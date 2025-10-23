@@ -1,0 +1,12 @@
+{
+  "root_dir": "/home/yeweitang/ANNDatasets",
+  "datasets": {
+    "sift-1m": {
+      "dataset_dir": "sift-1m",
+      "train_path": "sift_learn.fvecs",
+      "base_path": "sift_base.fvecs",
+      "query_path": "sift_query.fvecs",
+      "gt_path": "sift_groundtruth.ivecs"
+    }
+  }
+}
