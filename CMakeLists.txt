@@ -6,8 +6,9 @@ project(Artea LANGUAGES CXX)
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
-# --- 2. Dependency management (FetchContent) ---
+# --- 2. Dependency management (FetchContent & FindPackage) ---
 include(FetchContent)
+find_package(OpenMP REQUIRED)
 
 FetchContent_Declare(
   nlohmann_json
@@ -20,9 +21,14 @@ FetchContent_Declare(
   GIT_TAG "v2.2"
 )
 
-FetchContent_MakeAvailable(nlohmann_json argparse)
+FetchContent_Declare(
+  termcolor
+  GIT_REPOSITORY https://github.com/ikalnytskyi/termcolor.git
+  GIT_TAG "v2.1.0"  
+)
 
-find_package(OpenMP REQUIRED)
+# This command downloads and configures all declared content
+FetchContent_MakeAvailable(nlohmann_json argparse termcolor)
 
 # --- 3. Faiss Submodule Configuration ---
 # Set options to build a minimal CPU version of Faiss
@@ -45,6 +51,8 @@ target_link_libraries(artea INTERFACE
   nlohmann_json::nlohmann_json
   argparse::argparse
   OpenMP::OpenMP_CXX
+  faiss    
+  termcolor
 )
 
 # --- 5. Include subdirectories ---

@@ -48,7 +48,7 @@ public:
     }
 
     __attribute__((always_inline))
-    auto operator()(vec_ele_t* vec1, vec_ele_t* vec2) -> vec_ele_t {
+    auto operator()(const vec_ele_t* vec1, const vec_ele_t* vec2) -> vec_ele_t {
         if constexpr (dist_type == SIMDDistanceType::EUCLIDEAN) {
             return _impl_euclidean(vec1, vec2);
         } else if constexpr (dist_type == SIMDDistanceType::DOT) {
@@ -69,7 +69,7 @@ private:
     const std::size_t NUM_REMAINING_ELES;   
 
     __attribute__((always_inline))
-    auto _impl_euclidean(vec_ele_t* vec1, vec_ele_t* vec2) -> vec_ele_t {
+    auto _impl_euclidean(const vec_ele_t* vec1, const vec_ele_t* vec2) -> vec_ele_t {
         // AVX512 implementation
         vec_ele_t result_chunk [NUM_SIMD_CHUNKS] __attribute__((aligned(64)));
         __m512 vec1_chunk, vec2_chunk, diff_chunk, sum_chunk = _mm512_set1_ps(0.0f);
@@ -115,12 +115,13 @@ private:
     }
 
     __attribute__((always_inline))
-    auto _impl_dot(vec_ele_t* vec1, vec_ele_t* vec2) -> vec_ele_t {
+    auto _impl_dot(const vec_ele_t* vec1, const vec_ele_t* vec2) -> vec_ele_t {
         throw std::runtime_error("Currently DOT distance is not supported");
     }
 
 
-    auto _impl_cosine(vec_ele_t* vec1, vec_ele_t* vec2) -> vec_ele_t {
+    __attribute__((always_inline))
+    auto _impl_cosine(const vec_ele_t* vec1, const vec_ele_t* vec2) -> vec_ele_t {
         throw std::runtime_error("Currently COSINE distance is not supported");
     }
 

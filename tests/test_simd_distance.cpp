@@ -1,9 +1,9 @@
 /*
- * @FilePath: /Artea/tests/testSimdDistance.cpp
+ * @FilePath: /Artea/tests/test_simd_distance.cpp
  * @Author: Chandler (Weitang Ye) <weitang.ye@ntu.edu.sg>
- * @LastEditTime: 2025-10-23 19:48:38
+ * @LastEditTime: 2025-10-24 12:47:29
  * @Date: 2025-10-23 19:14:32
- * @Description: Test the SIMDDistance class
+ * @Description: Test the SIMDDistance class and compare with Faiss and direct C++
  */
 
 #include <iostream>
@@ -36,6 +36,16 @@ void generate_random_vector(float* vec, size_t dim) {
     }
 }
 
+// Helper function for direct C++ L2 square distance calculation (non-SIMD)
+float cpp_L2sqr(const float* x, const float* y, size_t d) {
+    float res = 0.0f;
+    for (size_t i = 0; i < d; ++i) {
+        const float diff = x[i] - y[i];
+        res += diff * diff;
+    }
+    return res;
+}
+
 int main() {
     // --- 1. Test Parameters ---
     constexpr artea::vec_dim_t DIM = 128; // Must be a multiple of 16 for AVX512 with float
@@ -64,15 +74,19 @@ int main() {
     // fvec_L2sqr computes the squared L2 (Euclidean) distance for floats
     float faiss_distance = faiss::fvec_L2sqr(vec1, vec2, DIM);
 
+    // Calculate distance using direct C++
+    float cpp_distance = cpp_L2sqr(vec1, vec2, DIM);
+
     // Compare results with a small tolerance for floating point inaccuracies
     const float tolerance = 1e-4f;
     assert(std::abs(artea_distance - faiss_distance) < tolerance);
+    assert(std::abs(faiss_distance - cpp_distance) < tolerance);
     
     std::cout << "Correctness test PASSED!" << std::endl;
-    std::cout << "  Artea Result: " << artea_distance << std::endl;
-    std::cout << "  Faiss Result: " << faiss_distance << std::endl;
+    std::cout << "  Artea Result:      " << artea_distance << std::endl;
+    std::cout << "  Faiss Result:      " << faiss_distance << std::endl;
+    std::cout << "  Direct C++ Result: " << cpp_distance << std::endl;
     std::cout << "-------------------------------------" << std::endl;
-
 
     // --- 4. Performance Benchmark ---
     std::cout << "Running performance benchmark..." << std::endl;
@@ -98,9 +112,19 @@ int main() {
     std::chrono::duration<double, std::micro> faiss_duration = end_faiss - start_faiss;
     double faiss_time_per_dist = faiss_duration.count() / NUM_VECTORS_FOR_BENCHMARK;
 
+    // Benchmark Direct C++
+    auto start_cpp = std::chrono::high_resolution_clock::now();
+    for (int i = 0; i < NUM_VECTORS_FOR_BENCHMARK; ++i) {
+        dummy_result += cpp_L2sqr(vec1, vec2, DIM);
+    }
+    auto end_cpp = std::chrono::high_resolution_clock::now();
+    std::chrono::duration<double, std::micro> cpp_duration = end_cpp - start_cpp;
+    double cpp_time_per_dist = cpp_duration.count() / NUM_VECTORS_FOR_BENCHMARK;
+
     std::cout << "Performance Results:" << std::endl;
     std::cout << "  Artea (SIMDDistance): " << artea_time_per_dist << " microseconds per calculation." << std::endl;
-    std::cout << "  Faiss (fvec_L2sqr): " << faiss_time_per_dist << " microseconds per calculation." << std::endl;
+    std::cout << "  Faiss (fvec_L2sqr):   " << faiss_time_per_dist << " microseconds per calculation." << std::endl;
+    std::cout << "  Direct C++:           " << cpp_time_per_dist << " microseconds per calculation." << std::endl;
     std::cout << "-------------------------------------" << std::endl;
 
 

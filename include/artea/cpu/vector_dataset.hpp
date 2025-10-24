@@ -1,7 +1,7 @@
 /*
  * @FilePath: /Artea/include/artea/cpu/vector_dataset.hpp
  * @Author: Chandler (Weitang Ye) <weitang.ye@ntu.edu.sg>
- * @LastEditTime: 2025-10-23 19:38:56
+ * @LastEditTime: 2025-10-24 09:00:19
  * @Date: 2025-10-23 13:06:00
  * @Description: 
  */
@@ -89,7 +89,7 @@ private:
         config_file.close();
 
         ArteaLogger logger("VectorDataset::load_config", system_log_level);
-        logger.info(std::format("Successfully loaded dataset config from {}", config_path));
+        logger.success(std::format("Successfully loaded dataset config from {}", config_path));
     }
 
     auto _load_datasets(const std::string& dataset_name) -> void {
@@ -102,12 +102,12 @@ private:
         std::filesystem::path gt_vecs_path = dataset_dir / dataset_config["gt_path"];
 
         ArteaLogger logger("VectorDataset::load_datasets", system_log_level);
-        logger.info(std::format("Loading dataset {} from {}", dataset_name, dataset_dir.string()));
+        logger.info(std::format("Loading dataset {} from {} ...", dataset_name, dataset_dir.string()));
         _base_vecs = new VectorArray<vecs_num_t, vec_ele_t>(base_vecs_path);
         _query_vecs = new VectorArray<vecs_num_t, vec_ele_t>(query_vecs_path);
         _gt_vecs = new VectorArray<vecs_num_t, vec_id_t>(gt_vecs_path);
 
-        logger.info(
+        logger.success(
             std::format(
                 "Successfully loaded {} base vectors ({} dims), {} query vectors ({} dims), and {} ground truth vectors ({} dims).", 
                 _base_vecs->get_num_vecs(), 

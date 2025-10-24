@@ -1,7 +1,7 @@
 /*
  * @FilePath: /Artea/include/artea/cpu/vector_array.hpp
  * @Author: Chandler (Weitang Ye) <weitang.ye@ntu.edu.sg>
- * @LastEditTime: 2025-10-23 17:13:43
+ * @LastEditTime: 2025-10-24 10:15:38
  * @Date: 2025-10-18 16:31:57
  * @Description: 
  */
@@ -66,27 +66,37 @@ public:
     }
 
     __attribute__((always_inline))
+    auto get(vec_id_t vid) const -> const vec_ele_t* {
+        return _vec_data + static_cast<std::size_t>(vid) * _vec_dim;
+    }
+
+    __attribute__((always_inline))
     auto get_all() -> vec_ele_t* {
         return _vec_data;
     }
 
     __attribute__((always_inline))
-    auto size() -> vecs_num_t {
+    auto get_all() const -> const vec_ele_t* {
+        return _vec_data;
+    }
+
+    __attribute__((always_inline))
+    auto size() const -> vecs_num_t {
         return _num_vecs;
     }
 
     __attribute__((always_inline))
-    auto get_num_vecs() -> vecs_num_t {
+    auto get_num_vecs() const -> vecs_num_t {
         return _num_vecs;
     }
 
     __attribute__((always_inline))
-    auto dim() -> vec_dim_t {
+    auto dim() const -> vec_dim_t {
         return _vec_dim;
     }
 
     __attribute__((always_inline))
-    auto get_vec_dim() -> vec_dim_t {
+    auto get_vec_dim() const -> vec_dim_t {
         return _vec_dim;
     }
 

@@ -1,9 +1,9 @@
 /*
  * @FilePath: /Artea/include/artea/logger.hpp
  * @Author: Chandler (Weitang Ye) <weitang.ye@ntu.edu.sg>
- * @LastEditTime: 2025-10-23 19:38:37
+ * @LastEditTime: 2025-10-24 09:30:00
  * @Date: 2025-10-23 13:26:15
- * @Description: 
+ * @Description: A logger that supports colorful printing via termcolor.
  */
 
 #pragma once
@@ -11,8 +11,11 @@
 #include <iostream>
 #include <string>
 #include <format>   // C++20
+#include <stdexcept>
 
 #include <artea/types.hpp>
+// Reference: https://github.com/ikaln/termcolor/blob/master/include/termcolor/termcolor.hpp
+#include <termcolor/termcolor.hpp>
 
 namespace artea {
 
@@ -40,18 +43,44 @@ public:
     
     ~ArteaLogger() = default;
 
+    template<bool success_flag = false>
     auto log(const std::string& message, const LogLevel msg_level) -> void {
         if (static_cast<int>(msg_level) < static_cast<int>(_system_level)) {
             return; // Skip logging if message level is lower than current level
         }
         auto level_str = to_string(msg_level);
-        // TODO: support colorful logging
-        std::cout << std::format("[{}] [{}] {}", level_str, _logger_name, message) << std::endl;
+    
+        switch (msg_level) {
+            case LogLevel::DEBUG:
+                std::cout << termcolor::grey;
+                break;
+            case LogLevel::INFO:
+                if constexpr (success_flag) {
+                    std::cout << termcolor::bold << termcolor::green;
+                } else {
+                    std::cout << termcolor::white;
+                }
+                break;
+            case LogLevel::WARN:
+                std::cout << termcolor::yellow;
+                break;
+            case LogLevel::ERROR:
+                std::cout << termcolor::bold << termcolor::red;
+                break;
+        }
+
+        std::cout << std::format("[{}] [{}] {}", level_str, _logger_name, message) 
+                  << termcolor::reset << std::endl;
     }
 
     __attribute__((always_inline))
     auto debug(const std::string& message) -> void { 
         log(message, LogLevel::DEBUG); 
+    }
+
+    __attribute__((always_inline))
+    auto success(const std::string& message) -> void {
+        log<true>(message, LogLevel::INFO); 
     }
 
     __attribute__((always_inline))
@@ -66,7 +95,8 @@ public:
     
     __attribute__((always_inline))
     auto error(const std::string& message) -> void {
-        log(message, LogLevel::ERROR); 
+        log(message, LogLevel::ERROR);
+        throw std::runtime_error(message);
     }
 
 private:
