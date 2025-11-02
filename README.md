@@ -1,6 +1,6 @@
 # Artea
 
-ANN Search on CPU/GPU
+High performance graph based approximate nearest negihbors index construction and search library on CPUs/GPUs.
 
 ## How to test
 

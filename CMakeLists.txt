@@ -27,8 +27,16 @@ FetchContent_Declare(
   GIT_TAG "v2.1.0"  
 )
 
+FetchContent_Declare(
+  eigen # We give it a name 'eigen'
+  GIT_REPOSITORY https://gitlab.com/libeigen/eigen.git
+  GIT_TAG "5.0.0"
+)
+
+
+
 # This command downloads and configures all declared content
-FetchContent_MakeAvailable(nlohmann_json argparse termcolor)
+FetchContent_MakeAvailable(nlohmann_json argparse termcolor eigen)
 
 # --- 3. Faiss Submodule Configuration ---
 # Set options to build a minimal CPU version of Faiss

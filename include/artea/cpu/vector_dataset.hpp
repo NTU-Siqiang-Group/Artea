@@ -1,7 +1,7 @@
 /*
  * @FilePath: /Artea/include/artea/cpu/vector_dataset.hpp
  * @Author: Chandler (Weitang Ye) <weitang.ye@ntu.edu.sg>
- * @LastEditTime: 2025-10-24 09:00:19
+ * @LastEditTime: 2025-10-27 16:10:41
  * @Date: 2025-10-23 13:06:00
  * @Description: 
  */
@@ -110,16 +110,16 @@ private:
         logger.success(
             std::format(
                 "Successfully loaded {} base vectors ({} dims), {} query vectors ({} dims), and {} ground truth vectors ({} dims).", 
-                _base_vecs->get_num_vecs(), 
-                _base_vecs->get_vec_dim(), 
+                _base_vecs->get_num_vecs(),
+                _base_vecs->get_vec_dim(),
                 _query_vecs->get_num_vecs(), 
                 _query_vecs->get_vec_dim(),
-                _gt_vecs->get_num_vecs(), 
+                _gt_vecs->get_num_vecs(),
                 _gt_vecs->get_vec_dim()
             )
         );
     }
-};
+};  // class VectorDataset
 
 }
 }

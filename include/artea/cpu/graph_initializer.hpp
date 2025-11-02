@@ -11,12 +11,12 @@ public:
     GraphInitializer() = default;
 
     static auto operator()(IndexGraph* graph) -> void {
-        init(graph);
+        _init_impl(graph);
     }
 
 private:
 
-    static virtual auto init(IndexGraph* graph) -> void = 0;
+    static virtual auto _init_impl(IndexGraph* graph) -> void = 0;
 
 };  // class GraphInitializer
 
