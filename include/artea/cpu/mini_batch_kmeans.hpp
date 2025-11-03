@@ -34,18 +34,18 @@ enum class AssignMethod {
 };
 
 template <
-    typename vecs_num_t, 
+    typename vec_num_t, 
     typename vec_ele_t,
     SIMDDistanceType simd_distance_type = SIMDDistanceType::EUCLIDEAN,
-    typename vec_id_t = vecs_num_t
+    typename vec_id_t = vec_num_t
 >
 class MiniBatchKmeans {
 
 public:
     MiniBatchKmeans(
-        vecs_num_t num_vecs,
+        vec_num_t num_vecs,
         cluster_num_t num_clusters, 
-        vecs_num_t batch_size, 
+        vec_num_t batch_size, 
         iter_t num_iters,
         vec_dim_t vec_dim,
         vec_ele_t tolerance = 1e-4
@@ -78,7 +78,7 @@ public:
     }
 
     template <uint32_t log_interval = 10>
-    auto fit(const VectorArray<vecs_num_t, vec_ele_t>* vecs_array) -> iter_t {
+    auto fit(const VectorArray<vec_num_t, vec_ele_t>* vecs_array) -> iter_t {
         std::vector<vec_id_t> indices(_num_vecs);
         std::iota(indices.begin(), indices.end(), 0);
         std::shuffle(indices.begin(), indices.end(), std::mt19937{std::random_device{}()});
@@ -87,9 +87,9 @@ public:
             std::copy_n(vecs_array->get(indices[i]), _vec_dim, _centroids->get(i));
         }
 
-        std::vector<vecs_num_t> counts(_num_clusters, 0);
+        std::vector<vec_num_t> counts(_num_clusters, 0);
         std::mt19937 rng(std::random_device{}());
-        std::uniform_int_distribution<vecs_num_t> dist(0, _num_vecs - 1);
+        std::uniform_int_distribution<vec_num_t> dist(0, _num_vecs - 1);
         
         auto old_centroids = new VectorArray<cluster_num_t, vec_ele_t>(_num_clusters, _vec_dim);
 
@@ -98,7 +98,7 @@ public:
         for (iter_t iter = 0; iter < _num_iters; ++iter) {
             std::copy_n(_centroids->get_all(), _num_clusters * _vec_dim, old_centroids->get_all());
 
-            for (vecs_num_t i = 0; i < _batch_size; ++i) {
+            for (vec_num_t i = 0; i < _batch_size; ++i) {
                 vec_id_t sample_idx = dist(rng);
                 const vec_ele_t* current_vec = vecs_array->get(sample_idx);
                 cluster_id_t closest_cluster_id = 0;
@@ -142,7 +142,7 @@ public:
     }
 
     template <AssignMethod M = AssignMethod::BRUTE_FORCE>
-    auto assign_index(const VectorArray<vecs_num_t, vec_ele_t>* vecs_array) -> void {
+    auto assign_index(const VectorArray<vec_num_t, vec_ele_t>* vecs_array) -> void {
         if constexpr (M == AssignMethod::BRUTE_FORCE) {
             _brute_force_assign(vecs_array);
         } else if constexpr (M == AssignMethod::FAISS_HNSW) {
@@ -151,7 +151,7 @@ public:
     }
 
     template <AssignMethod M = AssignMethod::BRUTE_FORCE>
-    auto build_index(const VectorArray<vecs_num_t, vec_ele_t>* vecs_array) -> void {
+    auto build_index(const VectorArray<vec_num_t, vec_ele_t>* vecs_array) -> void {
         fit(vecs_array);
         assign_index<M>(vecs_array);
     }
@@ -162,10 +162,10 @@ public:
 
 private:
 
-    auto _brute_force_assign(const VectorArray<vecs_num_t, vec_ele_t>* vecs_array) -> void {
+    auto _brute_force_assign(const VectorArray<vec_num_t, vec_ele_t>* vecs_array) -> void {
         _logger.info("Assigning clusters using Brute Force method (SIMD)...");
         #pragma omp parallel for schedule(static)
-        for (vecs_num_t i = 0; i < _num_vecs; ++i) {
+        for (vec_num_t i = 0; i < _num_vecs; ++i) {
             vec_ele_t min_dist = std::numeric_limits<vec_ele_t>::max();
             cluster_id_t closest_cluster = 0;
             for (cluster_id_t c = 0; c < _num_clusters; ++c) {
@@ -179,7 +179,7 @@ private:
         }
     }
 
-    auto _faiss_ann_assign(const VectorArray<vecs_num_t, vec_ele_t>* vecs_array) -> void {
+    auto _faiss_ann_assign(const VectorArray<vec_num_t, vec_ele_t>* vecs_array) -> void {
         _logger.info("Assigning clusters using Faiss HNSW method...");
         faiss::IndexHNSWFlat index(_vec_dim, 32, faiss::METRIC_L2);
         index.add(_num_clusters, _centroids->get_all());
@@ -189,17 +189,17 @@ private:
         index.search(_num_vecs, vecs_array->get_all(), 1, distances.data(), labels.data());
 
         #pragma omp parallel for schedule(static)
-        for (vecs_num_t i = 0; i < _num_vecs; ++i) {
+        for (vec_num_t i = 0; i < _num_vecs; ++i) {
             _vecs_cluster_idx[i] = static_cast<cluster_id_t>(labels[i]);
         }
     }
 
     /** @brief Number of vectors in the dataset. */
-    vecs_num_t _num_vecs;
+    vec_num_t _num_vecs;
     /** @brief Dimensionality of each vector. */
     vec_dim_t _vec_dim;
     /** @brief Batch size for MiniBatchKmeans. */
-    vecs_num_t _batch_size;
+    vec_num_t _batch_size;
     /** @brief Number of clusters. */
     cluster_num_t _num_clusters;
     /** @brief Maximum number of iterations. */

@@ -20,9 +20,9 @@ namespace artea {
 namespace cpu {
 
 template <
-    typename vecs_num_t, 
+    typename vec_num_t, 
     typename vec_ele_t,
-    typename vec_id_t = vecs_num_t
+    typename vec_id_t = vec_num_t
 >
 class VectorArray {
 
@@ -41,7 +41,7 @@ public:
      * @param num_vecs The total number of vectors the pool will manage.
      * @param dim The dimension of each vector.
      */
-    VectorArray(vecs_num_t num_vecs, vec_dim_t dim) : _num_vecs(num_vecs), _vec_dim(dim) {
+    VectorArray(vec_num_t num_vecs, vec_dim_t dim) : _num_vecs(num_vecs), _vec_dim(dim) {
         if (num_vecs <= 0 || dim <= 0) {
             _vecs_data = nullptr;
             throw std::invalid_argument("Error: VectorArray dimensions must be positive.");
@@ -93,12 +93,12 @@ public:
     }
 
     __attribute__((always_inline))
-    auto size() const -> vecs_num_t {
+    auto size() const -> vec_num_t {
         return _num_vecs;
     }
 
     __attribute__((always_inline))
-    auto get_num_vecs() const -> vecs_num_t {
+    auto get_num_vecs() const -> vec_num_t {
         return _num_vecs;
     }
 
@@ -154,7 +154,7 @@ public:
             throw std::runtime_error("Error: File size indicates a malformed or incomplete file.");
         }
         
-        vecs_num_t num_vecs_in_file = static_cast<vecs_num_t>(file_size / record_size);
+        vec_num_t num_vecs_in_file = static_cast<vec_num_t>(file_size / record_size);
 
         // --- Allocate aligned memory ---
         if (_vecs_data) _mm_free(_vecs_data);
@@ -186,7 +186,7 @@ public:
             }
         } else {
             #pragma omp for schedule(static)
-            for (vecs_num_t i = 0; i < _num_vecs; ++i) {
+            for (vec_num_t i = 0; i < _num_vecs; ++i) {
                 if (error_flag) continue;
 
                 std::streamoff offset = static_cast<std::streamoff>(i) * record_size;
@@ -241,7 +241,7 @@ public:
 
 private:
     vec_ele_t* _vecs_data;
-    vecs_num_t _num_vecs;
+    vec_num_t _num_vecs;
     vec_dim_t _vec_dim;
 };
 

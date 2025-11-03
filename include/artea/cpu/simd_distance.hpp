@@ -25,7 +25,7 @@ template <
 class SIMDDistance {
 
     static constexpr std::size_t SIMD_REGISTER_BITS = 512;
-    static constexpr std::size_t SIMD_REGISTER_BYTES = SIMD_REGISTER_BITS / 8;
+    static constexpr std::size_t SIMD_REGISTER_BYTES = SIMD_REGISTER_BITS / 8;  // 64
     // Number of elements that can be processed in a single SIMD register
     // e.g. we can process 16 elements per chunk for float32 type
     static constexpr std::size_t SIMD_CHUNK_SIZE = [] {

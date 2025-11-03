@@ -22,9 +22,9 @@ enum class EngineType{
 };
 
 template <
-    typename vecs_num_t,
+    typename vec_num_t,
     typename vec_ele_t,
-    typename vec_id_t = vecs_num_t
+    typename vec_id_t = vec_num_t
 >
 class Fast1NNEngine {
     
@@ -35,7 +35,7 @@ public:
 
     template <EngineType engine_type>
     auto compute(
-        const VectorArray<vecs_num_t, vec_ele_t>* vecs,
+        const VectorArray<vec_num_t, vec_ele_t>* vecs,
         const vec_dim_t vec_dim,
         const VectorArray<part_num_t, vec_ele_t>* centroids,
         const part_num_t num_clusters,
@@ -44,7 +44,7 @@ public:
 
         omp_set_num_threads(fast_1nn_threads);
         #pragma omp parallel for schedule(static)
-        for (vecs_num_t vec_id = 0; vec_id < _vecs->size(); vec_id++) {
+        for (vec_num_t vec_id = 0; vec_id < _vecs->size(); vec_id++) {
             /** implementaion logic:
             *      vec_ele_t* vec = vecs->get(vec_id);
             *      part_id_t best_cluster_id = 0;
