@@ -1,75 +1,86 @@
 /*
  * @FilePath: /Artea/include/artea/cpu/index_graph.hpp
  * @Author: Chandler (Weitang Ye) <weitang.ye@ntu.edu.sg>
- * @LastEditTime: 2025-11-01 19:42:14
+ * @LastEditTime: 2025-11-06 14:19:44
  * @Date: 2025-10-17 15:32:18
- * @Description: 
+ * @Description: Refactored IndexGraph using the custom Array class for memory management.
  */
 
 #pragma once
 
-#include <immintrin.h> // For _mm_malloc and _mm_free
+#include <cstddef>
+#include <stdexcept>
+#include <variant>
+
+#include <artea/cpu/array.hpp> // Include our new Array class
 
 namespace artea {
 namespace cpu {
 
-template <
-    typename vertex_num_t,
-    typename vec_ele_t,
-    typename distance_t = vec_ele_t,
-    typename vertex_id_t = vertex_num_t
->
+template <typename vertex_num_t, typename vec_ele_t>
+struct Neighbor {   // 8 bytes
+
+    using distance_t = vec_ele_t;
+    using vertex_id_t = vertex_num_t;
+
+    vertex_id_t dest;
+    distance_t distance;
+};  // struct Neighbor
+
+template <typename vertex_num_t, typename vec_ele_t>
 class IndexGraph {
 
 public:
-    IndexGraph(vertex_num_t num_vertices, vertex_num_t num_nbrs_per_vertex) : 
+
+    using distance_t = vec_ele_t;
+    using vertex_id_t = vertex_num_t;
+    using nbr_t = Neighbor<vertex_num_t, vec_ele_t>;
+    using nbr_arr_t = Array<nbr_t>;
+
+    /**
+     * @brief Construct a new Index Graph object with aligned memory.
+     * @param num_vertices The total number of vertices in the graph.
+     * @param num_nbrs_per_vertex The fixed number of neighbors for each vertex.
+     */
+    IndexGraph(const vertex_num_t& num_vertices, const vertex_num_t& num_nbrs_per_vertex) : 
         _num_vertices(num_vertices),
-        _nbrs(nullptr),
-        _nbrs_dists(nullptr) {}
+        _num_nbrs_per_vertex(num_nbrs_per_vertex) {}
 
-    ~IndexGraph() {
-        if (_nbrs != nullptr)
-            delete[] _nbrs;
-        if (_nbrs_dists != nullptr)
-            delete[] _nbrs_dists;
-        // if (_csr_offsets != nullptr)
-        //     delete[] _csr_offsets;
+    ~IndexGraph() = default;
 
-        _nbrs = nullptr;
-        _nbrs_dists = nullptr;
-        // _csr_offsets = nullptr;
-    }
+    // The default move constructor and assignment are correct thanks to Array's move semantics.
+    IndexGraph(IndexGraph&&) noexcept = default;
+    IndexGraph& operator=(IndexGraph&&) noexcept = default;
+
+    // Copying is deleted because our underlying Array is non-copyable.
+    IndexGraph(const IndexGraph&) = delete;
+    IndexGraph& operator=(const IndexGraph&) = delete;
+
+    // --- Accessors ---
 
     __attribute__((always_inline))
-    auto get_nbrs(vertex_id_t vid) -> vertex_num_t* {
-        return _nbrs + vid * _num_nbrs_per_vertex;
-    }
-
-    __attribute__((always_inline))
-    auto get_num_vertices() -> vertex_num_t {
+    auto get_num_vertices() const -> vertex_num_t {
         return _num_vertices;
     }
 
     __attribute__((always_inline))
-    auto get_num_nbrs_per_vertex() -> vertex_num_t {
+    auto get_num_nbrs_per_vertex() const -> vertex_num_t {
         return _num_nbrs_per_vertex;
     }
 
-private:
-    /** @brief Array of neighbors. */
-    vertex_num_t* _nbrs;
+    // // --- Graph Operations ---
     
-    /** @brief Array of neighbor distances. */
-    distance_t* _nbrs_dists;
+    // virtual auto append_nbr(const vertex_id_t& src, const nbr_t& nbr) -> void = 0;
+
+    // virtual auto fetch_nbrs(const vertex_id_t& src) -> nbr_arr_t& = 0;
+
+protected:
     
     /** @brief Number of vertices in the graph. */
-    vertex_num_t _num_vertices;
+    const vertex_num_t& _num_vertices;
 
-    // /** @brief CSR offset array. 
-    //   * This array has _num_vertices + 1 elements.
-    //   * Only used by reversed graph (reversed graph may have different number of neighbors)
-    // */
-    // vertex_num_t* _csr_offsets;
+    /** @brief Number of neighbors per vertex (used as stride for indexing). */
+    const vertex_num_t& _num_nbrs_per_vertex;
 
 };  // class IndexGraph
 

@@ -1,17 +1,28 @@
 /*
  * @FilePath: /Artea/include/artea/cpu/recommended_nn.hpp
  * @Author: Chandler (Weitang Ye) <weitang.ye@ntu.edu.sg>
- * @LastEditTime: 2025-11-02 21:20:54
+ * @LastEditTime: 2025-11-05 19:42:00
  * @Date: 2025-11-02 21:18:08
  * @Description: 
  */
 
+/*
+ * @FilePath: /Artea/include/artea/cpu/random_nn.hpp
+ * @Author: Chandler (Weitang Ye) <weitang.ye@ntu.edu.sg>
+ * @LastEditTime: 2025-11-05 19:18:18
+ * @Date: 2025-11-02 19:41:19
+ * @Description: Refactored to use generation type as a class template parameter.
+ */
+
 #pragma once
 
-#include <cstdint>
+#include <random>
+#include <stdexcept>
+#include <type_traits>
 
 #include <artea/types.hpp>
 #include <artea/config.hpp>
+#include <artea/cpu/array.hpp>
 #include <artea/cpu/vector_array.hpp>
 
 namespace artea {
@@ -24,16 +35,36 @@ template <
 class RecommendedNN {
 
 public:
+    
+
     /**
-     * @brief Construct a new RecommendedNN object.
-     * @param num_vecs The upper bound (exclusive) for the random numbers to be generated.
-     */
-    RecommendedNN(const vec_num_t& num_vecs) : _num_vecs(num_vecs) {
-        
+    * @brief Check if the recommended nearest neighbors generator is enabled.
+    * @return true If the recommended nearest neighbors generator is enabled.
+    * @return false If the recommended nearest neighbors generator is disabled.
+    */
+    __attribute__((always_inline))
+    auto enabled() const -> bool {
+        return _enabled;
+    }
+
+    /**
+    * @brief Disable the recommended nearest neighbors generator.
+    */
+    __attribute__((always_inline))
+    auto disable() -> void {
+        _enabled = false;
+    }
+
+    /**
+    * @brief Activate the recommended nearest neighbors generator.
+    */
+    __attribute__((always_inline))
+    auto activate() -> void {
+        _enabled = true;
     }
 
 private:
-    const vec_num_t& _num_vecs;
+    bool _enabled = false;
 
 };  // class RecommendedNN
 

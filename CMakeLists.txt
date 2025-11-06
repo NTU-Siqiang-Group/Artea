@@ -3,12 +3,23 @@ cmake_minimum_required(VERSION 3.16)
 cmake_policy(SET CMP0135 NEW) # Use modern timestamp behavior
 project(Artea LANGUAGES CXX)
 
-set(CMAKE_CXX_STANDARD 20)
+set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
-# --- 2. Dependency management (FetchContent & FindPackage) ---
+set(CMAKE_INSTALL_RPATH_USE_LINK_PATH ON)
+set(CMAKE_BUILD_WITH_INSTALL_RPATH ON)
+
+set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE} -O3")
+
+# --- Dependency management ---
 include(FetchContent)
 find_package(OpenMP REQUIRED)
+
+# --- Find Intel TBB ---
+find_package(TBB REQUIRED) # for concurrent_vector and parallel algorithms
+
+# --- Find Intel MKL (Optional) ---
+find_package(MKL QUIET) # source the setvars.sh script from Intel oneAPI
 
 FetchContent_Declare(
   nlohmann_json
@@ -28,15 +39,13 @@ FetchContent_Declare(
 )
 
 FetchContent_Declare(
-  eigen # We give it a name 'eigen'
-  GIT_REPOSITORY https://gitlab.com/libeigen/eigen.git
-  GIT_TAG "5.0.0"
+  fmt
+  GIT_REPOSITORY https://github.com/fmtlib/fmt.git
+  GIT_TAG "10.1.1" # Using a slightly older but common version
 )
 
-
-
 # This command downloads and configures all declared content
-FetchContent_MakeAvailable(nlohmann_json argparse termcolor eigen)
+FetchContent_MakeAvailable(nlohmann_json argparse termcolor fmt)
 
 # --- 3. Faiss Submodule Configuration ---
 # Set options to build a minimal CPU version of Faiss
@@ -61,7 +70,22 @@ target_link_libraries(artea INTERFACE
   OpenMP::OpenMP_CXX
   faiss    
   termcolor
+  fmt::fmt
+  TBB::tbb  # Link Intel TBB
 )
+
+# Conditionally add MKL support
+if(TARGET MKL::MKL)
+    message(STATUS "Found Intel MKL, enabling vectorized features.")
+    # Add a definition so C++ code can check for MKL
+    target_compile_definitions(artea INTERFACE MKL_ENABLED)
+    # Link MKL libraries. MKL::MKL should handle threading/interface layers.
+    target_link_libraries(artea INTERFACE MKL::MKL)
+else()
+    message(STATUS "Intel MKL not found, vectorized features will be disabled.")
+endif()
+
+target_compile_definitions(artea INTERFACE FMT_USE_CONSTEVAL=0)
 
 # --- 5. Include subdirectories ---
 add_subdirectory(tests)

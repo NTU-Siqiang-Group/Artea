@@ -11,7 +11,7 @@
 namespace artea {
 namespace cpu {
 
-enum class SIMDDistanceType {
+enum class DistanceMetrics {
     EUCLIDEAN,
     DOT,
     COSINE,
@@ -19,7 +19,7 @@ enum class SIMDDistanceType {
 
 template <
     typename vec_ele_t,
-    SIMDDistanceType dist_type = SIMDDistanceType::EUCLIDEAN,
+    DistanceMetrics dist_type = DistanceMetrics::EUCLIDEAN,
     uint32_t unroll_size = 1
 >
 class SIMDDistance {
@@ -42,21 +42,21 @@ public:
         ArteaLogger logger("SIMDDistance", LogLevel::INFO);
         if (vec_dim % SIMD_CHUNK_SIZE != 0) {
             logger.error(
-                "Vector dimension must be a multiple of SIMD chunk size (e.g. 16 for float type)"
+                "Vector dimension must be a multiple of SIMD chunk size (e.g. 16 for float type and 8 for double type)"
             );
         }
     }
 
     __attribute__((always_inline))
     auto operator()(const vec_ele_t* vec1, const vec_ele_t* vec2) -> vec_ele_t {
-        if constexpr (dist_type == SIMDDistanceType::EUCLIDEAN) {
+        if constexpr (dist_type == DistanceMetrics::EUCLIDEAN) {
             return _impl_euclidean(vec1, vec2);
-        } else if constexpr (dist_type == SIMDDistanceType::DOT) {
+        } else if constexpr (dist_type == DistanceMetrics::DOT) {
             return _impl_dot(vec1, vec2);
-        } else if constexpr (dist_type == SIMDDistanceType::COSINE) {
+        } else if constexpr (dist_type == DistanceMetrics::COSINE) {
             return _impl_cosine(vec1, vec2);
         } else {
-            throw std::runtime_error("Invalid SIMDDistanceType");
+            throw std::runtime_error("Invalid DistanceMetrics");
         }
     }
 
@@ -127,5 +127,5 @@ private:
 
 };  // class SIMDDistance
     
-}   // namespace cpu
+}  // namespace cpu
 }   // namespace artea

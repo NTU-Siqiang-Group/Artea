@@ -1,7 +1,7 @@
 /*
  * @FilePath: /Artea/include/artea/logger.hpp
  * @Author: Chandler (Weitang Ye) <weitang.ye@ntu.edu.sg>
- * @LastEditTime: 2025-10-24 09:30:00
+ * @LastEditTime: 2025-11-06 15:27:28
  * @Date: 2025-10-23 13:26:15
  * @Description: A logger that supports colorful printing via termcolor.
  */
@@ -10,8 +10,9 @@
 
 #include <iostream>
 #include <string>
-#include <format>   // C++20
 #include <stdexcept>
+
+#include <fmt/format.h>
 
 #include <artea/types.hpp>
 // Reference: https://github.com/ikaln/termcolor/blob/master/include/termcolor/termcolor.hpp
@@ -28,7 +29,7 @@ enum class LogLevel {
 
 class ArteaLogger {
 public:
-    static constexpr auto to_string(const LogLevel level) -> std::string {
+    static auto to_string(const LogLevel level) -> std::string {
         switch (level) {
             case LogLevel::DEBUG: return "DEBUG";
             case LogLevel::INFO:  return "INFO";
@@ -69,7 +70,7 @@ public:
                 break;
         }
 
-        std::cout << std::format("[{}] [{}] {}", level_str, _logger_name, message) 
+        std::cout << fmt::format("[{}] [{}] {}", level_str, _logger_name, message) 
                   << termcolor::reset << std::endl;
     }
 
@@ -96,7 +97,7 @@ public:
     __attribute__((always_inline))
     auto error(const std::string& message) -> void {
         log(message, LogLevel::ERROR);
-        throw std::runtime_error(message);
+        // throw std::runtime_error(message);
     }
 
 private:
@@ -104,6 +105,5 @@ private:
     LogLevel _system_level;
 
 };  // class ArteaLogger
-
 
 }   // namespace artea
