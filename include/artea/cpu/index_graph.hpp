@@ -1,7 +1,7 @@
 /*
  * @FilePath: /Artea/include/artea/cpu/index_graph.hpp
  * @Author: Chandler (Weitang Ye) <weitang.ye@ntu.edu.sg>
- * @LastEditTime: 2025-11-06 14:19:44
+ * @LastEditTime: 2025-11-09 20:55:58
  * @Date: 2025-10-17 15:32:18
  * @Description: Refactored IndexGraph using the custom Array class for memory management.
  */
@@ -11,21 +11,15 @@
 #include <cstddef>
 #include <stdexcept>
 #include <variant>
+#include <cstdint>
 
-#include <artea/cpu/array.hpp> // Include our new Array class
+#include <artea/types.hpp>
+#include <artea/config.hpp>
+#include <artea/cpu/array.hpp>
+#include <artea/cpu/recommended_nn.hpp>
 
 namespace artea {
 namespace cpu {
-
-template <typename vertex_num_t, typename vec_ele_t>
-struct Neighbor {   // 8 bytes
-
-    using distance_t = vec_ele_t;
-    using vertex_id_t = vertex_num_t;
-
-    vertex_id_t dest;
-    distance_t distance;
-};  // struct Neighbor
 
 template <typename vertex_num_t, typename vec_ele_t>
 class IndexGraph {
@@ -44,7 +38,13 @@ public:
      */
     IndexGraph(const vertex_num_t& num_vertices, const vertex_num_t& num_nbrs_per_vertex) : 
         _num_vertices(num_vertices),
-        _num_nbrs_per_vertex(num_nbrs_per_vertex) {}
+        _num_nbrs_per_vertex(num_nbrs_per_vertex) 
+    {
+        _nbrs_arr = Array<nbr_arr_t>::alloc(num_vertices);
+        for (vertex_num_t i = 0; i < num_vertices; ++i) {
+            _nbrs_arr[i] = nbr_arr_t::alloc(num_nbrs_per_vertex);
+        }
+    }
 
     ~IndexGraph() = default;
 
@@ -69,18 +69,38 @@ public:
     }
 
     // // --- Graph Operations ---
+    // append_nbr operations is delegated to the RecommendedNN.
     
     // virtual auto append_nbr(const vertex_id_t& src, const nbr_t& nbr) -> void = 0;
 
-    // virtual auto fetch_nbrs(const vertex_id_t& src) -> nbr_arr_t& = 0;
+    auto fetch_nbrs(const vertex_id_t& src) -> nbr_arr_t& {
+        return _nbrs_arr[src];
+    }
 
+    auto fetch_nbrs(const vertex_id_t& src) const -> const nbr_arr_t& {
+        return _nbrs_arr[src];
+    }
+
+    auto get_nbrs_arr() -> Array<nbr_arr_t>& {
+        return _nbrs_arr;
+    }
+
+    auto get_nbrs_arr() const -> const Array<nbr_arr_t>& {
+        return _nbrs_arr;
+    }
+
+    friend class 
+    
 protected:
     
     /** @brief Number of vertices in the graph. */
     const vertex_num_t& _num_vertices;
 
-    /** @brief Number of neighbors per vertex (used as stride for indexing). */
+    /** @brief Number of neighbors per vertex. */
     const vertex_num_t& _num_nbrs_per_vertex;
+
+    /** @brief Array of neighbors for each vertex. */
+    std::vector<nbr_arr_t> _nbrs_arr;
 
 };  // class IndexGraph
 

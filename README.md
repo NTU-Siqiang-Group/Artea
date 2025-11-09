@@ -7,6 +7,7 @@ High performance graph based approximate nearest negihbors index construction an
 initialize intel oneapi:
 
 ```sh
+# source /path/to/your/oneapi/setvars.sh
 source $HOME/intel/oneapi/setvars.sh
 ```
 

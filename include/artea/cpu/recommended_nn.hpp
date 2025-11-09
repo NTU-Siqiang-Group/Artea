@@ -1,7 +1,7 @@
 /*
  * @FilePath: /Artea/include/artea/cpu/recommended_nn.hpp
  * @Author: Chandler (Weitang Ye) <weitang.ye@ntu.edu.sg>
- * @LastEditTime: 2025-11-05 19:42:00
+ * @LastEditTime: 2025-11-09 17:07:03
  * @Date: 2025-11-02 21:18:08
  * @Description: 
  */
@@ -28,43 +28,26 @@
 namespace artea {
 namespace cpu {
 
-template <
-    typename vec_num_t, 
-    typename vec_id_t = vec_num_t
->
+template <typename vec_num_t>
 class RecommendedNN {
 
 public:
-    
 
-    /**
-    * @brief Check if the recommended nearest neighbors generator is enabled.
-    * @return true If the recommended nearest neighbors generator is enabled.
-    * @return false If the recommended nearest neighbors generator is disabled.
-    */
-    __attribute__((always_inline))
-    auto enabled() const -> bool {
-        return _enabled;
-    }
+    using vec_id_t = vec_num_t;
 
-    /**
-    * @brief Disable the recommended nearest neighbors generator.
-    */
-    __attribute__((always_inline))
-    auto disable() -> void {
-        _enabled = false;
-    }
+    RecommendedNN(const vertex_num_t& recom_buf_size, bool enabled = false) : 
+        _recom_buf_size(recom_buf_size) {}
 
-    /**
-    * @brief Activate the recommended nearest neighbors generator.
-    */
-    __attribute__((always_inline))
-    auto activate() -> void {
-        _enabled = true;
-    }
+    ~RecommendedNN() = default;
 
-private:
-    bool _enabled = false;
+    virtual auto append_edge(const vertex_id_t& src, const nbr_t& nbr) -> void = 0;
+
+    virtual auto get_recom_nbrs(const vertex_id_t& src) -> Array<nbr_t> = 0;
+
+protected:
+
+    /** @brief The size of the append buffer. */
+    const vertex_num_t& _recom_buf_size;
 
 };  // class RecommendedNN
 

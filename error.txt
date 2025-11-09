@@ -1,0 +1,35 @@
+/usr/bin/ld: ../third_party/faiss/faiss/libfaiss.a: error adding symbols: archive has no index; run ranlib to add one
+icpx: error: linker command failed with exit code 1 (use -v to see invocation)
+/usr/bin/ld: ../third_party/faiss/faiss/libfaiss.a: error adding symbols: archive has no index; run ranlib to add one
+icpx: error: linker command failed with exit code 1 (use -v to see invocation)
+gmake[2]: *** [tests/CMakeFiles/test_vector_dataset.dir/build.make:109: tests/test_vector_dataset] Error 1
+gmake[1]: *** [CMakeFiles/Makefile2:880: tests/CMakeFiles/test_vector_dataset.dir/all] Error 2
+gmake[1]: *** Waiting for unfinished jobs....
+/usr/bin/ld: ../third_party/faiss/faiss/libfaiss.a: error adding symbols: archive has no index; run ranlib to add one
+gmake[2]: *** [tests/CMakeFiles/test_simd_distance.dir/build.make:109: tests/test_simd_distance] Error 1
+gmake[1]: *** [CMakeFiles/Makefile2:907: tests/CMakeFiles/test_simd_distance.dir/all] Error 2
+icpx: error: linker command failed with exit code 1 (use -v to see invocation)
+gmake[2]: *** [tests/CMakeFiles/test_random_nn.dir/build.make:109: tests/test_random_nn] Error 1
+gmake[1]: *** [CMakeFiles/Makefile2:934: tests/CMakeFiles/test_random_nn.dir/all] Error 2
+In file included from /home/yeweitang/Artea/tests/test_array.cpp:14:
+/home/yeweitang/Artea/build/_deps/fmt-src/include/fmt/format.h:4429:27: warning: identifier '_a' preceded by whitespace in a literal operator declaration is deprecated [-Wdeprecated-literal-operator]
+ 4429 | constexpr auto operator"" _a(const char* s, size_t) -> detail::udl_arg<char> {
+      |                ~~~~~~~~~~~^~
+      |                operator""_a
+/home/yeweitang/Artea/tests/test_array.cpp:57:17: error: expected ';' after expression
+   57 |     std::mt19375 rng(std::random_device{}());
+      |                 ^
+      |                 ;
+/home/yeweitang/Artea/tests/test_array.cpp:57:10: error: no member named 'mt19375' in namespace 'std'
+   57 |     std::mt19375 rng(std::random_device{}());
+      |     ~~~~~^
+/home/yeweitang/Artea/tests/test_array.cpp:57:18: error: use of undeclared identifier 'rng'
+   57 |     std::mt19375 rng(std::random_device{}());
+      |                  ^
+/home/yeweitang/Artea/tests/test_array.cpp:59:65: error: use of undeclared identifier 'rng'
+   59 |     std::generate(data.begin(), data.end(), [&]() { return dist(rng); });
+      |                                                                 ^
+1 warning and 4 errors generated.
+gmake[2]: *** [tests/CMakeFiles/test_array.dir/build.make:76: tests/CMakeFiles/test_array.dir/test_array.cpp.o] Error 1
+gmake[1]: *** [CMakeFiles/Makefile2:961: tests/CMakeFiles/test_array.dir/all] Error 2
+gmake: *** [Makefile:156: all] Error 2
