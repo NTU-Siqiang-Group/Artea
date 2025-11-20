@@ -1,7 +1,7 @@
 #pragma once
 
 #include <cstdint>
-#include <artea/types.hpp>
+#include <artea/definitions.hpp>
 #include <artea/logger.hpp>
 
 namespace artea {

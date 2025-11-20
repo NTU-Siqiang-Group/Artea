@@ -1,7 +1,7 @@
 /*
- * @FilePath: /Artea/include/artea/cpu/random_nn.hpp
+ * @FilePath: /Artea/include/artea/cpu/random_seq.hpp
  * @Author: Chandler (Weitang Ye) <weitang.ye@ntu.edu.sg>
- * @LastEditTime: 2025-11-09 20:49:52
+ * @LastEditTime: 2025-11-20 10:44:28
  * @Date: 2025-11-02 19:41:19
  * @Description: Modified to be thread-safe for parallel execution by using TBB thread-local storage.
  */
@@ -15,16 +15,15 @@
 #include <mkl.h>
 #include <tbb/enumerable_thread_specific.h>
 
-#include <artea/types.hpp>
+#include <artea/definitions.hpp>
 #include <artea/config.hpp>
-#include <artea/cpu/array.hpp>
 #include <artea/cpu/vector_array.hpp>
 
 namespace artea {
 namespace cpu {
 
 template <typename vec_num_t>
-class RandomNN {
+class RandomSeq {
 
     using vec_id_t = vec_num_t;
 
@@ -33,13 +32,13 @@ class RandomNN {
 
 public:
     /**
-     * @brief Construct a new thread-safe RandomNN object.
+     * @brief Construct a new thread-safe RandomSeq object.
      * @param num_vecs The upper bound (exclusive) for the random numbers to be generated.
      */
-    RandomNN(const vec_num_t& num_vecs) : 
+    RandomSeq(const vec_num_t num_vecs) :
         _num_vecs(num_vecs),
         // Initialize the thread-local storage container.
-        // The container will call this factory function once for each thread 
+        // The container will call this factory function once for each thread
         // that executes 'local()' function in 'generate()' method.
         _tl_streams([]() {
             VSLStreamStatePtr stream = nullptr;
@@ -49,8 +48,8 @@ public:
         })
     {
     }
-    
-    ~RandomNN() {
+
+    ~RandomSeq() {
         // iterate through all streams created for all threads and delete each one.
         for (auto& stream : _tl_streams) {
             if (stream != nullptr) {
@@ -59,21 +58,21 @@ public:
         }
     }
 
-    RandomNN(const RandomNN&) = delete;
-    RandomNN& operator=(const RandomNN&) = delete;
-    RandomNN(RandomNN&&) = delete;
-    RandomNN& operator=(RandomNN&&) = delete;
+    RandomSeq(const RandomSeq&) = delete;
+    RandomSeq& operator=(const RandomSeq&) = delete;
+    RandomSeq(RandomSeq&&) = delete;
+    RandomSeq& operator=(RandomSeq&&) = delete;
 
     /**
      * @brief Generate random numbers in a thread-safe manner.
      *        It automatically uses a random stream unique to the calling thread.
      *        This method can be called by single-threaded or multi-threaded code.
-     * @param rand_nbrs Reference to the Array where the generated random numbers will be stored.
+     * @param rand_nbrs Reference to the vector where the generated random numbers will be stored.
      * @param num_rand_nbrs The total number of random numbers to generate.
      * @note  Caller must ensure that the size of rand_nbrs is at least num_rand_nbrs.
      */
     __attribute__((always_inline))
-    auto generate(Array<vec_id_t>& rand_nbrs, const vec_num_t num_rand_nbrs) -> void {
+    auto generate(std::vector<vec_id_t>& rand_nbrs, const vec_num_t num_rand_nbrs) -> void {
         vec_id_t* rand_nbrs_ptr = rand_nbrs.data();
 
         // Get the MKL stream specific to the current thread.
@@ -81,25 +80,25 @@ public:
         VSLStreamStatePtr& local_stream = _tl_streams.local();
 
         viRngUniform(
-            VSL_RNG_METHOD_UNIFORM_STD, 
-            local_stream, num_rand_nbrs, 
-            reinterpret_cast<int*>(rand_nbrs_ptr), 
-            0, 
+            VSL_RNG_METHOD_UNIFORM_STD,
+            local_stream, num_rand_nbrs,
+            reinterpret_cast<int*>(rand_nbrs_ptr),
+            0,
             static_cast<int>(_num_vecs)
         );
     }
 
 private:
     /** @brief The upper bound for the random numbers. */
-    const vec_num_t& _num_vecs;
+    const vec_num_t _num_vecs;
 
-    /** 
+    /**
      * @brief Thread-local storage for MKL stream pointers.
      * Each thread gets its own VSLStreamStatePtr, managed by this container.
      */
     mutable tbb::enumerable_thread_specific<VSLStreamStatePtr> _tl_streams;
 
-};  // class RandomNN
+};  // class RandomSeq
 
 }   // namespace cpu
 }   // namespace artea

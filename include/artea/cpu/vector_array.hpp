@@ -1,26 +1,30 @@
 /*
  * @FilePath: /Artea/include/artea/cpu/vector_array.hpp
  * @Author: Chandler (Weitang Ye) <weitang.ye@ntu.edu.sg>
- * @Description: Refactored to use the artea::cpu::Array class for robust memory management.
- *               This class now acts as a high-level wrapper for a 2D array of vectors.
+ * @LastEditTime: 2025-11-16 16:10:47
+ * @Date: 2025-10-18 16:31:57
+ * @Description:
  */
+
 
 #pragma once
 
-#include <fstream>      
-#include <string>       
+#include <vector>
+#include <fstream>
+#include <string>
 #include <stdexcept>
 #include <omp.h>
 #include <utility> // For std::move
 
-#include <artea/types.hpp>
-#include <artea/cpu/array.hpp> // Include our robust Array class
+#include <artea/definitions.hpp>
+#include <artea/utils.hpp>
+#include <artea/logger.hpp>
 
 namespace artea {
 namespace cpu {
 
 template <
-    typename vec_num_t, 
+    typename vec_num_t,
     typename vec_ele_t,
     typename vec_id_t = vec_num_t
 >
@@ -31,19 +35,21 @@ public:
      * @brief Default constructor. Creates an empty VectorArray.
      */
     VectorArray() : _num_vecs(0), _vec_dim(0) {}
-    
+
     /**
      * @brief Construct a new VectorArray object with a pre-defined size, using aligned memory.
      * @param num_vecs The total number of vectors the pool will manage.
      * @param dim The dimension of each vector.
      */
-    VectorArray(vec_num_t num_vecs, vec_dim_t dim) 
-        : _num_vecs(num_vecs), _vec_dim(dim) 
+    VectorArray(vec_num_t num_vecs, vec_dim_t dim)
+        : _num_vecs(num_vecs), _vec_dim(dim)
     {
         if (num_vecs > 0 && dim > 0) {
             std::size_t total_elements = static_cast<std::size_t>(num_vecs) * dim;
-            // Delegate memory allocation to our owning Array class.
-            _vecs_array = Array<vec_ele_t>::alloc(total_elements);
+            _storage.resize(total_elements);
+        }
+        else {
+            logger.warn("VectorArray initialized with zero size or dimension.");
         }
     }
 
@@ -61,7 +67,7 @@ public:
     VectorArray(const VectorArray&) = delete;
     VectorArray& operator=(const VectorArray&) = delete;
 
-    // We enable move semantics, which will be efficient as it just moves the underlying Array object.
+    // We enable move semantics, which will be efficient as it just moves the underlying std::vector object.
     VectorArray(VectorArray&&) noexcept = default;
     VectorArray& operator=(VectorArray&&) noexcept = default;
 
@@ -69,23 +75,23 @@ public:
 
     __attribute__((always_inline))
     auto get(vec_id_t vid) -> vec_ele_t* {
-        // Access data through the underlying Array's data pointer.
-        return _vecs_array.data() + static_cast<std::size_t>(vid) * _vec_dim;
+        // Access data through the underlying vector's data pointer.
+        return _storage.data() + static_cast<std::size_t>(vid) * _vec_dim;
     }
 
     __attribute__((always_inline))
     auto get(vec_id_t vid) const -> const vec_ele_t* {
-        return _vecs_array.data() + static_cast<std::size_t>(vid) * _vec_dim;
+        return _storage.data() + static_cast<std::size_t>(vid) * _vec_dim;
     }
 
     __attribute__((always_inline))
     auto get_all() -> vec_ele_t* {
-        return _vecs_array.data();
+        return _storage.data();
     }
 
     __attribute__((always_inline))
     auto get_all() const -> const vec_ele_t* {
-        return _vecs_array.data();
+        return _storage.data();
     }
 
     __attribute__((always_inline))
@@ -108,7 +114,9 @@ public:
             throw std::runtime_error("Cannot resize VectorArray with zero dimension.");
         }
         std::size_t new_total_elements = static_cast<std::size_t>(new_num_vecs) * _vec_dim;
-        _vecs_array.resize(new_total_elements);
+        // Reserve memory first to avoid over-subscription in case of reallocation.
+        _storage.reserve(new_total_elements);
+        _storage.resize(new_total_elements);
         _num_vecs = new_num_vecs;
     }
 
@@ -118,7 +126,7 @@ public:
      * @throw std::runtime_error If the file is invalid, corrupted, or dimensions are inconsistent.
      */
     auto from_vecs_file(const std::string& fvecs_file_path) -> void {
-        
+
         std::ifstream temp_file(fvecs_file_path, std::ios::binary);
         if (!temp_file.is_open()) {
             throw std::runtime_error("Error: Could not open file " + fvecs_file_path);
@@ -129,7 +137,7 @@ public:
         temp_file.read(reinterpret_cast<char*>(&first_dim), sizeof(int));
 
         if (temp_file.gcount() == 0) { // File is empty
-            _vecs_array.clear();
+            _storage.clear();
             _num_vecs = 0;
             _vec_dim = 0;
             return;
@@ -138,7 +146,7 @@ public:
         if (first_dim <= 0) {
             throw std::runtime_error("Error: Vector dimension read from file must be positive.");
         }
-        
+
         // --- Determine the number of vectors from file size ---
         temp_file.seekg(0, std::ios::end);
         std::streamoff file_size = temp_file.tellg();
@@ -152,15 +160,14 @@ public:
         if (file_size % record_size != 0) {
             throw std::runtime_error("Error: File size indicates a malformed or incomplete file.");
         }
-        
+
         vec_num_t num_vecs_in_file = static_cast<vec_num_t>(file_size / record_size);
 
-        // --- Allocate aligned memory using our Array class ---
         _num_vecs = num_vecs_in_file;
         _vec_dim = static_cast<vec_dim_t>(first_dim);
-        
-        // Allocate a new owning Array. This will automatically handle old memory if `from_vecs_file` is called again.
-        _vecs_array = Array<vec_ele_t>::alloc(static_cast<std::size_t>(_num_vecs) * _vec_dim);
+
+        _storage.reserve(static_cast<std::size_t>(_num_vecs) * _vec_dim);
+        _storage.resize(static_cast<std::size_t>(_num_vecs) * _vec_dim);
 
         // --- Parallel read directly into the allocated memory ---
         bool error_flag = false;
@@ -168,7 +175,7 @@ public:
 
         #pragma omp parallel
         {
-            
+
         std::ifstream input_file(std::string(fvecs_file_path), std::ios::binary);
         if (!input_file.is_open()) {
             #pragma omp critical
@@ -188,7 +195,7 @@ public:
 
                 int file_vec_dim = 0;
                 input_file.read(reinterpret_cast<char*>(&file_vec_dim), sizeof(int));
-                
+
                 if (!input_file || file_vec_dim != _vec_dim) {
                     #pragma omp critical
                     {
@@ -197,16 +204,16 @@ public:
                             if (!input_file) {
                                 error_message = "Error: Corrupted file at vector index " + std::to_string(i);
                             } else {
-                                error_message = "Error: Inconsistent vector dimension. Expected " + std::to_string(_vec_dim) 
-                                                + ", but file has " + std::to_string(file_vec_dim) 
+                                error_message = "Error: Inconsistent vector dimension. Expected " + std::to_string(_vec_dim)
+                                                + ", but file has " + std::to_string(file_vec_dim)
                                                 + " at vector index " + std::to_string(i);
                             }
                         }
                     }
                     continue;
                 }
-                
-                vec_ele_t* vec_start = _vecs_array.data() + static_cast<std::size_t>(i) * _vec_dim;
+
+                vec_ele_t* vec_start = _storage.data() + static_cast<std::size_t>(i) * _vec_dim;
                 std::streamsize bytes_to_read = static_cast<std::streamsize>(_vec_dim) * sizeof(vec_ele_t);
                 input_file.read(reinterpret_cast<char*>(vec_start), bytes_to_read);
 
@@ -221,11 +228,12 @@ public:
                 }
             }
         }
+
         } // End of parallel region.
 
         if (error_flag) {
             // If an error occurred, reset the object to a clean state before throwing.
-            _vecs_array.clear();
+            _storage.clear();
             _num_vecs = 0;
             _vec_dim = 0;
             throw std::runtime_error(error_message);
@@ -234,9 +242,10 @@ public:
 
 private:
 
-    Array<vec_ele_t> _vecs_array;
+    avx512_container_t<vec_ele_t> _storage;
     vec_num_t _num_vecs;
     vec_dim_t _vec_dim;
+
 };
 
 }   // namespace cpu

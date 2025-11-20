@@ -1,7 +1,7 @@
 /*
  * @FilePath: /Artea/include/artea/cpu/vector_dataset.hpp
  * @Author: Chandler (Weitang Ye) <weitang.ye@ntu.edu.sg>
- * @Description: Refactored to hold VectorArray members directly, leveraging RAII 
+ * @Description: Refactored to hold VectorArray members directly, leveraging RAII
  *               for automatic memory management.
  */
 
@@ -14,7 +14,7 @@
 #include <fmt/format.h>
 #include <nlohmann/json.hpp>
 
-#include <artea/types.hpp>
+#include <artea/definitions.hpp>
 #include <artea/cpu/vector_array.hpp>
 #include <artea/logger.hpp>
 #include <artea/config.hpp>
@@ -23,20 +23,20 @@ namespace artea {
 namespace cpu {
 
 template <
-    typename vecs_num_t, 
-    typename vec_ele_t,
-    typename vec_id_t = vecs_num_t
+    typename vecs_num_t,
+    typename vec_ele_t
 >
 class VectorDataset {
 
     // Typedefs for clarity
+    using vec_id_t = vecs_num_t;
     using BaseQueryArray = VectorArray<vecs_num_t, vec_ele_t>;
     using GroundTruthArray = VectorArray<vecs_num_t, vec_id_t>;
 
 public:
 
     VectorDataset() = default;
-    VectorDataset(const std::string& config_path, const std::string& dataset_name) {   
+    VectorDataset(const std::string& config_path, const std::string& dataset_name) {
         from_config(config_path, dataset_name);
     }
 
@@ -56,13 +56,13 @@ public:
         _load_config(config_path);
         _load_datasets(dataset_name);
     }
-    
+
     // --- Accessors ---
     __attribute__((always_inline))
     auto get_base_vecs() -> BaseQueryArray* {
         return &_base_vecs;
     }
-    
+
     __attribute__((always_inline))
     auto get_base_vecs() const -> const BaseQueryArray* {
         return &_base_vecs;
@@ -72,7 +72,7 @@ public:
     auto get_query_vecs() -> BaseQueryArray* {
         return &_query_vecs;
     }
-    
+
     __attribute__((always_inline))
     auto get_query_vecs() const -> const BaseQueryArray* {
         return &_query_vecs;
@@ -82,7 +82,7 @@ public:
     auto get_gt_vecs() -> GroundTruthArray* {
         return &_gt_vecs;
     }
-    
+
     __attribute__((always_inline))
     auto get_gt_vecs() const -> const GroundTruthArray* {
         return &_gt_vecs;
@@ -118,17 +118,17 @@ private:
 
         ArteaLogger logger("VectorDataset::load_datasets", system_log_level);
         logger.info(fmt::format("Loading dataset {} from {} ...", dataset_name, dataset_dir.string()));
-        
+
         _base_vecs = BaseQueryArray(base_vecs_path.string());
         _query_vecs = BaseQueryArray(query_vecs_path.string());
         _gt_vecs = GroundTruthArray(gt_vecs_path.string());
 
         logger.success(
             fmt::format(
-                "Successfully loaded {} base vectors ({} dims), {} query vectors ({} dims), and {} ground truth vectors ({} dims).", 
+                "Successfully loaded {} base vectors ({} dims), {} query vectors ({} dims), and {} ground truth vectors ({} dims).",
                 _base_vecs.get_num_vecs(),
                 _base_vecs.get_vec_dim(),
-                _query_vecs.get_num_vecs(), 
+                _query_vecs.get_num_vecs(),
                 _query_vecs.get_vec_dim(),
                 _gt_vecs.get_num_vecs(),
                 _gt_vecs.get_vec_dim()

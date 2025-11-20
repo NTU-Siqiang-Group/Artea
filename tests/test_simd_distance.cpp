@@ -1,7 +1,7 @@
 /*
- * @FilePath: /yeweitang/Artea/tests/test_simd_distance.cpp
+ * @FilePath: /Artea/tests/test_simd_distance.cpp
  * @Author: Chandler (Weitang Ye) <weitang.ye@ntu.edu.sg>
- * @LastEditTime: 2025-11-05 12:50:21
+ * @LastEditTime: 2025-11-15 14:24:37
  * @Date: 2025-10-23 19:14:32
  * @Description: Test the SIMDDistance class and compare with Faiss and direct C++.
  *               Refactored to use VectorArray for memory management and added multiple correctness tests.
@@ -17,18 +17,12 @@
 #include <fmt/format.h> // For fmt::format
 
 // Artea headers
-#include <artea/logger.hpp> // Added the Artea Logger
 #include <artea/cpu/simd_distance.hpp>
 #include <artea/cpu/vector_array.hpp> // Replaced manual memory management with VectorArray
-#include <artea/types.hpp>
-
+#include <artea/definitions.hpp>
+#include <artea/logger.hpp> // Added artea::logger
 // Faiss header for CPU distance functions
 #include <faiss/utils/distances.h>
-
-namespace {
-    // Instantiate the Artea Logger
-    artea::ArteaLogger logger("SIMD_Distance_Test");
-}   // anonymous namespace
 
 // Helper function to generate a vector with random data
 void generate_random_vector(float* vec, const std::size_t dim) {
@@ -56,9 +50,9 @@ int main() {
     constexpr int NUM_CORRECTNESS_TESTS = 100; // Number of times to run the correctness check
     constexpr int NUM_VECTORS_FOR_BENCHMARK = 10000000;
 
-    logger.info("Starting SIMD Distance Test");
-    logger.info(fmt::format("Vector Dimension: {}", DIM));
-    logger.info("-------------------------------------");
+    artea::logger.info("Starting SIMD Distance Test");
+    artea::logger.info(fmt::format("Vector Dimension: {}", DIM));
+    artea::logger.info("-------------------------------------");
 
     // --- 2. Data Preparation ---
     // Use VectorArray to manage aligned memory for our two test vectors.
@@ -67,10 +61,10 @@ int main() {
     float* vec2 = test_vectors.get(1);
 
     // --- 3. Correctness Test ---
-    logger.info(fmt::format("Running {} correctness tests...", NUM_CORRECTNESS_TESTS));
-    
+    artea::logger.info(fmt::format("Running {} correctness tests...", NUM_CORRECTNESS_TESTS));
+
     // Instantiate our distance calculator
-    artea::cpu::SIMDDistance<float, artea::cpu::DistanceMetrics::EUCLIDEAN> artea_dist_calculator(DIM);
+    artea::cpu::SIMDDistance<float, artea::cpu::DistanceMetrics::EUCLIDEAN> artea_dist_computer(DIM);
     const float tolerance = 1e-4f;
 
     for (int i = 0; i < NUM_CORRECTNESS_TESTS; ++i) {
@@ -79,7 +73,7 @@ int main() {
         generate_random_vector(vec2, DIM);
 
         // Calculate distance using our implementation
-        float artea_distance = artea_dist_calculator(vec1, vec2);
+        float artea_distance = artea_dist_computer(vec1, vec2);
 
         // Calculate distance using Faiss's implementation
         float faiss_distance = faiss::fvec_L2sqr(vec1, vec2, DIM);
@@ -91,18 +85,18 @@ int main() {
         assert(std::abs(artea_distance - faiss_distance) < tolerance);
         assert(std::abs(faiss_distance - cpp_distance) < tolerance);
     }
-    
-    logger.success("Correctness test PASSED!");
+
+    artea::logger.success("Correctness test PASSED!");
 
     // We can print the results of the last test case as a sample
-    logger.debug(fmt::format("Sample Artea Result:      {}", artea_dist_calculator(vec1, vec2)));
-    logger.debug(fmt::format("Sample Faiss Result:      {}", faiss::fvec_L2sqr(vec1, vec2, DIM)));
-    logger.debug(fmt::format("Sample Direct C++ Result: {}", cpp_L2sqr(vec1, vec2, DIM)));
-    logger.info("-------------------------------------");
+    artea::logger.debug(fmt::format("Sample Artea Result:      {}", artea_dist_computer(vec1, vec2)));
+    artea::logger.debug(fmt::format("Sample Faiss Result:      {}", faiss::fvec_L2sqr(vec1, vec2, DIM)));
+    artea::logger.debug(fmt::format("Sample Direct C++ Result: {}", cpp_L2sqr(vec1, vec2, DIM)));
+    artea::logger.info("-------------------------------------");
 
     // --- 4. Performance Benchmark ---
-    logger.info("Running performance benchmark...");
-    logger.info(fmt::format("Calculating {} distances...", NUM_VECTORS_FOR_BENCHMARK));
+    artea::logger.info("Running performance benchmark...");
+    artea::logger.info(fmt::format("Calculating {} distances...", NUM_VECTORS_FOR_BENCHMARK));
 
     volatile float dummy_result = 0.0f; // Use volatile to prevent compiler from optimizing away the loop
 
@@ -113,7 +107,7 @@ int main() {
     // Benchmark Artea
     auto start_artea = std::chrono::high_resolution_clock::now();
     for (int i = 0; i < NUM_VECTORS_FOR_BENCHMARK; ++i) {
-        dummy_result += artea_dist_calculator(vec1, vec2);
+        dummy_result += artea_dist_computer(vec1, vec2);
     }
     auto end_artea = std::chrono::high_resolution_clock::now();
     std::chrono::duration<double, std::micro> artea_duration = end_artea - start_artea;
@@ -136,12 +130,12 @@ int main() {
     auto end_cpp = std::chrono::high_resolution_clock::now();
     std::chrono::duration<double, std::micro> cpp_duration = end_cpp - start_cpp;
     double cpp_time_per_dist = cpp_duration.count() / NUM_VECTORS_FOR_BENCHMARK;
-    
-    logger.info("Performance Results:");
-    logger.info(fmt::format("  Artea (SIMDDistance): {:.4f} microseconds per calculation.", artea_time_per_dist));
-    logger.info(fmt::format("  Faiss (fvec_L2sqr):   {:.4f} microseconds per calculation.", faiss_time_per_dist));
-    logger.info(fmt::format("  Direct C++:           {:.4f} microseconds per calculation.", cpp_time_per_dist));
-    logger.info("-------------------------------------");
+
+    artea::logger.info("Performance Results:");
+    artea::logger.info(fmt::format("  Artea (SIMDDistance): {:.4f} microseconds per calculation.", artea_time_per_dist));
+    artea::logger.info(fmt::format("  Faiss (fvec_L2sqr):   {:.4f} microseconds per calculation.", faiss_time_per_dist));
+    artea::logger.info(fmt::format("  Direct C++:           {:.4f} microseconds per calculation.", cpp_time_per_dist));
+    artea::logger.info("-------------------------------------");
 
 
     // --- 5. Cleanup ---

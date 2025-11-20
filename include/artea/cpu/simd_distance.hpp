@@ -5,7 +5,7 @@
 #include <immintrin.h>
 #include <cassert>
 
-#include <artea/types.hpp>
+#include <artea/definitions.hpp>
 #include <artea/logger.hpp>
 
 namespace artea {
@@ -34,9 +34,9 @@ class SIMDDistance {
             "SIMD register size must be a multiple of the element size for this utility."
         );
         return SIMD_REGISTER_BYTES / sizeof(vec_ele_t);
-    }();
+    }();    // 16 for float32 type and 8 for double type
 
-public: 
+public:
 
     SIMDDistance(const vec_dim_t vec_dim) : _vec_dim(vec_dim), NUM_SIMD_CHUNKS(_vec_dim / SIMD_CHUNK_SIZE), NUM_REMAINING_ELES(_vec_dim % SIMD_CHUNK_SIZE) {
         ArteaLogger logger("SIMDDistance", LogLevel::INFO);
@@ -64,10 +64,11 @@ private:
 
     const vec_dim_t _vec_dim;
     /** @brief Number of SIMD chunks that can be processed in parallel */
-    const std::size_t NUM_SIMD_CHUNKS;      
+    const std::size_t NUM_SIMD_CHUNKS;
     /** @brief Number of remaining elements that cannot be processed in parallel */
-    const std::size_t NUM_REMAINING_ELES;   
+    const std::size_t NUM_REMAINING_ELES;
 
+    // TODO: test this always_inline performance
     __attribute__((always_inline))
     auto _impl_euclidean(const vec_ele_t* vec1, const vec_ele_t* vec2) -> vec_ele_t {
         // AVX512 implementation
@@ -90,7 +91,7 @@ private:
 
         }
         else if constexpr (unroll_size == 4) {
-            
+
         }
 
         // Process remaining elements
@@ -126,6 +127,6 @@ private:
     }
 
 };  // class SIMDDistance
-    
+
 }  // namespace cpu
 }   // namespace artea

@@ -1,9 +1,9 @@
 /*
  * @FilePath: /Artea/include/artea/cpu/part_index.hpp
  * @Author: Chandler (Weitang Ye) <weitang.ye@ntu.edu.sg>
- * @LastEditTime: 2025-11-05 16:15:24
+ * @LastEditTime: 2025-11-12 14:40:50
  * @Date: 2025-11-01 17:04:26
- * @Description: 
+ * @Description:
  */
 
 #pragma once
@@ -24,10 +24,8 @@ template <
 >
 class PartMethod {
 
-public:
-
 private:
-    
+
 
 };  // class PartMethod
 
@@ -49,18 +47,18 @@ public:
     ~PartIndex() = default;
 
     auto build(const VectorArray<vec_num_t, vec_ele_t, vec_dim>* vecs_array) -> void override {
-        
+
     }
 
     auto speculate(vec_id_t vec_id) -> part_id_t override {
-        
+
     }
 
 private:
     part_num_t _num_parts;
     VectorArray<part_num_t, vec_ele_t> _centroids;
     Array<part_id_t> _vid2pid;
-    
+
 };  // class PartIndex
 
 }   // namespace cpu

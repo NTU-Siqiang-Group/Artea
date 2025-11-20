@@ -19,7 +19,7 @@ cmake -B build -DCMAKE_BUILD_TYPE=Release \
       -D CMAKE_CXX_COMPILER=$HOME/intel/oneapi/compiler/latest/bin/icpx \
       -D CMAKE_C_COMPILER=$HOME/intel/oneapi/compiler/latest/bin/icx
 
-# If you do not have intel oneapi compiler, you can use gcc/g++ instead
+# If you do not have intel oneapi compiler, you can use gcc/g++ alternatively
 cmake -B build -DCMAKE_BUILD_TYPE=Release \
       -D CMAKE_CXX_COMPILER=/usr/local/gcc-14/bin/g++ \
       -D CMAKE_C_COMPILER=/usr/local/gcc-14/bin/gcc

@@ -21,7 +21,14 @@ find_package(OpenMP REQUIRED)
 find_package(TBB REQUIRED)
 
 # --- Find Intel MKL ---
-find_package(MKL REQUIRED) 
+find_package(MKL REQUIRED)
+
+# --- Find Intel oneDAL ---
+set(ONEDAL_INTERFACE "yes")
+set(ONEDAL_USE_DPCPP "no")
+find_package(oneDAL REQUIRED)
+message(STATUS "oneDAL Targets: ${oneDAL_IMPORTED_TARGETS}")
+message(STATUS "oneDAL Libraries: ${oneDAL_LIBRARIES}")
 
 FetchContent_Declare(
 	nlohmann_json
@@ -37,7 +44,7 @@ FetchContent_Declare(
 FetchContent_Declare(
 	termcolor
 	GIT_REPOSITORY https://github.com/ikalnytskyi/termcolor.git
-	GIT_TAG "v2.1.0"  
+	GIT_TAG "v2.1.0"
 )
 
 FetchContent_Declare(
@@ -53,7 +60,7 @@ FetchContent_Declare(
 )
 
 # This command downloads and configures all declared content
-FetchContent_MakeAvailable(nlohmann_json argparse termcolor fmt)
+FetchContent_MakeAvailable(nlohmann_json argparse termcolor fmt range-v3)
 
 # --- 3. Faiss Submodule Configuration ---
 # Set options to build a minimal CPU version of Faiss
@@ -75,11 +82,12 @@ target_compile_options(artea INTERFACE -mavx512f)
 target_link_libraries(artea INTERFACE
     nlohmann_json::nlohmann_json
     argparse::argparse
-    OpenMP::OpenMP_CXX   
+    OpenMP::OpenMP_CXX
     termcolor
     fmt::fmt
     TBB::tbb
     MKL::MKL
+	oneDAL::onedal_core
 	range-v3::range-v3
 )
 

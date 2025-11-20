@@ -1,14 +1,14 @@
 /*
- * @FilePath: /yeweitang/Artea/tests/test_vector_dataset.cpp
+ * @FilePath: /Artea/tests/test_vector_dataset.cpp
  * @Author: Chandler (Weitang Ye) <weitang.ye@ntu.edu.sg>
- * @LastEditTime: 2025-11-05 12:50:26
+ * @LastEditTime: 2025-11-20 10:18:06
  * @Date: 2025-10-23 15:50:42
  * @Description: Test the VectorDataset class for loading time and correctness.
  */
 
 #include <iostream>
 #include <string>
-#include <chrono> 
+#include <chrono>
 #include <stdexcept>
 #include <vector>
 #include <fstream>
@@ -20,12 +20,8 @@
 #include <fmt/format.h>
 
 #include <artea/cpu/vector_dataset.hpp>
-#include <artea/types.hpp> 
+#include <artea/definitions.hpp>
 #include <artea/logger.hpp>
-
-namespace {
-artea::ArteaLogger logger("testVectorDataset");
-}   // anonymous namespace
 
 // --- Start of Correctness Verification Code ---
 
@@ -51,7 +47,7 @@ std::pair<std::vector<T>, int> load_vecs_file_simple(const std::string& file_pat
     input.seekg(0, std::ios::beg); // Rewind to start
 
     const size_t record_size = sizeof(int) + static_cast<size_t>(dim) * sizeof(T);
-    
+
     // Get file size to determine the number of vectors
     input.seekg(0, std::ios::end);
     size_t file_size = input.tellg();
@@ -64,7 +60,7 @@ std::pair<std::vector<T>, int> load_vecs_file_simple(const std::string& file_pat
     size_t num_vectors = file_size / record_size;
     std::vector<T> data;
     data.reserve(num_vectors * dim);
-    
+
     int temp_dim = 0;
     std::vector<T> buffer(dim);
 
@@ -101,18 +97,18 @@ void run_correctness_check(
     // 1. Load data using the simple reference implementation
     auto [ref_data, ref_dim] = load_vecs_file_simple<T>(file_path);
     size_t ref_num_vecs = ref_data.size() / ref_dim;
-    
-    logger.info(fmt::format("Reference loader: {} vectors, {} dims.", ref_num_vecs, ref_dim));
-    
+
+    artea::logger.info(fmt::format("Reference loader: {} vectors, {} dims.", ref_num_vecs, ref_dim));
+
     // 2. Compare metadata (vector count and dimension)
     auto artea_num_vecs = artea_array->get_num_vecs();
     auto artea_dim = artea_array->get_vec_dim();
-    logger.info(fmt::format("Artea loader: {} vectors, {} dims.", artea_num_vecs, artea_dim));
-    
+    artea::logger.info(fmt::format("Artea loader: {} vectors, {} dims.", artea_num_vecs, artea_dim));
+
     if (artea_dim == ref_dim && artea_num_vecs == ref_num_vecs) {
-        logger.success("Metadata check PASSED.");
+        artea::logger.success("Metadata check PASSED.");
     } else {
-        logger.error("Metadata check FAILED.");
+        artea::logger.error("Metadata check FAILED.");
     }
 
     // 3. Randomly sample and compare vector data
@@ -129,16 +125,16 @@ void run_correctness_check(
             if constexpr (std::is_floating_point_v<T>) {
                 const T tolerance = 1e-6f;
                 if (std::abs(artea_vec[j] - ref_vec_start[j]) >= tolerance) {
-                    logger.error(fmt::format("Float data mismatch at vec_id {} dim {}: {} != {}", vec_id, j, artea_vec[j], ref_vec_start[j]));
+                    artea::logger.error(fmt::format("Float data mismatch at vec_id {} dim {}: {} != {}", vec_id, j, artea_vec[j], ref_vec_start[j]));
                 }
             } else {
                 if (artea_vec[j] != ref_vec_start[j]) {
-                    logger.error(fmt::format("Integer data mismatch at vec_id {} dim {}: {} != {}", vec_id, j, artea_vec[j], ref_vec_start[j]));
+                    artea::logger.error(fmt::format("Integer data mismatch at vec_id {} dim {}: {} != {}", vec_id, j, artea_vec[j], ref_vec_start[j]));
                 }
             }
         }
     }
-    logger.success(fmt::format("Random vector data check ({}) PASSED.", NUM_CHECKS));
+    artea::logger.success(fmt::format("Random vector data check ({}) PASSED.", NUM_CHECKS));
 }
 
 // --- End of Correctness Verification Code ---
@@ -159,43 +155,42 @@ int main() {
 
         artea::cpu::VectorDataset<
             uint32_t, // vecs_num_t
-            float,    // vec_ele_t for base and query
-            uint32_t  // vec_id_t for ground truth
+            float    // vec_ele_t for base and query
         > dataset(config_path, dataset_name);
 
         auto end_time = std::chrono::high_resolution_clock::now();
         std::chrono::duration<double, std::milli> elapsed_ms = end_time - start_time;
 
-        logger.success("Successfully loaded the dataset using Artea.");
-        logger.info(fmt::format("Time taken to load: {} ms", elapsed_ms.count()));
+        artea::logger.success("Successfully loaded the dataset using Artea.");
+        artea::logger.info(fmt::format("Time taken to load: {} ms", elapsed_ms.count()));
 
         // --- Perform correctness check (on-par comparison) ---
         run_correctness_check<float>(
-            "Base Vectors", 
-            root_dir + "sift_base.fvecs", 
+            "Base Vectors",
+            root_dir + "sift_base.fvecs",
             dataset.get_base_vecs()
         );
 
         run_correctness_check<float>(
-            "Query Vectors", 
-            root_dir + "sift_query.fvecs", 
+            "Query Vectors",
+            root_dir + "sift_query.fvecs",
             dataset.get_query_vecs()
         );
 
         run_correctness_check<uint32_t>(
-            "Ground Truth Vectors", 
-            root_dir + "sift_groundtruth.ivecs", 
+            "Ground Truth Vectors",
+            root_dir + "sift_groundtruth.ivecs",
             dataset.get_gt_vecs()
         );
 
     } catch (const std::exception& e) { // Catch std::exception for broader coverage
-        logger.error(fmt::format("\nAn error occurred during the test: {}", e.what()));
+        artea::logger.error(fmt::format("\nAn error occurred during the test: {}", e.what()));
         return 1;
     } catch (...) {
-        logger.error("\nAn unknown error occurred.");
+        artea::logger.error("\nAn unknown error occurred.");
         return 1;
     }
-    
-    logger.success("\nAll tests completed successfully!");
+
+    artea::logger.success("\nAll tests completed successfully!");
     return 0;
 }

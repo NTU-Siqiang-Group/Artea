@@ -1,7 +1,7 @@
 /*
  * @FilePath: /Artea/include/artea/logger.hpp
  * @Author: Chandler (Weitang Ye) <weitang.ye@ntu.edu.sg>
- * @LastEditTime: 2025-11-06 15:27:28
+ * @LastEditTime: 2025-11-15 16:18:30
  * @Date: 2025-10-23 13:26:15
  * @Description: A logger that supports colorful printing via termcolor.
  */
@@ -14,7 +14,7 @@
 
 #include <fmt/format.h>
 
-#include <artea/types.hpp>
+#include <artea/definitions.hpp>
 // Reference: https://github.com/ikaln/termcolor/blob/master/include/termcolor/termcolor.hpp
 #include <termcolor/termcolor.hpp>
 
@@ -39,9 +39,9 @@ public:
         return "UNKNOWN";
     }
 
-    ArteaLogger(const std::string& logger_name, const LogLevel system_level = LogLevel::DEBUG) : 
+    ArteaLogger(const std::string& logger_name, const LogLevel system_level = LogLevel::DEBUG) :
         _logger_name(logger_name), _system_level(system_level) {}
-    
+
     ~ArteaLogger() = default;
 
     template<bool success_flag = false>
@@ -50,7 +50,7 @@ public:
             return; // Skip logging if message level is lower than current level
         }
         auto level_str = to_string(msg_level);
-    
+
         switch (msg_level) {
             case LogLevel::DEBUG:
                 std::cout << termcolor::grey;
@@ -70,30 +70,30 @@ public:
                 break;
         }
 
-        std::cout << fmt::format("[{}] [{}] {}", level_str, _logger_name, message) 
+        std::cout << fmt::format("[{}] [{}] {}", level_str, _logger_name, message)
                   << termcolor::reset << std::endl;
     }
 
     __attribute__((always_inline))
-    auto debug(const std::string& message) -> void { 
-        log(message, LogLevel::DEBUG); 
+    auto debug(const std::string& message) -> void {
+        log(message, LogLevel::DEBUG);
     }
 
     __attribute__((always_inline))
     auto success(const std::string& message) -> void {
-        log<true>(message, LogLevel::INFO); 
+        log<true>(message, LogLevel::INFO);
     }
 
     __attribute__((always_inline))
-    auto info(const std::string& message)  -> void { 
-        log(message, LogLevel::INFO); 
+    auto info(const std::string& message)  -> void {
+        log(message, LogLevel::INFO);
     }
-    
+
     __attribute__((always_inline))
-    auto warn(const std::string& message)  -> void { 
-        log(message, LogLevel::WARN); 
+    auto warn(const std::string& message)  -> void {
+        log(message, LogLevel::WARN);
     }
-    
+
     __attribute__((always_inline))
     auto error(const std::string& message) -> void {
         log(message, LogLevel::ERROR);
@@ -105,5 +105,7 @@ private:
     LogLevel _system_level;
 
 };  // class ArteaLogger
+
+inline ArteaLogger logger("Artea");
 
 }   // namespace artea

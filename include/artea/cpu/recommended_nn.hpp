@@ -1,13 +1,13 @@
 /*
  * @FilePath: /Artea/include/artea/cpu/recommended_nn.hpp
  * @Author: Chandler (Weitang Ye) <weitang.ye@ntu.edu.sg>
- * @LastEditTime: 2025-11-09 17:07:03
+ * @LastEditTime: 2025-11-16 15:07:20
  * @Date: 2025-11-02 21:18:08
- * @Description: 
+ * @Description:
  */
 
 /*
- * @FilePath: /Artea/include/artea/cpu/random_nn.hpp
+ * @FilePath: /Artea/include/artea/cpu/random_seq.hpp
  * @Author: Chandler (Weitang Ye) <weitang.ye@ntu.edu.sg>
  * @LastEditTime: 2025-11-05 19:18:18
  * @Date: 2025-11-02 19:41:19
@@ -17,37 +17,82 @@
 #pragma once
 
 #include <random>
+#include <vector>
 #include <stdexcept>
 #include <type_traits>
 
-#include <artea/types.hpp>
-#include <artea/config.hpp>
-#include <artea/cpu/array.hpp>
 #include <artea/cpu/vector_array.hpp>
+#include <artea/cpu/index_graph.hpp>
+#include <artea/definitions.hpp>
+#include <artea/config.hpp>
 
 namespace artea {
 namespace cpu {
 
-template <typename vec_num_t>
+template <
+    typename vertex_num_t,
+    typename vec_ele_t,
+    typename derived_class
+>
 class RecommendedNN {
 
+    using distance_t = vec_ele_t;
+    using vertex_id_t = vertex_num_t;
+    using nbr_t = Neighbor<vertex_num_t, vec_ele_t>;
+    using nbr_arr_t = std::vector<nbr_t>;
+
 public:
-
-    using vec_id_t = vec_num_t;
-
-    RecommendedNN(const vertex_num_t& recom_buf_size, bool enabled = false) : 
-        _recom_buf_size(recom_buf_size) {}
+    RecommendedNN(const vertex_num_t num_vertices, const vertex_num_t recom_buf_size) :
+        _num_vertices(num_vertices),
+        _recom_buf_size(recom_buf_size),
+        _ro_recom_buf(num_vertices)
+    {
+        for (auto& ro_recom_arr : _ro_recom_buf) {
+            ro_recom_arr.reserve(recom_buf_size);
+        }
+    }
 
     ~RecommendedNN() = default;
 
-    virtual auto append_edge(const vertex_id_t& src, const nbr_t& nbr) -> void = 0;
+    __attribute__((always_inline))
+    auto append_edge(const vertex_id_t src, const nbr_t& nbr) -> void {
+        static_cast<derived_class*>(this)->append_edge_impl(src, nbr);
+    }
 
-    virtual auto get_recom_nbrs(const vertex_id_t& src) -> Array<nbr_t> = 0;
+    __attribute__((always_inline))
+    auto append_edge(const vertex_id_t src, const vertex_id_t dest, const distance_t dist) -> void {
+        static_cast<derived_class*>(this)->append_edge_impl(src, dest, dist);
+    }
+
+    __attribute__((always_inline))
+    auto get_recom_nbrs(const vertex_id_t src) -> nbr_arr_t& {
+        return static_cast<derived_class*>(this)->get_recom_nbrs_impl(src);
+    }
+
+    /**
+     * @brief Flush the recommendation buffer (implemented by the derived class, which supports
+     * thread-safe concurrent access) to a read-only buffer.
+     */
+    __attribute__((always_inline))
+    auto flush() -> void {
+        static_cast<derived_class*>(this)->flush_impl();
+    }
+
+    __attribute__((always_inline))
+    auto clear() -> void {
+        static_cast<derived_class*>(this)->clear_impl();
+    }
 
 protected:
 
-    /** @brief The size of the append buffer. */
-    const vertex_num_t& _recom_buf_size;
+    /** @brief Number of vertices. */
+    vertex_num_t _num_vertices;
+
+    /** @brief Size of the append buffer. */
+    vertex_num_t _recom_buf_size;
+
+    /** @brief Read-only recommendation buffer for each vertex. */
+    std::vector<nbr_arr_t> _ro_recom_buf;
 
 };  // class RecommendedNN
 
