@@ -1,7 +1,7 @@
 /*
  * @FilePath: /Artea/include/artea/cpu/random_seq.hpp
  * @Author: Chandler (Weitang Ye) <weitang.ye@ntu.edu.sg>
- * @LastEditTime: 2025-11-20 10:44:28
+ * @LastEditTime: 2025-11-22 11:23:11
  * @Date: 2025-11-02 19:41:19
  * @Description: Modified to be thread-safe for parallel execution by using TBB thread-local storage.
  */
@@ -71,10 +71,32 @@ public:
      * @param num_rand_nbrs The total number of random numbers to generate.
      * @note  Caller must ensure that the size of rand_nbrs is at least num_rand_nbrs.
      */
-    __attribute__((always_inline))
     auto generate(std::vector<vec_id_t>& rand_nbrs, const vec_num_t num_rand_nbrs) -> void {
         vec_id_t* rand_nbrs_ptr = rand_nbrs.data();
 
+        // Get the MKL stream specific to the current thread.
+        // If one doesn't exist yet for this thread, TBB creates it using our factory.
+        VSLStreamStatePtr& local_stream = _tl_streams.local();
+
+        viRngUniform(
+            VSL_RNG_METHOD_UNIFORM_STD,
+            local_stream, num_rand_nbrs,
+            reinterpret_cast<int*>(rand_nbrs_ptr),
+            0,
+            static_cast<int>(_num_vecs)
+        );
+    }
+
+    /**
+     * @brief Generate random numbers in a thread-safe manner.
+     *        It automatically uses a random stream unique to the calling thread.
+     *        This method can be called by single-threaded or multi-threaded code.
+     * @param rand_nbrs_ptr Pointer to the array where the generated random numbers will be stored.
+     * @param num_rand_nbrs The total number of random numbers to generate.
+     * @note  Caller must ensure that the memory pointed by rand_nbrs_ptr is large enough
+     *        to hold num_rand_nbrs elements.
+     */
+    auto generate(vec_id_t* rand_nbrs_ptr, const vec_num_t num_rand_nbrs) -> void {
         // Get the MKL stream specific to the current thread.
         // If one doesn't exist yet for this thread, TBB creates it using our factory.
         VSLStreamStatePtr& local_stream = _tl_streams.local();

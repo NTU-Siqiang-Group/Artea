@@ -1,7 +1,7 @@
 /*
  * @FilePath: /Artea/include/artea/cpu/vector_array.hpp
  * @Author: Chandler (Weitang Ye) <weitang.ye@ntu.edu.sg>
- * @LastEditTime: 2025-11-16 16:10:47
+ * @LastEditTime: 2025-11-24 12:09:01
  * @Date: 2025-10-18 16:31:57
  * @Description:
  */
@@ -44,13 +44,16 @@ public:
     VectorArray(vec_num_t num_vecs, vec_dim_t dim)
         : _num_vecs(num_vecs), _vec_dim(dim)
     {
-        if (num_vecs > 0 && dim > 0) {
-            std::size_t total_elements = static_cast<std::size_t>(num_vecs) * dim;
-            _storage.resize(total_elements);
-        }
-        else {
-            logger.warn("VectorArray initialized with zero size or dimension.");
-        }
+        // if (num_vecs > 0 && dim > 0) {
+        //     std::size_t total_elements = static_cast<std::size_t>(num_vecs) * dim;
+        //     _storage.resize(total_elements);
+        // }
+        // else {
+        //     logger.warn("VectorArray initialized with zero size or dimension.");
+        // }
+
+        std::size_t total_elements = static_cast<std::size_t>(num_vecs) * dim;
+        _storage.resize(total_elements);
     }
 
     /**
@@ -110,9 +113,9 @@ public:
      * @note If the dimension is 0, this function will throw. You must set a dimension first.
      */
     void resize(vec_num_t new_num_vecs) {
-        if (_vec_dim == 0 && new_num_vecs > 0) {
-            throw std::runtime_error("Cannot resize VectorArray with zero dimension.");
-        }
+        // if (_vec_dim == 0 && new_num_vecs > 0) {
+        //     throw std::runtime_error("Cannot resize VectorArray with zero dimension.");
+        // }
         std::size_t new_total_elements = static_cast<std::size_t>(new_num_vecs) * _vec_dim;
         // Reserve memory first to avoid over-subscription in case of reallocation.
         _storage.reserve(new_total_elements);

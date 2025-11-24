@@ -24,6 +24,6 @@ cmake -B build -DCMAKE_BUILD_TYPE=Release \
       -D CMAKE_CXX_COMPILER=/usr/local/gcc-14/bin/g++ \
       -D CMAKE_C_COMPILER=/usr/local/gcc-14/bin/gcc
 
-cmake --build build -j16
+cmake --build build -j64
 ./build/tests/test_simd_distance    # e.g. test the SIMD distance implementation
 ```

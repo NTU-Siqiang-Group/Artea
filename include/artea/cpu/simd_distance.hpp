@@ -1,3 +1,11 @@
+/*
+ * @FilePath: /Artea/include/artea/cpu/simd_distance.hpp
+ * @Author: Chandler (Weitang Ye) <weitang.ye@ntu.edu.sg>
+ * @LastEditTime: 2025-11-22 15:48:17
+ * @Date: 2025-10-18 19:10:57
+ * @Description: SIMD-accelerated distance computation utilities.
+ */
+
 #pragma once
 
 #include <cstddef>
@@ -24,6 +32,8 @@ template <
 >
 class SIMDDistance {
 
+    using distance_t = vec_ele_t;
+
     static constexpr std::size_t SIMD_REGISTER_BITS = 512;
     static constexpr std::size_t SIMD_REGISTER_BYTES = SIMD_REGISTER_BITS / 8;  // 64
     // Number of elements that can be processed in a single SIMD register
@@ -48,7 +58,7 @@ public:
     }
 
     __attribute__((always_inline))
-    auto operator()(const vec_ele_t* vec1, const vec_ele_t* vec2) -> vec_ele_t {
+    auto operator()(const vec_ele_t* vec1, const vec_ele_t* vec2) const -> distance_t {
         if constexpr (dist_type == DistanceMetrics::EUCLIDEAN) {
             return _impl_euclidean(vec1, vec2);
         } else if constexpr (dist_type == DistanceMetrics::DOT) {
@@ -68,61 +78,123 @@ private:
     /** @brief Number of remaining elements that cannot be processed in parallel */
     const std::size_t NUM_REMAINING_ELES;
 
-    // TODO: test this always_inline performance
     __attribute__((always_inline))
-    auto _impl_euclidean(const vec_ele_t* vec1, const vec_ele_t* vec2) -> vec_ele_t {
+    auto _impl_euclidean(const vec_ele_t* vec1, const vec_ele_t* vec2) const -> distance_t {
         // AVX512 implementation
-        vec_ele_t result_chunk [NUM_SIMD_CHUNKS] __attribute__((aligned(64)));
+        // sum_chunk serves as the first accumulator (sum_chunk_0)
         __m512 vec1_chunk, vec2_chunk, diff_chunk, sum_chunk = _mm512_set1_ps(0.0f);
 
         // Process SIMD chunks
+        std::size_t i = 0;
 
-        // TODO: unroll the loop
         if constexpr (unroll_size == 1) {
-            for (std::size_t i = 0; i < NUM_SIMD_CHUNKS; ++i) {
+            for (; i < NUM_SIMD_CHUNKS; ++i) {
                 vec1_chunk = _mm512_loadu_ps(vec1 + i * SIMD_CHUNK_SIZE);
                 vec2_chunk = _mm512_loadu_ps(vec2 + i * SIMD_CHUNK_SIZE);
                 diff_chunk = _mm512_sub_ps(vec1_chunk, vec2_chunk);
-                // sum_chunk = _mm512_add_ps(sum_chunk, _mm512_mul_ps(diff_chunk, diff_chunk));
                 sum_chunk = _mm512_fmadd_ps(diff_chunk, diff_chunk, sum_chunk);
             }
         }
         else if constexpr (unroll_size == 2) {
+            // Define a second accumulator to break dependency chain
+            __m512 sum_chunk_1 = _mm512_setzero_ps();
 
+            // Main unrolled loop
+            // Ensure we have at least 2 chunks left to process
+            for (; i + 1 < NUM_SIMD_CHUNKS; i += 2) {
+                // Chunk 0
+                vec1_chunk = _mm512_loadu_ps(vec1 + i * SIMD_CHUNK_SIZE);
+                vec2_chunk = _mm512_loadu_ps(vec2 + i * SIMD_CHUNK_SIZE);
+                diff_chunk = _mm512_sub_ps(vec1_chunk, vec2_chunk);
+                sum_chunk = _mm512_fmadd_ps(diff_chunk, diff_chunk, sum_chunk);
+
+                // Chunk 1
+                vec1_chunk = _mm512_loadu_ps(vec1 + (i + 1) * SIMD_CHUNK_SIZE);
+                vec2_chunk = _mm512_loadu_ps(vec2 + (i + 1) * SIMD_CHUNK_SIZE);
+                diff_chunk = _mm512_sub_ps(vec1_chunk, vec2_chunk);
+                sum_chunk_1 = _mm512_fmadd_ps(diff_chunk, diff_chunk, sum_chunk_1);
+            }
+
+            // Merge accumulators
+            sum_chunk = _mm512_add_ps(sum_chunk, sum_chunk_1);
+
+            // Process remaining SIMD chunks (Tail handling for unrolling)
+            // This loop handles the cases where NUM_SIMD_CHUNKS is not a multiple of unroll_size
+            for (; i < NUM_SIMD_CHUNKS; ++i) {
+                vec1_chunk = _mm512_loadu_ps(vec1 + i * SIMD_CHUNK_SIZE);
+                vec2_chunk = _mm512_loadu_ps(vec2 + i * SIMD_CHUNK_SIZE);
+                diff_chunk = _mm512_sub_ps(vec1_chunk, vec2_chunk);
+                sum_chunk = _mm512_fmadd_ps(diff_chunk, diff_chunk, sum_chunk);
+            }
         }
         else if constexpr (unroll_size == 4) {
+            // Define extra accumulators
+            __m512 sum_chunk_1 = _mm512_setzero_ps();
+            __m512 sum_chunk_2 = _mm512_setzero_ps();
+            __m512 sum_chunk_3 = _mm512_setzero_ps();
 
+            // Main unrolled loop
+            // Ensure we have at least 4 chunks left to process
+            for (; i + 3 < NUM_SIMD_CHUNKS; i += 4) {
+                // Chunk 0
+                vec1_chunk = _mm512_loadu_ps(vec1 + i * SIMD_CHUNK_SIZE);
+                vec2_chunk = _mm512_loadu_ps(vec2 + i * SIMD_CHUNK_SIZE);
+                diff_chunk = _mm512_sub_ps(vec1_chunk, vec2_chunk);
+                sum_chunk = _mm512_fmadd_ps(diff_chunk, diff_chunk, sum_chunk);
+
+                // Chunk 1
+                vec1_chunk = _mm512_loadu_ps(vec1 + (i + 1) * SIMD_CHUNK_SIZE);
+                vec2_chunk = _mm512_loadu_ps(vec2 + (i + 1) * SIMD_CHUNK_SIZE);
+                diff_chunk = _mm512_sub_ps(vec1_chunk, vec2_chunk);
+                sum_chunk_1 = _mm512_fmadd_ps(diff_chunk, diff_chunk, sum_chunk_1);
+
+                // Chunk 2
+                vec1_chunk = _mm512_loadu_ps(vec1 + (i + 2) * SIMD_CHUNK_SIZE);
+                vec2_chunk = _mm512_loadu_ps(vec2 + (i + 2) * SIMD_CHUNK_SIZE);
+                diff_chunk = _mm512_sub_ps(vec1_chunk, vec2_chunk);
+                sum_chunk_2 = _mm512_fmadd_ps(diff_chunk, diff_chunk, sum_chunk_2);
+
+                // Chunk 3
+                vec1_chunk = _mm512_loadu_ps(vec1 + (i + 3) * SIMD_CHUNK_SIZE);
+                vec2_chunk = _mm512_loadu_ps(vec2 + (i + 3) * SIMD_CHUNK_SIZE);
+                diff_chunk = _mm512_sub_ps(vec1_chunk, vec2_chunk);
+                sum_chunk_3 = _mm512_fmadd_ps(diff_chunk, diff_chunk, sum_chunk_3);
+            }
+
+            // Merge accumulators
+            // (sum0 + sum1) + (sum2 + sum3)
+            __m512 sum_01 = _mm512_add_ps(sum_chunk, sum_chunk_1);
+            __m512 sum_23 = _mm512_add_ps(sum_chunk_2, sum_chunk_3);
+            sum_chunk = _mm512_add_ps(sum_01, sum_23);
+
+            // Process remaining SIMD chunks (Tail handling for unrolling)
+            // This loop handles the cases where NUM_SIMD_CHUNKS is not a multiple of unroll_size
+            for (; i < NUM_SIMD_CHUNKS; ++i) {
+                vec1_chunk = _mm512_loadu_ps(vec1 + i * SIMD_CHUNK_SIZE);
+                vec2_chunk = _mm512_loadu_ps(vec2 + i * SIMD_CHUNK_SIZE);
+                diff_chunk = _mm512_sub_ps(vec1_chunk, vec2_chunk);
+                sum_chunk = _mm512_fmadd_ps(diff_chunk, diff_chunk, sum_chunk);
+            }
         }
 
-        // Process remaining elements
-        if (NUM_REMAINING_ELES > 0) {
-            throw std::runtime_error(
-                "Currently vector dimension must be a multiple of SIMD chunk size (e.g. 16 for float type)"
-            );
-        }
-
-        // // Horizontal sum
-        // _mm512_storeu_ps(result_chunk, sum_chunk);
-        // vec_ele_t result = 0.0f;
-
-        // // TODO: unroll the loop
-        // for (std::size_t i = 0; i < SIMD_CHUNK_SIZE; ++i) {
-        //     result += result_chunk[i];
+        // // Process remaining elements (non-multiple of 16)
+        // if (NUM_REMAINING_ELES > 0) {
+        //     throw std::runtime_error(
+        //         "Currently vector dimension must be a multiple of SIMD chunk size (e.g. 16 for float type)"
+        //     );
         // }
-
-        // return result;
 
         return _mm512_reduce_add_ps(sum_chunk);
     }
 
     __attribute__((always_inline))
-    auto _impl_dot(const vec_ele_t* vec1, const vec_ele_t* vec2) -> vec_ele_t {
+    auto _impl_dot(const vec_ele_t* vec1, const vec_ele_t* vec2) const -> distance_t {
         throw std::runtime_error("Currently DOT distance is not supported");
     }
 
 
     __attribute__((always_inline))
-    auto _impl_cosine(const vec_ele_t* vec1, const vec_ele_t* vec2) -> vec_ele_t {
+    auto _impl_cosine(const vec_ele_t* vec1, const vec_ele_t* vec2) const -> distance_t {
         throw std::runtime_error("Currently COSINE distance is not supported");
     }
 

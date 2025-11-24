@@ -3,6 +3,15 @@ cmake_minimum_required(VERSION 3.16)
 cmake_policy(SET CMP0135 NEW) # Use modern timestamp behavior
 project(Artea LANGUAGES CXX)
 
+# include(CheckIPOSupported)
+# check_ipo_supported(RESULT result OUTPUT output)
+# if(result)
+#     message(STATUS "IPO/LTO is supported. Enabling globally.")
+#     set(CMAKE_INTERPROCEDURAL_OPTIMIZATION ON)
+# else()
+#     message(WARNING "IPO/LTO is not supported: ${output}")
+# endif()
+
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
@@ -23,13 +32,6 @@ find_package(TBB REQUIRED)
 # --- Find Intel MKL ---
 find_package(MKL REQUIRED)
 
-# --- Find Intel oneDAL ---
-set(ONEDAL_INTERFACE "yes")
-set(ONEDAL_USE_DPCPP "no")
-find_package(oneDAL REQUIRED)
-message(STATUS "oneDAL Targets: ${oneDAL_IMPORTED_TARGETS}")
-message(STATUS "oneDAL Libraries: ${oneDAL_LIBRARIES}")
-
 FetchContent_Declare(
 	nlohmann_json
 	URL https://github.com/nlohmann/json/releases/download/v3.11.2/json.tar.xz
@@ -38,7 +40,7 @@ FetchContent_Declare(
 FetchContent_Declare(
 	argparse
 	GIT_REPOSITORY https://github.com/p-ranav/argparse.git
-	GIT_TAG "v2.2"
+	GIT_TAG "v3.2"
 )
 
 FetchContent_Declare(
@@ -59,8 +61,21 @@ FetchContent_Declare(
     GIT_TAG "0.12.0"
 )
 
+FetchContent_Declare(
+    hnswlib
+    GIT_REPOSITORY https://github.com/nmslib/hnswlib.git
+    GIT_TAG "v0.8.0"
+)
+
 # This command downloads and configures all declared content
-FetchContent_MakeAvailable(nlohmann_json argparse termcolor fmt range-v3)
+FetchContent_MakeAvailable(
+	nlohmann_json
+	argparse
+	termcolor
+	fmt
+	range-v3
+	hnswlib
+)
 
 # --- 3. Faiss Submodule Configuration ---
 # Set options to build a minimal CPU version of Faiss
@@ -76,8 +91,14 @@ target_include_directories(artea INTERFACE
   	"${CMAKE_CURRENT_SOURCE_DIR}/include"
 )
 
-# Add compiler flag for AVX512 support to our library
-target_compile_options(artea INTERFACE -mavx512f)
+# Add compiler flag for AVX512 support to artea library
+target_compile_options(artea INTERFACE -mavx512f -march=native)
+
+#
+target_compile_definitions(artea INTERFACE
+	# avoid error caused by fmt library
+	FMT_USE_CONSTEVAL=0
+)
 
 target_link_libraries(artea INTERFACE
     nlohmann_json::nlohmann_json
@@ -87,11 +108,9 @@ target_link_libraries(artea INTERFACE
     fmt::fmt
     TBB::tbb
     MKL::MKL
-	oneDAL::onedal_core
 	range-v3::range-v3
+	hnswlib
 )
-
-target_compile_definitions(artea INTERFACE FMT_USE_CONSTEVAL=0)
 
 # --- 5. Include subdirectories ---
 add_subdirectory(tests)

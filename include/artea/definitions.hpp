@@ -1,7 +1,7 @@
 /*
  * @FilePath: /Artea/include/artea/definitions.hpp
  * @Author: Chandler (Weitang Ye) <weitang.ye@ntu.edu.sg>
- * @LastEditTime: 2025-11-19 18:40:47
+ * @LastEditTime: 2025-11-24 19:15:44
  * @Date: 2025-10-18 16:36:47
  * @Description:
  */
@@ -17,15 +17,26 @@ namespace artea {
 
 using vec_dim_t = uint32_t;
 
-using part_num_t = uint16_t;
+using cluster_num_t = uint32_t;
 
-using part_id_t = part_num_t;
+using cluster_id_t = cluster_num_t;
+
+using part_num_t = uint32_t;
+
+using part_id_t = uint32_t;
 
 using iter_t = uint32_t;
 
 enum class device_t {
     CPU = 0,
     GPU = 1
+};
+
+/** @brief Direction type for graph edges. */
+enum class direction_t {
+    IN = 0,
+    OUT = 1,
+    HIBRID = 2
 };
 
 template <typename vertex_num_t, typename vec_ele_t>

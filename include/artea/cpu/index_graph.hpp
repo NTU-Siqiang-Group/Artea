@@ -1,7 +1,7 @@
 /*
  * @FilePath: /Artea/include/artea/cpu/index_graph.hpp
  * @Author: Chandler (Weitang Ye) <weitang.ye@ntu.edu.sg>
- * @LastEditTime: 2025-11-19 15:45:17
+ * @LastEditTime: 2025-11-22 11:03:44
  * @Date: 2025-10-17 15:32:18
  * @Description:
  */
@@ -22,12 +22,6 @@
 
 namespace artea {
 namespace cpu {
-
-enum class direction_t {
-    IN = 0,
-    OUT = 1,
-    HIBRID = 2
-};
 
 /**
  * @brief The index graph class.
@@ -54,8 +48,8 @@ public:
      * @param edges_limit The maximum number of (in-/out-) neighbors per vertex.
      */
     IndexGraph(
-        const vertex_num_t& num_vertices,
-        const vertex_num_t& edges_limit
+        const vertex_num_t num_vertices,
+        const vertex_num_t edges_limit
     ) :
         _num_vertices(num_vertices),
         _edges_limit(edges_limit)
