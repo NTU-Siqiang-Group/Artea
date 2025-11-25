@@ -48,7 +48,7 @@ public:
 
     ClusterRouter(
         const VectorArray<vertex_num_t, vec_ele_t>& centroids,
-        dist_func_t& dist_func
+        const dist_func_t& dist_func
     ) :
         _num_clusters(centroids.get_num_vecs()),
         _centroids(centroids),
@@ -71,7 +71,7 @@ public:
      */
     __attribute__((always_inline))
     auto query(const vec_ele_t* query_vec) const -> cluster_id_t {
-        return static_cast<derived_class_t*>(this)->query_impl(query_vec);
+        return static_cast<const derived_class_t*>(this)->query_impl(query_vec);
     }
 
     /**
@@ -95,7 +95,7 @@ public:
                     // Retrieve the pointer to the current query vector
                     const vec_ele_t* current_vec = query_vecs.get(i);
                     // Call query_impl.
-                    cluster_id_t best_cid = static_cast<derived_class_t*>(this)->query_impl(current_vec);
+                    cluster_id_t best_cid = static_cast<const derived_class_t*>(this)->query_impl(current_vec);
                     // Store the result
                     results[i] = static_cast<vertex_id_t>(best_cid);
                 }

@@ -78,7 +78,8 @@ public:
         const clustering_t& clustering
     ) :
         _centroids(clustering.get_centroids()),
-        _router(clustering.get_router())
+        _router(clustering.get_router()),
+        _num_clusters(clustering.get_num_clusters())
     {}
 
     auto partition_and_reorder(const VectorArray<vertex_num_t, vec_ele_t>& vecs_arr)
@@ -90,10 +91,11 @@ public:
         }
 
         const vertex_num_t num_vecs = vecs_arr.get_num_vecs();
+        const vec_dim_t vec_dim = vecs_arr.get_vec_dim();
 
         // --- Assign Labels using the ClusterRouter ---
-        this->_router.initialize();
-        std::vector<cluster_id_t> labels = this->_router.batch_query(vecs_arr);
+        _router.initialize();
+        std::vector<cluster_id_t> labels = _router.batch_query(vecs_arr);
 
         // --- Count Histogram (Parallel) ---
         const uint32_t num_threads = tbb::this_task_arena::max_concurrency();
@@ -142,7 +144,7 @@ public:
         assert(accumulated_pos == static_cast<offset_t>(num_vecs));
 
         // Scatter / Reorder Data (Parallel)
-        VectorArray<vertex_num_t, vec_ele_t> reordered_vecs(num_vecs, this->_vec_dim);
+        VectorArray<vertex_num_t, vec_ele_t> reordered_vecs(num_vecs, vec_dim);
         std::vector<vertex_id_t> original_ids(num_vecs, 0);
 
         vec_ele_t* dest_base = reordered_vecs.get_all();
@@ -160,9 +162,9 @@ public:
                     cluster_id_t label = labels[i];
                     vertex_id_t dest_idx = local_write_pos[label]++;
 
-                    const vec_ele_t* src_ptr = src_base + i * this->_vec_dim;
-                    vec_ele_t* dest_ptr = dest_base + dest_idx * this->_vec_dim;
-                    std::copy(src_ptr, src_ptr + this->_vec_dim, dest_ptr);
+                    const vec_ele_t* src_ptr = src_base + i * vec_dim;
+                    vec_ele_t* dest_ptr = dest_base + dest_idx * vec_dim;
+                    std::copy(src_ptr, src_ptr + vec_dim, dest_ptr);
 
                     original_ids[dest_idx] = i;
                 }
@@ -176,13 +178,22 @@ public:
         };
     }
 
+    __attribute__((always_inline))
+    auto operator()(
+        const VectorArray<vertex_num_t, vec_ele_t>& vecs_arr
+    ) -> PartitionedVectors<vertex_num_t, vec_ele_t> {
+        return this->partition_and_reorder(vecs_arr);
+    }
+
 private:
+
+    const cluster_num_t _num_clusters;
 
     /** @brief Use VectorArray for aligned SIMD access */
     const VectorArray<vertex_num_t, vec_ele_t>& _centroids;
 
     /** @brief Cluster router for efficient nearest centroid search. */
-    const ClusterRouter<vertex_num_t, vec_ele_t, dist_func_t, cluster_router_t>& _router;
+    cluster_router_t& _router;
 
 };  // class Partitioner
 

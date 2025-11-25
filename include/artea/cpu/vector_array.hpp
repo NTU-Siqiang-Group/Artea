@@ -1,7 +1,7 @@
 /*
  * @FilePath: /Artea/include/artea/cpu/vector_array.hpp
  * @Author: Chandler (Weitang Ye) <weitang.ye@ntu.edu.sg>
- * @LastEditTime: 2025-11-24 12:09:01
+ * @LastEditTime: 2025-11-25 09:30:13
  * @Date: 2025-10-18 16:31:57
  * @Description:
  */
@@ -25,10 +25,11 @@ namespace cpu {
 
 template <
     typename vec_num_t,
-    typename vec_ele_t,
-    typename vec_id_t = vec_num_t
+    typename vec_ele_t
 >
 class VectorArray {
+
+    using vec_id_t = vec_num_t;
 
 public:
     /**

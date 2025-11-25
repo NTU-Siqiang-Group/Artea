@@ -110,6 +110,7 @@ target_link_libraries(artea INTERFACE
     MKL::MKL
 	range-v3::range-v3
 	hnswlib
+	faiss
 )
 
 # --- 5. Include subdirectories ---

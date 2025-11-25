@@ -38,9 +38,9 @@ namespace cpu {
 template <
     typename vertex_num_t,
     typename vec_ele_t,
+    typename dist_func_t,
     typename cluster_router_t,
     typename vector_sampler_t,
-    typename dist_func_t,
     typename derived_class_t
 >
 class StaticClustering {
@@ -78,11 +78,6 @@ public:
     /** --- Accessors --- **/
 
     __attribute__((always_inline))
-    auto get_centroids() const -> const VectorArray<cluster_num_t, vec_ele_t>& {
-        return _centroids;
-    }
-
-    __attribute__((always_inline))
     auto get_num_clusters() const -> const cluster_num_t {
         return _num_clusters;
     }
@@ -98,7 +93,17 @@ public:
     }
 
     __attribute__((always_inline))
-    auto get_router() const -> const ClusterRouter<vertex_num_t, vec_ele_t, dist_func_t, cluster_router_t>& {
+    auto get_centroids() const -> const VectorArray<cluster_num_t, vec_ele_t>& {
+        return _centroids;
+    }
+
+    __attribute__((always_inline))
+    auto get_centroids() -> VectorArray<cluster_num_t, vec_ele_t>& {
+        return _centroids;
+    }
+
+    __attribute__((always_inline))
+    auto get_router() const -> cluster_router_t& {
         return _router;
     }
 
@@ -125,7 +130,7 @@ protected:
     const dist_func_t& _dist_func;
 
     /** @brief Cluster router for efficient nearest centroid search. */
-    ClusterRouter<vertex_num_t, vec_ele_t, dist_func_t, cluster_router_t> _router;
+    mutable cluster_router_t _router;
 
     /** @brief Vector sampler for random sampling of input data. */
     const vector_sampler_t& _sampler;

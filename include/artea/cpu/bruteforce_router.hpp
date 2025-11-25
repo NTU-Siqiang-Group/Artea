@@ -20,6 +20,8 @@
  * @Description:
  */
 
+#pragma once
+
 #include <cstddef>
 #include <cstdint>
 #include <vector>
@@ -82,7 +84,7 @@ public:
             // Find the cluster with the minimum distance to the query vector
             distance_t min_dist = std::numeric_limits<distance_t>::max();
             cluster_id_t best_cluster = 0;
-            for (cluster_id_t cid = 0; cid < this->_cluster_num; ++cid) {
+            for (cluster_id_t cid = 0; cid < this->_num_clusters; ++cid) {
                 const vec_ele_t* center = this->_centroids.get(cid);
                 distance_t dist = this->_dist_func(query_vec, center);
                 if (dist < min_dist) {
@@ -106,7 +108,7 @@ public:
             // Execute parallel reduction
             Result final_res = tbb::parallel_reduce(
                 // Range: Iterate over all clusters
-                tbb::blocked_range<cluster_id_t>(0, this->_cluster_num),
+                tbb::blocked_range<cluster_id_t>(0, this->_num_clusters),
 
                 // Identity value: Max distance
                 Result { std::numeric_limits<distance_t>::max(), 0 },

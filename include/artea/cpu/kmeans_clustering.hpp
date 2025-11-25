@@ -39,6 +39,7 @@
 #include <artea/cpu/vector_array.hpp>
 #include <artea/cpu/random_seq.hpp>
 #include <artea/cpu/cluster_router.hpp>
+#include <artea/cpu/bruteforce_router.hpp>
 #include <artea/cpu/vector_sampler.hpp>
 #include <artea/cpu/simd_distance.hpp>
 #include <artea/cpu/static_clustering.hpp>
@@ -67,19 +68,19 @@ namespace cpu {
 template <
     typename vertex_num_t,
     typename vec_ele_t,
+    typename dist_func_t = SIMDDistance<vec_ele_t, DistanceMetrics::EUCLIDEAN>,
     typename cluster_router_t = BruteforceRouter<vertex_num_t, vec_ele_t, dist_func_t, false>,
-    typename vector_sampler_t = VectorSampler<vertex_num_t, vec_ele_t>,
-    typename dist_func_t = SIMDDistance<vec_ele_t, DistanceMetrics::EUCLIDEAN>
+    typename vector_sampler_t = VectorSampler<vertex_num_t, vec_ele_t>
 >
 class KmeansClustering final :
-    public StaticClustering<vertex_num_t,  vec_ele_t, cluster_router_t, vector_sampler_t, dist_func_t,
-        KmeansClustering<vertex_num_t, vec_ele_t, cluster_router_t, vector_sampler_t, dist_func_t>>
+    public StaticClustering<vertex_num_t, vec_ele_t, dist_func_t, cluster_router_t, vector_sampler_t,
+        KmeansClustering<vertex_num_t, vec_ele_t, dist_func_t, cluster_router_t, vector_sampler_t>>
 {
 
     using vertex_id_t = vertex_num_t;
     using distance_t = vec_ele_t;
-    using base_class_t = StaticClustering<vertex_num_t,  vec_ele_t, cluster_router_t, vector_sampler_t, dist_func_t,
-        KmeansClustering<vertex_num_t, vec_ele_t, cluster_router_t, vector_sampler_t, dist_func_t>>;
+    using base_class_t = StaticClustering<vertex_num_t,  vec_ele_t, dist_func_t, cluster_router_t, vector_sampler_t,
+        KmeansClustering<vertex_num_t, vec_ele_t, dist_func_t, cluster_router_t, vector_sampler_t>>;
 
 public:
     /**

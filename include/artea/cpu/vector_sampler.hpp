@@ -1,7 +1,7 @@
 /*
  * @FilePath: /Artea/include/artea/cpu/vector_sampler.hpp
  * @Author: Chandler (Weitang Ye) <weitang.ye@ntu.edu.sg>
- * @LastEditTime: 2025-11-22 14:24:54
+ * @LastEditTime: 2025-11-25 09:56:17
  * @Date: 2025-11-22 11:11:23
  * @Description: Implements vector sampling logic with parallel random number generation.
  */
@@ -40,7 +40,7 @@ public:
     auto sample(
         const VectorArray<vertex_num_t, vec_ele_t>& source_arr,
         const float sampling_ratio
-    ) -> VectorArray<vertex_num_t, vec_ele_t> {
+    ) const -> VectorArray<vertex_num_t, vec_ele_t> {
 
         // Retrieve the total number of vertices from the source array
         vertex_num_t total_vertices = source_arr.get_num_vecs();
@@ -96,7 +96,7 @@ public:
     auto operator()(
         const VectorArray<vertex_num_t, vec_ele_t>& source_arr,
         const float sampling_ratio
-    ) -> VectorArray<vertex_num_t, vec_ele_t> {
+    ) const -> VectorArray<vertex_num_t, vec_ele_t> {
         return sample(source_arr, sampling_ratio);
     }
 
