@@ -13,9 +13,8 @@
 // limitations under the License.
 
 /*
- * @FilePath: /Artea/include/artea/cpu/kmeans_clustering.hpp
+ * @FilePath: /Artea/include/artea/cpu/partitioning/kmeans_clustering.hpp
  * @Author: Chandler (Weitang Ye) <weitang.ye@ntu.edu.sg>
- * @LastEditTime: 2025-11-24 16:03:00
  * @Description: High-performance K-means implementation delegating search to ClusterRouter.
  */
 
@@ -36,16 +35,15 @@
 #include <tbb/task_arena.h>
 #include <tbb/enumerable_thread_specific.h>
 
-#include <artea/cpu/vector_array.hpp>
-#include <artea/cpu/random_seq.hpp>
-#include <artea/cpu/cluster_router.hpp>
-#include <artea/cpu/bruteforce_router.hpp>
-#include <artea/cpu/vector_sampler.hpp>
-#include <artea/cpu/simd_distance.hpp>
-#include <artea/cpu/static_clustering.hpp>
+#include <artea/cpu/containers/vector_array.hpp>
+#include <artea/cpu/utils/random_seq.hpp>
+#include <artea/cpu/partitioning/cluster_router.hpp>
+#include <artea/cpu/partitioning/bruteforce_router.hpp>
+#include <artea/cpu/utils/vector_sampler.hpp>
+#include <artea/cpu/utils/simd_distance.hpp>
+#include <artea/cpu/partitioning/static_clustering.hpp>
 #include <artea/definitions.hpp>
-#include <artea/config.hpp>
-#include <artea/logger.hpp>
+#include <artea/common/logger.hpp>
 
 namespace artea {
 namespace cpu {

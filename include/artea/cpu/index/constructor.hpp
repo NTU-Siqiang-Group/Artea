@@ -13,11 +13,11 @@
 #include <memory>
 #include <utility>
 
-#include <artea/cpu/index_graph.hpp>
-#include <artea/cpu/recommended_nn.hpp>
-#include <artea/cpu/random_seq.hpp>
-#include <artea/cpu/vector_dataset.hpp>
-#include <artea/cpu/vector_array.hpp>
+#include <artea/cpu/index/index_graph.hpp>
+#include <artea/cpu/propagation/recommended_nn.hpp>
+#include <artea/cpu/utils/random_seq.hpp>
+#include <artea/cpu/containers/vector_dataset.hpp>
+#include <artea/cpu/containers/vector_array.hpp>
 #include <artea/cpu/descent_engine.hpp>
 
 #include <artea/definitions.hpp>

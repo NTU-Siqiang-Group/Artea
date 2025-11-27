@@ -13,13 +13,13 @@
 
 #include <tbb/parallel_for.h>
 
-#include <artea/cpu/index_graph.hpp>
-#include <artea/cpu/vector_array.hpp>
-#include <artea/cpu/recommended_nn.hpp>
+#include <artea/cpu/index/index_graph.hpp>
+#include <artea/cpu/containers/vector_array.hpp>
+#include <artea/cpu/propagation/recommended_nn.hpp>
 #include <artea/cpu/random_nn.hpp>
 #include <artea/cpu/definitions.hpp>
 #include <artea/cpu/conflicts.hpp>
-#include <artea/cpu/bytemap.hpp>
+#include <artea/cpu/containers/bytemap.hpp>
 
 namespace artea {
 namespace cpu {

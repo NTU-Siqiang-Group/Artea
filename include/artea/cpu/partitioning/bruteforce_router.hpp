@@ -13,7 +13,7 @@
 // limitations under the License.
 
 /*
- * @FilePath: /Artea/include/artea/cpu/bruteforce_router.hpp
+ * @FilePath: /Artea/include/artea/cpu/partitioning/bruteforce_router.hpp
  * @Author: Chandler (Weitang Ye) <weitang.ye@ntu.edu.sg>
  * @LastEditTime: 2025-11-23 15:29:20
  * @Date: 2025-11-23 15:11:26
@@ -33,8 +33,8 @@
 #include <tbb/parallel_reduce.h>
 #include <tbb/blocked_range.h>
 
-#include <artea/cpu/vector_array.hpp>
-#include <artea/cpu/cluster_router.hpp>
+#include <artea/cpu/containers/vector_array.hpp>
+#include <artea/cpu/partitioning/cluster_router.hpp>
 #include <artea/definitions.hpp>
 
 namespace artea {

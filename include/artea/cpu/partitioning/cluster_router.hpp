@@ -13,10 +13,8 @@
 // limitations under the License.
 
 /*
- * @FilePath: /Artea/include/artea/cpu/cluster_router.hpp
+ * @FilePath: /Artea/include/artea/cpu/partitioning/cluster_router.hpp
  * @Author: Chandler (Weitang Ye) <weitang.ye@ntu.edu.sg>
- * @LastEditTime: 2025-11-22 17:17:43
- * @Date: 2025-11-22 10:31:36
  * @Description:
  */
 
@@ -27,7 +25,7 @@
 #include <vector>
 #include <functional>
 
-#include <artea/cpu/vector_array.hpp>
+#include <artea/cpu/containers/vector_array.hpp>
 #include <artea/definitions.hpp>
 
 namespace artea {

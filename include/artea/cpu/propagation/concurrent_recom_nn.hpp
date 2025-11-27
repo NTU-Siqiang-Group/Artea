@@ -1,8 +1,6 @@
 /*
- * @FilePath: /Artea/include/artea/cpu/concurrent_recom_nn.hpp
+ * @FilePath: /Artea/include/artea/cpu/propagation/concurrent_recom_nn.hpp
  * @Author: Chandler (Weitang Ye) <weitang.ye@ntu.edu.sg>
- * @LastEditTime: 2025-11-15 17:01:39
- * @Date: 2025-11-06 21:20:10
  * @Description:
  */
 
@@ -16,8 +14,7 @@
 #include <range/v3/view/zip.hpp>
 
 #include <artea/definitions.hpp>
-#include <artea/config.hpp>
-#include <artea/cpu/recommended_nn.hpp>
+#include <artea/cpu/propagation/recommended_nn.hpp>
 
 namespace artea {
 namespace cpu {

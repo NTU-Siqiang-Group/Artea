@@ -14,9 +14,9 @@
 #include <tbb/global_control.h>
 #include <tbb/blocked_range.h>
 
-#include <artea/cpu/random_seq.hpp>
-#include <artea/cpu/array.hpp>
-#include <artea/logger.hpp>
+#include <artea/cpu/utils/random_seq.hpp>
+#include <artea/cpu/containers/array.hpp>
+#include <artea/common/logger.hpp>
 
 // Helper function to calculate and print statistics using the artea::logger
 template<typename T>

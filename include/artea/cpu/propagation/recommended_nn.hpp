@@ -1,13 +1,13 @@
 /*
- * @FilePath: /Artea/include/artea/cpu/recommended_nn.hpp
+ * @FilePath: /Artea/include/artea/cpu/propagation/recommended_nn.hpp
  * @Author: Chandler (Weitang Ye) <weitang.ye@ntu.edu.sg>
- * @LastEditTime: 2025-11-16 15:07:20
+ * @LastEditTime: 2025-11-27 11:41:52
  * @Date: 2025-11-02 21:18:08
  * @Description:
  */
 
 /*
- * @FilePath: /Artea/include/artea/cpu/random_seq.hpp
+ * @FilePath: /Artea/include/artea/cpu/utils/random_seq.hpp
  * @Author: Chandler (Weitang Ye) <weitang.ye@ntu.edu.sg>
  * @LastEditTime: 2025-11-05 19:18:18
  * @Date: 2025-11-02 19:41:19
@@ -21,10 +21,9 @@
 #include <stdexcept>
 #include <type_traits>
 
-#include <artea/cpu/vector_array.hpp>
-#include <artea/cpu/index_graph.hpp>
+#include <artea/cpu/containers/vector_array.hpp>
+#include <artea/cpu/index/index_graph.hpp>
 #include <artea/definitions.hpp>
-#include <artea/config.hpp>
 
 namespace artea {
 namespace cpu {

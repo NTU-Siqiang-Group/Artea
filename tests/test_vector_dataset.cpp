@@ -19,9 +19,9 @@
 
 #include <fmt/format.h>
 
-#include <artea/cpu/vector_dataset.hpp>
+#include <artea/cpu/containers/vector_dataset.hpp>
 #include <artea/definitions.hpp>
-#include <artea/logger.hpp>
+#include <artea/common/logger.hpp>
 
 // --- Start of Correctness Verification Code ---
 

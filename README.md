@@ -27,3 +27,10 @@ cmake -B build -DCMAKE_BUILD_TYPE=Release \
 cmake --build build -j64
 ./build/tests/test_simd_distance    # e.g. test the SIMD distance implementation
 ```
+
+To get the lines of code statistics:
+
+```sh
+find ./include -type f \( -name "*.hpp" -o -name "*.cpp" \) | xargs wc -l
+```
+

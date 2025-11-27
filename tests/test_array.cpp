@@ -15,8 +15,8 @@
 #include <fmt/format.h>
 #include <tbb/concurrent_vector.h>
 
-#include <artea/logger.hpp>
-#include <artea/cpu/array.hpp>
+#include <artea/common/logger.hpp>
+#include <artea/cpu/containers/array.hpp>
 
 class Timer {
 public:

@@ -1,5 +1,5 @@
 /*
- * @FilePath: /Artea/include/artea/cpu/vector_dataset.hpp
+ * @FilePath: /Artea/include/artea/cpu/containers/vector_dataset.hpp
  * @Author: Chandler (Weitang Ye) <weitang.ye@ntu.edu.sg>
  * @Description: Refactored to hold VectorArray members directly, leveraging RAII
  *               for automatic memory management.
@@ -14,10 +14,9 @@
 #include <fmt/format.h>
 #include <nlohmann/json.hpp>
 
+#include <artea/cpu/containers/vector_array.hpp>
 #include <artea/definitions.hpp>
-#include <artea/cpu/vector_array.hpp>
-#include <artea/logger.hpp>
-#include <artea/config.hpp>
+#include <artea/common/logger.hpp>
 
 namespace artea {
 namespace cpu {
@@ -103,7 +102,6 @@ private:
         _config = nlohmann::json::parse(config_file);
         config_file.close();
 
-        ArteaLogger logger("VectorDataset::load_config", system_log_level);
         logger.success(fmt::format("Successfully loaded dataset config from {}", config_path));
     }
 
@@ -116,7 +114,6 @@ private:
         std::filesystem::path query_vecs_path = dataset_dir / dataset_config["query_path"];
         std::filesystem::path gt_vecs_path = dataset_dir / dataset_config["gt_path"];
 
-        ArteaLogger logger("VectorDataset::load_datasets", system_log_level);
         logger.info(fmt::format("Loading dataset {} from {} ...", dataset_name, dataset_dir.string()));
 
         _base_vecs = BaseQueryArray(base_vecs_path.string());

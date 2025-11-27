@@ -13,10 +13,8 @@
 // limitations under the License.
 
 /*
- * @FilePath: /Artea/include/artea/cpu/stream_clustering.hpp
+ * @FilePath: /Artea/include/artea/cpu/partitioning/stream_clustering.hpp
  * @Author: Chandler (Weitang Ye) <weitang.ye@ntu.edu.sg>
- * @LastEditTime: 2025-11-24 15:53:57
- * @Date: 2025-11-24 15:53:22
  * @Description:
  */
 
@@ -26,8 +24,6 @@ namespace cpu {
 template <
     typename vertex_num_t,
     typename vec_ele_t,
-    typename cluster_router_t,
-    typename vector_sampler_t,
     typename dist_func_t,
     typename derived_class_t
 >

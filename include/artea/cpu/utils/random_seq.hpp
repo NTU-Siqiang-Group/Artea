@@ -1,7 +1,7 @@
 /*
- * @FilePath: /Artea/include/artea/cpu/random_seq.hpp
+ * @FilePath: /Artea/include/artea/cpu/utils/random_seq.hpp
  * @Author: Chandler (Weitang Ye) <weitang.ye@ntu.edu.sg>
- * @LastEditTime: 2025-11-22 11:23:11
+ * @LastEditTime: 2025-11-27 11:41:38
  * @Date: 2025-11-02 19:41:19
  * @Description: Modified to be thread-safe for parallel execution by using TBB thread-local storage.
  */
@@ -15,9 +15,8 @@
 #include <mkl.h>
 #include <tbb/enumerable_thread_specific.h>
 
+#include <artea/cpu/containers/vector_array.hpp>
 #include <artea/definitions.hpp>
-#include <artea/config.hpp>
-#include <artea/cpu/vector_array.hpp>
 
 namespace artea {
 namespace cpu {

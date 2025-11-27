@@ -1,7 +1,7 @@
 /*
  * @FilePath: /Artea/include/artea/cpu/simple_descent_engine.hpp
  * @Author: Chandler (Weitang Ye) <weitang.ye@ntu.edu.sg>
- * @LastEditTime: 2025-11-18 21:12:49
+ * @LastEditTime: 2025-11-27 11:53:04
  * @Date: 2025-11-09 19:11:21
  * @Description:
  */
@@ -13,13 +13,13 @@
 
 #include <tbb/parallel_for.h>
 
-#include <artea/cpu/index_graph.hpp>
-#include <artea/cpu/vector_array.hpp>
-#include <artea/cpu/recommended_nn.hpp>
-#include <artea/cpu/random_seq.hpp>
+#include <artea/cpu/index/index_graph.hpp>
+#include <artea/cpu/containers/vector_array.hpp>
+#include <artea/cpu/propagation/recommended_nn.hpp>
+#include <artea/cpu/utils/random_seq.hpp>
 #include <artea/cpu/conflicts.hpp>
-#include <artea/utils.hpp>
-#include <artea/config.hpp>
+#include <artea/cpu/utils/allocator.hpp>
+#include <artea/common/element_pos.hpp>
 #include <artea/definitions.hpp>
 
 namespace artea {

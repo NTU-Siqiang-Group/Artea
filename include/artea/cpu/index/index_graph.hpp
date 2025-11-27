@@ -1,7 +1,7 @@
 /*
- * @FilePath: /Artea/include/artea/cpu/index_graph.hpp
+ * @FilePath: /Artea/include/artea/cpu/index/index_graph.hpp
  * @Author: Chandler (Weitang Ye) <weitang.ye@ntu.edu.sg>
- * @LastEditTime: 2025-11-22 11:03:44
+ * @LastEditTime: 2025-11-27 12:47:35
  * @Date: 2025-10-17 15:32:18
  * @Description:
  */
@@ -17,8 +17,7 @@
 #include <tbb/parallel_for.h>
 
 #include <artea/definitions.hpp>
-#include <artea/config.hpp>
-#include <artea/cpu/recommended_nn.hpp>
+#include <artea/cpu/propagation/recommended_nn.hpp>
 
 namespace artea {
 namespace cpu {

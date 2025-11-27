@@ -11,7 +11,7 @@
 #include <cstdint>
 
 #include <artea/definitions.hpp>
-#include <artea/cpu/vector_array.hpp>
+#include <artea/cpu/containers/vector_array.hpp>
 
 namespace artea {
 namespace cpu {

@@ -1,7 +1,7 @@
 /*
- * @FilePath: /Artea/include/artea/cpu/vector_array.hpp
+ * @FilePath: /Artea/include/artea/cpu/containers/vector_array.hpp
  * @Author: Chandler (Weitang Ye) <weitang.ye@ntu.edu.sg>
- * @LastEditTime: 2025-11-25 09:30:13
+ * @LastEditTime: 2025-11-27 11:53:37
  * @Date: 2025-10-18 16:31:57
  * @Description:
  */
@@ -16,9 +16,9 @@
 #include <omp.h>
 #include <utility> // For std::move
 
+#include <artea/cpu/utils/allocator.hpp>
 #include <artea/definitions.hpp>
-#include <artea/utils.hpp>
-#include <artea/logger.hpp>
+#include <artea/common/logger.hpp>
 
 namespace artea {
 namespace cpu {

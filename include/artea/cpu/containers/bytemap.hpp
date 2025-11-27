@@ -1,11 +1,9 @@
-// bitmap.hpp
 #pragma once
 
 #include <cstdint>
 
-#include <artea/types.hpp>
-#include <artea/config.hpp>
-#include <artea/cpu/array.hpp>
+#include <artea/cpu/containers/array.hpp>
+#include <artea/definitions.hpp>
 
 namespace artea {
 namespace cpu {

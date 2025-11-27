@@ -1,7 +1,7 @@
 /*
- * @FilePath: /Artea/include/artea/cpu/simd_distance.hpp
+ * @FilePath: /Artea/include/artea/cpu/utils/simd_distance.hpp
  * @Author: Chandler (Weitang Ye) <weitang.ye@ntu.edu.sg>
- * @LastEditTime: 2025-11-22 15:48:17
+ * @LastEditTime: 2025-11-27 12:01:30
  * @Date: 2025-10-18 19:10:57
  * @Description: SIMD-accelerated distance computation utilities.
  */
@@ -14,7 +14,7 @@
 #include <cassert>
 
 #include <artea/definitions.hpp>
-#include <artea/logger.hpp>
+#include <artea/common/logger.hpp>
 
 namespace artea {
 namespace cpu {

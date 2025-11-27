@@ -13,9 +13,9 @@
 #include <random>
 #include <cstring>
 
-#include <artea/cpu/vector_sampler.hpp>
-#include <artea/cpu/vector_array.hpp> // Assuming this exists and works with the sampler
-#include <artea/logger.hpp>
+#include <artea/cpu/utils/vector_sampler.hpp>
+#include <artea/cpu/containers/vector_array.hpp> // Assuming this exists and works with the sampler
+#include <artea/common/logger.hpp>
 
 // Helper function to verify if a vector exists in the source data
 // This is a naive O(N*D) check, used only for small quality checks

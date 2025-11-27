@@ -15,15 +15,15 @@
 #include <fmt/format.h>
 #include <argparse/argparse.hpp>
 
-#include <artea/cpu/vector_dataset.hpp>
-#include <artea/cpu/kmeans_clustering.hpp>
-#include <artea/cpu/bruteforce_router.hpp>
-#include <artea/cpu/partitioner.hpp>
-#include <artea/cpu/cluster_evaluator.hpp>
-#include <artea/cpu/vector_sampler.hpp>
-#include <artea/cpu/simd_distance.hpp>
+#include <artea/cpu/containers/vector_dataset.hpp>
+#include <artea/cpu/partitioning/kmeans_clustering.hpp>
+#include <artea/cpu/partitioning/bruteforce_router.hpp>
+#include <artea/cpu/partitioning/partitioner.hpp>
+#include <artea/cpu/partitioning/cluster_evaluator.hpp>
+#include <artea/cpu/utils/vector_sampler.hpp>
+#include <artea/cpu/utils/simd_distance.hpp>
 #include <artea/definitions.hpp>
-#include <artea/logger.hpp>
+#include <artea/common/logger.hpp>
 
 using namespace artea;
 using namespace artea::cpu;

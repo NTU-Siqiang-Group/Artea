@@ -13,10 +13,8 @@
 // limitations under the License.
 
 /*
- * @FilePath: /Artea/include/artea/cpu/partitioner.hpp
+ * @FilePath: /Artea/include/artea/cpu/partitioning/partitioner.hpp
  * @Author: Chandler (Weitang Ye) <weitang.ye@ntu.edu.sg>
- * @LastEditTime: 2025-11-24 11:15:51
- * @Date: 2025-11-24 11:15:46
  * @Description:
  */
 
@@ -35,8 +33,8 @@
 #include <tbb/parallel_reduce.h>
 #include <tbb/blocked_range.h>
 
-#include <artea/cpu/vector_array.hpp>
-#include <artea/cpu/cluster_router.hpp>
+#include <artea/cpu/containers/vector_array.hpp>
+#include <artea/cpu/partitioning/cluster_router.hpp>
 #include <artea/definitions.hpp>
 
 namespace artea {

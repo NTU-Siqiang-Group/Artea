@@ -1,7 +1,7 @@
 /*
- * @FilePath: /Artea/include/artea/logger.hpp
+ * @FilePath: /Artea/include/artea/common/logger.hpp
  * @Author: Chandler (Weitang Ye) <weitang.ye@ntu.edu.sg>
- * @LastEditTime: 2025-11-15 16:18:30
+ * @LastEditTime: 2025-11-27 11:39:56
  * @Date: 2025-10-23 13:26:15
  * @Description: A logger that supports colorful printing via termcolor.
  */
@@ -106,6 +106,6 @@ private:
 
 };  // class ArteaLogger
 
-inline ArteaLogger logger("Artea");
+inline ArteaLogger logger("Artea", LogLevel::INFO);
 
 }   // namespace artea

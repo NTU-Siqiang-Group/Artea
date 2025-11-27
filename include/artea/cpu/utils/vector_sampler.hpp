@@ -15,8 +15,8 @@
 #include <tbb/parallel_for.h>
 #include <tbb/blocked_range.h>
 
-#include <artea/cpu/vector_array.hpp>
-#include <artea/cpu/random_seq.hpp>
+#include <artea/cpu/containers/vector_array.hpp>
+#include <artea/cpu/utils/random_seq.hpp>
 
 namespace artea {
 namespace cpu {

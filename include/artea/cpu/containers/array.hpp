@@ -13,8 +13,7 @@
 #include <tbb/concurrent_vector.h>
 
 #include <artea/definitions.hpp>
-#include <artea/config.hpp>
-#include <artea/utils.hpp>
+#include <artea/cpu/utils/allocator.hpp>
 
 namespace artea {
 namespace cpu {

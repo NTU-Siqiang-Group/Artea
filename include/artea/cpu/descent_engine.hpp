@@ -1,7 +1,7 @@
 /*
  * @FilePath: /Artea/include/artea/cpu/descent_engine.hpp
  * @Author: Chandler (Weitang Ye) <weitang.ye@ntu.edu.sg>
- * @LastEditTime: 2025-11-16 13:58:34
+ * @LastEditTime: 2025-11-27 11:52:16
  * @Date: 2025-11-09 20:46:35
  * @Description:
  */
@@ -14,13 +14,12 @@
 #include <tbb/parallel_for.h>
 #include <tbb/blocked_range.h>
 
-#include <artea/cpu/index_graph.hpp>
-#include <artea/cpu/vector_array.hpp>
+#include <artea/cpu/index/index_graph.hpp>
+#include <artea/cpu/containers/vector_array.hpp>
 
-#include <artea/config.hpp>
 #include <artea/definitions.hpp>
-#include <artea/logger.hpp>
-#include <artea/utils.hpp>
+#include <artea/common/logger.hpp>
+#include <artea/common/element_pos.hpp>
 
 template <
     typename vertex_num_t,

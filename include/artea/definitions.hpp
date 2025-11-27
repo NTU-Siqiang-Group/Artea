@@ -1,8 +1,20 @@
+// Copyright 2025 Weitang Ye
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     https://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 /*
  * @FilePath: /Artea/include/artea/definitions.hpp
  * @Author: Chandler (Weitang Ye) <weitang.ye@ntu.edu.sg>
- * @LastEditTime: 2025-11-24 19:15:44
- * @Date: 2025-10-18 16:36:47
  * @Description:
  */
 
@@ -11,7 +23,7 @@
 #include <cstdint>
 #include <vector>
 
-#include <artea/utils.hpp>
+#include <artea/cpu/utils/allocator.hpp>
 
 namespace artea {
 
@@ -77,6 +89,6 @@ constexpr std::size_t AVX512_ALIGNMENT = 64;
 
 /** @brief a container with AVX-512 alignment */
 template <typename T>
-using avx512_container_t = std::vector<T, AlignedAllocator<T, AVX512_ALIGNMENT>>;
+using avx512_container_t = std::vector<T, cpu::AlignedAllocator<T, AVX512_ALIGNMENT>>;
 
 }   // namespace artea

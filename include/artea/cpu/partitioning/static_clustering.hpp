@@ -13,10 +13,8 @@
 // limitations under the License.
 
 /*
- * @FilePath: /Artea/include/artea/cpu/static_clustering.hpp
+ * @FilePath: /Artea/include/artea/cpu/partitioning/static_clustering.hpp
  * @Author: Chandler (Weitang Ye) <weitang.ye@ntu.edu.sg>
- * @LastEditTime: 2025-11-24 15:59:26
- * @Date: 2025-11-22 10:42:02
  * @Description:
  */
 
@@ -28,8 +26,8 @@
 #include <utility>
 #include <limits>
 
-#include <artea/cpu/vector_array.hpp>
-#include <artea/cpu/cluster_router.hpp>
+#include <artea/cpu/containers/vector_array.hpp>
+#include <artea/cpu/partitioning/cluster_router.hpp>
 #include <artea/definitions.hpp>
 
 namespace artea {

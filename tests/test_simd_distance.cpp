@@ -20,10 +20,10 @@
 #include <fmt/format.h>
 
 // Artea headers
-#include <artea/cpu/simd_distance.hpp>
-#include <artea/cpu/vector_array.hpp>
+#include <artea/cpu/utils/simd_distance.hpp>
+#include <artea/cpu/containers/vector_array.hpp>
 #include <artea/definitions.hpp>
-#include <artea/logger.hpp>
+#include <artea/common/logger.hpp>
 
 // Faiss headers
 #include <faiss/IndexFlat.h>

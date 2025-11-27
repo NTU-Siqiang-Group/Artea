@@ -1,7 +1,7 @@
 /*
  * @FilePath: /Artea/tests/test_recom_nn.cpp
  * @Author: Chandler (Weitang Ye) <weitang.ye@ntu.edu.sg>
- * @LastEditTime: 2025-11-15 18:43:59
+ * @LastEditTime: 2025-11-27 11:53:56
  * @Date: 2025-11-15 15:14:18
  * @Description:
  */
@@ -18,11 +18,11 @@
 #include <tbb/parallel_for.h>
 #include <tbb/blocked_range.h>
 
-#include <artea/logger.hpp>
+#include <artea/common/logger.hpp>
 #include <artea/definitions.hpp>
-#include <artea/utils.hpp>
-#include <artea/cpu/concurrent_recom_nn.hpp>
-#include <artea/cpu/locked_recom_nn.hpp>
+#include <artea/cpu/utils/allocator.hpp>
+#include <artea/cpu/propagation/concurrent_recom_nn.hpp>
+#include <artea/cpu/propagation/locked_recom_nn.hpp>
 
 // Define common types for the test
 using vertex_num_t = uint32_t;

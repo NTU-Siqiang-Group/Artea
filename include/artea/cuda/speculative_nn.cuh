@@ -1,2 +1,0 @@
-// speculative_nn.cuh
-
