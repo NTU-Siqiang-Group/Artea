@@ -20,7 +20,7 @@
 
 #include <artea/common/logger.hpp>
 #include <artea/definitions.hpp>
-#include <artea/cpu/utils/allocator.hpp>
+#include <artea/cpu/containers/allocator.hpp>
 #include <artea/cpu/propagation/concurrent_recom_nn.hpp>
 #include <artea/cpu/propagation/locked_recom_nn.hpp>
 

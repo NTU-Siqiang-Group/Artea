@@ -1,7 +1,7 @@
 # --- 1. Project basic configuration ---
 cmake_minimum_required(VERSION 3.16)
 cmake_policy(SET CMP0135 NEW) # Use modern timestamp behavior
-project(Artea LANGUAGES CXX)
+project(Artea LANGUAGES C CXX)
 
 # include(CheckIPOSupported)
 # check_ipo_supported(RESULT result OUTPUT output)
@@ -28,6 +28,7 @@ find_package(OpenMP REQUIRED)
 
 # --- Find Intel TBB ---
 find_package(TBB REQUIRED)
+message(STATUS "TBB_DIR: ${TBB_DIR}")
 
 # --- Find Intel MKL ---
 find_package(MKL REQUIRED)
@@ -115,3 +116,4 @@ target_link_libraries(artea INTERFACE
 
 # --- 5. Include subdirectories ---
 add_subdirectory(tests)
+add_subdirectory(benchmarks)

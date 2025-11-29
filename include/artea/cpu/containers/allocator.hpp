@@ -24,16 +24,11 @@
 #include <utility>
 #include <stdexcept>
 #include <immintrin.h>
+#include <sys/mman.h>
+#include <unistd.h>
 
 namespace artea {
 namespace cpu {
-
-/** @brief Custom deleter for memory allocated by _mm_malloc. */
-struct AlignedDeleter {
-    void operator()(void* p) const {
-        _mm_free(p);
-    }
-};
 
 /**
  * @brief An allocator that uses _mm_malloc and _mm_free for aligned memory allocation,
@@ -89,6 +84,13 @@ public:
     }
 };
 
+/** @brief Custom deleter for memory allocated by _mm_malloc. */
+struct AlignedDeleter {
+    void operator()(void* p) const {
+        _mm_free(p);
+    }
+};
+
 /** @brief Comparison operators for AlignedAllocator */
 template <typename T1, std::size_t A1, typename T2, std::size_t A2>
 bool operator==(const AlignedAllocator<T1, A1>&, const AlignedAllocator<T2, A2>&) noexcept {
@@ -99,6 +101,87 @@ template <typename T1, std::size_t A1, typename T2, std::size_t A2>
 bool operator!=(const AlignedAllocator<T1, A1>&, const AlignedAllocator<T2, A2>&) noexcept {
     return A1 != A2;
 }
+
+/* ------ MmapAllocator ------ */
+
+/**
+ * @brief Allocator using mmap for large memory pages or manual NUMA control.
+ *        Memory is zero-initialized by the OS (implicitly) but physical pages
+ *        are allocated on "first-touch".
+ * @tparam T The type of elements.
+ */
+template <typename T>
+class MmapAllocator {
+
+public:
+    using value_type = T;
+
+    MmapAllocator() noexcept = default;
+
+    template <typename U>
+    MmapAllocator(const MmapAllocator<U>&) noexcept {}
+
+    /**
+     * @brief Allocates memory using mmap.
+     * @param n Number of elements.
+     * @return Pointer to allocated memory.
+     */
+    T* allocate(std::size_t n) {
+        if (n > std::size_t(-1) / sizeof(T)) {
+            throw std::bad_alloc();
+        }
+
+        size_t bytes_to_allocate = n * sizeof(T);
+
+        // Use mmap to allocate memory.
+        // PROT_READ | PROT_WRITE: Read and write access.
+        // MAP_PRIVATE | MAP_ANONYMOUS: Private memory, not backed by any file.
+        // MAP_HUGETLB: Use huge pages if supported.
+        // We do NOT use MAP_POPULATE to ensure First-Touch policy works during initialization.
+        void* p = mmap(nullptr, bytes_to_allocate,
+                       PROT_READ | PROT_WRITE,
+                       MAP_PRIVATE | MAP_ANONYMOUS | MAP_HUGETLB,
+                       -1, 0);
+
+        if (p == MAP_FAILED) {
+            throw std::bad_alloc();
+        }
+
+        return static_cast<T*>(p);
+    }
+
+    /**
+     * @brief Deallocates memory using munmap.
+     * @param p Pointer to memory.
+     * @param n Number of elements (needed for munmap).
+     */
+    void deallocate(T* p, std::size_t n) noexcept {
+        size_t bytes_to_deallocate = n * sizeof(T);
+        munmap(p, bytes_to_deallocate);
+    }
+};
+
+template <typename T, typename U>
+bool operator==(const MmapAllocator<T>&, const MmapAllocator<U>&) noexcept {
+    return true;
+}
+
+template <typename T, typename U>
+bool operator!=(const MmapAllocator<T>&, const MmapAllocator<U>&) noexcept {
+    return false;
+}
+
+constexpr std::size_t AVX512_ALIGNMENT = 64;
+
+/** @brief a container with AVX-512 alignment */
+template <typename T>
+using avx512_container_t = std::vector<T, cpu::AlignedAllocator<T, AVX512_ALIGNMENT>>;
+
+/** @brief a container with mmap allocator */
+template <typename T>
+using mmap_container_t = std::vector<T, cpu::MmapAllocator<T>>;
+
+static constexpr std::size_t CACHE_LINE_SIZE = 64;
 
 }   // namespace cpu
 }   // namespace artea

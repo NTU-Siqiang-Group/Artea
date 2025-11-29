@@ -87,23 +87,6 @@ bool operator!=(const AlignedAllocator<T1, A1>&, const AlignedAllocator<T2, A2>&
     return A1 != A2;
 }
 
-/** @brief Find the position of the minimum element in a small fixed-size array.
-  * @tparam T The type of the elements in the array.
-  * @tparam N The size of the array (must be 2 or 3).
-  * @param arr Pointer to the first element of the array.
-  * @return The index of the minimum element in the array.
-  * @note This function is optimized for small arrays of size 2 or 3 using compile-time branching.
- */
-template <typename T, int N>
-auto min_element_pos(T* arr) -> int {
-    if constexpr (N == 2) {
-        return (arr[0] < arr[1]) ? 0 : 1;
-    }
-    if constexpr (N == 3) {
-        return (arr[0] < arr[1])
-               ? ((arr[0] < arr[2]) ? 0 : 2)
-               : ((arr[1] < arr[2]) ? 1 : 2);
-    }
-}
+
 
 }   // namespace artea

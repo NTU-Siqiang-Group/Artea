@@ -16,7 +16,7 @@
 #include <omp.h>
 #include <utility> // For std::move
 
-#include <artea/cpu/utils/allocator.hpp>
+#include <artea/cpu/containers/allocator.hpp>
 #include <artea/definitions.hpp>
 #include <artea/common/logger.hpp>
 

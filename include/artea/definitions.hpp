@@ -23,8 +23,6 @@
 #include <cstdint>
 #include <vector>
 
-#include <artea/cpu/utils/allocator.hpp>
-
 namespace artea {
 
 using vec_dim_t = uint32_t;
@@ -38,6 +36,10 @@ using part_num_t = uint32_t;
 using part_id_t = uint32_t;
 
 using iter_t = uint32_t;
+
+using block_num_t = uint32_t;
+
+using block_id_t = uint32_t;
 
 enum class device_t {
     CPU = 0,
@@ -84,11 +86,5 @@ constexpr auto NeighborComparator = [](
     return a.distance < b.distance or
           (a.distance == b.distance && a.dest < b.dest);
 };  // constexpr auto NeighborComparator
-
-constexpr std::size_t AVX512_ALIGNMENT = 64;
-
-/** @brief a container with AVX-512 alignment */
-template <typename T>
-using avx512_container_t = std::vector<T, cpu::AlignedAllocator<T, AVX512_ALIGNMENT>>;
 
 }   // namespace artea

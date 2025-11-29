@@ -18,7 +18,7 @@
 #include <artea/cpu/propagation/recommended_nn.hpp>
 #include <artea/cpu/utils/random_seq.hpp>
 #include <artea/cpu/conflicts.hpp>
-#include <artea/cpu/utils/allocator.hpp>
+#include <artea/cpu/containers/allocator.hpp>
 #include <artea/common/element_pos.hpp>
 #include <artea/definitions.hpp>
 
