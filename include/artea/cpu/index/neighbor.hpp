@@ -13,45 +13,39 @@
 // limitations under the License.
 
 /*
- * @FilePath: /Artea/include/artea/cpu/propagation/delegate_lookup_table.hpp
+ * @FilePath: /Artea/include/artea/cpu/index/neighbor.hpp
  * @Author: Chandler (Weitang Ye) <weitang.ye@ntu.edu.sg>
- * @Description:
+ * @Description: Neighbor structure definition.
  */
 
 #pragma once
 
-#include <cstdint>
-#include <vector>
-#include <algorithm>
-#include <limits>
-#include <utility>
-#include <mutex>
-#include <memory>
-#include <unordered_map>
-
-#include <artea/cpu/propagation/delegate_entry.hpp>
-#include <artea/definitions.hpp>
-
 namespace artea {
 namespace cpu {
 
+/** @brief Neighbor structure for storing vertex ID and distance. */
 template <typename vertex_num_t, typename vec_ele_t>
-class DelegateLookupTable {
+struct alignas(8) Neighbor {   // 8 bytes
 
-public:
-
-    using vertex_id_t = vertex_num_t;
     using distance_t = vec_ele_t;
-    using delegate_entry_t = DelegateEntry<vertex_num_t, vec_ele_t>;
+    using vertex_id_t = vertex_num_t;
 
-private:
+    vertex_id_t dest;
+    distance_t distance;
+    // bool new_flag;
+    // uint8_t padding[7];
 
-    /** @brief number of vertices */
-    vertex_num_t _num_vertices;
+};  // struct Neighbor
 
-
-
-};  // class DelegateLookupTable
+/** @brief Comparator for Neighbor, lambda function. */
+template <typename vertex_num_t, typename vec_ele_t>
+constexpr auto NeighborComparator = [](
+    const Neighbor<vertex_num_t, vec_ele_t>& a,
+    const Neighbor<vertex_num_t, vec_ele_t>& b
+) -> bool {
+    return a.distance < b.distance or
+          (a.distance == b.distance && a.dest < b.dest);
+};  // constexpr auto NeighborComparator
 
 }   // namespace cpu
 }   // namespace artea

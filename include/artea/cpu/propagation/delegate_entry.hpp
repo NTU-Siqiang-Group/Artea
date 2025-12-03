@@ -126,6 +126,15 @@ struct alignas(8) DelegateEntry {   // 16 bytes
 };  // struct DelegateEntry
 
 template <typename vertex_num_t, typename vec_ele_t>
+constexpr auto DelegateEntryComparator = [](
+    const DelegateEntry<vertex_num_t, vec_ele_t>& a,
+    const DelegateEntry<vertex_num_t, vec_ele_t>& b
+) -> bool {
+    return a.distance < b.distance or
+          (a.distance == b.distance && a.dest < b.dest);
+};  // constexpr auto DelegateEntryComparator
+
+template <typename vertex_num_t, typename vec_ele_t>
 struct alignas(4) CompactDelegateEntry {   // 12 bytes
 
     using vertex_id_t = vertex_num_t;
@@ -231,6 +240,31 @@ struct alignas(4) CompactDelegateEntry {   // 12 bytes
     }
 
 };  // struct CompactDelegateEntry
+
+template <typename vertex_num_t, typename vec_ele_t>
+struct alignas(8) SimpleDelegateEntry {  // 8 bytes
+    using vertex_id_t = vertex_num_t;
+    using distance_t = vec_ele_t;
+
+    /** @brief The source vertex id. */
+    vertex_id_t src_id;
+
+    /** @brief The destination vertex id. */
+    vertex_id_t dest_id;
+
+    /** @brief The distance between source and destination vertices. */
+    distance_t distance;
+
+    /* --- Constructor --- */
+
+    SimpleDelegateEntry(
+        const vertex_id_t src_id,
+        const vertex_id_t dest_id,
+        const distance_t distance
+    ) : src_id(src_id), dest_id(dest_id), distance(distance)
+    {}
+
+};  // struct SimpleDelegateEntry
 
 }   // namespace cpu
 }   // namespace artea

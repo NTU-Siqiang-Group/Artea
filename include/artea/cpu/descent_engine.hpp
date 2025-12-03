@@ -20,6 +20,7 @@
 #include <artea/definitions.hpp>
 #include <artea/common/logger.hpp>
 #include <artea/common/element_pos.hpp>
+#include <artea/cpu/index/neighbor.hpp>
 
 template <
     typename vertex_num_t,

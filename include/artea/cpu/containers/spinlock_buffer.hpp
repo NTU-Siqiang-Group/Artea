@@ -13,54 +13,37 @@
 // limitations under the License.
 
 /*
- * @FilePath: /Artea/include/artea/definitions.hpp
+ * @FilePath: /Artea/include/artea/cpu/containers/spinlock_buffer.hpp
  * @Author: Chandler (Weitang Ye) <weitang.ye@ntu.edu.sg>
  * @Description:
  */
 
 #pragma once
 
-#include <cstdint>
-#include <vector>
+#include <cstddef>
 
 namespace artea {
+namespace cpu {
 
-using vec_dim_t = uint32_t;
+template <
+    typename container_t,
+    typename lock_t,
+    std::size_t buf_size = 64
+>
+struct alignas(CACHE_LINE_SIZE) SpinlockBuffer {
 
-using cluster_num_t = uint32_t;
+    /** @brief Container protected by a spinlock */
+    container_t container;
 
-using cluster_id_t = cluster_num_t;
+    /** @brief Spinlock for synchronizing access to the container */
+    lock_t lock;
 
-using part_num_t = uint32_t;
+    /** @brief Default constructor that reserves buffer size */
+    SpinlockBuffer() {
+        container.reserve(buf_size);
+    }
 
-using part_id_t = uint32_t;
+};  // struct SpinlockBuffer
 
-using iter_t = uint32_t;
-
-using block_num_t = uint32_t;
-
-using block_id_t = uint32_t;
-
-enum class device_t {
-    CPU = 0,
-    GPU = 1
-};
-
-/** @brief Direction type for graph edges. */
-enum class direction_t {
-    IN = 0,
-    OUT = 1,
-    HIBRID = 2
-};
-
-template <typename vertex_num_t, typename vec_ele_t>
-struct alignas(8) VertexProperty {   // 8 bytes
-
-    using distance_t = vec_ele_t;
-
-    vertex_num_t indegree;
-    distance_t avg_distance;
-
-};  // struct VertexProperty
-
+}   // namespace cpu
 }   // namespace artea

@@ -19,10 +19,7 @@
 namespace artea {
 namespace cpu {
 
-template<
-    typename vertex_num_t,
-    typename vec_ele_t
->
+template <typename vertex_num_t, typename vec_ele_t>
 class ConcurrentRecomNN final:
     public RecommendedNN<vertex_num_t, vec_ele_t,
         ConcurrentRecomNN<vertex_num_t, vec_ele_t>>

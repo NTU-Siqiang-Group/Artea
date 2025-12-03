@@ -1,7 +1,7 @@
 /*
  * @FilePath: /Artea/include/artea/cpu/conflicts.hpp
  * @Author: Chandler (Weitang Ye) <weitang.ye@ntu.edu.sg>
- * @LastEditTime: 2025-11-27 11:41:18
+ * @LastEditTime: 2025-11-30 20:46:46
  * @Date: 2025-11-11 16:50:41
  * @Description:
  */
@@ -13,7 +13,8 @@
 
 #include <range/v3/view/zip.hpp>
 
-#include <artea/types.hpp>
+#include <artea/definitions.hpp>
+#include <artea/cpu/index/neighbor.hpp>
 #include <artea/cpu/containers/array.hpp>
 #include <artea/cpu/utils/simd_distance.hpp>
 

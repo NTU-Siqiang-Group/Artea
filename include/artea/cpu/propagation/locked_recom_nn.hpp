@@ -1,7 +1,7 @@
 /*
  * @FilePath: /Artea/include/artea/cpu/propagation/locked_recom_nn.hpp
  * @Author: Chandler (Weitang Ye) <weitang.ye@ntu.edu.sg>
- * @LastEditTime: 2025-11-27 11:41:34
+ * @LastEditTime: 2025-11-30 20:47:28
  * @Date: 2025-11-13 09:28:38
  * @Description:
  */
@@ -16,6 +16,7 @@
 #include <tbb/parallel_for.h>
 
 #include <artea/definitions.hpp>
+#include <artea/cpu/index/neighbor.hpp>
 #include <artea/cpu/propagation/recommended_nn.hpp>
 
 namespace artea {
