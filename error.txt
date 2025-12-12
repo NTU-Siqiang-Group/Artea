@@ -1,0 +1,411 @@
+icpx: warning: overriding '-march=nocona' option with '-march=native' [-Woverriding-option]
+icpx: warning: overriding '-march=nocona' option with '-march=native' [-Woverriding-option]
+In file included from /home/yeweitang/Artea/tests/test_neighbor_search.cpp:35:
+In file included from /home/yeweitang/Artea/include/artea/common/logger.hpp:15:
+/home/yeweitang/Artea/build/_deps/fmt-src/include/fmt/format.h:4429:27: warning: identifier '_a' preceded by whitespace in a literal operator declaration is deprecated [-Wdeprecated-literal-operator]
+ 4429 | constexpr auto operator"" _a(const char* s, size_t) -> detail::udl_arg<char> {
+      |                ~~~~~~~~~~~^~
+      |                operator""_a
+In file included from /home/yeweitang/Artea/tests/test_merge_logs.cpp:23:
+In file included from /home/yeweitang/Artea/include/artea/common/logger.hpp:15:
+/home/yeweitang/Artea/build/_deps/fmt-src/include/fmt/format.h:4429:27: warning: identifier '_a' preceded by whitespace in a literal operator declaration is deprecated [-Wdeprecated-literal-operator]
+ 4429 | constexpr auto operator"" _a(const char* s, size_t) -> detail::udl_arg<char> {
+      |                ~~~~~~~~~~~^~
+      |                operator""_a
+/home/yeweitang/Artea/tests/test_merge_logs.cpp:240:5: error: no matching function for call to 'parallel_for'
+  240 |     tbb::parallel_for(size_t(0), graph.get_num_vertices(), [&](size_t v) {
+      |     ^~~~~~~~~~~~~~~~~
+/home/yeweitang/intel/oneapi/tbb/2022.2/env/../include/tbb/../oneapi/tbb/parallel_for.h:236:6: note: candidate function not viable: no known conversion from '(lambda at /home/yeweitang/Artea/tests/test_merge_logs.cpp:240:60)' to 'const simple_partitioner' for 3rd argument
+  236 | void parallel_for( const Range& range, const Body& body, const simple_partitioner& partitioner ) {
+      |      ^                                                   ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+/home/yeweitang/intel/oneapi/tbb/2022.2/env/../include/tbb/../oneapi/tbb/parallel_for.h:244:6: note: candidate function not viable: no known conversion from '(lambda at /home/yeweitang/Artea/tests/test_merge_logs.cpp:240:60)' to 'const auto_partitioner' for 3rd argument
+  244 | void parallel_for( const Range& range, const Body& body, const auto_partitioner& partitioner ) {
+      |      ^                                                   ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+/home/yeweitang/intel/oneapi/tbb/2022.2/env/../include/tbb/../oneapi/tbb/parallel_for.h:252:6: note: candidate function not viable: no known conversion from '(lambda at /home/yeweitang/Artea/tests/test_merge_logs.cpp:240:60)' to 'const static_partitioner' for 3rd argument
+  252 | void parallel_for( const Range& range, const Body& body, const static_partitioner& partitioner ) {
+      |      ^                                                   ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+/home/yeweitang/intel/oneapi/tbb/2022.2/env/../include/tbb/../oneapi/tbb/parallel_for.h:260:6: note: candidate function not viable: no known conversion from '(lambda at /home/yeweitang/Artea/tests/test_merge_logs.cpp:240:60)' to 'affinity_partitioner &' for 3rd argument
+  260 | void parallel_for( const Range& range, const Body& body, affinity_partitioner& partitioner ) {
+      |      ^                                                   ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+/home/yeweitang/intel/oneapi/tbb/2022.2/env/../include/tbb/../oneapi/tbb/parallel_for.h:268:6: note: candidate function not viable: no known conversion from '(lambda at /home/yeweitang/Artea/tests/test_merge_logs.cpp:240:60)' to 'task_group_context &' for 3rd argument
+  268 | void parallel_for( const Range& range, const Body& body, task_group_context& context ) {
+      |      ^                                                   ~~~~~~~~~~~~~~~~~~~~~~~~~~~
+/home/yeweitang/intel/oneapi/tbb/2022.2/env/../include/tbb/../oneapi/tbb/parallel_for.h:352:6: note: candidate template ignored: deduced conflicting types for parameter 'Index' ('size_t' (aka 'unsigned long') vs. 'unsigned int')
+  352 | void parallel_for(Index first, Index last, const Function& f) {
+      |      ^
+/home/yeweitang/intel/oneapi/tbb/2022.2/env/../include/tbb/../oneapi/tbb/parallel_for.h:228:6: note: candidate function not viable: requires 2 arguments, but 3 were provided
+  228 | void parallel_for( const Range& range, const Body& body ) {
+      |      ^             ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+/home/yeweitang/intel/oneapi/tbb/2022.2/env/../include/tbb/../oneapi/tbb/parallel_for.h:276:6: note: candidate function not viable: requires 4 arguments, but 3 were provided
+  276 | void parallel_for( const Range& range, const Body& body, const simple_partitioner& partitioner, task_group_context& context ) {
+      |      ^             ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+/home/yeweitang/intel/oneapi/tbb/2022.2/env/../include/tbb/../oneapi/tbb/parallel_for.h:284:6: note: candidate function not viable: requires 4 arguments, but 3 were provided
+  284 | void parallel_for( const Range& range, const Body& body, const auto_partitioner& partitioner, task_group_context& context ) {
+      |      ^             ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+/home/yeweitang/intel/oneapi/tbb/2022.2/env/../include/tbb/../oneapi/tbb/parallel_for.h:292:6: note: candidate function not viable: requires 4 arguments, but 3 were provided
+  292 | void parallel_for( const Range& range, const Body& body, const static_partitioner& partitioner, task_group_context& context ) {
+      |      ^             ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+/home/yeweitang/intel/oneapi/tbb/2022.2/env/../include/tbb/../oneapi/tbb/parallel_for.h:300:6: note: candidate function not viable: requires 4 arguments, but 3 were provided
+  300 | void parallel_for( const Range& range, const Body& body, affinity_partitioner& partitioner, task_group_context& context ) {
+      |      ^             ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+/home/yeweitang/intel/oneapi/tbb/2022.2/env/../include/tbb/../oneapi/tbb/parallel_for.h:321:6: note: candidate function not viable: requires 4 arguments, but 3 were provided
+  321 | void parallel_for(Index first, Index last, Index step, const Function& f) {
+      |      ^            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+/home/yeweitang/intel/oneapi/tbb/2022.2/env/../include/tbb/../oneapi/tbb/parallel_for.h:358:6: note: candidate function not viable: requires 4 arguments, but 3 were provided
+  358 | void parallel_for(Index first, Index last, const Function& f, const simple_partitioner& partitioner) {
+      |      ^            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+/home/yeweitang/intel/oneapi/tbb/2022.2/env/../include/tbb/../oneapi/tbb/parallel_for.h:364:6: note: candidate function not viable: requires 4 arguments, but 3 were provided
+  364 | void parallel_for(Index first, Index last, const Function& f, const auto_partitioner& partitioner) {
+      |      ^            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+/home/yeweitang/intel/oneapi/tbb/2022.2/env/../include/tbb/../oneapi/tbb/parallel_for.h:370:6: note: candidate function not viable: requires 4 arguments, but 3 were provided
+  370 | void parallel_for(Index first, Index last, const Function& f, const static_partitioner& partitioner) {
+      |      ^            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+/home/yeweitang/intel/oneapi/tbb/2022.2/env/../include/tbb/../oneapi/tbb/parallel_for.h:376:6: note: candidate function not viable: requires 4 arguments, but 3 were provided
+  376 | void parallel_for(Index first, Index last, const Function& f, affinity_partitioner& partitioner) {
+      |      ^            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+/home/yeweitang/intel/oneapi/tbb/2022.2/env/../include/tbb/../oneapi/tbb/parallel_for.h:428:6: note: candidate function not viable: requires 4 arguments, but 3 were provided
+  428 | void parallel_for(Index first, Index last, const Function& f, task_group_context &context) {
+      |      ^            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+/home/yeweitang/intel/oneapi/tbb/2022.2/env/../include/tbb/../oneapi/tbb/parallel_for.h:327:6: note: candidate function not viable: requires 5 arguments, but 3 were provided
+  327 | void parallel_for(Index first, Index last, Index step, const Function& f, const simple_partitioner& partitioner) {
+      |      ^            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+/home/yeweitang/intel/oneapi/tbb/2022.2/env/../include/tbb/../oneapi/tbb/parallel_for.h:333:6: note: candidate function not viable: requires 5 arguments, but 3 were provided
+  333 | void parallel_for(Index first, Index last, Index step, const Function& f, const auto_partitioner& partitioner) {
+      |      ^            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+/home/yeweitang/intel/oneapi/tbb/2022.2/env/../include/tbb/../oneapi/tbb/parallel_for.h:339:6: note: candidate function not viable: requires 5 arguments, but 3 were provided
+  339 | void parallel_for(Index first, Index last, Index step, const Function& f, const static_partitioner& partitioner) {
+      |      ^            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+/home/yeweitang/intel/oneapi/tbb/2022.2/env/../include/tbb/../oneapi/tbb/parallel_for.h:345:6: note: candidate function not viable: requires 5 arguments, but 3 were provided
+  345 | void parallel_for(Index first, Index last, Index step, const Function& f, affinity_partitioner& partitioner) {
+      |      ^            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+/home/yeweitang/intel/oneapi/tbb/2022.2/env/../include/tbb/../oneapi/tbb/parallel_for.h:397:6: note: candidate function not viable: requires 5 arguments, but 3 were provided
+  397 | void parallel_for(Index first, Index last, Index step, const Function& f, task_group_context &context) {
+      |      ^            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+/home/yeweitang/intel/oneapi/tbb/2022.2/env/../include/tbb/../oneapi/tbb/parallel_for.h:434:6: note: candidate function not viable: requires 5 arguments, but 3 were provided
+  434 | void parallel_for(Index first, Index last, const Function& f, const simple_partitioner& partitioner, task_group_context &context) {
+      |      ^            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+/home/yeweitang/intel/oneapi/tbb/2022.2/env/../include/tbb/../oneapi/tbb/parallel_for.h:440:6: note: candidate function not viable: requires 5 arguments, but 3 were provided
+  440 | void parallel_for(Index first, Index last, const Function& f, const auto_partitioner& partitioner, task_group_context &context) {
+      |      ^            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+/home/yeweitang/intel/oneapi/tbb/2022.2/env/../include/tbb/../oneapi/tbb/parallel_for.h:446:6: note: candidate function not viable: requires 5 arguments, but 3 were provided
+  446 | void parallel_for(Index first, Index last, const Function& f, const static_partitioner& partitioner, task_group_context &context) {
+      |      ^            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+/home/yeweitang/intel/oneapi/tbb/2022.2/env/../include/tbb/../oneapi/tbb/parallel_for.h:452:6: note: candidate function not viable: requires 5 arguments, but 3 were provided
+  452 | void parallel_for(Index first, Index last, const Function& f, affinity_partitioner& partitioner, task_group_context &context) {
+      |      ^            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+/home/yeweitang/intel/oneapi/tbb/2022.2/env/../include/tbb/../oneapi/tbb/parallel_for.h:403:6: note: candidate function not viable: requires 6 arguments, but 3 were provided
+  403 | void parallel_for(Index first, Index last, Index step, const Function& f, const simple_partitioner& partitioner, task_group_context &context) {
+      |      ^            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+/home/yeweitang/intel/oneapi/tbb/2022.2/env/../include/tbb/../oneapi/tbb/parallel_for.h:409:6: note: candidate function not viable: requires 6 arguments, but 3 were provided
+  409 | void parallel_for(Index first, Index last, Index step, const Function& f, const auto_partitioner& partitioner, task_group_context &context) {
+      |      ^            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+/home/yeweitang/intel/oneapi/tbb/2022.2/env/../include/tbb/../oneapi/tbb/parallel_for.h:415:6: note: candidate function not viable: requires 6 arguments, but 3 were provided
+  415 | void parallel_for(Index first, Index last, Index step, const Function& f, const static_partitioner& partitioner, task_group_context &context) {
+      |      ^            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+/home/yeweitang/intel/oneapi/tbb/2022.2/env/../include/tbb/../oneapi/tbb/parallel_for.h:421:6: note: candidate function not viable: requires 6 arguments, but 3 were provided
+  421 | void parallel_for(Index first, Index last, Index step, const Function& f, affinity_partitioner& partitioner, task_group_context &context) {
+      |      ^            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+/home/yeweitang/Artea/tests/test_merge_logs.cpp:283:5: error: no matching function for call to 'parallel_for'
+  283 |     tbb::parallel_for(size_t(0), truth.get_num_vertices(), [&](size_t v) {
+      |     ^~~~~~~~~~~~~~~~~
+/home/yeweitang/intel/oneapi/tbb/2022.2/env/../include/tbb/../oneapi/tbb/parallel_for.h:236:6: note: candidate function not viable: no known conversion from '(lambda at /home/yeweitang/Artea/tests/test_merge_logs.cpp:283:60)' to 'const simple_partitioner' for 3rd argument
+  236 | void parallel_for( const Range& range, const Body& body, const simple_partitioner& partitioner ) {
+      |      ^                                                   ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+/home/yeweitang/intel/oneapi/tbb/2022.2/env/../include/tbb/../oneapi/tbb/parallel_for.h:244:6: note: candidate function not viable: no known conversion from '(lambda at /home/yeweitang/Artea/tests/test_merge_logs.cpp:283:60)' to 'const auto_partitioner' for 3rd argument
+  244 | void parallel_for( const Range& range, const Body& body, const auto_partitioner& partitioner ) {
+      |      ^                                                   ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+/home/yeweitang/intel/oneapi/tbb/2022.2/env/../include/tbb/../oneapi/tbb/parallel_for.h:252:6: note: candidate function not viable: no known conversion from '(lambda at /home/yeweitang/Artea/tests/test_merge_logs.cpp:283:60)' to 'const static_partitioner' for 3rd argument
+  252 | void parallel_for( const Range& range, const Body& body, const static_partitioner& partitioner ) {
+      |      ^                                                   ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+/home/yeweitang/intel/oneapi/tbb/2022.2/env/../include/tbb/../oneapi/tbb/parallel_for.h:260:6: note: candidate function not viable: no known conversion from '(lambda at /home/yeweitang/Artea/tests/test_merge_logs.cpp:283:60)' to 'affinity_partitioner &' for 3rd argument
+  260 | void parallel_for( const Range& range, const Body& body, affinity_partitioner& partitioner ) {
+      |      ^                                                   ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+/home/yeweitang/intel/oneapi/tbb/2022.2/env/../include/tbb/../oneapi/tbb/parallel_for.h:268:6: note: candidate function not viable: no known conversion from '(lambda at /home/yeweitang/Artea/tests/test_merge_logs.cpp:283:60)' to 'task_group_context &' for 3rd argument
+  268 | void parallel_for( const Range& range, const Body& body, task_group_context& context ) {
+      |      ^                                                   ~~~~~~~~~~~~~~~~~~~~~~~~~~~
+/home/yeweitang/intel/oneapi/tbb/2022.2/env/../include/tbb/../oneapi/tbb/parallel_for.h:352:6: note: candidate template ignored: deduced conflicting types for parameter 'Index' ('size_t' (aka 'unsigned long') vs. 'unsigned int')
+  352 | void parallel_for(Index first, Index last, const Function& f) {
+      |      ^
+/home/yeweitang/intel/oneapi/tbb/2022.2/env/../include/tbb/../oneapi/tbb/parallel_for.h:228:6: note: candidate function not viable: requires 2 arguments, but 3 were provided
+  228 | void parallel_for( const Range& range, const Body& body ) {
+      |      ^             ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+/home/yeweitang/intel/oneapi/tbb/2022.2/env/../include/tbb/../oneapi/tbb/parallel_for.h:276:6: note: candidate function not viable: requires 4 arguments, but 3 were provided
+  276 | void parallel_for( const Range& range, const Body& body, const simple_partitioner& partitioner, task_group_context& context ) {
+      |      ^             ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+/home/yeweitang/intel/oneapi/tbb/2022.2/env/../include/tbb/../oneapi/tbb/parallel_for.h:284:6: note: candidate function not viable: requires 4 arguments, but 3 were provided
+  284 | void parallel_for( const Range& range, const Body& body, const auto_partitioner& partitioner, task_group_context& context ) {
+      |      ^             ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+/home/yeweitang/intel/oneapi/tbb/2022.2/env/../include/tbb/../oneapi/tbb/parallel_for.h:292:6: note: candidate function not viable: requires 4 arguments, but 3 were provided
+  292 | void parallel_for( const Range& range, const Body& body, const static_partitioner& partitioner, task_group_context& context ) {
+      |      ^             ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+/home/yeweitang/intel/oneapi/tbb/2022.2/env/../include/tbb/../oneapi/tbb/parallel_for.h:300:6: note: candidate function not viable: requires 4 arguments, but 3 were provided
+  300 | void parallel_for( const Range& range, const Body& body, affinity_partitioner& partitioner, task_group_context& context ) {
+      |      ^             ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+/home/yeweitang/intel/oneapi/tbb/2022.2/env/../include/tbb/../oneapi/tbb/parallel_for.h:321:6: note: candidate function not viable: requires 4 arguments, but 3 were provided
+  321 | void parallel_for(Index first, Index last, Index step, const Function& f) {
+      |      ^            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+/home/yeweitang/intel/oneapi/tbb/2022.2/env/../include/tbb/../oneapi/tbb/parallel_for.h:358:6: note: candidate function not viable: requires 4 arguments, but 3 were provided
+  358 | void parallel_for(Index first, Index last, const Function& f, const simple_partitioner& partitioner) {
+      |      ^            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+/home/yeweitang/intel/oneapi/tbb/2022.2/env/../include/tbb/../oneapi/tbb/parallel_for.h:364:6: note: candidate function not viable: requires 4 arguments, but 3 were provided
+  364 | void parallel_for(Index first, Index last, const Function& f, const auto_partitioner& partitioner) {
+      |      ^            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+/home/yeweitang/intel/oneapi/tbb/2022.2/env/../include/tbb/../oneapi/tbb/parallel_for.h:370:6: note: candidate function not viable: requires 4 arguments, but 3 were provided
+  370 | void parallel_for(Index first, Index last, const Function& f, const static_partitioner& partitioner) {
+      |      ^            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+/home/yeweitang/intel/oneapi/tbb/2022.2/env/../include/tbb/../oneapi/tbb/parallel_for.h:376:6: note: candidate function not viable: requires 4 arguments, but 3 were provided
+  376 | void parallel_for(Index first, Index last, const Function& f, affinity_partitioner& partitioner) {
+      |      ^            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+/home/yeweitang/intel/oneapi/tbb/2022.2/env/../include/tbb/../oneapi/tbb/parallel_for.h:428:6: note: candidate function not viable: requires 4 arguments, but 3 were provided
+  428 | void parallel_for(Index first, Index last, const Function& f, task_group_context &context) {
+      |      ^            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+/home/yeweitang/intel/oneapi/tbb/2022.2/env/../include/tbb/../oneapi/tbb/parallel_for.h:327:6: note: candidate function not viable: requires 5 arguments, but 3 were provided
+  327 | void parallel_for(Index first, Index last, Index step, const Function& f, const simple_partitioner& partitioner) {
+      |      ^            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+/home/yeweitang/intel/oneapi/tbb/2022.2/env/../include/tbb/../oneapi/tbb/parallel_for.h:333:6: note: candidate function not viable: requires 5 arguments, but 3 were provided
+  333 | void parallel_for(Index first, Index last, Index step, const Function& f, const auto_partitioner& partitioner) {
+      |      ^            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+/home/yeweitang/intel/oneapi/tbb/2022.2/env/../include/tbb/../oneapi/tbb/parallel_for.h:339:6: note: candidate function not viable: requires 5 arguments, but 3 were provided
+  339 | void parallel_for(Index first, Index last, Index step, const Function& f, const static_partitioner& partitioner) {
+      |      ^            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+/home/yeweitang/intel/oneapi/tbb/2022.2/env/../include/tbb/../oneapi/tbb/parallel_for.h:345:6: note: candidate function not viable: requires 5 arguments, but 3 were provided
+  345 | void parallel_for(Index first, Index last, Index step, const Function& f, affinity_partitioner& partitioner) {
+      |      ^            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+/home/yeweitang/intel/oneapi/tbb/2022.2/env/../include/tbb/../oneapi/tbb/parallel_for.h:397:6: note: candidate function not viable: requires 5 arguments, but 3 were provided
+  397 | void parallel_for(Index first, Index last, Index step, const Function& f, task_group_context &context) {
+      |      ^            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+/home/yeweitang/intel/oneapi/tbb/2022.2/env/../include/tbb/../oneapi/tbb/parallel_for.h:434:6: note: candidate function not viable: requires 5 arguments, but 3 were provided
+  434 | void parallel_for(Index first, Index last, const Function& f, const simple_partitioner& partitioner, task_group_context &context) {
+      |      ^            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+/home/yeweitang/intel/oneapi/tbb/2022.2/env/../include/tbb/../oneapi/tbb/parallel_for.h:440:6: note: candidate function not viable: requires 5 arguments, but 3 were provided
+  440 | void parallel_for(Index first, Index last, const Function& f, const auto_partitioner& partitioner, task_group_context &context) {
+      |      ^            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+/home/yeweitang/intel/oneapi/tbb/2022.2/env/../include/tbb/../oneapi/tbb/parallel_for.h:446:6: note: candidate function not viable: requires 5 arguments, but 3 were provided
+  446 | void parallel_for(Index first, Index last, const Function& f, const static_partitioner& partitioner, task_group_context &context) {
+      |      ^            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+/home/yeweitang/intel/oneapi/tbb/2022.2/env/../include/tbb/../oneapi/tbb/parallel_for.h:452:6: note: candidate function not viable: requires 5 arguments, but 3 were provided
+  452 | void parallel_for(Index first, Index last, const Function& f, affinity_partitioner& partitioner, task_group_context &context) {
+      |      ^            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+/home/yeweitang/intel/oneapi/tbb/2022.2/env/../include/tbb/../oneapi/tbb/parallel_for.h:403:6: note: candidate function not viable: requires 6 arguments, but 3 were provided
+  403 | void parallel_for(Index first, Index last, Index step, const Function& f, const simple_partitioner& partitioner, task_group_context &context) {
+      |      ^            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+/home/yeweitang/intel/oneapi/tbb/2022.2/env/../include/tbb/../oneapi/tbb/parallel_for.h:409:6: note: candidate function not viable: requires 6 arguments, but 3 were provided
+  409 | void parallel_for(Index first, Index last, Index step, const Function& f, const auto_partitioner& partitioner, task_group_context &context) {
+      |      ^            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+/home/yeweitang/intel/oneapi/tbb/2022.2/env/../include/tbb/../oneapi/tbb/parallel_for.h:415:6: note: candidate function not viable: requires 6 arguments, but 3 were provided
+  415 | void parallel_for(Index first, Index last, Index step, const Function& f, const static_partitioner& partitioner, task_group_context &context) {
+      |      ^            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+/home/yeweitang/intel/oneapi/tbb/2022.2/env/../include/tbb/../oneapi/tbb/parallel_for.h:421:6: note: candidate function not viable: requires 6 arguments, but 3 were provided
+  421 | void parallel_for(Index first, Index last, Index step, const Function& f, affinity_partitioner& partitioner, task_group_context &context) {
+      |      ^            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+/home/yeweitang/Artea/tests/test_merge_logs.cpp:309:5: error: no matching function for call to 'parallel_for'
+  309 |     tbb::parallel_for(size_t(0), src.get_num_vertices(), [&](size_t v) {
+      |     ^~~~~~~~~~~~~~~~~
+/home/yeweitang/intel/oneapi/tbb/2022.2/env/../include/tbb/../oneapi/tbb/parallel_for.h:236:6: note: candidate function not viable: no known conversion from '(lambda at /home/yeweitang/Artea/tests/test_merge_logs.cpp:309:58)' to 'const simple_partitioner' for 3rd argument
+  236 | void parallel_for( const Range& range, const Body& body, const simple_partitioner& partitioner ) {
+      |      ^                                                   ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+/home/yeweitang/intel/oneapi/tbb/2022.2/env/../include/tbb/../oneapi/tbb/parallel_for.h:244:6: note: candidate function not viable: no known conversion from '(lambda at /home/yeweitang/Artea/tests/test_merge_logs.cpp:309:58)' to 'const auto_partitioner' for 3rd argument
+  244 | void parallel_for( const Range& range, const Body& body, const auto_partitioner& partitioner ) {
+      |      ^                                                   ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+/home/yeweitang/intel/oneapi/tbb/2022.2/env/../include/tbb/../oneapi/tbb/parallel_for.h:252:6: note: candidate function not viable: no known conversion from '(lambda at /home/yeweitang/Artea/tests/test_merge_logs.cpp:309:58)' to 'const static_partitioner' for 3rd argument
+  252 | void parallel_for( const Range& range, const Body& body, const static_partitioner& partitioner ) {
+      |      ^                                                   ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+/home/yeweitang/intel/oneapi/tbb/2022.2/env/../include/tbb/../oneapi/tbb/parallel_for.h:260:6: note: candidate function not viable: no known conversion from '(lambda at /home/yeweitang/Artea/tests/test_merge_logs.cpp:309:58)' to 'affinity_partitioner &' for 3rd argument
+  260 | void parallel_for( const Range& range, const Body& body, affinity_partitioner& partitioner ) {
+      |      ^                                                   ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+/home/yeweitang/intel/oneapi/tbb/2022.2/env/../include/tbb/../oneapi/tbb/parallel_for.h:268:6: note: candidate function not viable: no known conversion from '(lambda at /home/yeweitang/Artea/tests/test_merge_logs.cpp:309:58)' to 'task_group_context &' for 3rd argument
+  268 | void parallel_for( const Range& range, const Body& body, task_group_context& context ) {
+      |      ^                                                   ~~~~~~~~~~~~~~~~~~~~~~~~~~~
+/home/yeweitang/intel/oneapi/tbb/2022.2/env/../include/tbb/../oneapi/tbb/parallel_for.h:352:6: note: candidate template ignored: deduced conflicting types for parameter 'Index' ('size_t' (aka 'unsigned long') vs. 'unsigned int')
+  352 | void parallel_for(Index first, Index last, const Function& f) {
+      |      ^
+/home/yeweitang/intel/oneapi/tbb/2022.2/env/../include/tbb/../oneapi/tbb/parallel_for.h:228:6: note: candidate function not viable: requires 2 arguments, but 3 were provided
+  228 | void parallel_for( const Range& range, const Body& body ) {
+      |      ^             ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+/home/yeweitang/intel/oneapi/tbb/2022.2/env/../include/tbb/../oneapi/tbb/parallel_for.h:276:6: note: candidate function not viable: requires 4 arguments, but 3 were provided
+  276 | void parallel_for( const Range& range, const Body& body, const simple_partitioner& partitioner, task_group_context& context ) {
+      |      ^             ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+/home/yeweitang/intel/oneapi/tbb/2022.2/env/../include/tbb/../oneapi/tbb/parallel_for.h:284:6: note: candidate function not viable: requires 4 arguments, but 3 were provided
+  284 | void parallel_for( const Range& range, const Body& body, const auto_partitioner& partitioner, task_group_context& context ) {
+      |      ^             ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+/home/yeweitang/intel/oneapi/tbb/2022.2/env/../include/tbb/../oneapi/tbb/parallel_for.h:292:6: note: candidate function not viable: requires 4 arguments, but 3 were provided
+  292 | void parallel_for( const Range& range, const Body& body, const static_partitioner& partitioner, task_group_context& context ) {
+      |      ^             ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+/home/yeweitang/intel/oneapi/tbb/2022.2/env/../include/tbb/../oneapi/tbb/parallel_for.h:300:6: note: candidate function not viable: requires 4 arguments, but 3 were provided
+  300 | void parallel_for( const Range& range, const Body& body, affinity_partitioner& partitioner, task_group_context& context ) {
+      |      ^             ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+/home/yeweitang/intel/oneapi/tbb/2022.2/env/../include/tbb/../oneapi/tbb/parallel_for.h:321:6: note: candidate function not viable: requires 4 arguments, but 3 were provided
+  321 | void parallel_for(Index first, Index last, Index step, const Function& f) {
+      |      ^            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+/home/yeweitang/intel/oneapi/tbb/2022.2/env/../include/tbb/../oneapi/tbb/parallel_for.h:358:6: note: candidate function not viable: requires 4 arguments, but 3 were provided
+  358 | void parallel_for(Index first, Index last, const Function& f, const simple_partitioner& partitioner) {
+      |      ^            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+/home/yeweitang/intel/oneapi/tbb/2022.2/env/../include/tbb/../oneapi/tbb/parallel_for.h:364:6: note: candidate function not viable: requires 4 arguments, but 3 were provided
+  364 | void parallel_for(Index first, Index last, const Function& f, const auto_partitioner& partitioner) {
+      |      ^            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+/home/yeweitang/intel/oneapi/tbb/2022.2/env/../include/tbb/../oneapi/tbb/parallel_for.h:370:6: note: candidate function not viable: requires 4 arguments, but 3 were provided
+  370 | void parallel_for(Index first, Index last, const Function& f, const static_partitioner& partitioner) {
+      |      ^            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+/home/yeweitang/intel/oneapi/tbb/2022.2/env/../include/tbb/../oneapi/tbb/parallel_for.h:376:6: note: candidate function not viable: requires 4 arguments, but 3 were provided
+  376 | void parallel_for(Index first, Index last, const Function& f, affinity_partitioner& partitioner) {
+      |      ^            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+/home/yeweitang/intel/oneapi/tbb/2022.2/env/../include/tbb/../oneapi/tbb/parallel_for.h:428:6: note: candidate function not viable: requires 4 arguments, but 3 were provided
+  428 | void parallel_for(Index first, Index last, const Function& f, task_group_context &context) {
+      |      ^            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+/home/yeweitang/intel/oneapi/tbb/2022.2/env/../include/tbb/../oneapi/tbb/parallel_for.h:327:6: note: candidate function not viable: requires 5 arguments, but 3 were provided
+  327 | void parallel_for(Index first, Index last, Index step, const Function& f, const simple_partitioner& partitioner) {
+      |      ^            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+/home/yeweitang/intel/oneapi/tbb/2022.2/env/../include/tbb/../oneapi/tbb/parallel_for.h:333:6: note: candidate function not viable: requires 5 arguments, but 3 were provided
+  333 | void parallel_for(Index first, Index last, Index step, const Function& f, const auto_partitioner& partitioner) {
+      |      ^            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+/home/yeweitang/intel/oneapi/tbb/2022.2/env/../include/tbb/../oneapi/tbb/parallel_for.h:339:6: note: candidate function not viable: requires 5 arguments, but 3 were provided
+  339 | void parallel_for(Index first, Index last, Index step, const Function& f, const static_partitioner& partitioner) {
+      |      ^            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+/home/yeweitang/intel/oneapi/tbb/2022.2/env/../include/tbb/../oneapi/tbb/parallel_for.h:345:6: note: candidate function not viable: requires 5 arguments, but 3 were provided
+  345 | void parallel_for(Index first, Index last, Index step, const Function& f, affinity_partitioner& partitioner) {
+      |      ^            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+/home/yeweitang/intel/oneapi/tbb/2022.2/env/../include/tbb/../oneapi/tbb/parallel_for.h:397:6: note: candidate function not viable: requires 5 arguments, but 3 were provided
+  397 | void parallel_for(Index first, Index last, Index step, const Function& f, task_group_context &context) {
+      |      ^            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+/home/yeweitang/intel/oneapi/tbb/2022.2/env/../include/tbb/../oneapi/tbb/parallel_for.h:434:6: note: candidate function not viable: requires 5 arguments, but 3 were provided
+  434 | void parallel_for(Index first, Index last, const Function& f, const simple_partitioner& partitioner, task_group_context &context) {
+      |      ^            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+/home/yeweitang/intel/oneapi/tbb/2022.2/env/../include/tbb/../oneapi/tbb/parallel_for.h:440:6: note: candidate function not viable: requires 5 arguments, but 3 were provided
+  440 | void parallel_for(Index first, Index last, const Function& f, const auto_partitioner& partitioner, task_group_context &context) {
+      |      ^            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+/home/yeweitang/intel/oneapi/tbb/2022.2/env/../include/tbb/../oneapi/tbb/parallel_for.h:446:6: note: candidate function not viable: requires 5 arguments, but 3 were provided
+  446 | void parallel_for(Index first, Index last, const Function& f, const static_partitioner& partitioner, task_group_context &context) {
+      |      ^            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+/home/yeweitang/intel/oneapi/tbb/2022.2/env/../include/tbb/../oneapi/tbb/parallel_for.h:452:6: note: candidate function not viable: requires 5 arguments, but 3 were provided
+  452 | void parallel_for(Index first, Index last, const Function& f, affinity_partitioner& partitioner, task_group_context &context) {
+      |      ^            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+/home/yeweitang/intel/oneapi/tbb/2022.2/env/../include/tbb/../oneapi/tbb/parallel_for.h:403:6: note: candidate function not viable: requires 6 arguments, but 3 were provided
+  403 | void parallel_for(Index first, Index last, Index step, const Function& f, const simple_partitioner& partitioner, task_group_context &context) {
+      |      ^            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+/home/yeweitang/intel/oneapi/tbb/2022.2/env/../include/tbb/../oneapi/tbb/parallel_for.h:409:6: note: candidate function not viable: requires 6 arguments, but 3 were provided
+  409 | void parallel_for(Index first, Index last, Index step, const Function& f, const auto_partitioner& partitioner, task_group_context &context) {
+      |      ^            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+/home/yeweitang/intel/oneapi/tbb/2022.2/env/../include/tbb/../oneapi/tbb/parallel_for.h:415:6: note: candidate function not viable: requires 6 arguments, but 3 were provided
+  415 | void parallel_for(Index first, Index last, Index step, const Function& f, const static_partitioner& partitioner, task_group_context &context) {
+      |      ^            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+/home/yeweitang/intel/oneapi/tbb/2022.2/env/../include/tbb/../oneapi/tbb/parallel_for.h:421:6: note: candidate function not viable: requires 6 arguments, but 3 were provided
+  421 | void parallel_for(Index first, Index last, Index step, const Function& f, affinity_partitioner& partitioner, task_group_context &context) {
+      |      ^            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+/home/yeweitang/Artea/tests/test_merge_logs.cpp:266:9: error: no matching function for call to 'parallel_for'
+  266 |         tbb::parallel_for(size_t(0), graph.get_num_vertices(), [&](size_t v) {
+      |         ^~~~~~~~~~~~~~~~~
+/home/yeweitang/Artea/tests/test_merge_logs.cpp:353:9: note: in instantiation of function template specialization 'run_engine_benchmark<false>' requested here
+  353 |         run_engine_benchmark<false>("Parallel (No Selective)", test_graph, workload);
+      |         ^
+/home/yeweitang/intel/oneapi/tbb/2022.2/env/../include/tbb/../oneapi/tbb/parallel_for.h:236:6: note: candidate function not viable: no known conversion from '(lambda at /home/yeweitang/Artea/tests/test_merge_logs.cpp:266:64)' to 'const simple_partitioner' for 3rd argument
+  236 | void parallel_for( const Range& range, const Body& body, const simple_partitioner& partitioner ) {
+      |      ^                                                   ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+/home/yeweitang/intel/oneapi/tbb/2022.2/env/../include/tbb/../oneapi/tbb/parallel_for.h:244:6: note: candidate function not viable: no known conversion from '(lambda at /home/yeweitang/Artea/tests/test_merge_logs.cpp:266:64)' to 'const auto_partitioner' for 3rd argument
+  244 | void parallel_for( const Range& range, const Body& body, const auto_partitioner& partitioner ) {
+      |      ^                                                   ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+/home/yeweitang/intel/oneapi/tbb/2022.2/env/../include/tbb/../oneapi/tbb/parallel_for.h:252:6: note: candidate function not viable: no known conversion from '(lambda at /home/yeweitang/Artea/tests/test_merge_logs.cpp:266:64)' to 'const static_partitioner' for 3rd argument
+  252 | void parallel_for( const Range& range, const Body& body, const static_partitioner& partitioner ) {
+      |      ^                                                   ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+/home/yeweitang/intel/oneapi/tbb/2022.2/env/../include/tbb/../oneapi/tbb/parallel_for.h:260:6: note: candidate function not viable: no known conversion from '(lambda at /home/yeweitang/Artea/tests/test_merge_logs.cpp:266:64)' to 'affinity_partitioner &' for 3rd argument
+  260 | void parallel_for( const Range& range, const Body& body, affinity_partitioner& partitioner ) {
+      |      ^                                                   ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+/home/yeweitang/intel/oneapi/tbb/2022.2/env/../include/tbb/../oneapi/tbb/parallel_for.h:268:6: note: candidate function not viable: no known conversion from '(lambda at /home/yeweitang/Artea/tests/test_merge_logs.cpp:266:64)' to 'task_group_context &' for 3rd argument
+  268 | void parallel_for( const Range& range, const Body& body, task_group_context& context ) {
+      |      ^                                                   ~~~~~~~~~~~~~~~~~~~~~~~~~~~
+/home/yeweitang/intel/oneapi/tbb/2022.2/env/../include/tbb/../oneapi/tbb/parallel_for.h:352:6: note: candidate template ignored: deduced conflicting types for parameter 'Index' ('size_t' (aka 'unsigned long') vs. 'unsigned int')
+  352 | void parallel_for(Index first, Index last, const Function& f) {
+      |      ^
+/home/yeweitang/intel/oneapi/tbb/2022.2/env/../include/tbb/../oneapi/tbb/parallel_for.h:228:6: note: candidate function not viable: requires 2 arguments, but 3 were provided
+  228 | void parallel_for( const Range& range, const Body& body ) {
+      |      ^             ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+/home/yeweitang/intel/oneapi/tbb/2022.2/env/../include/tbb/../oneapi/tbb/parallel_for.h:276:6: note: candidate function not viable: requires 4 arguments, but 3 were provided
+  276 | void parallel_for( const Range& range, const Body& body, const simple_partitioner& partitioner, task_group_context& context ) {
+      |      ^             ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+/home/yeweitang/intel/oneapi/tbb/2022.2/env/../include/tbb/../oneapi/tbb/parallel_for.h:284:6: note: candidate function not viable: requires 4 arguments, but 3 were provided
+  284 | void parallel_for( const Range& range, const Body& body, const auto_partitioner& partitioner, task_group_context& context ) {
+      |      ^             ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+/home/yeweitang/intel/oneapi/tbb/2022.2/env/../include/tbb/../oneapi/tbb/parallel_for.h:292:6: note: candidate function not viable: requires 4 arguments, but 3 were provided
+  292 | void parallel_for( const Range& range, const Body& body, const static_partitioner& partitioner, task_group_context& context ) {
+      |      ^             ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+/home/yeweitang/intel/oneapi/tbb/2022.2/env/../include/tbb/../oneapi/tbb/parallel_for.h:300:6: note: candidate function not viable: requires 4 arguments, but 3 were provided
+  300 | void parallel_for( const Range& range, const Body& body, affinity_partitioner& partitioner, task_group_context& context ) {
+      |      ^             ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+/home/yeweitang/intel/oneapi/tbb/2022.2/env/../include/tbb/../oneapi/tbb/parallel_for.h:321:6: note: candidate function not viable: requires 4 arguments, but 3 were provided
+  321 | void parallel_for(Index first, Index last, Index step, const Function& f) {
+      |      ^            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+/home/yeweitang/intel/oneapi/tbb/2022.2/env/../include/tbb/../oneapi/tbb/parallel_for.h:358:6: note: candidate function not viable: requires 4 arguments, but 3 were provided
+  358 | void parallel_for(Index first, Index last, const Function& f, const simple_partitioner& partitioner) {
+      |      ^            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+/home/yeweitang/intel/oneapi/tbb/2022.2/env/../include/tbb/../oneapi/tbb/parallel_for.h:364:6: note: candidate function not viable: requires 4 arguments, but 3 were provided
+  364 | void parallel_for(Index first, Index last, const Function& f, const auto_partitioner& partitioner) {
+      |      ^            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+/home/yeweitang/intel/oneapi/tbb/2022.2/env/../include/tbb/../oneapi/tbb/parallel_for.h:370:6: note: candidate function not viable: requires 4 arguments, but 3 were provided
+  370 | void parallel_for(Index first, Index last, const Function& f, const static_partitioner& partitioner) {
+      |      ^            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+/home/yeweitang/intel/oneapi/tbb/2022.2/env/../include/tbb/../oneapi/tbb/parallel_for.h:376:6: note: candidate function not viable: requires 4 arguments, but 3 were provided
+  376 | void parallel_for(Index first, Index last, const Function& f, affinity_partitioner& partitioner) {
+      |      ^            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+/home/yeweitang/intel/oneapi/tbb/2022.2/env/../include/tbb/../oneapi/tbb/parallel_for.h:428:6: note: candidate function not viable: requires 4 arguments, but 3 were provided
+  428 | void parallel_for(Index first, Index last, const Function& f, task_group_context &context) {
+      |      ^            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+/home/yeweitang/intel/oneapi/tbb/2022.2/env/../include/tbb/../oneapi/tbb/parallel_for.h:327:6: note: candidate function not viable: requires 5 arguments, but 3 were provided
+  327 | void parallel_for(Index first, Index last, Index step, const Function& f, const simple_partitioner& partitioner) {
+      |      ^            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+/home/yeweitang/intel/oneapi/tbb/2022.2/env/../include/tbb/../oneapi/tbb/parallel_for.h:333:6: note: candidate function not viable: requires 5 arguments, but 3 were provided
+  333 | void parallel_for(Index first, Index last, Index step, const Function& f, const auto_partitioner& partitioner) {
+      |      ^            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+/home/yeweitang/intel/oneapi/tbb/2022.2/env/../include/tbb/../oneapi/tbb/parallel_for.h:339:6: note: candidate function not viable: requires 5 arguments, but 3 were provided
+  339 | void parallel_for(Index first, Index last, Index step, const Function& f, const static_partitioner& partitioner) {
+      |      ^            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+/home/yeweitang/intel/oneapi/tbb/2022.2/env/../include/tbb/../oneapi/tbb/parallel_for.h:345:6: note: candidate function not viable: requires 5 arguments, but 3 were provided
+  345 | void parallel_for(Index first, Index last, Index step, const Function& f, affinity_partitioner& partitioner) {
+      |      ^            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+/home/yeweitang/intel/oneapi/tbb/2022.2/env/../include/tbb/../oneapi/tbb/parallel_for.h:397:6: note: candidate function not viable: requires 5 arguments, but 3 were provided
+  397 | void parallel_for(Index first, Index last, Index step, const Function& f, task_group_context &context) {
+      |      ^            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+/home/yeweitang/intel/oneapi/tbb/2022.2/env/../include/tbb/../oneapi/tbb/parallel_for.h:434:6: note: candidate function not viable: requires 5 arguments, but 3 were provided
+  434 | void parallel_for(Index first, Index last, const Function& f, const simple_partitioner& partitioner, task_group_context &context) {
+      |      ^            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+/home/yeweitang/intel/oneapi/tbb/2022.2/env/../include/tbb/../oneapi/tbb/parallel_for.h:440:6: note: candidate function not viable: requires 5 arguments, but 3 were provided
+  440 | void parallel_for(Index first, Index last, const Function& f, const auto_partitioner& partitioner, task_group_context &context) {
+      |      ^            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+/home/yeweitang/intel/oneapi/tbb/2022.2/env/../include/tbb/../oneapi/tbb/parallel_for.h:446:6: note: candidate function not viable: requires 5 arguments, but 3 were provided
+  446 | void parallel_for(Index first, Index last, const Function& f, const static_partitioner& partitioner, task_group_context &context) {
+      |      ^            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+/home/yeweitang/intel/oneapi/tbb/2022.2/env/../include/tbb/../oneapi/tbb/parallel_for.h:452:6: note: candidate function not viable: requires 5 arguments, but 3 were provided
+  452 | void parallel_for(Index first, Index last, const Function& f, affinity_partitioner& partitioner, task_group_context &context) {
+      |      ^            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+/home/yeweitang/intel/oneapi/tbb/2022.2/env/../include/tbb/../oneapi/tbb/parallel_for.h:403:6: note: candidate function not viable: requires 6 arguments, but 3 were provided
+  403 | void parallel_for(Index first, Index last, Index step, const Function& f, const simple_partitioner& partitioner, task_group_context &context) {
+      |      ^            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+/home/yeweitang/intel/oneapi/tbb/2022.2/env/../include/tbb/../oneapi/tbb/parallel_for.h:409:6: note: candidate function not viable: requires 6 arguments, but 3 were provided
+  409 | void parallel_for(Index first, Index last, Index step, const Function& f, const auto_partitioner& partitioner, task_group_context &context) {
+      |      ^            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+/home/yeweitang/intel/oneapi/tbb/2022.2/env/../include/tbb/../oneapi/tbb/parallel_for.h:415:6: note: candidate function not viable: requires 6 arguments, but 3 were provided
+  415 | void parallel_for(Index first, Index last, Index step, const Function& f, const static_partitioner& partitioner, task_group_context &context) {
+      |      ^            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+/home/yeweitang/intel/oneapi/tbb/2022.2/env/../include/tbb/../oneapi/tbb/parallel_for.h:421:6: note: candidate function not viable: requires 6 arguments, but 3 were provided
+  421 | void parallel_for(Index first, Index last, Index step, const Function& f, affinity_partitioner& partitioner, task_group_context &context) {
+      |      ^            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+In file included from /home/yeweitang/Artea/tests/test_merge_logs.cpp:5:
+/home/yeweitang/Artea/include/artea/cpu/propagation/propagate_engine.hpp:136:83: error: too few arguments to function call, expected 2, have 1
+  136 |                             auto& log_container = _log_table.get_log_container(vid);
+      |                                                   ~~~~~~~~~~~~~~~~~~~~~~~~~~~~    ^
+/home/yeweitang/Artea/include/artea/cpu/propagation/propagate_engine.hpp:128:58: note: while substituting into a lambda expression here
+  128 |                 [&](const tbb::blocked_range<size_t>& r) {
+      |                                                          ^
+/home/yeweitang/Artea/tests/test_merge_logs.cpp:273:16: note: in instantiation of function template specialization 'artea::cpu::PropagateEngine<unsigned int, float, artea::cpu::LockedBuffer<artea::cpu::Neighbor<unsigned int, float>, 64>, 64>::merge_logs<true>' requested here
+  273 |         engine.merge_logs<Selective>();
+      |                ^
+/home/yeweitang/Artea/tests/test_merge_logs.cpp:362:9: note: in instantiation of function template specialization 'run_engine_benchmark<true>' requested here
+  362 |         run_engine_benchmark<true>("Parallel (With Selective)", test_graph, workload);
+      |         ^
+/home/yeweitang/Artea/include/artea/cpu/propagation/nbr_log_table.hpp:108:10: note: 'get_log_container' declared here
+  108 |     auto get_log_container(const vertex_id_t executor_vid, const op_direction_t direction) -> nbr_container_t& {
+      |          ^                 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+1 warning and 5 errors generated.
+gmake[2]: *** [tests/CMakeFiles/test_merge_logs.dir/build.make:76: tests/CMakeFiles/test_merge_logs.dir/test_merge_logs.cpp.o] Error 1
+gmake[1]: *** [CMakeFiles/Makefile2:1053: tests/CMakeFiles/test_merge_logs.dir/all] Error 2
+gmake[1]: *** Waiting for unfinished jobs....
+1 warning generated.
+gmake: *** [Makefile:156: all] Error 2

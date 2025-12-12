@@ -221,10 +221,10 @@ int main(int argc, char** argv) {
     // --- 2. Load Dataset ---
     artea::logger.info("Step 1: Loading Dataset...");
     VectorDataset<VecNumT, VecElemT> dataset(config_path, dataset_name);
-    auto* base_vecs = dataset.get_base_vecs();
+    auto& base_vecs = dataset.get_base_vecs();
 
-    size_t total_available_vecs = base_vecs->get_num_vecs();
-    size_t vec_dim = base_vecs->get_vec_dim();
+    size_t total_available_vecs = base_vecs.get_num_vecs();
+    size_t vec_dim = base_vecs.get_vec_dim();
     size_t dataset_vecs = (limit_vecs > 0 && limit_vecs < total_available_vecs) ? limit_vecs : total_available_vecs;
     size_t vecs_per_thread = dataset_vecs / actual_total_threads;
 
@@ -240,7 +240,7 @@ int main(int argc, char** argv) {
         size_t total_elements = vecs_per_thread * vec_dim;
         VecElemT* local_ptr = allocator.allocate(total_elements);
 
-        const VecElemT* src_ptr = base_vecs->get(global_tid * vecs_per_thread);
+        const VecElemT* src_ptr = base_vecs.get(global_tid * vecs_per_thread);
         std::copy(src_ptr, src_ptr + total_elements, local_ptr);
 
         global_memory_table[global_tid].data_ptr = local_ptr;

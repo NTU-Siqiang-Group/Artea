@@ -22,6 +22,8 @@
 
 #include <cstdint>
 #include <vector>
+#include <limits>
+#include <cmath>
 
 namespace artea {
 
@@ -46,13 +48,6 @@ enum class device_t {
     GPU = 1
 };
 
-/** @brief Direction type for graph edges. */
-enum class direction_t {
-    IN = 0,
-    OUT = 1,
-    HIBRID = 2
-};
-
 template <typename vertex_num_t, typename vec_ele_t>
 struct alignas(8) VertexProperty {   // 8 bytes
 
@@ -62,5 +57,26 @@ struct alignas(8) VertexProperty {   // 8 bytes
     distance_t avg_distance;
 
 };  // struct VertexProperty
+
+template <typename T>
+constexpr auto get_max_value() -> T {
+    return std::numeric_limits<T>::max();
+}
+
+template <typename vertex_id_t>
+constexpr auto invalid_vertex_id() -> vertex_id_t {
+    return get_max_value<vertex_id_t>();
+}
+
+template <typename vec_ele_t>
+constexpr auto nan_distance() -> vec_ele_t {
+    return std::numeric_limits<vec_ele_t>::quiet_NaN();
+}
+
+template <typename distance_t>
+__attribute__((always_inline))
+constexpr auto is_nan_distance(const distance_t dist) -> bool {
+    return std::isnan(dist);
+}
 
 }   // namespace artea

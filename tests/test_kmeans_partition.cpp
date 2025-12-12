@@ -71,9 +71,9 @@ void run_kmeans_benchmark(
     float sampling_ratio,
     int num_trials
 ) {
-    const auto* base_vecs = dataset.get_base_vecs();
-    uint32_t num_vecs = base_vecs->get_num_vecs();
-    uint32_t dim = base_vecs->get_vec_dim();
+    const auto& base_vecs = dataset.get_base_vecs();
+    uint32_t num_vecs = base_vecs.get_num_vecs();
+    uint32_t dim = base_vecs.get_vec_dim();
 
     SamplerType sampler;
     ClusterEvaluator<VertexType, ElementType, DistFuncType> evaluator(dist_func);
@@ -95,7 +95,7 @@ void run_kmeans_benchmark(
         // strictly to evaluate the sampler's performance.
         auto t0 = std::chrono::high_resolution_clock::now();
         {
-            auto temp_sample = sampler.sample(*base_vecs, sampling_ratio);
+            auto temp_sample = sampler.sample(base_vecs, sampling_ratio);
             // Prevent optimization
             volatile size_t s = temp_sample.get_num_vecs();
             (void)s;
@@ -108,7 +108,7 @@ void run_kmeans_benchmark(
         KmeansType kmeans(num_vecs, num_clusters, dim, dist_func, sampler);
 
         auto t2 = std::chrono::high_resolution_clock::now();
-        kmeans.fit(*base_vecs, sampling_ratio);
+        kmeans.fit(base_vecs, sampling_ratio);
         auto t3 = std::chrono::high_resolution_clock::now();
         double fit_ms = std::chrono::duration<double, std::milli>(t3 - t2).count();
 
@@ -117,13 +117,13 @@ void run_kmeans_benchmark(
         PartitionerType partitioner(kmeans);
 
         auto t4 = std::chrono::high_resolution_clock::now();
-        auto partitioned_result = partitioner.partition_and_reorder(*base_vecs);
+        auto partitioned_result = partitioner.partition_and_reorder(base_vecs);
         auto t5 = std::chrono::high_resolution_clock::now();
         double part_ms = std::chrono::duration<double, std::milli>(t5 - t4).count();
 
         // 4. Evaluation (Inertia, Balance, etc.)
         logger.info("Evaluating clustering quality...");
-        auto metrics = evaluator.evaluate(*base_vecs, kmeans.get_centroids());
+        auto metrics = evaluator.evaluate(base_vecs, kmeans.get_centroids());
 
         logger.info(fmt::format("   -> Inertia (SSE):       {:.4e}", metrics.inertia));
         logger.info(fmt::format("   -> Silhouette Score:    {:.4f}", metrics.silhouette_score));
@@ -204,7 +204,7 @@ int main(int argc, char* argv[]) {
 
         // Load Dataset
         VectorDataset<VertexType, ElementType> dataset(config_path, dataset_name);
-        uint32_t dim = dataset.get_base_vecs()->get_vec_dim();
+        uint32_t dim = dataset.get_base_vecs().get_vec_dim();
 
         // Initialize SIMD Distance Function
         DistFuncType dist_func(dim);

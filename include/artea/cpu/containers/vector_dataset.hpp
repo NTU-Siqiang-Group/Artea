@@ -58,33 +58,53 @@ public:
 
     // --- Accessors ---
     __attribute__((always_inline))
-    auto get_base_vecs() -> BaseQueryArray* {
-        return &_base_vecs;
+    auto get_base_vecs() -> BaseQueryArray& {
+        return _base_vecs;
     }
 
     __attribute__((always_inline))
-    auto get_base_vecs() const -> const BaseQueryArray* {
-        return &_base_vecs;
+    auto get_base_vecs() const -> const BaseQueryArray& {
+        return _base_vecs;
     }
 
     __attribute__((always_inline))
-    auto get_query_vecs() -> BaseQueryArray* {
-        return &_query_vecs;
+    auto get_query_vecs() -> BaseQueryArray& {
+        return _query_vecs;
     }
 
     __attribute__((always_inline))
-    auto get_query_vecs() const -> const BaseQueryArray* {
-        return &_query_vecs;
+    auto get_query_vecs() const -> const BaseQueryArray& {
+        return _query_vecs;
     }
 
     __attribute__((always_inline))
-    auto get_gt_vecs() -> GroundTruthArray* {
-        return &_gt_vecs;
+    auto get_gt_vecs() -> GroundTruthArray& {
+        return _gt_vecs;
     }
 
     __attribute__((always_inline))
-    auto get_gt_vecs() const -> const GroundTruthArray* {
-        return &_gt_vecs;
+    auto get_gt_vecs() const -> const GroundTruthArray& {
+        return _gt_vecs;
+    }
+
+    __attribute__((always_inline))
+    auto get_num_base_vecs() const -> vecs_num_t {
+        return static_cast<vecs_num_t>(_base_vecs.get_num_vecs());
+    }
+
+    __attribute__((always_inline))
+    auto get_num_query_vecs() const -> vecs_num_t {
+        return static_cast<vecs_num_t>(_query_vecs.get_num_vecs());
+    }
+
+    __attribute__((always_inline))
+    auto get_num_gt_vecs() const -> vecs_num_t {
+        return static_cast<vecs_num_t>(_gt_vecs.get_num_vecs());
+    }
+
+    __attribute__((always_inline))
+    auto get_vec_dim() const -> vecs_num_t {
+        return static_cast<vecs_num_t>(_base_vecs.get_vec_dim());
     }
 
 private:

@@ -173,15 +173,19 @@ bool operator!=(const MmapAllocator<T>&, const MmapAllocator<U>&) noexcept {
 
 constexpr std::size_t AVX512_ALIGNMENT = 64;
 
+constexpr std::size_t CACHE_LINE_SIZE = 64;
+
 /** @brief a container with AVX-512 alignment */
 template <typename T>
 using avx512_container_t = std::vector<T, cpu::AlignedAllocator<T, AVX512_ALIGNMENT>>;
 
+/** @brief a container with cache line alignment */
+template <typename T>
+using cache_aligned_container_t = std::vector<T, cpu::AlignedAllocator<T, CACHE_LINE_SIZE>>;
+
 /** @brief a container with mmap allocator */
 template <typename T>
 using mmap_container_t = std::vector<T, cpu::MmapAllocator<T>>;
-
-static constexpr std::size_t CACHE_LINE_SIZE = 64;
 
 }   // namespace cpu
 }   // namespace artea

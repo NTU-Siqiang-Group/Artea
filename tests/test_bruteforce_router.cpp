@@ -87,13 +87,13 @@ int main(int argc, char* argv[]) {
 
         VectorDataset<VertexType, ElementType> dataset(config_path, dataset_name);
 
-        const auto* base_vecs = dataset.get_base_vecs();
-        const auto* query_vecs = dataset.get_query_vecs();
-        const auto* gt_vecs = dataset.get_gt_vecs();
+        const auto& base_vecs = dataset.get_base_vecs();
+        const auto& query_vecs = dataset.get_query_vecs();
+        const auto& gt_vecs = dataset.get_gt_vecs();
 
-        uint32_t dim = base_vecs->get_vec_dim();
-        uint32_t num_base = base_vecs->get_num_vecs();
-        uint32_t num_queries = query_vecs->get_num_vecs();
+        uint32_t dim = base_vecs.get_vec_dim();
+        uint32_t num_base = base_vecs.get_num_vecs();
+        uint32_t num_queries = query_vecs.get_num_vecs();
 
         logger.info(fmt::format("Dataset Loaded: {} base, {} queries, dim={}", num_base, num_queries, dim));
         DistFuncType dist_func(dim);
@@ -102,7 +102,7 @@ int main(int argc, char* argv[]) {
         logger.info(">>> Running Faiss IndexFlatL2 <<<");
 
         faiss::IndexFlatL2 faiss_index(dim);
-        faiss_index.add(num_base, base_vecs->get_all());
+        faiss_index.add(num_base, base_vecs.get_all());
 
         // Faiss uses int64_t (long) for labels
         std::vector<faiss::idx_t> faiss_labels(num_queries);
@@ -112,7 +112,7 @@ int main(int argc, char* argv[]) {
 
         for(int t = 0; t < trials; ++t) {
             auto t1 = std::chrono::high_resolution_clock::now();
-            faiss_index.search(num_queries, query_vecs->get_all(), 1, faiss_dists.data(), faiss_labels.data());
+            faiss_index.search(num_queries, query_vecs.get_all(), 1, faiss_dists.data(), faiss_labels.data());
             auto t2 = std::chrono::high_resolution_clock::now();
             faiss_total_ms += std::chrono::duration<double, std::milli>(t2 - t1).count();
         }
@@ -123,7 +123,7 @@ int main(int argc, char* argv[]) {
         // --- 3. Artea Benchmark ---
         logger.info(">>> Running Artea BruteforceRouter <<<");
 
-        ArteaRouter router(*base_vecs, dist_func);
+        ArteaRouter router(base_vecs, dist_func);
         // Note: Router treats base vectors as 'centroids' here
 
         std::vector<VertexType> artea_labels;
@@ -131,7 +131,7 @@ int main(int argc, char* argv[]) {
 
         for(int t = 0; t < trials; ++t) {
             auto t1 = std::chrono::high_resolution_clock::now();
-            artea_labels = router.batch_query(*query_vecs);
+            artea_labels = router.batch_query(query_vecs);
             auto t2 = std::chrono::high_resolution_clock::now();
             artea_total_ms += std::chrono::duration<double, std::milli>(t2 - t1).count();
         }
@@ -145,14 +145,14 @@ int main(int argc, char* argv[]) {
         hnswlib::L2Space space(dim);
         hnswlib::BruteforceSearch<float> hnsw_alg(&space, num_base);
 
-        const float* base_ptr = base_vecs->get_all();
+        const float* base_ptr = base_vecs.get_all();
         for (size_t i = 0; i < num_base; ++i) {
             hnsw_alg.addPoint((void*)(base_ptr + i * dim), i);
         }
 
         std::vector<VertexType> hnsw_labels(num_queries);
         double hnsw_total_ms = 0.0;
-        const float* query_ptr = query_vecs->get_all();
+        const float* query_ptr = query_vecs.get_all();
 
         for(int t = 0; t < trials; ++t) {
             auto t1 = std::chrono::high_resolution_clock::now();

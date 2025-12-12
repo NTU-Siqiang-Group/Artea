@@ -63,9 +63,9 @@ public:
      */
     auto calculate_recall_at_1(
         const std::vector<vertex_id_t>& predictions,
-        const cpu::VectorArray<vertex_num_t, vertex_id_t>* gt_vecs,
-        const cpu::VectorArray<vertex_num_t, vec_ele_t>* query_vecs,
-        const cpu::VectorArray<vertex_num_t, vec_ele_t>* base_vecs
+        const cpu::VectorArray<vertex_num_t, vertex_id_t>& gt_vecs,
+        const cpu::VectorArray<vertex_num_t, vec_ele_t>& query_vecs,
+        const cpu::VectorArray<vertex_num_t, vec_ele_t>& base_vecs
     ) const -> RecallMetrics {
 
         std::size_t num_queries = predictions.size();
@@ -85,7 +85,7 @@ public:
             // Lambda processor: Process a chunk of queries
             [&](const tbb::blocked_range<std::size_t>& r, CorrectCounts local_counts) -> CorrectCounts {
                 for (std::size_t i = r.begin(); i != r.end(); ++i) {
-                    const vertex_id_t* gt_row = gt_vecs->get(i);
+                    const vertex_id_t* gt_row = gt_vecs.get(i);
                     vertex_id_t gt_id = gt_row[0];
                     vertex_id_t pred_id = predictions[i];
 
@@ -95,9 +95,9 @@ public:
                         local_counts.soft++;
                     } else {
                         /* Distance-based tolerance check (Soft Match) */
-                        const distance_t* q_vec = query_vecs->get(i);
-                        const distance_t* gt_vec_data = base_vecs->get(gt_id);
-                        const distance_t* pred_vec_data = base_vecs->get(pred_id);
+                        const distance_t* q_vec = query_vecs.get(i);
+                        const distance_t* gt_vec_data = base_vecs.get(gt_id);
+                        const distance_t* pred_vec_data = base_vecs.get(pred_id);
 
                         /* Re-calculate distances */
                         distance_t dist_gt = _dist_func(q_vec, gt_vec_data);
@@ -141,7 +141,7 @@ public:
     auto calculate_recall_at_k(
         const std::vector<vertex_id_t>& predictions,
         std::size_t k,
-        const cpu::VectorArray<vertex_num_t, vertex_id_t>* gt_vecs
+        const cpu::VectorArray<vertex_num_t, vertex_id_t>& gt_vecs
     ) const -> double {
 
         std::size_t num_queries = predictions.size() / k;
@@ -152,7 +152,7 @@ public:
             std::size_t(0),
             [&](const tbb::blocked_range<std::size_t>& r, std::size_t local_count) -> std::size_t {
                 for (std::size_t i = r.begin(); i != r.end(); ++i) {
-                    const vertex_id_t gt_id = gt_vecs->get(i)[0]; // Nearest GT
+                    const vertex_id_t gt_id = gt_vecs.get(i)[0]; // Nearest GT
 
                     // Iterate through top-K predictions
                     for (std::size_t j = 0; j < k; ++j) {

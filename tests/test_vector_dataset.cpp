@@ -1,7 +1,7 @@
 /*
  * @FilePath: /Artea/tests/test_vector_dataset.cpp
  * @Author: Chandler (Weitang Ye) <weitang.ye@ntu.edu.sg>
- * @LastEditTime: 2025-11-20 10:18:06
+ * @LastEditTime: 2025-12-12 08:34:30
  * @Date: 2025-10-23 15:50:42
  * @Description: Test the VectorDataset class for loading time and correctness.
  */
@@ -90,7 +90,7 @@ template<typename T, typename ArteaVecNumT>
 void run_correctness_check(
     const std::string& file_type_name,
     const std::string& file_path,
-    artea::cpu::VectorArray<ArteaVecNumT, T>* artea_array
+    artea::cpu::VectorArray<ArteaVecNumT, T>& artea_array
 ) {
     std::cout << "\n--- Running correctness check for " << file_type_name << " ---" << std::endl;
 
@@ -101,8 +101,8 @@ void run_correctness_check(
     artea::logger.info(fmt::format("Reference loader: {} vectors, {} dims.", ref_num_vecs, ref_dim));
 
     // 2. Compare metadata (vector count and dimension)
-    auto artea_num_vecs = artea_array->get_num_vecs();
-    auto artea_dim = artea_array->get_vec_dim();
+    auto artea_num_vecs = artea_array.get_num_vecs();
+    auto artea_dim = artea_array.get_vec_dim();
     artea::logger.info(fmt::format("Artea loader: {} vectors, {} dims.", artea_num_vecs, artea_dim));
 
     if (artea_dim == ref_dim && artea_num_vecs == ref_num_vecs) {
@@ -118,7 +118,7 @@ void run_correctness_check(
 
     for (int i = 0; i < NUM_CHECKS; ++i) {
         ArteaVecNumT vec_id = dist(rng);
-        T* artea_vec = artea_array->get(vec_id);
+        T* artea_vec = artea_array.get(vec_id);
         T* ref_vec_start = &ref_data[static_cast<size_t>(vec_id) * artea_dim];
 
         for (artea::vec_dim_t j = 0; j < artea_dim; ++j) {
