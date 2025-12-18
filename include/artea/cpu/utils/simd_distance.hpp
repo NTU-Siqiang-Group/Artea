@@ -1,7 +1,7 @@
 /*
  * @FilePath: /Artea/include/artea/cpu/utils/simd_distance.hpp
  * @Author: Chandler (Weitang Ye) <weitang.ye@ntu.edu.sg>
- * @LastEditTime: 2025-11-27 12:01:30
+ * @LastEditTime: 2025-12-14 11:10:22
  * @Date: 2025-10-18 19:10:57
  * @Description: SIMD-accelerated distance computation utilities.
  */
@@ -19,20 +19,14 @@
 namespace artea {
 namespace cpu {
 
-enum class DistanceMetrics {
-    EUCLIDEAN,
-    DOT,
-    COSINE,
-};
-
-template <
-    typename vec_ele_t,
-    DistanceMetrics dist_type = DistanceMetrics::EUCLIDEAN,
-    uint32_t unroll_size = 1
->
+template <typename ComputerTraitsT>
 class SIMDDistance {
 
-    using distance_t = vec_ele_t;
+    using distance_t = typename ComputerTraitsT::vec_ele_t;
+    using vec_ele_t = typename ComputerTraitsT::vec_ele_t;
+    using vec_dim_t = typename ComputerTraitsT::vec_dim_t;
+    static constexpr DistanceMetrics dist_metrics = ComputerTraitsT::dist_metrics;
+    static constexpr std::size_t unroll_size = ComputerTraitsT::unroll_size;
 
     static constexpr std::size_t SIMD_REGISTER_BITS = 512;
     static constexpr std::size_t SIMD_REGISTER_BYTES = SIMD_REGISTER_BITS / 8;  // 64
@@ -59,11 +53,11 @@ public:
 
     __attribute__((always_inline))
     auto operator()(const vec_ele_t* vec1, const vec_ele_t* vec2) const -> distance_t {
-        if constexpr (dist_type == DistanceMetrics::EUCLIDEAN) {
+        if constexpr (dist_metrics == DistanceMetrics::EUCLIDEAN) {
             return _impl_euclidean(vec1, vec2);
-        } else if constexpr (dist_type == DistanceMetrics::DOT) {
+        } else if constexpr (dist_metrics == DistanceMetrics::DOT) {
             return _impl_dot(vec1, vec2);
-        } else if constexpr (dist_type == DistanceMetrics::COSINE) {
+        } else if constexpr (dist_metrics == DistanceMetrics::COSINE) {
             return _impl_cosine(vec1, vec2);
         } else {
             throw std::runtime_error("Invalid DistanceMetrics");

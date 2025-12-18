@@ -48,20 +48,17 @@ namespace cpu {
   * @tparam vec_ele_t   Type for vector elements.
   * @tparam dist_func_t Type for the distance function functor.
  */
-template <
-    typename vertex_num_t,
-    typename vec_ele_t,
-    typename dist_func_t
->
-class BingClustering :
-    public StreamClustering<vertex_num_t, vec_ele_t, dist_func_t,
-        BingClustering<vertex_num_t, vec_ele_t, dist_func_t>>
+template <typename type_context_t>
+class BingClustering : public type_context_t::stream_clustering_t
 {
 
-    using vertex_id_t = vertex_num_t;
-    using distance_t = vec_ele_t;
-    using base_class_t = StreamClustering<vertex_num_t, vec_ele_t, dist_func_t,
-        BingClustering<vertex_num_t, vec_ele_t, dist_func_t>>;
+    using vertex_num_t = typename type_context_t::vertex_num_t;
+    using vec_dim_t = typename type_context_t::vec_dim_t;
+    using vec_ele_t = typename type_context_t::vec_ele_t;
+    using dist_func_t = typename type_context_t::dist_func_t;
+    using vertex_id_t = typename type_context_t::vertex_id_t;
+    using distance_t = typename type_context_t::distance_t;
+    using base_class_t = typename type_context_t::stream_clustering_t;
 
 public:
     BingClustering(

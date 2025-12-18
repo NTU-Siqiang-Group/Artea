@@ -1,7 +1,7 @@
 /*
  * @FilePath: /Artea/include/artea/cpu/index/index_graph.hpp
  * @Author: Chandler (Weitang Ye) <weitang.ye@ntu.edu.sg>
- * @LastEditTime: 2025-12-12 10:26:05
+ * @LastEditTime: 2025-12-14 11:46:19
  * @Date: 2025-10-17 15:32:18
  * @Description:
  */
@@ -16,7 +16,7 @@
 
 #include <tbb/parallel_for.h>
 
-#include <artea/definitions.hpp>
+#include <artea/common/definitions.hpp>
 #include <artea/cpu/utils/direction.hpp>
 #include <artea/cpu/index/neighbor.hpp>
 #include <artea/cpu/containers/allocator.hpp>
@@ -31,17 +31,14 @@ namespace cpu {
  * @tparam{vec_ele_t} The type of vector element.
  * @tparam{direction} The direction of the graph (IN, OUT, HIBRID).
  */
-template <
-    typename vertex_num_t,
-    typename vec_ele_t,
-    graph_direction_t direction = graph_direction_t::OUT
->
+template <typename BaseTraitsT>
 class IndexGraph {
 
-    using vertex_id_t = vertex_num_t;
-    using distance_t = vec_ele_t;
-    using nbr_t = Neighbor<vertex_num_t, vec_ele_t>;
-    using nbr_arr_t = std::vector<nbr_t>;
+    using vertex_num_t = typename BaseTraitsT::vertex_num_t;
+    using vertex_id_t = typename BaseTraitsT::vertex_id_t;
+    using distance_t = typename BaseTraitsT::distance_t;
+    using nbr_t = typename BaseTraitsT::nbr_t;
+    using nbr_arr_t = typename BaseTraitsT::nbr_arr_t;
 
 public:
     /**

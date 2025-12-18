@@ -1,7 +1,7 @@
 /*
  * @FilePath: /Artea/include/artea/cpu/containers/vector_array.hpp
  * @Author: Chandler (Weitang Ye) <weitang.ye@ntu.edu.sg>
- * @LastEditTime: 2025-11-27 11:53:37
+ * @LastEditTime: 2025-12-14 14:18:38
  * @Date: 2025-10-18 16:31:57
  * @Description:
  */
@@ -17,19 +17,19 @@
 #include <utility> // For std::move
 
 #include <artea/cpu/containers/allocator.hpp>
-#include <artea/definitions.hpp>
+#include <artea/common/definitions.hpp>
 #include <artea/common/logger.hpp>
 
 namespace artea {
 namespace cpu {
 
-template <
-    typename vec_num_t,
-    typename vec_ele_t
->
+template <typename VertexNumT, typename VecEleT>
 class VectorArray {
 
-    using vec_id_t = vec_num_t;
+    using vec_num_t = VertexNumT;
+    using vec_dim_t = VecEleT;
+    using vec_id_t = VertexNumT;
+    using vec_ele_t = VecEleT;
 
 public:
     /**
@@ -113,7 +113,7 @@ public:
      * @param new_num_vecs The new number of vectors.
      * @note If the dimension is 0, this function will throw. You must set a dimension first.
      */
-    void resize(vec_num_t new_num_vecs) {
+    auto resize(const vec_num_t new_num_vecs) -> void {
         // if (_vec_dim == 0 && new_num_vecs > 0) {
         //     throw std::runtime_error("Cannot resize VectorArray with zero dimension.");
         // }

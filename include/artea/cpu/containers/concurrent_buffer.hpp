@@ -24,16 +24,13 @@
 
 #include <cstddef>
 
-#include <artea/definitions.hpp>
+#include <artea/common/definitions.hpp>
 #include <artea/cpu/containers/allocator.hpp>
 
 namespace artea {
 namespace cpu {
 
-template <
-    typename T,
-    std::size_t buf_capacity
->
+template <typename T, std::size_t BufCapacity>
 struct alignas(CACHE_LINE_SIZE) ConcurrentBuffer {
 
     using container_t = avx512_container_t<T>;
@@ -45,7 +42,7 @@ struct alignas(CACHE_LINE_SIZE) ConcurrentBuffer {
      * @brief Number of shards (cache lines) available.
      * Calculated by dividing total capacity by elements per line.
      */
-    static constexpr std::size_t num_cachelines = buf_capacity / num_elements_per_cacheline;
+    static constexpr std::size_t num_cachelines = BufCapacity / num_elements_per_cacheline;
 
     /**
      * @brief Stride size.
@@ -65,12 +62,12 @@ struct alignas(CACHE_LINE_SIZE) ConcurrentBuffer {
     static_assert(sizeof(T) <= CACHE_LINE_SIZE,
         "Error: Type T is larger than CACHE_LINE_SIZE. ConcurrentBuffer is optimized for small objects.");
 
-    /** @brief Force buf_capacity to be a perfect multiple of elements per cache line.
+    /** @brief Force BufCapacity to be a perfect multiple of elements per cache line.
       * This is CRITICAL. If not aligned, the interleaving math (row/col calculation)
       * will cause physical index collisions (different logical indices mapping to the same physical slot).
       */
-    static_assert(buf_capacity % num_elements_per_cacheline == 0,
-        "Error: buf_capacity must be a multiple of num_elements_per_cacheline to prevent index collision.");
+    static_assert(BufCapacity % num_elements_per_cacheline == 0,
+        "Error: BufCapacity must be a multiple of num_elements_per_cacheline to prevent index collision.");
 
     /** @brief Atomic index for writing (Monotonically increasing) */
     alignas(CACHE_LINE_SIZE) std::atomic<std::size_t> write_idx {0};
@@ -82,7 +79,7 @@ struct alignas(CACHE_LINE_SIZE) ConcurrentBuffer {
     ConcurrentBuffer() {
         // Resize container to hold the physical data.
         // Note: vector memory must be physically allocated for direct access.
-        container.resize(buf_capacity);
+        container.resize(BufCapacity);
         // Ensure atomic counter starts at 0
         write_idx.store(0, std::memory_order_relaxed);
     }
@@ -122,12 +119,12 @@ struct alignas(CACHE_LINE_SIZE) ConcurrentBuffer {
 
     /**
      * @brief Gets the number of elements currently written (approximate).
-     * @return Number of elements. Max capped at buf_capacity.
+     * @return Number of elements. Max capped at BufCapacity.
      */
     __attribute__((always_inline))
     auto size() const -> std::size_t {
         std::size_t idx = write_idx.load(std::memory_order_relaxed);
-        return idx > buf_capacity ? buf_capacity : idx;
+        return idx > BufCapacity ? BufCapacity : idx;
     }
 
     /**
@@ -149,7 +146,7 @@ struct alignas(CACHE_LINE_SIZE) ConcurrentBuffer {
         const std::size_t current_idx = write_idx.load(std::memory_order_acquire);
 
         // Cap the count at capacity (in case of overflow)
-        const std::size_t count = (current_idx > buf_capacity) ? buf_capacity : current_idx;
+        const std::size_t count = (current_idx > BufCapacity) ? BufCapacity : current_idx;
 
         // Prepare result vector
         std::vector<T> result;

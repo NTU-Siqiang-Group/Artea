@@ -1,7 +1,7 @@
 /*
  * @FilePath: /Artea/include/artea/cpu/index/graph_constructor.hpp
  * @Author: Chandler (Weitang Ye) <weitang.ye@ntu.edu.sg>
- * @LastEditTime: 2025-12-12 10:40:34
+ * @LastEditTime: 2025-12-13 10:19:07
  * @Date: 2025-11-15 20:36:29
  * @Description:
  */
@@ -23,31 +23,28 @@
 #include <artea/cpu/containers/vector_array.hpp>
 #include <artea/cpu/propagation/propagate_engine.hpp>
 #include <artea/cpu/propagation/rng_updater.hpp>
-#include <artea/definitions.hpp>
+#include <artea/common/definitions.hpp>
 
 namespace artea {
 namespace cpu {
 
-template <
-    typename vertex_num_t,
-    typename vec_ele_t,
-    DistanceMetrics dist_type = DistanceMetrics::EUCLIDEAN
->
+template <typename type_context_t>
 class GraphConstructor {
 
-    using distance_t = vec_ele_t;
-    using vertex_id_t = vertex_num_t;
-    using nbr_t = Neighbor<vertex_num_t, vec_ele_t>;
-    using nbr_arr_t = std::vector<nbr_t>;
-    using log_buffer_t = LockedBuffer<Neighbor<vertex_id_t, distance_t>, 64, tbb::spin_mutex>;
-    using log_table_t = NbrLogTable<vertex_num_t, vec_ele_t, log_buffer_t>;
-    using dist_func_t = SIMDDistance<vec_ele_t, dist_type>;
-    using rng_updater_t = RNGUpdater<vertex_num_t, vec_ele_t, log_table_t, dist_func_t>;
-    using propagate_engine_t = PropagateEngine<vertex_num_t, vec_ele_t, log_buffer_t>;
-    using index_graph_t = IndexGraph<vertex_num_t, vec_ele_t, graph_direction_t::HIBRID>;
+    using distance_t = typename type_context_t::vec_ele_t;
+    using vertex_id_t = typename type_context_t::vertex_num_t;
+    using nbr_t = typename type_context_t::nbr_t;
+    using nbr_arr_t = typename type_context_t::nbr_arr_t;
+    using log_buffer_t = typename type_context_t::log_buffer_t;
+    using log_table_t = typename type_context_t::log_table_t;
+    using dist_func_t = typename type_context_t::dist_func_t;
+    using rng_updater_t = typename type_context_t::rng_updater_t;
+    using propagate_engine_t = typename type_context_t::propagate_engine_t;
+    using index_graph_t = typename type_context_t::index_graph_t;
+    using vector_dataset_t = typename type_context_t::vector_dataset_t;
 
 public:
-    GraphConstructor(VectorDataset<vertex_num_t, vec_ele_t>& dataset) :
+    GraphConstructor(vector_dataset_t& dataset) :
         _dataset(dataset) {}
 
     /** @brief construct a new graph */
@@ -79,7 +76,7 @@ public:
 private:
 
     /** @brief Vector dataset */
-    VectorDataset<vertex_num_t, vec_ele_t>& _dataset;
+    vector_dataset_t& _dataset;
 
 };  // class GraphConstructor
 

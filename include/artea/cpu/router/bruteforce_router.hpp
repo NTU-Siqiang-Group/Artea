@@ -35,31 +35,28 @@
 
 #include <artea/cpu/containers/vector_array.hpp>
 #include <artea/cpu/partitioning/cluster_router.hpp>
-#include <artea/definitions.hpp>
+#include <artea/common/definitions.hpp>
 
 namespace artea {
 namespace cpu {
 
-template <
-    typename vertex_num_t,
-    typename vec_ele_t,
-    typename dist_func_t,
-    bool intra_query_parallel
->
-class BruteforceRouter :
-    public ClusterRouter<vertex_num_t, vec_ele_t, dist_func_t,
-        BruteforceRouter<vertex_num_t, vec_ele_t, dist_func_t, intra_query_parallel>>
+template <typename RouterTraitsT>
+class BruteforceRouter : public RouterTraitsT::cluster_router_t
 {
-
-    using vertex_id_t = vertex_num_t;
-    using distance_t = vec_ele_t;
-    using base_class_t = ClusterRouter<vertex_num_t, vec_ele_t, dist_func_t,
-        BruteforceRouter<vertex_num_t, vec_ele_t, dist_func_t, intra_query_parallel>>;
+    using vertex_num_t = typename RouterTraitsT::vertex_num_t;
+    using vertex_id_t = typename RouterTraitsT::vertex_id_t;
+    using vec_ele_t = typename RouterTraitsT::vec_ele_t;
+    using distance_t = typename RouterTraitsT::distance_t;
+    using dist_func_t = typename RouterTraitsT::dist_func_t;
+    using vector_array_t = typename RouterTraitsT::vector_array_t;
+    using cluster_id_t = typename RouterTraitsT::cluster_id_t;
+    static constexpr bool intra_query_parallel = RouterTraitsT::intra_query_parallel;
+    using base_class_t = typename RouterTraitsT::cluster_router_t;
 
 public:
 
     BruteforceRouter(
-        const VectorArray<vertex_num_t, vec_ele_t>& centroids,
+        const vector_array_t& centroids,
         const dist_func_t& dist_func
     ) : base_class_t(centroids, dist_func)
     {}

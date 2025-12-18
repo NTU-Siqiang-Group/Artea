@@ -13,7 +13,7 @@
 // limitations under the License.
 
 /*
- * @FilePath: /Artea/include/artea/definitions.hpp
+ * @FilePath: /Artea/include/artea/common/definitions.hpp
  * @Author: Chandler (Weitang Ye) <weitang.ye@ntu.edu.sg>
  * @Description:
  */
@@ -26,22 +26,6 @@
 #include <cmath>
 
 namespace artea {
-
-using vec_dim_t = uint32_t;
-
-using cluster_num_t = uint32_t;
-
-using cluster_id_t = cluster_num_t;
-
-using part_num_t = uint32_t;
-
-using part_id_t = uint32_t;
-
-using iter_t = uint32_t;
-
-using block_num_t = uint32_t;
-
-using block_id_t = uint32_t;
 
 enum class device_t {
     CPU = 0,

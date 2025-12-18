@@ -24,22 +24,24 @@
 #include <type_traits>
 #include <limits>
 
-#include <artea/definitions.hpp>
+#include <artea/common/definitions.hpp>
 
 namespace artea {
 namespace cpu {
 
 /** @brief Neighbor structure for storing vertex ID and distance. */
-template <typename vertex_num_t, typename vec_ele_t>
+template <typename BaseTraitsT>
 struct alignas(8) Neighbor {   // 8 bytes
+
+    using vertex_num_t = typename BaseTraitsT::vertex_num_t;
+    using vertex_id_t = typename BaseTraitsT::vertex_id_t;
+    using vec_ele_t = typename BaseTraitsT::vec_ele_t;
+    using distance_t = typename BaseTraitsT::distance_t;
 
     // currently we assert that vertex_id_t is uint32_t (4 bytes)
     static_assert(sizeof(vertex_num_t) == 4, "vertex_num_t must be 4 bytes.");
     static_assert(std::is_unsigned<vertex_num_t>::value, "vertex_num_t must be unsigned (e.g., uint32_t).");
     static_assert(sizeof(vec_ele_t) == 4, "vec_ele_t must be 4 bytes to keep struct size 8 bytes.");
-
-    using distance_t = vec_ele_t;
-    using vertex_id_t = vertex_num_t;
 
     // Bit masks configuration:
     // Bit 31: New/Old status

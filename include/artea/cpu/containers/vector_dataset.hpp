@@ -15,22 +15,21 @@
 #include <nlohmann/json.hpp>
 
 #include <artea/cpu/containers/vector_array.hpp>
-#include <artea/definitions.hpp>
+#include <artea/common/definitions.hpp>
 #include <artea/common/logger.hpp>
 
 namespace artea {
 namespace cpu {
 
-template <
-    typename vecs_num_t,
-    typename vec_ele_t
->
+template <typename BaseTraitsT>
 class VectorDataset {
 
     // Typedefs for clarity
-    using vec_id_t = vecs_num_t;
-    using BaseQueryArray = VectorArray<vecs_num_t, vec_ele_t>;
-    using GroundTruthArray = VectorArray<vecs_num_t, vec_id_t>;
+    using vec_id_t = typename BaseTraitsT::vec_id_t;
+    using vec_num_t = typename BaseTraitsT::vec_num_t;
+    using vec_ele_t = typename BaseTraitsT::vec_ele_t;
+    using base_queries_t = typename BaseTraitsT::base_queries_t;
+    using groud_truth_t = typename BaseTraitsT::groud_truth_t;
 
 public:
 
@@ -50,7 +49,6 @@ public:
     VectorDataset(VectorDataset&&) noexcept = default;
     VectorDataset& operator=(VectorDataset&&) noexcept = default;
 
-
     void from_config(const std::string& config_path, const std::string& dataset_name) {
         _load_config(config_path);
         _load_datasets(dataset_name);
@@ -58,61 +56,61 @@ public:
 
     // --- Accessors ---
     __attribute__((always_inline))
-    auto get_base_vecs() -> BaseQueryArray& {
+    auto get_base_vecs() -> base_queries_t& {
         return _base_vecs;
     }
 
     __attribute__((always_inline))
-    auto get_base_vecs() const -> const BaseQueryArray& {
+    auto get_base_vecs() const -> const base_queries_t& {
         return _base_vecs;
     }
 
     __attribute__((always_inline))
-    auto get_query_vecs() -> BaseQueryArray& {
+    auto get_query_vecs() -> base_queries_t& {
         return _query_vecs;
     }
 
     __attribute__((always_inline))
-    auto get_query_vecs() const -> const BaseQueryArray& {
+    auto get_query_vecs() const -> const base_queries_t& {
         return _query_vecs;
     }
 
     __attribute__((always_inline))
-    auto get_gt_vecs() -> GroundTruthArray& {
+    auto get_gt_vecs() -> groud_truth_t& {
         return _gt_vecs;
     }
 
     __attribute__((always_inline))
-    auto get_gt_vecs() const -> const GroundTruthArray& {
+    auto get_gt_vecs() const -> const groud_truth_t& {
         return _gt_vecs;
     }
 
     __attribute__((always_inline))
-    auto get_num_base_vecs() const -> vecs_num_t {
-        return static_cast<vecs_num_t>(_base_vecs.get_num_vecs());
+    auto get_num_base_vecs() const -> vec_num_t {
+        return static_cast<vec_num_t>(_base_vecs.get_num_vecs());
     }
 
     __attribute__((always_inline))
-    auto get_num_query_vecs() const -> vecs_num_t {
-        return static_cast<vecs_num_t>(_query_vecs.get_num_vecs());
+    auto get_num_query_vecs() const -> vec_num_t {
+        return static_cast<vec_num_t>(_query_vecs.get_num_vecs());
     }
 
     __attribute__((always_inline))
-    auto get_num_gt_vecs() const -> vecs_num_t {
-        return static_cast<vecs_num_t>(_gt_vecs.get_num_vecs());
+    auto get_num_gt_vecs() const -> vec_num_t {
+        return static_cast<vec_num_t>(_gt_vecs.get_num_vecs());
     }
 
     __attribute__((always_inline))
-    auto get_vec_dim() const -> vecs_num_t {
-        return static_cast<vecs_num_t>(_base_vecs.get_vec_dim());
+    auto get_vec_dim() const -> vec_num_t {
+        return static_cast<vec_num_t>(_base_vecs.get_vec_dim());
     }
 
 private:
     nlohmann::json _config;
 
-    BaseQueryArray _base_vecs;
-    BaseQueryArray _query_vecs;
-    GroundTruthArray _gt_vecs;
+    base_queries_t _base_vecs;
+    base_queries_t _query_vecs;
+    groud_truth_t _gt_vecs;
 
     auto _load_config(const std::string& config_path) -> void {
         std::ifstream config_file(config_path);
@@ -136,9 +134,9 @@ private:
 
         logger.info(fmt::format("Loading dataset {} from {} ...", dataset_name, dataset_dir.string()));
 
-        _base_vecs = BaseQueryArray(base_vecs_path.string());
-        _query_vecs = BaseQueryArray(query_vecs_path.string());
-        _gt_vecs = GroundTruthArray(gt_vecs_path.string());
+        _base_vecs = base_queries_t(base_vecs_path.string());
+        _query_vecs = base_queries_t(query_vecs_path.string());
+        _gt_vecs = groud_truth_t(gt_vecs_path.string());
 
         logger.success(
             fmt::format(

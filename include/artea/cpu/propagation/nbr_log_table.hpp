@@ -14,24 +14,24 @@
 #include <artea/cpu/containers/allocator.hpp>
 #include <artea/cpu/index/neighbor.hpp>
 #include <artea/cpu/utils/nbr_arr_checker.hpp>
-#include <artea/definitions.hpp>
+#include <artea/common/definitions.hpp>
 #include <artea/cpu/index/index_graph.hpp>
 #include <artea/cpu/propagation/graph_op_log.hpp>
 
 namespace artea {
 namespace cpu {
 
-template <
-    typename vertex_num_t,
-    typename vec_ele_t,
-    typename nbr_buffer_t
->
+template <typename BufferTraitsT>
 class NbrLogTable {
 
-    using vertex_id_t = uint32_t;
-    using distance_t = float;
-    using nbr_t = Neighbor<vertex_id_t, distance_t>;
-    using nbr_container_t = typename nbr_buffer_t::container_t;
+    using vertex_num_t = typename BufferTraitsT::vertex_num_t;
+    using vertex_id_t = typename BufferTraitsT::vertex_id_t;
+    using vec_ele_t = typename BufferTraitsT::vec_ele_t;
+    using distance_t = typename BufferTraitsT::distance_t;
+    using nbr_t = typename BufferTraitsT::nbr_t;
+    using nbr_arr_t = typename BufferTraitsT::nbr_arr_t;
+    using log_buffer_t = typename BufferTraitsT::log_buffer_t;
+    using log_container_t = typename BufferTraitsT::log_container_t;
 
 public:
 
@@ -105,7 +105,7 @@ public:
     }
 
     __attribute__((always_inline))
-    auto get_log_container(const vertex_id_t executor_vid, const op_direction_t direction) -> nbr_container_t& {
+    auto get_log_container(const vertex_id_t executor_vid, const op_direction_t direction) -> log_container_t& {
         return direction == op_direction_t::IN ?
             _in_nbr_logs[executor_vid].get_container() : _out_nbr_logs[executor_vid].get_container();
     }
@@ -199,10 +199,10 @@ public:
 private:
 
     /** @brief Neighbor buffers for each vertex to store in-neighbor update logs. */
-    cache_aligned_container_t<nbr_buffer_t> _in_nbr_logs;
+    cache_aligned_container_t<log_buffer_t> _in_nbr_logs;
 
     /** @brief Neighbor buffers for each vertex to store out-neighbor update logs. */
-    cache_aligned_container_t<nbr_buffer_t> _out_nbr_logs;
+    cache_aligned_container_t<log_buffer_t> _out_nbr_logs;
 };
 
 }   // namespace cpu

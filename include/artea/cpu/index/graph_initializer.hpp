@@ -28,20 +28,22 @@
 #include <artea/cpu/containers/vector_array.hpp>
 #include <artea/cpu/propagation/propagate_engine.hpp>
 #include <artea/cpu/propagation/rng_updater.hpp>
-#include <artea/definitions.hpp>
+#include <artea/common/definitions.hpp>
 
 namespace artea {
 namespace cpu {
 
-template <
-    typename vertex_num_t,
-    typename vec_ele_t
->
+template <typename type_context_t>
 class GraphInitializer {
+
+    using vertex_num_t = typename type_context_t::vertex_num_t;
+    using vertex_id_t = typename type_context_t::vertex_id_t;
+    using vec_ele_t = typename type_context_t::vec_ele_t;
+    using index_graph_t = typename type_context_t::index_graph_t;
 
 public:
     static random_initialize(
-        IndexGraph<vertex_num_t, vec_ele_t, graph_direction_t::HIBRID>& index_graph
+        index_graph_t& index_graph
     ) -> void {
 
 

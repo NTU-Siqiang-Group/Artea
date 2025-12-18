@@ -47,10 +47,12 @@ cmake --build build -j64
 #### Objective Function
 
 This module aims to maximize the following objective function:
+
 $$
 \mathbb{C} = \left\{ C_1, C_2, \cdots, C_k \right\}\\
 O_{Partition} = A\cdot\sum_{C_i \in \mathbb{C}} \sum_{u\in C_i}\sum_{v\in C_i/\{u\}} \mathbb{I}\left\{v\in \mathbb{N}_r(u)\right\} - B\cdot \sum_{C_i \in \mathbb{C}} \left| |C_i| - \frac{n}{k} \right|
 $$
+
 By maximizing the first term, we hope that data points within the same cluster are closely connected in the r-NN graph, promoting intra-cluster similarity. The second term penalizes deviations from the ideal cluster size of n/k, thereby encouraging balanced cluster sizes across the dataset. The constants A and B are used to weight the importance of these two objectives.
 
 We hierarchically sample the data points to create a multi-level representation of the dataset. At each level, we perform clustering using the r-NN graph constructed from the sampled points. This hierarchical structure will be served as A BETTER CHOICE of HNSW-like routing layers.
@@ -59,7 +61,7 @@ We hierarchically sample the data points to create a multi-level representation 
 
 #### Baseline: Hierarchical Sampled Kmeans|| Clustering
 
-
+####Clustering Feature
 
 
 
@@ -89,4 +91,3 @@ We fine-tuned the parameters for all methods to ensure 99% recall@10 on the GIST
 
 
 
- 

@@ -25,7 +25,7 @@
 #include <vector>
 #include <stdexcept>
 
-#include <artea/cpu/propagation/graph_op_log.hpp>
+#include <artea/cpu/utils/direction.hppq>
 #include <artea/cpu/index/neighbor.hpp>
 #include <artea/cpu/containers/allocator.hpp>
 #include <artea/cpu/containers/vector_array.hpp>
@@ -34,23 +34,23 @@
 namespace artea {
 namespace cpu {
 
-template <
-    typename vertex_num_t,
-    typename vec_ele_t,
-    typename log_table_t,
-    typename dist_func_t
->
+template <typename UpdaterTraitsT>
 class RNGUpdater {
 
-    using vertex_id_t = vertex_num_t;
-    using distance_t = vec_ele_t;
-    using nbr_t = Neighbor<vertex_num_t, vec_ele_t>;
-    using nbr_arr_t = std::vector<nbr_t>;
+    using vertex_id_t = typename UpdaterTraitsT::vertex_id_t;
+    using vertex_num_t = typename UpdaterTraitsT::vertex_num_t;
+    using vec_ele_t = typename UpdaterTraitsT::vec_ele_t;
+    using distance_t = typename UpdaterTraitsT::distance_t;
+    using vector_array_t = typename UpdaterTraitsT::vector_array_t;
+    using nbr_t = typename UpdaterTraitsT::nbr_t;
+    using nbr_arr_t = typename UpdaterTraitsT::nbr_arr_t;
+    using log_table_t = typename UpdaterTraitsT::log_table_t;
+    using dist_func_t = typename UpdaterTraitsT::dist_func_t;
 
 public:
     RNGUpdater(
         const dist_func_t& dist_func,
-        const VectorArray<vertex_num_t, vec_ele_t>& vecs_arr,
+        const vector_array_t& vecs_arr,
         log_table_t& log_table
     ) : _dist_func(dist_func), _vecs_arr(vecs_arr), _log_table(log_table) {}
 
@@ -60,7 +60,7 @@ public:
         nbr_arr_t& origin_nbrs,
         nbr_arr_t& retained_nbrs
     ) -> void {
-        for (vertex_id_t i = 0; i < origin_nbrs.size(); ++i) {
+        for (vertex_num_t i = 0; i < origin_nbrs.size(); ++i) {
             const nbr_t& ori_nbr = origin_nbrs[i];
             auto [passed, delegated_vid, new_edge_dist] = _rng_check(ori_nbr, retained_nbrs);
             if (passed) {
@@ -126,7 +126,7 @@ private:
     const dist_func_t& _dist_func;
 
     /** @brief Reference to the vector array. */
-    const VectorArray<vertex_num_t, vec_ele_t>& _vecs_arr;
+    const vector_array_t& _vecs_arr;
 
     /** @brief Reference to the operation log table. */
     log_table_t& _log_table;

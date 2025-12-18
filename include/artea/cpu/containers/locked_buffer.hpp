@@ -28,7 +28,7 @@
 
 #include <tbb/spin_mutex.h>
 
-#include <artea/definitions.hpp>
+#include <artea/common/definitions.hpp>
 #include <artea/cpu/containers/allocator.hpp>
 
 namespace artea {
@@ -39,12 +39,12 @@ namespace cpu {
  *
  * @tparam T The type of elements stored.
  * @tparam container_t The underlying container type (default: std::vector<T>).
- * @tparam buf_capacity Initial reservation size (optimization hint).
+ * @tparam BufCapacity Initial reservation size (optimization hint).
  */
 template <
     typename T,
-    std::size_t buf_capacity,
-    typename lock_t = tbb::spin_mutex
+    std::size_t BufCapacity,
+    typename LockT = tbb::spin_mutex
 >
 struct alignas(CACHE_LINE_SIZE) LockedBuffer {
 
@@ -59,9 +59,9 @@ struct alignas(CACHE_LINE_SIZE) LockedBuffer {
 
     /** @brief The mutex protecting the container */
     // mutable allows locking in const methods like size()
-    mutable lock_t mtx;
+    mutable LockT mtx;
 
-    // char padding[CACHE_LINE_SIZE - sizeof(container_t) - sizeof(lock_t)];
+    // char padding[CACHE_LINE_SIZE - sizeof(container_t) - sizeof(LockT)];
 
     // -------------------------------------------------------------------------
     // Constructor / Destructor
@@ -72,8 +72,8 @@ struct alignas(CACHE_LINE_SIZE) LockedBuffer {
      */
     LockedBuffer() {
         // Pre-reserve memory to minimize reallocation inside the lock
-        if (buf_capacity > 0) {
-            container.reserve(buf_capacity);
+        if (BufCapacity > 0) {
+            container.reserve(BufCapacity);
         }
     }
 
@@ -86,7 +86,7 @@ struct alignas(CACHE_LINE_SIZE) LockedBuffer {
     LockedBuffer(LockedBuffer&& other) noexcept {
         // Lock the source to be safe, although in vector resize scenarios 'other'
         // is typically not accessed concurrently.
-        // std::lock_guard<lock_t> lock(other.mtx);
+        // std::lock_guard<LockT> lock(other.mtx);
         container = std::move(other.container);
     }
 
@@ -112,7 +112,7 @@ struct alignas(CACHE_LINE_SIZE) LockedBuffer {
      */
     __attribute__((always_inline))
     auto append(const T& element) -> void {
-        std::lock_guard<lock_t> lock(mtx);
+        std::lock_guard<LockT> lock(mtx);
         container.push_back(element);
     }
 
@@ -122,13 +122,13 @@ struct alignas(CACHE_LINE_SIZE) LockedBuffer {
     template <typename... Args>
     __attribute__((always_inline))
     auto append(Args&&... args) -> void {
-        std::lock_guard<lock_t> lock(mtx);
+        std::lock_guard<LockT> lock(mtx);
         container.emplace_back(std::forward<Args>(args)...);
     }
 
     __attribute__((always_inline))
     auto atomic_flush_to(std::vector<T>& swap_buffer) -> void {
-        std::lock_guard<lock_t> lock(mtx);
+        std::lock_guard<LockT> lock(mtx);
         {
             std::swap(swap_buffer, container);
         }

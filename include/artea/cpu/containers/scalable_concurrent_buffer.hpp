@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#if 0
+
 #pragma once
 
 #include <atomic>
@@ -19,8 +21,6 @@
 #include <memory>
 #include <cassert>
 #include <algorithm> // for std::max
-
-#include <artea/definitions.hpp>
 
 namespace artea {
 namespace cpu {
@@ -233,3 +233,5 @@ struct alignas(CACHE_LINE_SIZE) ScalableConcurrentBuffer {
 
 } // namespace cpu
 } // namespace artea
+
+#endif

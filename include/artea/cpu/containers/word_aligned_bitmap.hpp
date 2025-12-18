@@ -25,7 +25,7 @@
 #include <algorithm>
 #include <cstring>
 
-#include <artea/definitions.hpp>
+#include <artea/common/definitions.hpp>
 #include <artea/cpu/containers/allocator.hpp>
 
 namespace artea {
@@ -53,7 +53,7 @@ public:
 
     WordAlignedBitmap() = default;
 
-    explicit WordAlignedBitmap(size_t num_bits) {
+    explicit WordAlignedBitmap(const size_t num_bits) {
         resize(num_bits);
     }
 
@@ -61,7 +61,7 @@ public:
      * @brief Resize and clear the bitmap.
      * @param num_bits The new size in bits.
      */
-    void resize(size_t num_bits) {
+    void resize(const size_t num_bits) {
         _num_bits = num_bits;
         // Ceil division: (num_bits + 63) / 64
         size_t num_words = (num_bits + BITS_PER_WORD - 1) >> WORD_SHIFT;
@@ -74,7 +74,7 @@ public:
      * @return true if the bit is set, false otherwise.
      */
     __attribute__((always_inline))
-    bool test(size_t bit_index) const {
+    bool test(const size_t bit_index) const {
         const size_t word_idx = bit_index >> WORD_SHIFT;
         const size_t bit_offset = bit_index & WORD_MASK;
         return (_data[word_idx] & (1ULL << bit_offset)) != 0;
@@ -87,7 +87,7 @@ public:
      * @warning: Safe ONLY if the caller guarantees no other thread writes to this word_idx.
      */
     __attribute__((always_inline))
-    void set_word_mask(size_t word_idx, word_t mask) {
+    void set_word_mask(const size_t word_idx, const word_t mask) {
         // Simple assignment, zero overhead
         _data[word_idx] = mask;
     }
@@ -98,7 +98,7 @@ public:
      * @return The word mask at the specified index.
      */
     __attribute__((always_inline))
-    word_t get_word_mask(size_t word_idx) const {
+    word_t get_word_mask(const size_t word_idx) const {
         return _data[word_idx];
     }
 
@@ -115,13 +115,14 @@ public:
      * @param end_vid Output parameter for the end bit index (exclusive).
      */
     __attribute__((always_inline))
-    void get_range_from_word(size_t word_idx, size_t& start_vid, size_t& end_vid) const {
+    void get_range_from_word(const size_t word_idx, size_t& start_vid, size_t& end_vid) const {
         start_vid = word_idx << WORD_SHIFT;
         // Determine end_vid: usually start + 64, but capped at total bits for the last word
         end_vid = std::min(start_vid + BITS_PER_WORD, _num_bits);
     }
 
     /** @brief Fast clear. Can be parallelized by caller. */
+    __attribute__((always_inline))
     void clear() {
         if (!_data.empty()) {
             std::memset(_data.data(), 0, _data.size() * sizeof(word_t));
@@ -129,6 +130,7 @@ public:
     }
 
     /** @brief Access raw data */
+    __attribute__((always_inline))
     const container_t& data() const { return _data; }
 
 private:

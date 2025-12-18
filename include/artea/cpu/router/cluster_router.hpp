@@ -25,27 +25,28 @@
 #include <vector>
 #include <functional>
 
-#include <artea/cpu/containers/vector_array.hpp>
 #include <artea/definitions.hpp>
 
 namespace artea {
 namespace cpu {
 
-template <
-    typename vertex_num_t,
-    typename vec_ele_t,
-    typename dist_func_t,
-    typename derived_class_t
->
+template <typename RouterTraitsT>
 class ClusterRouter {
 
-    using vertex_id_t = vertex_num_t;
-    using distance_t = vec_ele_t;
+    using vertex_id_t = typename RouterTraitsT::vertex_id_t;
+    using vertex_num_t = typename RouterTraitsT::vertex_num_t;
+    using vec_ele_t = typename RouterTraitsT::vec_ele_t;
+    using distance_t = typename RouterTraitsT::distance_t;
+    using dist_func_t = typename RouterTraitsT::dist_func_t;
+    using vector_array_t = typename RouterTraitsT::vector_array_t;
+    using cluster_id_t = typename RouterTraitsT::cluster_id_t;
+    using cluster_num_t = typename RouterTraitsT::cluster_num_t;
+    using derived_class_t = typename RouterTraitsT::router_impl_t;
 
 public:
 
     ClusterRouter(
-        const VectorArray<vertex_num_t, vec_ele_t>& centroids,
+        const vector_array_t& centroids,
         const dist_func_t& dist_func
     ) :
         _num_clusters(centroids.get_num_vecs()),
@@ -82,7 +83,7 @@ public:
      */
     auto batch_query(const VectorArray<vertex_num_t, vec_ele_t>& query_vecs) const -> std::vector<cluster_id_t> {
         const vertex_num_t num_queries = query_vecs.get_num_vecs();
-        std::vector<vertex_id_t> results(num_queries);
+        std::vector<cluster_id_t> results(num_queries);
         tbb::parallel_for(
             // Range: Iterate over all query vectors
             tbb::blocked_range<vertex_num_t>(0, num_queries),
@@ -95,7 +96,7 @@ public:
                     // Call query_impl.
                     cluster_id_t best_cid = static_cast<const derived_class_t*>(this)->query_impl(current_vec);
                     // Store the result
-                    results[i] = static_cast<vertex_id_t>(best_cid);
+                    results[i] = static_cast<cluster_id_t>(best_cid);
                 }
             }
         );
@@ -109,7 +110,7 @@ protected:
     const cluster_num_t _num_clusters;
 
     /** @brief Reference to the centroids of the clusters. */
-    const VectorArray<vertex_num_t, vec_ele_t>& _centroids;
+    const vector_array_t& _centroids;
 
     /** @brief Reference to the injected distance function functor. */
     const dist_func_t& _dist_func;

@@ -33,12 +33,11 @@ namespace cpu {
  * @brief A single-container concurrent buffer based on TBB's concurrent_vector.
  *
  * @tparam T The type of elements stored.
- * @tparam container_t The underlying container type (default: tbb::concurrent_vector<T>).
- * @tparam buf_capacity Initial reservation size (optimization hint).
+ * @tparam BufCapacity Initial reservation size (optimization hint).
  */
 template <
     typename T,
-    std::size_t buf_capacity = 32
+    std::size_t BufCapacity = 32
 >
 struct alignas(CACHE_LINE_SIZE) TbbBuffer {
 
@@ -62,7 +61,7 @@ struct alignas(CACHE_LINE_SIZE) TbbBuffer {
     TbbBuffer() {
         // TBB vector supports reserve to pre-allocate memory segments.
         // This makes the performance closer to a fixed-size buffer for the first N elements.
-        container.reserve(buf_capacity);
+        container.reserve(BufCapacity);
     }
 
     ~TbbBuffer() = default;

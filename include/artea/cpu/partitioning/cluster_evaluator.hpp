@@ -41,9 +41,13 @@ namespace cpu {
  * Contains statistical information about the clustering quality, including
  * intra/inter-cluster distances, silhouette score, and partition balance.
  */
-template <typename vertex_num_t, typename vec_ele_t>
+template <typename type_context_t>
 struct PartitionMetrics {
-    using distance_t = vec_ele_t;
+    using distance_t = typename type_context_t::vec_ele_t;
+    using vertex_num_t = typename type_context_t::vertex_num_t;
+    using part_num_t = typename type_context_t::part_num_t;
+
+
     const part_num_t num_parts;
 
     explicit PartitionMetrics(const part_num_t parts) :
@@ -81,20 +85,25 @@ struct PartitionMetrics {
  * Calculates metrics such as Inertia, Silhouette Score, and Load Balance
  * given a dataset and a set of centroids.
  *
- * @tparam vertex_num_t Integer type for vertex indices.
- * @tparam vec_ele_t Float type for vector elements.
- * @tparam DistanceFunc Functor type for distance calculation.
+ * @tparam type_context_t The type context defining types used in the evaluator.
  */
-template <typename vertex_num_t, typename vec_ele_t, typename DistanceFunc>
+template <typename type_context_t>
 class ClusterEvaluator {
-    using distance_t = vec_ele_t;
 
+    using distance_t = typename type_context_t::vec_ele_t;
+    using vertex_num_t = typename type_context_t::vertex_num_t;
+    using vec_ele_t = typename type_context_t::vec_ele_t;
+    using cluster_num_t = typename type_context_t::cluster_num_t;
+    using part_num_t = typename type_context_t::part_num_t;
+    using dist_func_t = typename type_context_t::dist_func_t;
+    using vector_array_t = typename type_context_t::vector_array_t;
+    using partition_metrics_t = typename type_context_t::partition_metrics_t;
 public:
     /**
      * @brief Construct a new Cluster Evaluator.
      * @param dist_func Reference to the distance calculation functor.
      */
-    explicit ClusterEvaluator(const DistanceFunc& dist_func)
+    explicit ClusterEvaluator(const dist_func_t& dist_func)
         : _dist_func(dist_func) {}
 
     /**
@@ -105,14 +114,13 @@ public:
      * @return PartitionMetrics calculated metrics.
      */
     auto evaluate(
-        const VectorArray<vertex_num_t, vec_ele_t>& vecs_arr,
-        const VectorArray<vertex_num_t, vec_ele_t>& centroids
-    ) const -> PartitionMetrics<vertex_num_t, vec_ele_t> {
+        const vector_array_t& vecs_arr,
+        const vector_array_t& centroids
+    ) const -> partition_metrics_t {
 
         vertex_num_t num_vecs = vecs_arr.get_num_vecs();
-        vertex_num_t num_clusters = centroids.get_num_vecs();
-        PartitionMetrics<vertex_num_t, vec_ele_t> metrics(static_cast<part_num_t>(num_clusters));
-
+        cluster_num_t num_clusters = centroids.get_num_vecs();
+        partition_metrics_t metrics(static_cast<part_num_t>(num_clusters));
         if (num_clusters == 0) {
             logger.warn("Evaluator received empty centroids. Returning empty metrics.");
             return metrics;
@@ -201,14 +209,14 @@ public:
 
     __attribute__((always_inline))
     auto operator()(
-        const VectorArray<vertex_num_t, vec_ele_t>& vecs_arr,
-        const VectorArray<vertex_num_t, vec_ele_t>& centroids
-    ) const -> PartitionMetrics<vertex_num_t, vec_ele_t> {
+        const vector_array_t& vecs_arr,
+        const vector_array_t& centroids
+    ) const -> partition_metrics_t {
         return evaluate(vecs_arr, centroids);
     }
 
 private:
-    const DistanceFunc& _dist_func;
+    const dist_func_t& _dist_func;
 
 };
 
