@@ -34,31 +34,31 @@
 #include <tbb/blocked_range.h>
 
 #include <artea/cpu/containers/vector_array.hpp>
-#include <artea/cpu/partitioning/cluster_router.hpp>
+#include <artea/cpu/partitioning/vector_router.hpp>
 #include <artea/common/definitions.hpp>
 
 namespace artea {
 namespace cpu {
 
-template <typename RouterTraitsT>
-class BruteforceRouter : public RouterTraitsT::cluster_router_t
+template <typename ComputerTraitsT, bool IntraQueryParallel = false>
+class BruteforceRouter :
+    public VectorRouter<ComputerTraitsT, BruteforceRouter<ComputerTraitsT, IntraQueryParallel>>
 {
-    using vertex_num_t = typename RouterTraitsT::vertex_num_t;
-    using vertex_id_t = typename RouterTraitsT::vertex_id_t;
-    using vec_ele_t = typename RouterTraitsT::vec_ele_t;
-    using distance_t = typename RouterTraitsT::distance_t;
-    using dist_func_t = typename RouterTraitsT::dist_func_t;
-    using vector_array_t = typename RouterTraitsT::vector_array_t;
-    using cluster_id_t = typename RouterTraitsT::cluster_id_t;
-    static constexpr bool intra_query_parallel = RouterTraitsT::intra_query_parallel;
-    using base_class_t = typename RouterTraitsT::cluster_router_t;
+    using vec_num_t = typename ComputerTraitsT::vec_num_t;
+    using vec_id_t = typename ComputerTraitsT::vec_id_t;
+    using vec_ele_t = typename ComputerTraitsT::vec_ele_t;
+    using distance_t = typename ComputerTraitsT::distance_t;
+    using dist_func_t = typename ComputerTraitsT::dist_func_t;
+    using vector_array_t = typename ComputerTraitsT::vector_array_t;
+    using base_vecs_t = typename ComputerTraitsT::base_vecs_t;
+    using base_class_t = VectorRouter<ComputerTraitsT, BruteforceRouter<ComputerTraitsT, IntraQueryParallel>>;
 
 public:
 
     BruteforceRouter(
-        const vector_array_t& centroids,
+        const base_vecs_t& base_vecs,
         const dist_func_t& dist_func
-    ) : base_class_t(centroids, dist_func)
+    ) : base_class_t(base_vecs, dist_func)
     {}
 
     auto initialize_impl() -> void {
@@ -67,58 +67,58 @@ public:
 
 
     /**
-     * @brief Query the nearest cluster centroid for a given vector.
+     * @brief Query the nearest vertex centroid for a given vector.
      *
-     * Depending on the template parameter `intra_query_parallel`, this function runs
+     * Depending on the template parameter `IntraQueryParallel`, this function runs
      * either sequentially or in parallel using TBB to find the centroid with
      * the minimum distance.
      *
      * @param query_vec Pointer to the query vector data.
-     * @return cluster_id_t The ID of the nearest cluster.
+     * @return vec_id_t The ID of the nearest vertex.
      */
-    auto query_impl(const vec_ele_t* query_vec) const -> cluster_id_t {
-        if constexpr (not intra_query_parallel) {
-            // Find the cluster with the minimum distance to the query vector
+    auto query_impl(const vec_ele_t* query_vec) const -> vec_id_t {
+        if constexpr (not IntraQueryParallel) {
+            // Find the vertex with the minimum distance to the query vector
             distance_t min_dist = std::numeric_limits<distance_t>::max();
-            cluster_id_t best_cluster = 0;
-            for (cluster_id_t cid = 0; cid < this->_num_clusters; ++cid) {
-                const vec_ele_t* center = this->_centroids.get(cid);
-                distance_t dist = this->_dist_func(query_vec, center);
+            vec_id_t best_vid = 0;
+            for (vec_id_t vid = 0; vid < this->_num_vecs; ++vid) {
+                const vec_ele_t* vec = this->_base_vecs.get(vid);
+                distance_t dist = this->_dist_func(query_vec, vec);
                 if (dist < min_dist) {
                     min_dist = dist;
-                    best_cluster = cid;
+                    best_vid = vid;
                 }
             }
-            return best_cluster;
-
-        } else {
-            // Parallel reduction to find the cluster with the minimum distance
+            return best_vid;
+        }
+        else {
+            // Parallel reduction to find the vertex with the minimum distance
 
             distance_t global_min_dist = std::numeric_limits<distance_t>::max();
-            cluster_id_t global_best_cluster = 0;
+            vec_id_t global_best_vid = 0;
             // Define a helper struct to hold the reduction result (distance + index)
             struct Result {
                 distance_t min_dist;
-                cluster_id_t cluster_id;
+                vec_id_t vertex_id;
             };
 
             // Execute parallel reduction
             Result final_res = tbb::parallel_reduce(
-                // Range: Iterate over all clusters
-                tbb::blocked_range<cluster_id_t>(0, this->_num_clusters),
+                // Range: Iterate over all vertices
+                tbb::blocked_range<vec_id_t>(0, this->_num_vecs),
 
                 // Identity value: Max distance
                 Result { std::numeric_limits<distance_t>::max(), 0 },
 
-                // Processor for a sub-range of clusters
-                [&](const tbb::blocked_range<cluster_id_t>& r, Result local_res) -> Result {
-                    for (cluster_id_t cid = r.begin(); cid != r.end(); ++cid) {
-                        const vec_ele_t* center = this->_centroids.get(cid);
-                        distance_t dist = this->_dist_func(query_vec, center);
+                // Processor for a sub-range of vertices
+                [&](const tbb::blocked_range<vec_id_t>& r, Result local_res) -> Result {
+                    for (vec_id_t vid = r.begin(); vid != r.end(); ++vid) {
+                        const vec_ele_t* vec = this->_base_vecs.get(vid);
+                        distance_t dist = this->_dist_func(query_vec, vec);
 
                         if (dist < local_res.min_dist) {
                             local_res.min_dist = dist;
-                            local_res.cluster_id = cid;
+                            local_res.vertex_id = vid;
                         }
                     }
                     return local_res;
@@ -130,9 +130,9 @@ public:
                 }
             );
 
-            global_best_cluster = final_res.cluster_id;
+            global_best_vid = final_res.vertex_id;
 
-            return global_best_cluster;
+            return global_best_vid;
         }
     }
 

@@ -36,8 +36,7 @@ class NbrLogTable {
 public:
 
     NbrLogTable(const vertex_num_t num_vertices) {
-        _in_nbr_logs.resize(num_vertices);
-        _out_nbr_logs.resize(num_vertices);
+        _nbr_logs.resize(num_vertices);
     }
 
     /**
@@ -51,8 +50,7 @@ public:
     auto add_append_log(
         const vertex_id_t executor_vid,
         const vertex_id_t nbr_id,
-        const distance_t new_edge_dist,
-        const op_direction_t direction
+        const distance_t new_edge_dist
     ) -> void {
         #ifndef NDEBUG
         if (is_nan_distance(new_edge_dist)) {
@@ -60,12 +58,8 @@ public:
             throw std::runtime_error("Error: Logging an operation with NaN distance is not allowed.");
         }
         #endif
-        if (direction == op_direction_t::IN) {
-            _in_nbr_logs[executor_vid].append(nbr_id, new_edge_dist, true, false);  // is_new = true, is_removed = false
-        }
-        else { // OUT direction
-            _out_nbr_logs[executor_vid].append(nbr_id, new_edge_dist, true, false); // is_new = true, is_removed = false
-        }
+        // is_new = true, is_removed = false
+        _nbr_logs[executor_vid].append(nbr_id, new_edge_dist, true, false);
     }
 
     /**
@@ -79,35 +73,19 @@ public:
     auto add_remove_log(
         const vertex_id_t executor_vid,
         const vertex_id_t nbr_id,
-        const distance_t removed_edge_dist,
-        const op_direction_t direction
+        const distance_t removed_edge_dist
     ) -> void {
-        if (direction == op_direction_t::IN) {
-            _in_nbr_logs[executor_vid].append(nbr_id, removed_edge_dist, false, true);  // is_new = false (irrelevant for remove), is_removed = true
-        } else { // OUT direction
-            _out_nbr_logs[executor_vid].append(nbr_id, removed_edge_dist, false, true); // is_new = false (irrelevant for remove), is_removed = true
-        }
-    }
-
-    __attribute__((always_inline))
-    auto clear_logs(const vertex_id_t executor_vid, const op_direction_t direction) -> void {
-        if (direction == op_direction_t::IN) {
-            _in_nbr_logs[executor_vid].clear();
-        } else {
-            _out_nbr_logs[executor_vid].clear();
-        }
+        _nbr_logs[executor_vid].append(nbr_id, removed_edge_dist, false, true);
     }
 
     __attribute__((always_inline))
     auto clear_logs(const vertex_id_t executor_vid) -> void {
-        _in_nbr_logs[executor_vid].clear();
-        _out_nbr_logs[executor_vid].clear();
+        _nbr_logs[executor_vid].clear();
     }
 
     __attribute__((always_inline))
-    auto get_log_container(const vertex_id_t executor_vid, const op_direction_t direction) -> log_container_t& {
-        return direction == op_direction_t::IN ?
-            _in_nbr_logs[executor_vid].get_container() : _out_nbr_logs[executor_vid].get_container();
+    auto get_log_container(const vertex_id_t executor_vid) -> log_container_t& {
+        return _nbr_logs[executor_vid].get_container();
     }
 
     /**
@@ -115,34 +93,16 @@ public:
      *        Precondition: graph neighbors are sorted by StrictNeighborComparator (Dist, ID, removed).
      */
     template <typename GraphType>
-    auto apply_logs(const vertex_id_t executor_vid, GraphType& graph, const op_direction_t direction) -> void {
-
-        auto& log_container = direction == op_direction_t::IN ?
-            _in_nbr_logs[executor_vid].get_container() :
-            _out_nbr_logs[executor_vid].get_container();
-
+    auto apply_logs(const vertex_id_t executor_vid, GraphType& graph) -> void {
+        auto& log_container = _nbr_logs[executor_vid].get_container();
         if (log_container.empty()) return;
 
-        auto& cur_nbrs = direction == op_direction_t::IN ?
-            graph.template fetch_nbrs<op_direction_t::IN>(executor_vid) :
-            graph.template fetch_nbrs<op_direction_t::OUT>(executor_vid);
+        auto& cur_nbrs = fetch_nbrs(executor_vid);
 
         #ifndef NDEBUG
-        if (!NbrArrChecker<vertex_id_t, distance_t>::no_nan_check(cur_nbrs)) {
-            logger.error("Neighbor array contains NaN distances before applying logs.");
-            throw std::runtime_error("Error: Neighbor array contains NaN distances before applying logs.");
-        }
-        if (!NbrArrChecker<vertex_id_t, distance_t>::no_removed_check(cur_nbrs)) {
-            logger.error("Neighbor array contains removed neighbors before applying logs.");
-            throw std::runtime_error("Error: Neighbor array contains removed neighbors before applying logs.");
-        }
-        if (!NbrArrChecker<vertex_id_t, distance_t>::no_duplicate_check(cur_nbrs)) {
-            logger.error("Neighbor array contains duplicate neighbors before applying logs.");
-            throw std::runtime_error("Error: Neighbor array contains duplicate neighbors before applying logs.");
-        }
-        if (!NbrArrChecker<vertex_id_t, distance_t>::distance_order_check(cur_nbrs)) {
-            logger.error("Neighbor array is not sorted by distance before applying logs.");
-            throw std::runtime_error("Error: Neighbor array is not sorted by distance before applying logs.");
+        if (!NbrArrChecker<vertex_id_t, distance_t>::full_check(cur_nbrs)) {
+            logger.error("Current neighbor array failed integrity check before applying logs.");
+            throw std::runtime_error("Error: Current neighbor array failed integrity check before applying logs.");
         }
         #endif
 
@@ -153,7 +113,7 @@ public:
         auto middle_iter = cur_nbrs.insert(cur_nbrs.end(), log_container.begin(), log_container.end());
         std::inplace_merge(cur_nbrs.begin(), middle_iter, cur_nbrs.end(), StrictNeighborComparator<vertex_id_t, distance_t>);
 
-        // Step 3: Linear Scan with Cancellation (Stack Logic)
+        // Step 3: Duplicate (Linear Scanning)
         std::size_t stack_top = 0;
 
         for (std::size_t read_idx = 0; read_idx < cur_nbrs.size(); ++read_idx) {
@@ -177,32 +137,17 @@ public:
         log_container.clear();
 
         #ifndef NDEBUG
-        if (!NbrArrChecker<vertex_id_t, distance_t>::no_nan_check(cur_nbrs)) {
-            logger.error("Neighbor array contains NaN distances before applying logs.");
-            throw std::runtime_error("Error: Neighbor array contains NaN distances before applying logs.");
-        }
-        if (!NbrArrChecker<vertex_id_t, distance_t>::no_removed_check(cur_nbrs)) {
-            logger.error("Neighbor array contains removed neighbors before applying logs.");
-            throw std::runtime_error("Error: Neighbor array contains removed neighbors before applying logs.");
-        }
-        if (!NbrArrChecker<vertex_id_t, distance_t>::no_duplicate_check(cur_nbrs)) {
-            logger.error("Neighbor array contains duplicate neighbors before applying logs.");
-            throw std::runtime_error("Error: Neighbor array contains duplicate neighbors before applying logs.");
-        }
-        if (!NbrArrChecker<vertex_id_t, distance_t>::distance_order_check(cur_nbrs)) {
-            logger.error("Neighbor array is not sorted by distance before applying logs.");
-            throw std::runtime_error("Error: Neighbor array is not sorted by distance before applying logs.");
+        if (!NbrArrChecker<vertex_id_t, distance_t>::full_check(cur_nbrs)) {
+            logger.error("Current neighbor array failed integrity check after applying logs.");
+            throw std::runtime_error("Error: Current neighbor array failed integrity check after applying logs.");
         }
         #endif
     }
 
 private:
 
-    /** @brief Neighbor buffers for each vertex to store in-neighbor update logs. */
-    cache_aligned_container_t<log_buffer_t> _in_nbr_logs;
-
     /** @brief Neighbor buffers for each vertex to store out-neighbor update logs. */
-    cache_aligned_container_t<log_buffer_t> _out_nbr_logs;
+    cache_aligned_container_t<log_buffer_t> _nbr_logs;
 };
 
 }   // namespace cpu

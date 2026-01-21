@@ -28,7 +28,7 @@
 
 #include <artea/cpu/containers/locked_buffer.hpp>
 #include <artea/cpu/containers/tbb_buffer.hpp>
-
+// #include <artea/cpu/framework/base_traits.hpp>
 
 namespace artea {
 namespace cpu {
@@ -82,12 +82,15 @@ private:
     using buffer_traits_t = BufferTraits<BaseTraitsT, BufferPolicy, BufCapacity>;
 
 public:
+
+    using base_traits_t = BaseTraitsT;
+
     /** @brief Type for buffer elements. */
-    using nbr_t = BaseTraitsT::nbr_t;
+    using nbr_t = typename BaseTraitsT::nbr_t;
 
     /** ------ Selected Buffer Type ------ **/
 
-    /** @brief Type for neighbor buffers. */
+    /** @brief Type for neighbor log buffers. */
     using log_buffer_t = typename BufferSelector<BufferPolicy, nbr_t, BufCapacity>::type;
 
      /** @brief Type for the container used within the neighbor buffer. */
@@ -95,6 +98,12 @@ public:
 
     /** @brief Type for neighbor log tables. */
     using log_table_t = NbrLogTable<buffer_traits_t>;
+
+    /** @brief Buffer policy used for the buffers. */
+    static constexpr buffer_policy_t buffer_policy = BufferPolicy;
+
+    /** @brief Capacity of each buffer. */
+    static constexpr std::size_t buf_capacity = BufCapacity;
 
 };  // struct BufferTraits
 

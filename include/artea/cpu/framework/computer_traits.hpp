@@ -33,29 +33,36 @@ namespace cpu {
 template <typename ComputerTraitsT> class SIMDDistance;
 
 /** @brief Distance metrics used for computing distances between vectors */
-enum class DistanceMetrics {
+enum class distance_metrics_t {
     EUCLIDEAN,
     DOT,
     COSINE
-};  // enum class DistanceMetrics
+};  // enum class distance_metrics_t
 
 /** @brief Traits for computing distances between vectors */
 template <
     typename BaseTraitsT,
-    DistanceMetrics dist_metrics,
-    std::size_t unroll_size
+    distance_metrics_t DistanceMetrics,
+    std::size_t UnrollSize = 1
 >
-struct ComputerTraits : public BaseTraitsT {
+struct ComputerTraits : virtual public BaseTraitsT {
 
 private:
 
     /** ------ Self Traits ------ **/
-    using computer_traits_t = ComputerTraits<BaseTraitsT, dist_metrics, unroll_size>;
+    using computer_traits_t = ComputerTraits<BaseTraitsT, DistanceMetrics, UnrollSize>;
 
 public:
 
+    /** @brief Base traits type. */
+    using base_traits_t = BaseTraitsT;
+
     /** @brief Type for distance values. */
     using dist_func_t = SIMDDistance<computer_traits_t>;
+
+    static constexpr distance_metrics_t distance_metrics = DistanceMetrics;
+
+    static constexpr std::size_t unroll_size = UnrollSize;
 
 };  // struct ComputerTraits
 

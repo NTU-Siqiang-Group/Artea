@@ -42,6 +42,8 @@ public:
     static auto no_nan_check(const nbr_arr_t& nbrs) -> bool {
         for (std::size_t i = 0; i < nbrs.size(); ++i) {
             if (is_nan_distance(nbrs[i].get_distance())) {
+                logger.error("Neighbor array contains NaN distances before applying logs.");
+                // throw std::runtime_error("Error: Neighbor array contains NaN distances before applying logs.");
                 return false;
             }
         }
@@ -51,6 +53,8 @@ public:
     static auto no_removed_check(const nbr_arr_t& nbrs) -> bool {
         for (std::size_t i = 0; i < nbrs.size(); ++i) {
             if (nbrs[i].is_removed()) {
+                logger.error("Neighbor array contains removed neighbors before applying logs.");
+                // throw std::runtime_error("Error: Neighbor array contains removed neighbors before applying logs.");
                 return false;
             }
         }
@@ -64,6 +68,8 @@ public:
         for (std::size_t i = 0; i < nbrs.size(); ++i) {
             vertex_num_t nbr_id = nbrs[i].get_id();
             if (std::find(seen_ids.begin(), seen_ids.end(), nbr_id) != seen_ids.end()) {
+                logger.error("Neighbor array contains duplicate neighbors before applying logs.");
+                // throw std::runtime_error("Error: Neighbor array contains duplicate neighbors before applying logs.");
                 return false;
             }
             seen_ids.push_back(nbr_id);
@@ -74,10 +80,19 @@ public:
     static auto distance_order_check(const nbr_arr_t& nbrs) -> bool {
         for (std::size_t i = 1; i < nbrs.size(); ++i) {
             if (NeighborDistanceComparator<vertex_num_t, vec_ele_t>(nbrs[i], nbrs[i - 1])) {
+                logger.error("Neighbor array is not sorted by distance before applying logs.");
+                // throw std::runtime_error("Error: Neighbor array is not sorted by distance before applying logs.");
                 return false;
             }
         }
         return true;
+    }
+
+    static auto full_check(const nbr_arr_t& nbrs) -> bool {
+        return no_nan_check(nbrs) &&
+               no_removed_check(nbrs) &&
+               no_duplicate_check(nbrs) &&
+               distance_order_check(nbrs);
     }
 
 };  // class NbrArrChecker

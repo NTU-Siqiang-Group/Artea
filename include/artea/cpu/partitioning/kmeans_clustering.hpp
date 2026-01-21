@@ -15,7 +15,7 @@
 /*
  * @FilePath: /Artea/include/artea/cpu/partitioning/kmeans_clustering.hpp
  * @Author: Chandler (Weitang Ye) <weitang.ye@ntu.edu.sg>
- * @Description: High-performance K-means implementation delegating search to ClusterRouter.
+ * @Description: High-performance K-means implementation delegating search to VectorRouter.
  */
 
 #pragma once
@@ -37,7 +37,7 @@
 
 #include <artea/cpu/containers/vector_array.hpp>
 #include <artea/cpu/utils/random_seq.hpp>
-#include <artea/cpu/partitioning/cluster_router.hpp>
+#include <artea/cpu/partitioning/vector_router.hpp>
 #include <artea/cpu/partitioning/bruteforce_router.hpp>
 #include <artea/cpu/utils/vector_sampler.hpp>
 #include <artea/cpu/utils/simd_distance.hpp>
@@ -66,7 +66,7 @@ namespace cpu {
 template <
     typename vertex_num_t,
     typename vec_ele_t,
-    typename dist_func_t = SIMDDistance<vec_ele_t, DistanceMetrics::EUCLIDEAN>,
+    typename dist_func_t = SIMDDistance<vec_ele_t, distance_metrics_t::EUCLIDEAN>,
     typename cluster_router_t = BruteforceRouter<vertex_num_t, vec_ele_t, dist_func_t, false>,
     typename vector_sampler_t = VectorSampler<vertex_num_t, vec_ele_t>
 >
@@ -275,11 +275,11 @@ public:
 
         const vertex_num_t num_vecs = vecs_arr.get_num_vecs();
 
-        // 1. Assign Labels using the ClusterRouter
+        // 1. Assign Labels using the VectorRouter
         std::vector<cluster_id_t> labels;
 
         this->_router.initialize();
-        // This leverages the highly optimized batch_query implementation in ClusterRouter
+        // This leverages the highly optimized batch_query implementation in VectorRouter
         labels = this->_router.batch_query(vecs_arr);
 
         // 2. Count Histogram (Parallel)

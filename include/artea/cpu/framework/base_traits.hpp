@@ -95,11 +95,14 @@ public:
     /** @brief Type for vector datasets. */
     using vector_dataset_t = VectorDataset<base_traits_t>;
 
-    /** @brief Type for base/query vector arrays. */
-    using base_queries_t = VectorArray<vertex_num_t, vec_ele_t>;
+    /** @brief Type for base vector arrays. */
+    using base_vecs_t = VectorArray<vertex_num_t, vec_ele_t>;
+
+    /** @brief Type for query vector arrays. */
+    using query_vecs_t = VectorArray<vertex_num_t, vec_ele_t>;
 
     /** @brief Type for ground truth vector arrays. */
-    using groud_truth_t = VectorArray<vertex_num_t, vec_id_t>;
+    using ground_truth_t = VectorArray<vertex_num_t, vec_id_t>;
 
 };  // struct BaseTraits
 

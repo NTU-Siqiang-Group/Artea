@@ -37,9 +37,9 @@ namespace cpu {
  * Design Philosophy:
  * Instead of using atomic operations (slow) or locks (slower), this bitmap implies
  * a specific parallelization strategy:
- * 1. The work is partitioned by "Word Index" (chunks of 64 bits), not by individual bits.
- * 2. A single thread claims ownership of a whole uint64_t word.
- * 3. Bitwise operations are done in registers, and the result is written to memory once per word.
+ * * The work is partitioned by "Word Index" (chunks of 64 bits), not by individual bits.
+ * * A single thread claims ownership of a whole uint64_t word.
+ * * Bitwise operations are done in registers, and the result is written to memory once per word.
  */
 class WordAlignedBitmap {
 

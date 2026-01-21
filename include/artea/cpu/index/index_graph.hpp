@@ -1,7 +1,7 @@
 /*
  * @FilePath: /Artea/include/artea/cpu/index/index_graph.hpp
  * @Author: Chandler (Weitang Ye) <weitang.ye@ntu.edu.sg>
- * @LastEditTime: 2025-12-14 11:46:19
+ * @LastEditTime: 2026-01-18 14:45:17
  * @Date: 2025-10-17 15:32:18
  * @Description:
  */
@@ -53,17 +53,9 @@ public:
         _num_vertices(num_vertices),
         _reserved_nbrs_size(reserved_nbrs_size)
     {
-        if constexpr (direction == graph_direction_t::IN or direction == graph_direction_t::HIBRID) {
-            _in_nbrs_arr.resize(num_vertices);
-            for (vertex_num_t i = 0; i < num_vertices; ++i) {
-                _in_nbrs_arr[i].reserve(reserved_nbrs_size);
-            }
-        }
-        if constexpr (direction == graph_direction_t::OUT or direction == graph_direction_t::HIBRID) {
-            _out_nbrs_arr.resize(num_vertices);
-            for (vertex_num_t i = 0; i < num_vertices; ++i) {
-                _out_nbrs_arr[i].reserve(reserved_nbrs_size);
-            }
+        _nbrs_arr.resize(num_vertices);
+        for (vertex_num_t i = 0; i < num_vertices; ++i) {
+            _nbrs_arr[i].reserve(reserved_nbrs_size);
         }
     }
 
@@ -91,60 +83,24 @@ public:
         return _reserved_nbrs_size;
     }
 
-    template <graph_direction_t fetch_direction>
     __attribute__((always_inline))
     auto get_nbrs_arr() -> std::vector<nbr_arr_t>& {
-        static_assert(
-            fetch_direction == graph_direction_t::IN or fetch_direction == graph_direction_t::OUT,
-            "fetch_direction must be IN or OUT"
-        );
-
-        if constexpr (fetch_direction == graph_direction_t::IN) {
-            return _in_nbrs_arr;
-        }
-        else if constexpr (fetch_direction == graph_direction_t::OUT) {
-            return _out_nbrs_arr;
-        }
+        return _nbrs_arr;
     }
 
-    template <graph_direction_t fetch_direction>
     __attribute__((always_inline))
     auto get_nbrs_arr() const -> const std::vector<nbr_arr_t>& {
-        static_assert(
-            fetch_direction == graph_direction_t::IN or fetch_direction == graph_direction_t::OUT,
-            "fetch_direction must be IN or OUT"
-        );
-        if constexpr (fetch_direction == graph_direction_t::IN) {
-            return _in_nbrs_arr;
-        }
-        else if constexpr (fetch_direction == graph_direction_t::OUT) {
-            return _out_nbrs_arr;
-        }
+        return _nbrs_arr;
     }
 
-    // // --- Graph Operations ---
-    // append_nbr operations is delegated to the RecommendedNN.
-
-    template <op_direction_t op_direction>
-    __attribute__((always_inline))
-    auto fetch_nbrs(const vertex_id_t src) -> nbr_arr_t& {
-        if constexpr (op_direction == op_direction_t::IN) {
-            return _in_nbrs_arr[src];
-        }
-        else if constexpr (op_direction == op_direction_t::OUT) {
-            return _out_nbrs_arr[src];
-        }
-    }
-
-    template <op_direction_t op_direction>
     __attribute__((always_inline))
     auto fetch_nbrs(const vertex_id_t src) const -> const nbr_arr_t& {
-        if constexpr (op_direction == op_direction_t::IN) {
-            return _in_nbrs_arr[src];
-        }
-        else if constexpr (op_direction == op_direction_t::OUT) {
-            return _out_nbrs_arr[src];
-        }
+        return _nbrs_arr[src];
+    }
+
+    __attribute__((always_inline))
+    auto fetch_nbrs(const vertex_id_t src) -> nbr_arr_t& {
+        return _nbrs_arr[src];
     }
 
 protected:
@@ -155,11 +111,8 @@ protected:
     /** @brief Number of (expected) neighbors per vertex. */
     vertex_num_t _reserved_nbrs_size;
 
-    /** @brief Array of in-neighbors for each vertex. */
-    std::vector<nbr_arr_t> _in_nbrs_arr;
-
-    /** @brief Array of out-neighbors for each vertex. */
-    std::vector<nbr_arr_t> _out_nbrs_arr;
+    /** @brief Array of neighbors for each vertex. */
+    std::vector<nbr_arr_t> _nbrs_arr;
 
 };  // class IndexGraph
 

@@ -34,7 +34,7 @@
 #include <tbb/blocked_range.h>
 
 #include <artea/cpu/containers/vector_array.hpp>
-#include <artea/cpu/partitioning/cluster_router.hpp>
+#include <artea/cpu/partitioning/vector_router.hpp>
 #include <artea/definitions.hpp>
 
 namespace artea {
@@ -91,7 +91,7 @@ public:
         const vertex_num_t num_vecs = vecs_arr.get_num_vecs();
         const vec_dim_t vec_dim = vecs_arr.get_vec_dim();
 
-        // --- Assign Labels using the ClusterRouter ---
+        // --- Assign Labels using the VectorRouter ---
         _router.initialize();
         std::vector<cluster_id_t> labels = _router.batch_query(vecs_arr);
 

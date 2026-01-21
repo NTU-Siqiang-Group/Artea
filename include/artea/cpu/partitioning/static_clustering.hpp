@@ -27,7 +27,7 @@
 #include <limits>
 
 #include <artea/cpu/containers/vector_array.hpp>
-#include <artea/cpu/partitioning/cluster_router.hpp>
+#include <artea/cpu/partitioning/vector_router.hpp>
 #include <artea/definitions.hpp>
 
 namespace artea {

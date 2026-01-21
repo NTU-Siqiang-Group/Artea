@@ -73,7 +73,7 @@ Following experiment data was generated with current library implementation: Kme
 
 We fine-tuned the parameters for all methods to ensure 99% recall@10 on the SIFT1M dataset.
 
-| Dataset/Setting/Result       | Baseline (RNN-Descent)  | BRNG                         | GS+BRNG                      |
+| Dataset/Setting/Result       | Baseline (RNN-Descent)  | BRNG (Artea)                         | GS+BRNG (Artea)                      |
 | ---------------------------- | ----------------------- | ---------------------------- | ---------------------------- |
 | Parameter Setting            | S=20, R=96, T1=4, T2=15 | S=16, R=$\infty$, T=30, K=64 | S=16, R=$\infty$, T=30, K=64 |
 | Construction Performance (s) | 36.296                  | 30.131                       | 16.382                       |

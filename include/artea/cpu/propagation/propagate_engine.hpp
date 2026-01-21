@@ -41,45 +41,43 @@
 namespace artea {
 namespace cpu {
 
-template <
-    typename vertex_num_t,
-    typename vec_ele_t,
-    typename log_buffer_t
->
+template <typename BufferTraitsT>
 class PropagateEngine {
 
-    using vertex_id_t = vertex_num_t;
-    using distance_t = vec_ele_t;
-    using nbr_t = Neighbor<vertex_num_t, vec_ele_t>;
-    using nbr_arr_t = std::vector<nbr_t>;
-    using log_container_t = typename log_buffer_t::container_t;
+    using vertex_num_t = typename BufferTraitsT::vertex_num_t;
+    using vec_ele_t = typename BufferTraitsT::vec_ele_t;
+    using vertex_id_t = typename BufferTraitsT::vertex_num_t;
+    using distance_t = typename BufferTraitsT::vec_ele_t;
+    using nbr_t = typename BufferTraitsT::nbr_t;
+    using nbr_arr_t = typename BufferTraitsT::nbr_arr_t;
+    using log_buffer_t = typename BufferTraitsT::log_buffer_t;
+    using log_container_t = typename BufferTraitsT::log_container_t;
+    using log_table_t = typename BufferTraitsT::log_table_t;
+    using base_traits_t = typename BufferTraitsT::base_traits_t;
 
 public:
-    PropagateEngine(IndexGraph<vertex_num_t, vec_ele_t, graph_direction_t::HIBRID>& index_graph) :
+    PropagateEngine(IndexGraph<base_traits_t>& index_graph) :
         _log_table(index_graph.get_num_vertices()),
         _index_graph(index_graph),
-        _in_executor_bitmap(index_graph.get_num_vertices()),
-        _out_executor_bitmap(index_graph.get_num_vertices())
+        _executor_bitmap(index_graph.get_num_vertices())
     {}
 
-    template <typename udf_updater_t, bool selective_schedule, op_direction_t op_direction>
+    template <typename udf_updater_t, bool selective_schedule>
     auto propagate(
         const vertex_id_t pivot_vid,
         udf_updater_t& udf_updater
     ) -> void {
         if constexpr (selective_schedule) {
-            auto& executor_bitmap = (op_direction == op_direction_t::IN) ?
-                _in_executor_bitmap : _out_executor_bitmap;
-            if (!executor_bitmap.test(pivot_vid)) {
+            if (!_executor_bitmap.test(pivot_vid)) {
                 // No pending operations; skip propagation
                 return;
             }
         }
 
-        nbr_arr_t& origin_nbrs = _index_graph.template fetch_nbrs<op_direction>(pivot_vid);
+        nbr_arr_t& origin_nbrs = _index_graph.template fetch_nbrs(pivot_vid);
         nbr_arr_t retained_nbrs;
         retained_nbrs.reserve(origin_nbrs.size());
-        udf_updater(pivot_vid, op_direction, origin_nbrs, retained_nbrs);
+        udf_updater(pivot_vid, origin_nbrs, retained_nbrs);
         std::swap(origin_nbrs, retained_nbrs);
     }
 
@@ -90,10 +88,7 @@ public:
             tbb::blocked_range<vertex_id_t>(0, num_vertices),
             [&](const tbb::blocked_range<vertex_id_t>& r) {
                 for (vertex_id_t pivot_vid = r.begin(); pivot_vid != r.end(); ++pivot_vid) {
-                    propagate<udf_updater_t, selective_schedule, op_direction_t::OUT>(
-                        pivot_vid, udf_updater);
-                    propagate<udf_updater_t, selective_schedule, op_direction_t::IN>(
-                        pivot_vid, udf_updater);
+                    propagate<udf_updater_t, selective_schedule>(pivot_vid, udf_updater);
                 }
             }
         );
@@ -105,8 +100,7 @@ public:
     __attribute__((always_inline))
     auto merge_logs(const vertex_id_t executor_vid) -> void {
         // Logic decoupled to NbrLogTable
-        _log_table.apply_logs(executor_vid, _index_graph, op_direction_t::IN);
-        _log_table.apply_logs(executor_vid, _index_graph, op_direction_t::OUT);
+        _log_table.apply_logs(executor_vid, _index_graph);
     }
 
     /** @brief Merge the logged operations for all vertices back to the index graph. */
@@ -125,10 +119,10 @@ public:
         }
         // Selective Scheduling based on Bitmap
         else {
-            const size_t num_words = _in_executor_bitmap.get_num_words();
+            const size_t num_words = _executor_bitmap.get_num_words();
 
             #ifndef NDEBUG
-            if (num_words != _out_executor_bitmap.get_num_words()) {
+            if (num_words != _executor_bitmap.get_num_words()) {
                 logger.error("Inconsistent executor bitmap word counts between IN and OUT.");
                 throw std::runtime_error("Error: Inconsistent executor bitmap word counts between IN and OUT.");
             }
@@ -139,26 +133,18 @@ public:
                 tbb::blocked_range<size_t>(0, num_words),
                 [&](const tbb::blocked_range<size_t>& r) {
                     for (size_t word_idx = r.begin(); word_idx != r.end(); ++word_idx) {
-                        uint64_t current_in_mask = 0, current_out_mask = 0;
+                        uint64_t current_mask = 0;
                         size_t start_vid, end_vid;
-                        _in_executor_bitmap.get_range_from_word(word_idx, start_vid, end_vid);
+                        _executor_bitmap.get_range_from_word(word_idx, start_vid, end_vid);
                         for (vertex_id_t vid = start_vid; vid < end_vid; ++vid) {
-                            auto& log_in = _log_table.get_log_container(vid, op_direction_t::IN);
-                            if (!log_in.empty()) {
-                                _log_table.apply_logs(vid, _index_graph, op_direction_t::IN);
-                                current_in_mask |= (1ULL << (vid & WordAlignedBitmap::WORD_MASK));
-                            }
-                            auto& log_out = _log_table.get_log_container(vid, op_direction_t::OUT);
-                            if (!log_out.empty()) {
-                                _log_table.apply_logs(vid, _index_graph, op_direction_t::OUT);
-                                current_out_mask |= (1ULL << (vid & WordAlignedBitmap::WORD_MASK));
+                            auto& log_container = _log_table.get_log_container(vid);
+                            if (!log_container.empty()) {
+                                _log_table.apply_logs(vid, _index_graph);
+                                current_mask |= (1ULL << (vid & WordAlignedBitmap::WORD_MASK));
                             }
                         }
-                        if (current_in_mask != 0) {
-                            _in_executor_bitmap.set_word_mask(word_idx, current_in_mask);
-                        }
-                        if (current_out_mask != 0) {
-                            _out_executor_bitmap.set_word_mask(word_idx, current_out_mask);
+                        if (current_mask != 0) {
+                            _executor_bitmap.set_word_mask(word_idx, current_mask);
                         }
                     }
                 }
@@ -186,13 +172,8 @@ public:
     }
 
     __attribute__((always_inline))
-    auto get_in_executor_bitmap() -> WordAlignedBitmap& {
-        return _in_executor_bitmap;
-    }
-
-    __attribute__((always_inline))
-    auto get_out_executor_bitmap() -> WordAlignedBitmap& {
-        return _out_executor_bitmap;
+    auto get_executor_bitmap() -> WordAlignedBitmap& {
+        return _executor_bitmap;
     }
 
 private:
@@ -204,8 +185,7 @@ private:
     IndexGraph<vertex_num_t, vec_ele_t, graph_direction_t::HIBRID>& _index_graph;
 
     /** @brief Bitmap to track which vertices have pending operations. */
-    WordAlignedBitmap _in_executor_bitmap;
-    WordAlignedBitmap _out_executor_bitmap;
+    WordAlignedBitmap _executor_bitmap;
 
 };  // class PropagateEngine
 

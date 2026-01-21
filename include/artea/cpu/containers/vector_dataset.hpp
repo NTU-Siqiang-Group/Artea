@@ -28,8 +28,9 @@ class VectorDataset {
     using vec_id_t = typename BaseTraitsT::vec_id_t;
     using vec_num_t = typename BaseTraitsT::vec_num_t;
     using vec_ele_t = typename BaseTraitsT::vec_ele_t;
-    using base_queries_t = typename BaseTraitsT::base_queries_t;
-    using groud_truth_t = typename BaseTraitsT::groud_truth_t;
+    using base_vecs_t = typename BaseTraitsT::base_vecs_t;
+    using query_vecs_t = typename BaseTraitsT::query_vecs_t;
+    using ground_truth_t = typename BaseTraitsT::ground_truth_t;
 
 public:
 
@@ -56,32 +57,32 @@ public:
 
     // --- Accessors ---
     __attribute__((always_inline))
-    auto get_base_vecs() -> base_queries_t& {
+    auto get_base_vecs() -> base_vecs_t& {
         return _base_vecs;
     }
 
     __attribute__((always_inline))
-    auto get_base_vecs() const -> const base_queries_t& {
+    auto get_base_vecs() const -> const base_vecs_t& {
         return _base_vecs;
     }
 
     __attribute__((always_inline))
-    auto get_query_vecs() -> base_queries_t& {
+    auto get_query_vecs() -> query_vecs_t& {
         return _query_vecs;
     }
 
     __attribute__((always_inline))
-    auto get_query_vecs() const -> const base_queries_t& {
+    auto get_query_vecs() const -> const query_vecs_t& {
         return _query_vecs;
     }
 
     __attribute__((always_inline))
-    auto get_gt_vecs() -> groud_truth_t& {
+    auto get_gt_vecs() -> ground_truth_t& {
         return _gt_vecs;
     }
 
     __attribute__((always_inline))
-    auto get_gt_vecs() const -> const groud_truth_t& {
+    auto get_gt_vecs() const -> const ground_truth_t& {
         return _gt_vecs;
     }
 
@@ -108,9 +109,9 @@ public:
 private:
     nlohmann::json _config;
 
-    base_queries_t _base_vecs;
-    base_queries_t _query_vecs;
-    groud_truth_t _gt_vecs;
+    base_vecs_t _base_vecs;
+    query_vecs_t _query_vecs;
+    ground_truth_t _gt_vecs;
 
     auto _load_config(const std::string& config_path) -> void {
         std::ifstream config_file(config_path);
@@ -134,9 +135,9 @@ private:
 
         logger.info(fmt::format("Loading dataset {} from {} ...", dataset_name, dataset_dir.string()));
 
-        _base_vecs = base_queries_t(base_vecs_path.string());
-        _query_vecs = base_queries_t(query_vecs_path.string());
-        _gt_vecs = groud_truth_t(gt_vecs_path.string());
+        _base_vecs = base_vecs_t(base_vecs_path.string());
+        _query_vecs = query_vecs_t(query_vecs_path.string());
+        _gt_vecs = ground_truth_t(gt_vecs_path.string());
 
         logger.success(
             fmt::format(

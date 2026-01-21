@@ -25,29 +25,31 @@
 #include <vector>
 #include <functional>
 
+#include <artea/common/definitions.hpp>
+#include <artea/cpu/router/vector_router.hpp>
+
 namespace artea {
 namespace cpu {
 
-template <typename RouterTraitsT>
-class ProximityGraphRouter : public RouterTraitsT::cluster_router_t
+template <typename ComputerTraitsT, bool IntraQueryParallel = false>
+class ProximityGraphRouter : public VectorRouter<ComputerTraitsT, ProximityGraphRouter<ComputerTraitsT, IntraQueryParallel>>
 {
 
-    using vertex_num_t = typename RouterTraitsT::vertex_num_t;
-    using vertex_id_t = typename RouterTraitsT::vertex_id_t;
-    using vec_ele_t = typename RouterTraitsT::vec_ele_t;
-    using distance_t = typename RouterTraitsT::distance_t;
-    using dist_func_t = typename RouterTraitsT::dist_func_t;
-    using vector_array_t = typename RouterTraitsT::vector_array_t;
-    using cluster_id_t = typename RouterTraitsT::cluster_id_t;
-    static constexpr bool intra_query_parallel = RouterTraitsT::intra_query_parallel;
-    using base_class_t = typename RouterTraitsT::cluster_router_t;
+    using vec_num_t = typename ComputerTraitsT::vec_num_t;
+    using vec_id_t = typename ComputerTraitsT::vec_id_t;
+    using vec_ele_t = typename ComputerTraitsT::vec_ele_t;
+    using distance_t = typename ComputerTraitsT::distance_t;
+    using dist_func_t = typename ComputerTraitsT::dist_func_t;
+    using vector_array_t = typename ComputerTraitsT::vector_array_t;
+    using base_vecs_t = typename ComputerTraitsT::base_vecs_t;
+    using base_class_t = VectorRouter<ComputerTraitsT, ProximityGraphRouter<ComputerTraitsT, IntraQueryParallel>>;
 
 public:
 
     ProximityGraphRouter(
-        const vector_array_t& centroids,
+        const base_vecs_t& base_vecs,
         const dist_func_t& dist_func
-    ) : base_class_t(centroids, dist_func)
+    ) : base_class_t(base_vecs, dist_func)
     {}
 
     auto initialize_impl() -> void {
@@ -57,8 +59,7 @@ public:
     /**
      * @brief Query implementation for proximity graph router.
      */
-    auto query_impl(const vec_ele_t* query_vec) const -> cluster_id_t {
-
+    auto query_impl(const vec_ele_t* query_vec) const -> vec_id_t {
     }
 
 };  // class ProximityGraphRouter
