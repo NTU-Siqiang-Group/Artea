@@ -1,4 +1,4 @@
-// Copyright 2025 Weitang Ye
+// Copyright 2026 Weitang Ye
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -13,25 +13,31 @@
 // limitations under the License.
 
 /*
- * @FilePath: /Artea/include/artea/cpu/utils/parallel.hpp
+ * @FilePath: /Artea/include/artea/cpu/utils/bit_ops.hpp
  * @Author: Chandler (Weitang Ye) <weitang.ye@ntu.edu.sg>
  * @Description:
  */
 
-#pragma once
+#ifdef _MSC_VER
+#include <intrin.h>
+#endif
 
-#include <tbb/task_arena.h>
+#pragma once
 
 namespace artea {
 namespace cpu {
 
-/** @brief Get the maximum number of threads used by TBB.
-  * @return The number of threads used by TBB.
-  */
+// Helper function for bit scanning (Platform independent)
 __attribute__((always_inline))
-auto tbb_max_num_threads() -> int {
-    return tbb::this_task_arena::max_concurrency();
+inline int count_trailing_zeros(uint64_t val) {
+    #if defined(_MSC_VER)
+        unsigned long index;
+        _BitScanForward64(&index, val);
+        return static_cast<int>(index);
+    #else
+        return __builtin_ctzll(val);
+    #endif
 }
 
-}   // namespace cpu
+}   //  namespace cpu
 }   // namespace artea

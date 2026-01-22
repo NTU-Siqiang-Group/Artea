@@ -23,8 +23,6 @@
 #pragma once
 
 #include <cstddef>
-
-#include <artea/common/definitions.hpp>
 #include <artea/cpu/containers/allocator.hpp>
 
 namespace artea {

@@ -25,10 +25,7 @@
 #include <algorithm>
 #include <utility>
 #include <cstddef>
-
 #include <tbb/spin_mutex.h>
-
-#include <artea/common/definitions.hpp>
 #include <artea/cpu/containers/allocator.hpp>
 
 namespace artea {

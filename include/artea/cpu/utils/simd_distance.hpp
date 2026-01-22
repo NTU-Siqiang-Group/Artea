@@ -1,7 +1,7 @@
 /*
  * @FilePath: /Artea/include/artea/cpu/utils/simd_distance.hpp
  * @Author: Chandler (Weitang Ye) <weitang.ye@ntu.edu.sg>
- * @LastEditTime: 2025-12-14 11:10:22
+ * @LastEditTime: 2026-01-22 18:42:26
  * @Date: 2025-10-18 19:10:57
  * @Description: SIMD-accelerated distance computation utilities.
  */
@@ -12,21 +12,20 @@
 #include <cstdint>
 #include <immintrin.h>
 #include <cassert>
-
-#include <artea/definitions.hpp>
 #include <artea/common/logger.hpp>
 
 namespace artea {
 namespace cpu {
 
-template <typename ComputerTraitsT>
+template <typename ComputerTraitsT, std::size_t UnrollSize = 1>
 class SIMDDistance {
 
-    using distance_t = typename ComputerTraitsT::vec_ele_t;
     using vec_ele_t = typename ComputerTraitsT::vec_ele_t;
+    using distance_t = typename ComputerTraitsT::distance_t;
     using vec_dim_t = typename ComputerTraitsT::vec_dim_t;
-    static constexpr DistanceMetrics dist_metrics = ComputerTraitsT::dist_metrics;
-    static constexpr std::size_t unroll_size = ComputerTraitsT::unroll_size;
+    using distance_metrics_t = typename ComputerTraitsT::distance_metrics_t;
+    static constexpr distance_metrics_t distance_metrics = ComputerTraitsT::distance_metrics;
+    static constexpr std::size_t unroll_size = UnrollSize;
 
     static constexpr std::size_t SIMD_REGISTER_BITS = 512;
     static constexpr std::size_t SIMD_REGISTER_BYTES = SIMD_REGISTER_BITS / 8;  // 64
@@ -43,7 +42,7 @@ class SIMDDistance {
 public:
 
     SIMDDistance(const vec_dim_t vec_dim) : _vec_dim(vec_dim), NUM_SIMD_CHUNKS(_vec_dim / SIMD_CHUNK_SIZE), NUM_REMAINING_ELES(_vec_dim % SIMD_CHUNK_SIZE) {
-        ArteaLogger logger("SIMDDistance", LogLevel::INFO);
+        ArteaLogger logger("SIMDDistance", LogLevelT::INFO);
         if (vec_dim % SIMD_CHUNK_SIZE != 0) {
             logger.error(
                 "Vector dimension must be a multiple of SIMD chunk size (e.g. 16 for float type and 8 for double type)"
@@ -53,11 +52,11 @@ public:
 
     __attribute__((always_inline))
     auto operator()(const vec_ele_t* vec1, const vec_ele_t* vec2) const -> distance_t {
-        if constexpr (dist_metrics == DistanceMetrics::EUCLIDEAN) {
+        if constexpr (distance_metrics == distance_metrics_t::EUCLIDEAN) {
             return _impl_euclidean(vec1, vec2);
-        } else if constexpr (dist_metrics == DistanceMetrics::DOT) {
+        } else if constexpr (distance_metrics == distance_metrics_t::DOT) {
             return _impl_dot(vec1, vec2);
-        } else if constexpr (dist_metrics == DistanceMetrics::COSINE) {
+        } else if constexpr (distance_metrics == distance_metrics_t::COSINE) {
             return _impl_cosine(vec1, vec2);
         } else {
             throw std::runtime_error("Invalid DistanceMetrics");

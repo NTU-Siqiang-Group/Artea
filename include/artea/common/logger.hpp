@@ -1,7 +1,7 @@
 /*
  * @FilePath: /Artea/include/artea/common/logger.hpp
  * @Author: Chandler (Weitang Ye) <weitang.ye@ntu.edu.sg>
- * @LastEditTime: 2025-11-27 11:39:56
+ * @LastEditTime: 2026-01-22 15:01:47
  * @Date: 2025-10-23 13:26:15
  * @Description: A logger that supports colorful printing via termcolor.
  */
@@ -11,16 +11,13 @@
 #include <iostream>
 #include <string>
 #include <stdexcept>
-
 #include <fmt/format.h>
-
-#include <artea/definitions.hpp>
 // Reference: https://github.com/ikaln/termcolor/blob/master/include/termcolor/termcolor.hpp
 #include <termcolor/termcolor.hpp>
 
 namespace artea {
 
-enum class LogLevel {
+enum class LogLevelT {
     DEBUG,
     INFO,
     WARN,
@@ -29,43 +26,43 @@ enum class LogLevel {
 
 class ArteaLogger {
 public:
-    static auto to_string(const LogLevel level) -> std::string {
+    static auto to_string(const LogLevelT level) -> std::string {
         switch (level) {
-            case LogLevel::DEBUG: return "DEBUG";
-            case LogLevel::INFO:  return "INFO";
-            case LogLevel::WARN:  return "WARN";
-            case LogLevel::ERROR: return "ERROR";
+            case LogLevelT::DEBUG: return "DEBUG";
+            case LogLevelT::INFO:  return "INFO";
+            case LogLevelT::WARN:  return "WARN";
+            case LogLevelT::ERROR: return "ERROR";
         }
         return "UNKNOWN";
     }
 
-    ArteaLogger(const std::string& logger_name, const LogLevel system_level = LogLevel::DEBUG) :
+    ArteaLogger(const std::string& logger_name, const LogLevelT system_level = LogLevelT::DEBUG) :
         _logger_name(logger_name), _system_level(system_level) {}
 
     ~ArteaLogger() = default;
 
     template<bool success_flag = false>
-    auto log(const std::string& message, const LogLevel msg_level) -> void {
+    auto log(const std::string& message, const LogLevelT msg_level) -> void {
         if (static_cast<int>(msg_level) < static_cast<int>(_system_level)) {
             return; // Skip logging if message level is lower than current level
         }
         auto level_str = to_string(msg_level);
 
         switch (msg_level) {
-            case LogLevel::DEBUG:
+            case LogLevelT::DEBUG:
                 std::cout << termcolor::grey;
                 break;
-            case LogLevel::INFO:
+            case LogLevelT::INFO:
                 if constexpr (success_flag) {
                     std::cout << termcolor::bold << termcolor::green;
                 } else {
                     std::cout << termcolor::white;
                 }
                 break;
-            case LogLevel::WARN:
+            case LogLevelT::WARN:
                 std::cout << termcolor::yellow;
                 break;
-            case LogLevel::ERROR:
+            case LogLevelT::ERROR:
                 std::cout << termcolor::bold << termcolor::red;
                 break;
         }
@@ -76,36 +73,36 @@ public:
 
     __attribute__((always_inline))
     auto debug(const std::string& message) -> void {
-        log(message, LogLevel::DEBUG);
+        log(message, LogLevelT::DEBUG);
     }
 
     __attribute__((always_inline))
     auto success(const std::string& message) -> void {
-        log<true>(message, LogLevel::INFO);
+        log<true>(message, LogLevelT::INFO);
     }
 
     __attribute__((always_inline))
     auto info(const std::string& message)  -> void {
-        log(message, LogLevel::INFO);
+        log(message, LogLevelT::INFO);
     }
 
     __attribute__((always_inline))
     auto warn(const std::string& message)  -> void {
-        log(message, LogLevel::WARN);
+        log(message, LogLevelT::WARN);
     }
 
     __attribute__((always_inline))
     auto error(const std::string& message) -> void {
-        log(message, LogLevel::ERROR);
+        log(message, LogLevelT::ERROR);
         // throw std::runtime_error(message);
     }
 
 private:
     std::string _logger_name;
-    LogLevel _system_level;
+    LogLevelT _system_level;
 
 };  // class ArteaLogger
 
-inline ArteaLogger logger("Artea", LogLevel::INFO);
+inline ArteaLogger logger("Artea", LogLevelT::INFO);
 
 }   // namespace artea

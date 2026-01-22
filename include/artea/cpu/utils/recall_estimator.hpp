@@ -1,5 +1,5 @@
 /*
- * @FilePath: /Artea/include/artea/common/recall_estimator.hpp
+ * @FilePath: /Artea/include/artea/cpu/utils/recall_estimator.hpp
  * @Author: Chandler (Weitang Ye) <weitang.ye@ntu.edu.sg>
  * @Description: TBB-accelerated Recall Estimator with soft validation.
  */
@@ -10,14 +10,9 @@
 #include <cstdint>
 #include <vector>
 #include <cmath>
-
 #include <tbb/parallel_reduce.h>
 #include <tbb/blocked_range.h>
-
 #include <fmt/format.h>
-
-#include <artea/definitions.hpp>
-#include <artea/cpu/containers/vector_array.hpp>
 #include <artea/common/logger.hpp>
 
 /**
@@ -29,17 +24,21 @@ struct RecallMetrics {
 };
 
 namespace artea {
+namespace cpu {
 
-template <
-    typename vertex_num_t,
-    typename vec_ele_t,
-    typename dist_func_t,
-    std::size_t inversed_epsilon = 1000000 // Default epsilon = 1e-6
->
+template <typename ComputerTraitsT>
 class RecallEstimator final {
 
-    using vertex_id_t = vertex_num_t;
-    using distance_t = vec_ele_t;
+    using vertex_id_t = typename ComputerTraitsT::vertex_id_t;
+    using vertex_num_t = typename ComputerTraitsT::vertex_num_t;
+    using vec_ele_t = typename ComputerTraitsT::vec_ele_t;
+    using distance_t = typename ComputerTraitsT::distance_t;
+    using dist_func_t = typename ComputerTraitsT::dist_func_t;
+    using vector_array_t = typename ComputerTraitsT::vector_array_t;
+    using base_vecs_t = typename ComputerTraitsT::base_vecs_t;
+    using query_vecs_t = typename ComputerTraitsT::query_vecs_t;
+    using ground_truth_t = typename ComputerTraitsT::ground_truth_t;
+    static constexpr std::size_t inversed_epsilon = 1000000; // Default epsilon = 1e-6
     static constexpr distance_t epsilon = static_cast<distance_t>(1.0) / static_cast<distance_t>(inversed_epsilon);
 
 public:
@@ -63,9 +62,9 @@ public:
      */
     auto calculate_recall_at_1(
         const std::vector<vertex_id_t>& predictions,
-        const cpu::VectorArray<vertex_num_t, vertex_id_t>& gt_vecs,
-        const cpu::VectorArray<vertex_num_t, vec_ele_t>& query_vecs,
-        const cpu::VectorArray<vertex_num_t, vec_ele_t>& base_vecs
+        const ground_truth_t& gt_vecs,
+        const query_vecs_t& query_vecs,
+        const base_vecs_t& base_vecs
     ) const -> RecallMetrics {
 
         std::size_t num_queries = predictions.size();
@@ -93,7 +92,8 @@ public:
                     if (pred_id == gt_id) {
                         local_counts.strict++;
                         local_counts.soft++;
-                    } else {
+                    }
+                    else {
                         /* Distance-based tolerance check (Soft Match) */
                         const distance_t* q_vec = query_vecs.get(i);
                         const distance_t* gt_vec_data = base_vecs.get(gt_id);
@@ -104,7 +104,7 @@ public:
                         distance_t dist_pred = _dist_func(q_vec, pred_vec_data);
 
                         /* Check if prediction is within epsilon tolerance of GT */
-                        if (dist_pred <= dist_gt + epsilon) {
+                        if (dist_pred <= dist_gt * (static_cast<distance_t>(1.0) + epsilon)) {
                             local_counts.soft++;
                         }
                     }
@@ -141,9 +141,8 @@ public:
     auto calculate_recall_at_k(
         const std::vector<vertex_id_t>& predictions,
         std::size_t k,
-        const cpu::VectorArray<vertex_num_t, vertex_id_t>& gt_vecs
+        const ground_truth_t& gt_vecs
     ) const -> double {
-
         std::size_t num_queries = predictions.size() / k;
 
         // Parallel Reduction for strict match count
@@ -181,4 +180,5 @@ private:
 
 };  // class RecallEstimator
 
+}   // namespace cpu
 }   // namespace artea

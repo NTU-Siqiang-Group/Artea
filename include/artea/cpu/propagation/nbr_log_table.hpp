@@ -11,13 +11,6 @@
 #include <algorithm>
 #include <stdexcept>
 
-#include <artea/cpu/containers/allocator.hpp>
-#include <artea/cpu/index/neighbor.hpp>
-#include <artea/cpu/utils/nbr_arr_checker.hpp>
-#include <artea/common/definitions.hpp>
-#include <artea/cpu/index/index_graph.hpp>
-#include <artea/cpu/propagation/graph_op_log.hpp>
-
 namespace artea {
 namespace cpu {
 
@@ -32,6 +25,11 @@ class NbrLogTable {
     using nbr_arr_t = typename BufferTraitsT::nbr_arr_t;
     using log_buffer_t = typename BufferTraitsT::log_buffer_t;
     using log_container_t = typename BufferTraitsT::log_container_t;
+    using nbr_arr_checker_t = typename BufferTraitsT::nbr_arr_checker_t;
+    using index_graph_t = typename BufferTraitsT::index_graph_t;
+    using strict_nbr_comp_t = typename BufferTraitsT::strict_nbr_comp_t;
+
+    constexpr static strict_nbr_comp_t strict_nbr_comp {};
 
 public:
 
@@ -47,7 +45,7 @@ public:
      * @param direction The direction of the operation (IN/OUT).
      */
     __attribute__((always_inline))
-    auto add_append_log(
+    auto write_log(
         const vertex_id_t executor_vid,
         const vertex_id_t nbr_id,
         const distance_t new_edge_dist
@@ -58,24 +56,7 @@ public:
             throw std::runtime_error("Error: Logging an operation with NaN distance is not allowed.");
         }
         #endif
-        // is_new = true, is_removed = false
-        _nbr_logs[executor_vid].append(nbr_id, new_edge_dist, true, false);
-    }
-
-    /**
-     * @brief Append a neighbor removal log.
-     * @param executor_vid The vertex executing the operation.
-     * @param nbr_id The neighbor vertex to be removed/sacrificed.
-     * @param removed_edge_dist The distance of the edge to be removed.
-     * @param direction The direction of the operation (IN/OUT).
-     */
-    __attribute__((always_inline))
-    auto add_remove_log(
-        const vertex_id_t executor_vid,
-        const vertex_id_t nbr_id,
-        const distance_t removed_edge_dist
-    ) -> void {
-        _nbr_logs[executor_vid].append(nbr_id, removed_edge_dist, false, true);
+        _nbr_logs[executor_vid].append(nbr_id, new_edge_dist, true); // is_new = true
     }
 
     __attribute__((always_inline))
@@ -90,56 +71,56 @@ public:
 
     /**
      * @brief Applies logs to the graph directly using Distance ordering.
-     *        Precondition: graph neighbors are sorted by StrictNeighborComparator (Dist, ID, removed).
+     *        Precondition: graph neighbors are sorted by StrictNeighborComparator (Dist, ID).
+     * @param executor_vid The vertex whose logs are to be applied.
+     * @param graph The index graph to which the logs will be applied.
+     * @note This function can be called thread-safely for different executor_vids in parallel.
      */
     template <typename GraphType>
     auto apply_logs(const vertex_id_t executor_vid, GraphType& graph) -> void {
         auto& log_container = _nbr_logs[executor_vid].get_container();
         if (log_container.empty()) return;
 
-        auto& cur_nbrs = fetch_nbrs(executor_vid);
+        auto& cur_nbrs = graph.fetch_nbrs(executor_vid);
 
         #ifndef NDEBUG
-        if (!NbrArrChecker<vertex_id_t, distance_t>::full_check(cur_nbrs)) {
-            logger.error("Current neighbor array failed integrity check before applying logs.");
-            throw std::runtime_error("Error: Current neighbor array failed integrity check before applying logs.");
+        if (!nbr_arr_checker_t::full_check(cur_nbrs)) {
+            throw std::runtime_error("Error: Integrity check failed before applying logs.");
         }
         #endif
 
-        // Sort logs by StrictNeighborComparator (Distance first, then ID, then removed tag).
-        std::sort(log_container.begin(), log_container.end(), StrictNeighborComparator<vertex_id_t, distance_t>);
+        // * Sort the logs (Update buffer)
+        // * Complexity: O(M log M), where M is number of logs (usually small).
+        std::sort(log_container.begin(), log_container.end(), strict_nbr_comp);
 
-        // Merge Logs (Sorted) into Graph (Sorted)
+        // * Insert and Merge
+
+        // * Expand vector to hold everything
+        auto old_size = cur_nbrs.size();
+        cur_nbrs.reserve(old_size + log_container.size());
+
+        // * Append logs to the end. O(1)
         auto middle_iter = cur_nbrs.insert(cur_nbrs.end(), log_container.begin(), log_container.end());
-        std::inplace_merge(cur_nbrs.begin(), middle_iter, cur_nbrs.end(), StrictNeighborComparator<vertex_id_t, distance_t>);
 
-        // Step 3: Duplicate (Linear Scanning)
-        std::size_t stack_top = 0;
-
-        for (std::size_t read_idx = 0; read_idx < cur_nbrs.size(); ++read_idx) {
-            const auto& item = cur_nbrs[read_idx];
-            bool match_prev = false;
-            if (stack_top > 0) {
-                const auto& prev = cur_nbrs[stack_top - 1];
-                if (prev.get_id() == item.get_id()) match_prev = true;
-            }
-            if (item.is_removed()) {
-                if (match_prev) stack_top--;    // pop stack
-            }
-            else {
-                if (match_prev) continue;       // skip duplicate
-                if (stack_top != read_idx) cur_nbrs[stack_top] = item;
-                stack_top++;
-            }
-        }
-
-        cur_nbrs.resize(stack_top);
+        // * Clear the log buffer early
         log_container.clear();
 
+        // * Merge the two sorted ranges: [begin, middle) and [middle, end). O(N + M)
+        std::inplace_merge(cur_nbrs.begin(), middle_iter, cur_nbrs.end(), strict_nbr_comp);
+
+        // * Deduplicate (std::unique)
+        // * Note that neighbors with same ID must have same distance (guaranteed by the nature of index graph)
+        auto last = std::unique(cur_nbrs.begin(), cur_nbrs.end(),
+            [](const auto& a, const auto& b) {
+                return a.get_id() == b.get_id();
+            });
+
+        // * Erase the undefined elements at the tail
+        cur_nbrs.erase(last, cur_nbrs.end());
+
         #ifndef NDEBUG
-        if (!NbrArrChecker<vertex_id_t, distance_t>::full_check(cur_nbrs)) {
-            logger.error("Current neighbor array failed integrity check after applying logs.");
-            throw std::runtime_error("Error: Current neighbor array failed integrity check after applying logs.");
+        if (!nbr_arr_checker_t::full_check(cur_nbrs)) {
+            throw std::runtime_error("Error: Integrity check failed after applying logs.");
         }
         #endif
     }

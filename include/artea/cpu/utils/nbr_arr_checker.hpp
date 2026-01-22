@@ -24,18 +24,25 @@
 #include <vector>
 #include <stdexcept>
 
-#include <artea/definitions.hpp>
+
 #include <artea/cpu/index/neighbor.hpp>
 #include <artea/cpu/containers/allocator.hpp>
 
 namespace artea {
 namespace cpu {
 
-template <typename vertex_num_t, typename vec_ele_t>
+template <typename BaseTraitsT>
 class NbrArrChecker {
 
-    using nbr_t = Neighbor<uint32_t, float>;
-    using nbr_arr_t = cache_aligned_container_t<Neighbor<vertex_num_t, vec_ele_t>>;
+    using vertex_num_t = typename BaseTraitsT::vertex_num_t;
+    using vertex_id_t = typename BaseTraitsT::vertex_id_t;
+    using vec_ele_t = typename BaseTraitsT::vec_ele_t;
+    using distance_t = typename BaseTraitsT::distance_t;
+    using nbr_t = typename BaseTraitsT::nbr_t;
+    using nbr_arr_t = typename BaseTraitsT::nbr_arr_t;
+    using nbr_dist_comp_t = typename BaseTraitsT::nbr_dist_comp_t;
+
+    constexpr static nbr_dist_comp_t nbr_dist_comp {};
 
 public:
 
@@ -44,17 +51,6 @@ public:
             if (is_nan_distance(nbrs[i].get_distance())) {
                 logger.error("Neighbor array contains NaN distances before applying logs.");
                 // throw std::runtime_error("Error: Neighbor array contains NaN distances before applying logs.");
-                return false;
-            }
-        }
-        return true;
-    }
-
-    static auto no_removed_check(const nbr_arr_t& nbrs) -> bool {
-        for (std::size_t i = 0; i < nbrs.size(); ++i) {
-            if (nbrs[i].is_removed()) {
-                logger.error("Neighbor array contains removed neighbors before applying logs.");
-                // throw std::runtime_error("Error: Neighbor array contains removed neighbors before applying logs.");
                 return false;
             }
         }
@@ -79,7 +75,7 @@ public:
 
     static auto distance_order_check(const nbr_arr_t& nbrs) -> bool {
         for (std::size_t i = 1; i < nbrs.size(); ++i) {
-            if (NeighborDistanceComparator<vertex_num_t, vec_ele_t>(nbrs[i], nbrs[i - 1])) {
+            if (nbr_dist_comp(nbrs[i], nbrs[i - 1])) {
                 logger.error("Neighbor array is not sorted by distance before applying logs.");
                 // throw std::runtime_error("Error: Neighbor array is not sorted by distance before applying logs.");
                 return false;
@@ -90,7 +86,6 @@ public:
 
     static auto full_check(const nbr_arr_t& nbrs) -> bool {
         return no_nan_check(nbrs) &&
-               no_removed_check(nbrs) &&
                no_duplicate_check(nbrs) &&
                distance_order_check(nbrs);
     }

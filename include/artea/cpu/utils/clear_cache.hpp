@@ -21,8 +21,6 @@
 #pragma once
 
 #include <cstddef>
-
-#include <artea/definitions.hpp>
 #include <artea/cpu/containers/allocator.hpp>
 #include <artea/common/logger.hpp>
 

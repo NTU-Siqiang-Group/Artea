@@ -23,8 +23,10 @@
 #include <cstddef>
 #include <vector>
 #include <utility>
-
+#include <limits>
+#include <cmath>
 #include <artea/cpu/containers/vector_array.hpp>
+#include <artea/cpu/containers/word_aligned_bitmap.hpp>
 
 namespace artea {
 namespace cpu {
@@ -33,76 +35,128 @@ namespace cpu {
 template <typename BaseTraitsT> struct Neighbor;
 template <typename BaseTraitsT> class NbrLogTable;
 template <typename BaseTraitsT> class VectorDataset;
-template <typename BaseTraitsT> class SIMDDistance;
-template <typename BaseTraitsT> class VectorDataset;
+template <typename BaseTraitsT> class VectorSampler;
+template <typename BaseTraitsT> class NbrArrChecker;
+template <typename BaseTraitsT> class RandomSeq;
+template <typename BaseTraitsT> struct NeighborComparator;
+template <typename BaseTraitsT> struct StrictNeighborComparator;
+template <typename BaseTraitsT> struct NeighborIdComparator;
+template <typename BaseTraitsT> struct NeighborDistanceComparator;
 
 /* ------ Base Traits Definition ------ */
-template <typename VertexNumT, typename VecEleT>
+template <typename VertexNumT, typename VecEleT, bool ProfilingMode = false>
 struct BaseTraits {
 
 private:
     /** ------ Basic Type ------ **/
-    using base_traits_t = BaseTraits<VertexNumT, VecEleT>;
+    using base_traits_t = BaseTraits<VertexNumT, VecEleT, ProfilingMode>;
 
 public:
-    /** @brief Type for vector dimensions. */
+    /** @brief vector dimensions. */
     using vec_dim_t = uint32_t;
 
-    /** @brief Type for vertex numbers. */
+    /** @brief vertex numbers. */
     using vertex_num_t = VertexNumT;
 
-    /** @brief Type for vertex identifiers. */
+    /** @brief vertex identifiers. */
     using vertex_id_t = VertexNumT;
 
-    /** @brief Type for number of vectors. */
+    /** @brief number of vectors. */
     using vec_num_t = VertexNumT;
 
-    /** @brief Type for vector identifiers. */
+    /** @brief vector identifiers. */
     using vec_id_t = VertexNumT;
 
-    /** @brief Type for vector elements. */
+    /** @brief vector elements. */
     using vec_ele_t = VecEleT;
 
-    /** @brief Type for distance values. */
+    /** @brief distance values. */
     using distance_t = VecEleT;
 
-    /** @brief Type for number of clusters. */
+    /** @brief number of clusters. */
     using cluster_num_t = VertexNumT;
 
-    /** @brief Type for cluster identifiers. */
+    /** @brief cluster identifiers. */
     using cluster_id_t = VertexNumT;
 
-    /** @brief Type for partition numbers. */
+    /** @brief partition numbers. */
     using part_num_t = VertexNumT;
 
-    /** @brief Type for partition identifiers. */
+    /** @brief partition identifiers. */
     using part_id_t = VertexNumT;
 
-    /** @brief Type for iteration counts. */
+    /** @brief iteration counts. */
     using iter_t = uint32_t;
 
-    /** ------  ------ **/
+    /** @brief word-aligned bitmap. */
+    using word_aligned_bitmap_t = WordAlignedBitmap;
 
-    /** @brief Type for neighbor entries. */
+    /** @brief neighbor entries. */
     using nbr_t = Neighbor<base_traits_t>;
 
-    /** @brief Type for neighbor arrays. */
+    /** @brief neighbor comparator. */
+    using nbr_comp_t = NeighborComparator<base_traits_t>;
+
+    /** @brief strict neighbor comparator. */
+    using strict_nbr_comp_t = StrictNeighborComparator<base_traits_t>;
+
+    /** @brief ID-only comparator. */
+    using nbr_id_comp_t = NeighborIdComparator<base_traits_t>;
+
+    /** @brief distance-only comparator. */
+    using nbr_dist_comp_t = NeighborDistanceComparator<base_traits_t>;
+
+    /** @brief neighbor arrays. */
     using nbr_arr_t = std::vector<nbr_t>;
 
-    /** @brief Type for vector arrays. */
+    /** @brief vector arrays. */
     using vector_array_t = VectorArray<vertex_num_t, vec_ele_t>;
 
-    /** @brief Type for vector datasets. */
+    /** @brief vector datasets. */
     using vector_dataset_t = VectorDataset<base_traits_t>;
 
-    /** @brief Type for base vector arrays. */
+    /** @brief base vector arrays. */
     using base_vecs_t = VectorArray<vertex_num_t, vec_ele_t>;
 
-    /** @brief Type for query vector arrays. */
+    /** @brief query vector arrays. */
     using query_vecs_t = VectorArray<vertex_num_t, vec_ele_t>;
 
-    /** @brief Type for ground truth vector arrays. */
+    /** @brief ground truth vector arrays. */
     using ground_truth_t = VectorArray<vertex_num_t, vec_id_t>;
+
+    /** @brief vector samplers. */
+    using vector_sampler_t = VectorSampler<base_traits_t>;
+
+    /** @brief neighbor array checkers. */
+    using nbr_arr_checker_t = NbrArrChecker<base_traits_t>;
+
+    /** @brief random sequences generator. */
+    using random_seq_t = RandomSeq<base_traits_t>;
+
+    /** @brief profiling mode flag. */
+    static constexpr bool profiling_mode = ProfilingMode;
+
+    __attribute__((always_inline))
+    static constexpr auto invalid_vertex_id_generator() -> vertex_id_t {
+        return std::numeric_limits<vertex_id_t>::max();
+    }
+    static constexpr vertex_id_t invalid_vertex_id = invalid_vertex_id_generator();
+
+    __attribute__((always_inline))
+    static constexpr auto nan_distance_generator() -> distance_t {
+        return std::numeric_limits<distance_t>::quiet_NaN();
+    }
+    static constexpr distance_t nan_distance = nan_distance_generator();
+
+    __attribute__((always_inline))
+    static constexpr auto is_nan_distance(const distance_t dist) -> bool {
+        return std::isnan(dist);
+    }
+
+    template <typename T>
+    static constexpr auto get_max_value() -> T {
+        return std::numeric_limits<T>::max();
+    }
 
 };  // struct BaseTraits
 

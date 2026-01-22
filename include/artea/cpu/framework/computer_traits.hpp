@@ -24,45 +24,47 @@
 #include <vector>
 #include <utility>
 
-#include <artea/cpu/framework/base_traits.hpp>
-
 namespace artea {
 namespace cpu {
 
 /** ------ Forward Declaration  ------ **/
-template <typename ComputerTraitsT> class SIMDDistance;
+template <typename ComputerTraitsT, std::size_t UnrollSize> class SIMDDistance;
+template <typename ComputerTraitsT> class RecallEstimator;
 
 /** @brief Distance metrics used for computing distances between vectors */
-enum class distance_metrics_t {
+enum class DistanceMetricsT : uint8_t {
     EUCLIDEAN,
     DOT,
     COSINE
-};  // enum class distance_metrics_t
+};  // enum class DistanceMetricsT
 
 /** @brief Traits for computing distances between vectors */
-template <
-    typename BaseTraitsT,
-    distance_metrics_t DistanceMetrics,
-    std::size_t UnrollSize = 1
->
+template <typename BaseTraitsT, DistanceMetricsT DistanceMetrics>
 struct ComputerTraits : virtual public BaseTraitsT {
 
 private:
 
     /** ------ Self Traits ------ **/
-    using computer_traits_t = ComputerTraits<BaseTraitsT, DistanceMetrics, UnrollSize>;
+    using computer_traits_t = ComputerTraits<BaseTraitsT, DistanceMetrics>;
 
 public:
 
     /** @brief Base traits type. */
     using base_traits_t = BaseTraitsT;
 
-    /** @brief Type for distance values. */
-    using dist_func_t = SIMDDistance<computer_traits_t>;
+    using distance_metrics_t = DistanceMetricsT;
+
+    using dist_func_t = SIMDDistance<computer_traits_t, 1>;
+
+    template <std::size_t UnrollSize = 1>
+    using simd_t = SIMDDistance<computer_traits_t, UnrollSize>;
+    using simdu1_t = SIMDDistance<computer_traits_t, 1>;
+    using simdu2_t = SIMDDistance<computer_traits_t, 2>;
+    using simdu4_t = SIMDDistance<computer_traits_t, 4>;
+
+    using recall_estimator_t = RecallEstimator<computer_traits_t>;
 
     static constexpr distance_metrics_t distance_metrics = DistanceMetrics;
-
-    static constexpr std::size_t unroll_size = UnrollSize;
 
 };  // struct ComputerTraits
 

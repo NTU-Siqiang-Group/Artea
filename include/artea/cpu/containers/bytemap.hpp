@@ -1,9 +1,7 @@
 #pragma once
 
 #include <cstdint>
-
 #include <artea/cpu/containers/array.hpp>
-#include <artea/definitions.hpp>
 
 namespace artea {
 namespace cpu {

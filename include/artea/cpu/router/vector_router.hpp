@@ -25,21 +25,20 @@
 #include <vector>
 #include <functional>
 
-#include <artea/definitions.hpp>
-
 namespace artea {
 namespace cpu {
 
-template <typename ComputerTraitsT, typename DerivedClassT>
+template <typename RouterTraitsT, typename DerivedClassT>
 class VectorRouter {
 
-    using vec_id_t = typename ComputerTraitsT::vec_id_t;
-    using vec_num_t = typename ComputerTraitsT::vec_num_t;
-    using vec_ele_t = typename ComputerTraitsT::vec_ele_t;
-    using distance_t = typename ComputerTraitsT::distance_t;
-    using dist_func_t = typename ComputerTraitsT::dist_func_t;
-    using vector_array_t = typename ComputerTraitsT::vector_array_t;
-    using base_vecs_t = typename ComputerTraitsT::base_vecs_t;
+    using vec_id_t = typename RouterTraitsT::vec_id_t;
+    using vec_num_t = typename RouterTraitsT::vec_num_t;
+    using vec_ele_t = typename RouterTraitsT::vec_ele_t;
+    using distance_t = typename RouterTraitsT::distance_t;
+    using dist_func_t = typename RouterTraitsT::dist_func_t;
+    using vector_array_t = typename RouterTraitsT::vector_array_t;
+    using base_vecs_t = typename RouterTraitsT::base_vecs_t;
+    using query_vecs_t = typename RouterTraitsT::query_vecs_t;
 
 public:
 
@@ -79,7 +78,7 @@ public:
      * @param query_vecs A VectorArray containing the query vectors.
      * @return std::vector<vec_id_t> A vector containing the ID of the nearest vertex for each query.
      */
-    auto batch_query(const VectorArray<vec_num_t, vec_ele_t>& query_vecs) const -> std::vector<vec_id_t> {
+    auto batch_query(const query_vecs_t& query_vecs) const -> std::vector<vec_id_t> {
         const vec_num_t num_queries = query_vecs.get_num_vecs();
         std::vector<vec_id_t> results(num_queries);
         tbb::parallel_for(

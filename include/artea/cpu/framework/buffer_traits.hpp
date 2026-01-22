@@ -26,10 +26,6 @@
 #include <mutex>
 #include <tbb/spin_mutex.h>
 
-#include <artea/cpu/containers/locked_buffer.hpp>
-#include <artea/cpu/containers/tbb_buffer.hpp>
-// #include <artea/cpu/framework/base_traits.hpp>
-
 namespace artea {
 namespace cpu {
 
@@ -41,37 +37,37 @@ template <typename BufferTraitsT> class NbrLogTable;
 
 /* ------ Buffer Definition ------ */
 
-enum class buffer_policy_t : uint8_t {
+enum class BufferPolicyT : uint8_t {
     LOCKED_BUFFER_WITH_MUTEX = 0,
     LOCKED_BUFFER_WITH_SPINLOCK = 1,
     TBB_CONCURRENT_BUFFER = 2
-};  // enum class buffer_policy_t
+};  // enum class BufferPolicyT
 
 template <
-    buffer_policy_t BufferPolicy,
+    BufferPolicyT BufferPolicy,
     typename T,
     std::size_t BufCapacity
 >
 struct BufferSelector;
 
 template <typename T, std::size_t BufCapacity>
-struct BufferSelector<buffer_policy_t::LOCKED_BUFFER_WITH_MUTEX, T, BufCapacity> {
+struct BufferSelector<BufferPolicyT::LOCKED_BUFFER_WITH_MUTEX, T, BufCapacity> {
     using type = LockedBuffer<T, BufCapacity, std::mutex>;
 };
 
 template <typename T, std::size_t BufCapacity>
-struct BufferSelector<buffer_policy_t::LOCKED_BUFFER_WITH_SPINLOCK, T, BufCapacity> {
+struct BufferSelector<BufferPolicyT::LOCKED_BUFFER_WITH_SPINLOCK, T, BufCapacity> {
     using type = LockedBuffer<T, BufCapacity, tbb::spin_mutex>;
 };
 
 template <typename T, std::size_t BufCapacity>
-struct BufferSelector<buffer_policy_t::TBB_CONCURRENT_BUFFER, T, BufCapacity> {
+struct BufferSelector<BufferPolicyT::TBB_CONCURRENT_BUFFER, T, BufCapacity> {
     using type = TbbBuffer<T, BufCapacity>;
 };
 
 template <
     typename BaseTraitsT,
-    buffer_policy_t BufferPolicy,
+    BufferPolicyT BufferPolicy,
     std::size_t BufCapacity
 >
 struct BufferTraits : virtual public BaseTraitsT {
@@ -88,6 +84,8 @@ public:
     /** @brief Type for buffer elements. */
     using nbr_t = typename BaseTraitsT::nbr_t;
 
+    using buffer_policy_t = BufferPolicyT;
+
     /** ------ Selected Buffer Type ------ **/
 
     /** @brief Type for neighbor log buffers. */
@@ -100,7 +98,7 @@ public:
     using log_table_t = NbrLogTable<buffer_traits_t>;
 
     /** @brief Buffer policy used for the buffers. */
-    static constexpr buffer_policy_t buffer_policy = BufferPolicy;
+    static constexpr BufferPolicyT buffer_policy = BufferPolicy;
 
     /** @brief Capacity of each buffer. */
     static constexpr std::size_t buf_capacity = BufCapacity;

@@ -25,24 +25,28 @@
 #include <vector>
 #include <functional>
 
-#include <artea/common/definitions.hpp>
+
 #include <artea/cpu/router/vector_router.hpp>
 
 namespace artea {
 namespace cpu {
 
-template <typename ComputerTraitsT, bool IntraQueryParallel = false>
-class ProximityGraphRouter : public VectorRouter<ComputerTraitsT, ProximityGraphRouter<ComputerTraitsT, IntraQueryParallel>>
+template <typename RouterTraitsT>
+class ProximityGraphRouter :
+    public RouterTraitsT::template vector_router_t<RouterTraitsT, ProximityGraphRouter<RouterTraitsT>>
 {
 
-    using vec_num_t = typename ComputerTraitsT::vec_num_t;
-    using vec_id_t = typename ComputerTraitsT::vec_id_t;
-    using vec_ele_t = typename ComputerTraitsT::vec_ele_t;
-    using distance_t = typename ComputerTraitsT::distance_t;
-    using dist_func_t = typename ComputerTraitsT::dist_func_t;
-    using vector_array_t = typename ComputerTraitsT::vector_array_t;
-    using base_vecs_t = typename ComputerTraitsT::base_vecs_t;
-    using base_class_t = VectorRouter<ComputerTraitsT, ProximityGraphRouter<ComputerTraitsT, IntraQueryParallel>>;
+    using vec_num_t = typename RouterTraitsT::vec_num_t;
+    using vec_id_t = typename RouterTraitsT::vec_id_t;
+    using vec_ele_t = typename RouterTraitsT::vec_ele_t;
+    using distance_t = typename RouterTraitsT::distance_t;
+    using dist_func_t = typename RouterTraitsT::dist_func_t;
+    using vector_array_t = typename RouterTraitsT::vector_array_t;
+    using base_vecs_t = typename RouterTraitsT::base_vecs_t;
+    using base_class_t = typename RouterTraitsT::template vector_router_t<
+        RouterTraitsT, ProximityGraphRouter<RouterTraitsT>>;
+
+    static constexpr bool intra_query_parallel = RouterTraitsT::intra_query_parallel;
 
 public:
 

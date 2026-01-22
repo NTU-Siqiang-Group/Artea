@@ -68,17 +68,24 @@ FetchContent_Declare(
     GIT_TAG "v0.8.0"
 )
 
-# This command downloads and configures all declared content
-FetchContent_MakeAvailable(
-	nlohmann_json
-	argparse
-	termcolor
-	fmt
-	range-v3
-	hnswlib
+FetchContent_Declare(
+    googletest
+    GIT_REPOSITORY https://github.com/google/googletest.git
+    GIT_TAG v1.17.0
 )
 
-# --- 3. Faiss Submodule Configuration ---
+FetchContent_Declare(
+    benchmark
+    GIT_REPOSITORY https://github.com/google/benchmark.git
+    GIT_TAG v1.9.5
+)
+
+# --- Google Benchmark Configuration ---
+# Disable building tests and examples for Google Benchmark to speed up the process
+set(BENCHMARK_ENABLE_TESTING OFF CACHE BOOL "Disable benchmark testing" FORCE)
+set(BENCHMARK_INSTALL_DOCS OFF CACHE BOOL "Disable benchmark docs" FORCE)
+
+# --- Faiss Submodule Configuration ---
 # Set options to build a minimal CPU version of Faiss
 set(FAISS_ENABLE_GPU OFF CACHE BOOL "Disable Faiss GPU support")
 set(FAISS_ENABLE_PYTHON OFF CACHE BOOL "Disable Faiss Python wrappers")
@@ -86,7 +93,19 @@ set(BUILD_TESTING OFF CACHE BOOL "Disable building Faiss's own tests")
 set(FAISS_OPT_LEVEL "native" CACHE STRING "Optimize Faiss for the host CPU")
 add_subdirectory(third_party/faiss)
 
-# --- 4. Define core "artea" library ---
+# --- Downloads and configures all declared content ---
+FetchContent_MakeAvailable(
+	nlohmann_json
+	argparse
+	termcolor
+	fmt
+	range-v3
+	hnswlib
+	googletest
+	benchmark
+)
+
+# --- Define core "artea" library ---
 add_library(artea INTERFACE)
 target_include_directories(artea INTERFACE
   	"${CMAKE_CURRENT_SOURCE_DIR}/include"
@@ -113,6 +132,8 @@ target_link_libraries(artea INTERFACE
 	hnswlib
 	faiss
 )
+
+include(CTest)
 
 # --- 5. Include subdirectories ---
 add_subdirectory(tests)

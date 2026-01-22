@@ -23,7 +23,6 @@
 #include <vector>
 #include <algorithm>
 #include <tbb/concurrent_vector.h>
-
 #include <artea/common/logger.hpp>
 
 namespace artea {

@@ -1,267 +1,346 @@
+// Copyright 2026 Weitang Ye
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     https://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 /*
  * @FilePath: /Artea/tests/test_simd_distance.cpp
  * @Author: Chandler (Weitang Ye) <weitang.ye@ntu.edu.sg>
- * @LastEditTime: 2025-11-22 16:30:00
- * @Date: 2025-10-23 19:14:32
- * @Description: Comprehensive benchmark comparing Artea SIMD distance with different
- *               unroll factors, Faiss direct functions, Faiss DistanceComputer,
- *               and HNSWLib AVX512 implementation.
+ * @Description: Comprehensive benchmark suite for SIMD distance calculations
+ *               using Google Test for correctness and Google Benchmark for performance.
+ *               (Dataset Only Version)
  */
 
 #include <iostream>
 #include <vector>
-#include <random>
-#include <chrono>
-#include <cassert>
-#include <cmath>
 #include <memory>
-#include <array>
-
+#include <cmath>
+#include <algorithm>
+#include <cstring>
+#include <filesystem>
+// External Libraries
 #include <fmt/format.h>
-
-// Artea headers
-#include <artea/cpu/utils/simd_distance.hpp>
-#include <artea/cpu/containers/vector_array.hpp>
-#include <artea/definitions.hpp>
-#include <artea/common/logger.hpp>
-
-// Faiss headers
+#include <argparse/argparse.hpp>
+#include <gtest/gtest.h>
+#include <benchmark/benchmark.h>
+// Artea Headers
+#include <artea/cpu/framework/artea.hpp>
+// Faiss Headers
 #include <faiss/IndexFlat.h>
-#include <faiss/impl/AuxIndexStructures.h>
 #include <faiss/utils/distances.h>
-
-// HNSWLib headers
+#include <faiss/impl/AuxIndexStructures.h>
+// HNSWLib Headers
 #include <hnswlib/hnswlib.h>
 
-// Helper function to generate a vector with random data
-void generate_random_vector(float* vec, const std::size_t dim) {
-    static std::mt19937 rng(std::random_device{}());
-    std::uniform_real_distribution<float> dist(-1.0f, 1.0f);
-    for (std::size_t i = 0; i < dim; ++i) {
-        vec[i] = dist(rng);
-    }
-}
+using namespace artea;
+using namespace artea::cpu;
 
-// Helper function for direct C++ L2 square distance calculation
-float cpp_L2sqr(const float* x, const float* y, const std::size_t d) {
+// Typename Definitions
+using base_traits_t = BaseTraits<uint32_t, float, false>;
+using computer_traits_t = ComputerTraits<base_traits_t, DistanceMetricsT::EUCLIDEAN>;
+using vector_dataset_t = typename base_traits_t::vector_dataset_t;
+using artea_simdu1_t = typename computer_traits_t::simdu1_t;
+using artea_simdu2_t = typename computer_traits_t::simdu2_t;
+using artea_simdu4_t = typename computer_traits_t::simdu4_t;
+template <std::size_t UnrollSize>
+using artea_simd_t = computer_traits_t::template simd_t<UnrollSize>;
+
+// --- Configuration & Data Provider ---
+
+struct TestConfig {
+    std::string config_path;
+    std::string dataset_name;
+} g_config;
+
+/**
+ * @brief Singleton class to manage Dataset loading.
+ *        Ensures data is loaded once and shared between GTest and Benchmark.
+ */
+class DataProvider {
+public:
+    static DataProvider& instance() {
+        static DataProvider instance;
+        return instance;
+    }
+
+    void init() {
+        if (g_config.dataset_name.empty() || g_config.config_path.empty()) {
+            throw std::runtime_error("Dataset name and config path must be provided.");
+        }
+
+        if (!std::filesystem::exists(g_config.config_path)) {
+            throw std::runtime_error("Config file not found: " + g_config.config_path);
+        }
+
+        logger.info(fmt::format("Loading Dataset: {} from {}", g_config.dataset_name, g_config.config_path));
+
+        auto dataset = std::make_unique<vector_dataset_t>(g_config.config_path, g_config.dataset_name);
+        const auto& base_vecs = dataset->get_base_vecs();
+        const auto& query_vecs = dataset->get_query_vecs();
+
+        dim_ = base_vecs.get_vec_dim();
+
+        if (base_vecs.get_num_vecs() < 4 || query_vecs.get_num_vecs() < 1) {
+             throw std::runtime_error("Dataset too small (need at least 1 query and 4 base vectors).");
+        }
+
+        // Allocate memory for cached test vectors
+        query_vec_.resize(dim_);
+        targets_.resize(4 * dim_);
+
+        // cache: Use the first query vector
+        std::memcpy(query_vec_.data(), query_vecs.get(0), dim_ * sizeof(float));
+
+        // cache: Use the first 4 base vectors as targets
+        for(int i = 0; i < 4; ++i) {
+            const float* src = base_vecs.get(i);
+            std::memcpy(targets_.data() + i * dim_, src, dim_ * sizeof(float));
+        }
+
+        logger.info(fmt::format("Dataset loaded successfully. Dimension: {}", dim_));
+
+        // Initialize Faiss Index for DistanceComputer (using the 4 cached targets)
+        faiss_index_ = std::make_unique<faiss::IndexFlatL2>(dim_);
+        faiss_index_->add(4, targets_.data());
+    }
+
+    uint32_t get_dim() const { return dim_; }
+    float* get_query() { return query_vec_.data(); }
+    float* get_target(int idx) { return targets_.data() + idx * dim_; }
+
+    // Returns pointer to raw array of 4 vectors
+    float* get_targets_raw() { return targets_.data(); }
+
+    faiss::IndexFlatL2* get_faiss_index() { return faiss_index_.get(); }
+
+private:
+    DataProvider() = default;
+
+    uint32_t dim_ = 0;
+    std::vector<float> query_vec_;
+    std::vector<float> targets_; // Stores 4 concatenated vectors
+    std::unique_ptr<faiss::IndexFlatL2> faiss_index_;
+};
+
+// Helper: Naive C++ Implementation (Ground Truth)
+float cpp_L2sqr(const float* x, const float* y, const size_t d) {
     float res = 0.0f;
-    for (std::size_t i = 0; i < d; ++i) {
-        const float diff = x[i] - y[i];
+    for (size_t i = 0; i < d; ++i) {
+        float diff = x[i] - y[i];
         res += diff * diff;
     }
     return res;
 }
 
-int main() {
+// --- PART 1: Google Test (Correctness) ---
 
-    // --- 1. Test Parameters ---
-    constexpr artea::vec_dim_t DIM = 128; // Standard dimension
-    constexpr int NUM_CORRECTNESS_TESTS = 100;
-    constexpr int NUM_VECTORS_FOR_BENCHMARK = 10000000; // Total distance calculations
+class SIMDCorrectnessTest : public ::testing::Test {
+protected:
+    void SetUp() override {
+        // DataProvider is initialized in main
+    }
+};
 
-    // Ensure benchmark count is divisible by 4 for batch testing
-    static_assert(NUM_VECTORS_FOR_BENCHMARK % 4 == 0, "Benchmark count must be divisible by 4");
+TEST_F(SIMDCorrectnessTest, VerifyAgainstGroundTruth) {
+    auto& provider = DataProvider::instance();
+    uint32_t dim = provider.get_dim();
+    float* q = provider.get_query();
 
-    artea::logger.info("Starting SIMD Distance Test Suite");
-    artea::logger.info(fmt::format("Vector Dimension: {}, Total Ops: {}", DIM, NUM_VECTORS_FOR_BENCHMARK));
-    artea::logger.info("-------------------------------------");
+    // Check all 4 targets
+    for (int i = 0; i < 4; ++i) {
+        float* t = provider.get_target(i);
+        float gt = cpp_L2sqr(q, t, dim);
 
-    // --- 2. Data Preparation ---
-    // Query vector (1 vector)
-    artea::cpu::VectorArray<int, float> query_arr(1, DIM);
-    float* query_vec = query_arr.get(0);
+        // 1. Artea Variants
+        artea_simdu1_t artea_u1(dim);
+        artea_simdu2_t artea_u2(dim);
+        artea_simdu4_t artea_u4(dim);
 
-    // Database vectors (4 vectors for batch testing)
-    artea::cpu::VectorArray<int, float> db_arr(4, DIM);
+        EXPECT_NEAR(artea_u1(q, t), gt, 1e-5) << "Artea Unroll-1 failed at idx " << i;
+        EXPECT_NEAR(artea_u2(q, t), gt, 1e-5) << "Artea Unroll-2 failed at idx " << i;
+        EXPECT_NEAR(artea_u4(q, t), gt, 1e-5) << "Artea Unroll-4 failed at idx " << i;
 
-    // Initialize Faiss Flat Index (Acts as the data provider for DistanceComputer)
-    faiss::IndexFlatL2 faiss_index(DIM);
+        // 2. Faiss Fvec
+        EXPECT_NEAR(faiss::fvec_L2sqr(q, t, dim), gt, 1e-5) << "Faiss fvec failed at idx " << i;
 
-    // Instantiate Artea distance calculators
-    artea::cpu::SIMDDistance<float, artea::cpu::DistanceMetrics::EUCLIDEAN, 1> artea_dist_unroll_1(DIM);
-    artea::cpu::SIMDDistance<float, artea::cpu::DistanceMetrics::EUCLIDEAN, 2> artea_dist_unroll_2(DIM);
-    artea::cpu::SIMDDistance<float, artea::cpu::DistanceMetrics::EUCLIDEAN, 4> artea_dist_unroll_4(DIM);
-
-    // Instantiate HNSWLib Space and Function
-    // We create an L2Space. The constructor of L2Space automatically selects the best SIMD implementation
-    // (AVX512/AVX/SSE) based on compilation flags (USE_AVX512) and runtime capabilities.
-    hnswlib::L2Space hnsw_l2_space(DIM);
-    hnswlib::DISTFUNC<float> hnsw_dist_func = hnsw_l2_space.get_dist_func();
-    void* hnsw_dist_param = hnsw_l2_space.get_dist_func_param();
-
-    // --- 3. Correctness Test ---
-    artea::logger.info(fmt::format("Running {} correctness tests...", NUM_CORRECTNESS_TESTS));
-    const float tolerance = 1e-4f;
-
-    for (int k = 0; k < NUM_CORRECTNESS_TESTS; ++k) {
-        // Refresh data
-        generate_random_vector(query_vec, DIM);
-        for(int i=0; i<4; ++i) {
-            generate_random_vector(db_arr.get(i), DIM);
-        }
-
-        faiss_index.reset();
-        faiss_index.add(4, db_arr.get_all());
-
-        // Ground Truth
-        float d_cpp_0 = cpp_L2sqr(query_vec, db_arr.get(0), DIM);
-        float d_cpp_1 = cpp_L2sqr(query_vec, db_arr.get(1), DIM);
-        float d_cpp_2 = cpp_L2sqr(query_vec, db_arr.get(2), DIM);
-        float d_cpp_3 = cpp_L2sqr(query_vec, db_arr.get(3), DIM);
-
-        // A. Verify Artea & Faiss Direct
-        float d_artea_u1 = artea_dist_unroll_1(query_vec, db_arr.get(0));
-        float d_artea_u2 = artea_dist_unroll_2(query_vec, db_arr.get(0));
-        float d_artea_u4 = artea_dist_unroll_4(query_vec, db_arr.get(0));
-        float d_faiss_func = faiss::fvec_L2sqr(query_vec, db_arr.get(0), DIM);
-
-        // HNSWLib Calculation
-        float d_hnsw = hnsw_dist_func(query_vec, db_arr.get(0), hnsw_dist_param);
-
-        assert(std::abs(d_artea_u1 - d_cpp_0) < tolerance);
-        assert(std::abs(d_artea_u2 - d_cpp_0) < tolerance);
-        assert(std::abs(d_artea_u4 - d_cpp_0) < tolerance);
-        assert(std::abs(d_faiss_func - d_cpp_0) < tolerance);
-
-        // Verify HNSWLib
-        assert(std::abs(d_hnsw - d_cpp_0) < tolerance);
-
-        // B. Verify Faiss DistanceComputer
-        std::unique_ptr<faiss::DistanceComputer> computer(faiss_index.get_distance_computer());
-        computer->set_query(query_vec);
-
-        float d0_single = (*computer)(0);
-        float d1_single = (*computer)(1);
-        float d2_single = (*computer)(2);
-        float d3_single = (*computer)(3);
-
-        assert(std::abs(d0_single - d_cpp_0) < tolerance);
-        assert(std::abs(d1_single - d_cpp_1) < tolerance);
-        assert(std::abs(d2_single - d_cpp_2) < tolerance);
-        assert(std::abs(d3_single - d_cpp_3) < tolerance);
-
-        float d0_batch, d1_batch, d2_batch, d3_batch;
-        computer->distances_batch_4(0, 1, 2, 3, d0_batch, d1_batch, d2_batch, d3_batch);
-
-        assert(std::abs(d0_single - d0_batch) < tolerance);
+        // 3. HNSWLib
+        hnswlib::L2Space l2space(dim);
+        float hnsw_res = l2space.get_dist_func()(q, t, l2space.get_dist_func_param());
+        EXPECT_NEAR(hnsw_res, gt, 1e-5) << "HNSWLib failed at idx " << i;
     }
 
-    artea::logger.success(fmt::format("Correctness test PASSED! (Artea, Faiss, HNSWLib verified)"));
-    artea::logger.info("-------------------------------------");
+    // 4. Faiss DistanceComputer (Batch & Single)
+    auto index = provider.get_faiss_index();
+    auto computer = std::unique_ptr<faiss::DistanceComputer>(index->get_distance_computer());
+    computer->set_query(q);
 
-    // --- 4. Performance Benchmark ---
-    artea::logger.info("Running performance benchmark...");
+    // Single
+    EXPECT_NEAR((*computer)(0), cpp_L2sqr(q, provider.get_target(0), dim), 1e-5);
 
-    volatile float dummy_accumulator = 0.0f;
+    // Batch
+    float d0, d1, d2, d3;
+    computer->distances_batch_4(0, 1, 2, 3, d0, d1, d2, d3);
+    EXPECT_NEAR(d0, cpp_L2sqr(q, provider.get_target(0), dim), 1e-5);
+    EXPECT_NEAR(d3, cpp_L2sqr(q, provider.get_target(3), dim), 1e-5);
+}
 
-    // Prepare fixed data for stable benchmarking
-    generate_random_vector(query_vec, DIM);
-    for(int i=0; i<4; ++i) generate_random_vector(db_arr.get(i), DIM);
+// --- PART 2: Google Benchmark (Performance) ---
 
-    faiss_index.reset();
-    faiss_index.add(4, db_arr.get_all());
+// 1. Artea Benchmarks
+template <std::size_t UnrollSize>
+static void BM_Artea(benchmark::State& state) {
+    auto& provider = DataProvider::instance();
+    artea_simd_t<UnrollSize> dist_func(provider.get_dim());
+    float* q = provider.get_query();
+    float* t = provider.get_target(0);
 
-    float* target_ptr = db_arr.get(0);
+    for (auto _ : state) {
+        benchmark::DoNotOptimize(dist_func(q, t));
+    }
+}
+BENCHMARK_TEMPLATE(BM_Artea, 1)->Name("Artea_Unroll_1");
+BENCHMARK_TEMPLATE(BM_Artea, 2)->Name("Artea_Unroll_2");
+BENCHMARK_TEMPLATE(BM_Artea, 4)->Name("Artea_Unroll_4");
 
-    // 4.1 Artea (Unroll=1)
-    {
-        auto start = std::chrono::high_resolution_clock::now();
-        for (int i = 0; i < NUM_VECTORS_FOR_BENCHMARK; ++i) {
-            dummy_accumulator += artea_dist_unroll_1(query_vec, target_ptr);
-        }
-        auto end = std::chrono::high_resolution_clock::now();
-        std::chrono::duration<double, std::micro> duration = end - start;
-        artea::logger.info(fmt::format("  Artea (Unroll=1):           {:.4f} us/op", duration.count() / NUM_VECTORS_FOR_BENCHMARK));
+// 2. HNSWLib Benchmark
+static void BM_HNSWLib(benchmark::State& state) {
+    auto& provider = DataProvider::instance();
+    hnswlib::L2Space l2space(provider.get_dim());
+    auto func = l2space.get_dist_func();
+    void* param = l2space.get_dist_func_param();
+
+    float* q = provider.get_query();
+    float* t = provider.get_target(0);
+
+    for (auto _ : state) {
+        benchmark::DoNotOptimize(func(q, t, param));
+    }
+}
+BENCHMARK(BM_HNSWLib)->Name("HNSWLib_AVX512_Auto");
+
+// 3. Faiss Direct Benchmark
+static void BM_Faiss_Fvec(benchmark::State& state) {
+    auto& provider = DataProvider::instance();
+    float* q = provider.get_query();
+    float* t = provider.get_target(0);
+    uint32_t dim = provider.get_dim();
+
+    for (auto _ : state) {
+        benchmark::DoNotOptimize(faiss::fvec_L2sqr(q, t, dim));
+    }
+}
+BENCHMARK(BM_Faiss_Fvec)->Name("Faiss_fvec_L2sqr");
+
+// 4. Faiss DistanceComputer (Single)
+static void BM_Faiss_DistComp_Single(benchmark::State& state) {
+    auto& provider = DataProvider::instance();
+    auto computer = std::unique_ptr<faiss::DistanceComputer>(
+        provider.get_faiss_index()->get_distance_computer()
+    );
+    computer->set_query(provider.get_query());
+
+    for (auto _ : state) {
+        benchmark::DoNotOptimize((*computer)(0));
+    }
+}
+BENCHMARK(BM_Faiss_DistComp_Single)->Name("Faiss_DistComp_Single");
+
+// 5. Faiss DistanceComputer (Batch 4)
+static void BM_Faiss_DistComp_Batch4(benchmark::State& state) {
+    auto& provider = DataProvider::instance();
+    auto computer = std::unique_ptr<faiss::DistanceComputer>(
+        provider.get_faiss_index()->get_distance_computer()
+    );
+    computer->set_query(provider.get_query());
+
+    float d0, d1, d2, d3;
+
+    // Measures throughput of processing 4 items at once
+    for (auto _ : state) {
+        computer->distances_batch_4(0, 1, 2, 3, d0, d1, d2, d3);
+        benchmark::DoNotOptimize(d0);
+    }
+    // Reflect that 4 distance calculations happened per iteration
+    state.SetItemsProcessed(state.iterations() * 4);
+}
+BENCHMARK(BM_Faiss_DistComp_Batch4)->Name("Faiss_DistComp_Batch4");
+
+// 6. Direct C++ (Baseline)
+static void BM_Cpp_Direct(benchmark::State& state) {
+    auto& provider = DataProvider::instance();
+    float* q = provider.get_query();
+    float* t = provider.get_target(0);
+    uint32_t dim = provider.get_dim();
+
+    for (auto _ : state) {
+        benchmark::DoNotOptimize(cpp_L2sqr(q, t, dim));
+    }
+}
+BENCHMARK(BM_Cpp_Direct)->Name("Cpp_Direct_Implementation");
+
+// --- Main Entry ---
+
+int main(int argc, char** argv) {
+    ::testing::InitGoogleTest(&argc, argv);
+
+    // 1. Parse Arguments
+    argparse::ArgumentParser program("test_simd_distance");
+
+    program.add_argument("-c", "--config").default_value(std::string("../datasets.json"))
+           .help("Path to dataset config file");
+    program.add_argument("-d", "--dataset").default_value(std::string("sift-1m"))
+           .help("Dataset name (e.g. sift-1m).");
+
+    try {
+        program.parse_args(argc, argv);
+    } catch (const std::runtime_error& err) {
+        std::cerr << err.what() << std::endl;
+        std::cerr << program;
+        return 1;
     }
 
-    // 4.2 Artea (Unroll=2)
-    {
-        auto start = std::chrono::high_resolution_clock::now();
-        for (int i = 0; i < NUM_VECTORS_FOR_BENCHMARK; ++i) {
-            dummy_accumulator += artea_dist_unroll_2(query_vec, target_ptr);
-        }
-        auto end = std::chrono::high_resolution_clock::now();
-        std::chrono::duration<double, std::micro> duration = end - start;
-        artea::logger.info(fmt::format("  Artea (Unroll=2):           {:.4f} us/op", duration.count() / NUM_VECTORS_FOR_BENCHMARK));
+    g_config.config_path = program.get<std::string>("--config");
+    g_config.dataset_name = program.get<std::string>("--dataset");
+
+    // 2. Initialize Data
+    logger.info("Initializing Data Provider from Dataset...");
+    try {
+        DataProvider::instance().init();
+    } catch (const std::exception& e) {
+        logger.error(fmt::format("Failed to initialize dataset: {}", e.what()));
+        return 1;
     }
 
-    // 4.3 Artea (Unroll=4)
-    {
-        auto start = std::chrono::high_resolution_clock::now();
-        for (int i = 0; i < NUM_VECTORS_FOR_BENCHMARK; ++i) {
-            dummy_accumulator += artea_dist_unroll_4(query_vec, target_ptr);
-        }
-        auto end = std::chrono::high_resolution_clock::now();
-        std::chrono::duration<double, std::micro> duration = end - start;
-        artea::logger.info(fmt::format("  Artea (Unroll=4):           {:.4f} us/op", duration.count() / NUM_VECTORS_FOR_BENCHMARK));
+    // 3. Run Google Test (Correctness Check)
+    logger.info("==========================================================");
+    logger.info(" -> Running Correctness Tests (GTest)...");
+    logger.info("==========================================================");
+    int gtest_result = RUN_ALL_TESTS();
+
+    if (::testing::GTEST_FLAG(list_tests) || gtest_result != 0) {
+        return gtest_result;
     }
 
-    // 4.4 HNSWLib (AVX512 - Auto Selected)
-    {
-        auto start = std::chrono::high_resolution_clock::now();
-        for (int i = 0; i < NUM_VECTORS_FOR_BENCHMARK; ++i) {
-            dummy_accumulator += hnsw_dist_func(query_vec, target_ptr, hnsw_dist_param);
-        }
-        auto end = std::chrono::high_resolution_clock::now();
-        std::chrono::duration<double, std::micro> duration = end - start;
-        artea::logger.info(fmt::format("  HNSWLib (AVX512):           {:.4f} us/op", duration.count() / NUM_VECTORS_FOR_BENCHMARK));
+    if (gtest_result != 0) {
+        logger.error("Correctness tests failed! Aborting benchmarks.");
+        return gtest_result;
     }
 
-    // 4.5 Faiss (fvec_L2sqr)
-    {
-        auto start = std::chrono::high_resolution_clock::now();
-        for (int i = 0; i < NUM_VECTORS_FOR_BENCHMARK; ++i) {
-            dummy_accumulator += faiss::fvec_L2sqr(query_vec, target_ptr, DIM);
-        }
-        auto end = std::chrono::high_resolution_clock::now();
-        std::chrono::duration<double, std::micro> duration = end - start;
-        artea::logger.info(fmt::format("  Faiss (fvec_L2sqr):         {:.4f} us/op", duration.count() / NUM_VECTORS_FOR_BENCHMARK));
-    }
-
-    // 4.6 Faiss (DistanceComputer op())
-    {
-        std::unique_ptr<faiss::DistanceComputer> computer(faiss_index.get_distance_computer());
-        computer->set_query(query_vec);
-
-        auto start = std::chrono::high_resolution_clock::now();
-        for (int i = 0; i < NUM_VECTORS_FOR_BENCHMARK; ++i) {
-            dummy_accumulator += (*computer)(0);
-        }
-        auto end = std::chrono::high_resolution_clock::now();
-        std::chrono::duration<double, std::micro> duration = end - start;
-        artea::logger.info(fmt::format("  Faiss (DistComp::op()):     {:.4f} us/op", duration.count() / NUM_VECTORS_FOR_BENCHMARK));
-    }
-
-    // 4.7 Faiss (DistanceComputer batch4)
-    {
-        std::unique_ptr<faiss::DistanceComputer> computer(faiss_index.get_distance_computer());
-        computer->set_query(query_vec);
-
-        int loop_count = NUM_VECTORS_FOR_BENCHMARK / 4;
-        float d0, d1, d2, d3;
-
-        auto start = std::chrono::high_resolution_clock::now();
-        for (int i = 0; i < loop_count; ++i) {
-            computer->distances_batch_4(0, 1, 2, 3, d0, d1, d2, d3);
-            dummy_accumulator += (d0 + d1 + d2 + d3);
-        }
-        auto end = std::chrono::high_resolution_clock::now();
-        std::chrono::duration<double, std::micro> duration = end - start;
-        artea::logger.info(fmt::format("  Faiss (DistComp::batch4):   {:.4f} us/op", duration.count() / NUM_VECTORS_FOR_BENCHMARK));
-    }
-
-    // 4.8 Direct C++
-    {
-        auto start = std::chrono::high_resolution_clock::now();
-        for (int i = 0; i < NUM_VECTORS_FOR_BENCHMARK; ++i) {
-            dummy_accumulator += cpp_L2sqr(query_vec, target_ptr, DIM);
-        }
-        auto end = std::chrono::high_resolution_clock::now();
-        std::chrono::duration<double, std::micro> duration = end - start;
-        artea::logger.info(fmt::format("  Direct C++ (Compiler SIMD): {:.4f} us/op", duration.count() / NUM_VECTORS_FOR_BENCHMARK));
-    }
-
-    artea::logger.info("-------------------------------------");
+    // 4. Run Google Benchmark (Performance)
+    logger.info("==========================================================");
+    logger.info(" -> Running Performance Benchmarks (Google Benchmark)...");
+    logger.info("==========================================================");
+    ::benchmark::Initialize(&argc, argv);
+    ::benchmark::RunSpecifiedBenchmarks();
 
     return 0;
 }

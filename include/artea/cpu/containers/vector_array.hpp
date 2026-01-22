@@ -1,7 +1,7 @@
 /*
  * @FilePath: /Artea/include/artea/cpu/containers/vector_array.hpp
  * @Author: Chandler (Weitang Ye) <weitang.ye@ntu.edu.sg>
- * @LastEditTime: 2025-12-14 14:18:38
+ * @LastEditTime: 2026-01-22 16:48:58
  * @Date: 2025-10-18 16:31:57
  * @Description:
  */
@@ -15,9 +15,7 @@
 #include <stdexcept>
 #include <omp.h>
 #include <utility> // For std::move
-
 #include <artea/cpu/containers/allocator.hpp>
-#include <artea/common/definitions.hpp>
 #include <artea/common/logger.hpp>
 
 namespace artea {
@@ -27,7 +25,7 @@ template <typename VertexNumT, typename VecEleT>
 class VectorArray {
 
     using vec_num_t = VertexNumT;
-    using vec_dim_t = VecEleT;
+    using vec_dim_t = uint32_t;
     using vec_id_t = VertexNumT;
     using vec_ele_t = VecEleT;
 

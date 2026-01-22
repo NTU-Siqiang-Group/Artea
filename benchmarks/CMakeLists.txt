@@ -14,19 +14,35 @@
 
 cmake_minimum_required(VERSION 3.16)
 
-project(ArteaTests CXX)
+# Renamed project to reflect that these are benchmarks
+project(ArteaBenchmarks CXX)
 
 file(GLOB BENCH_SOURCES "*.cpp")
 
 foreach(sourcefile ${BENCH_SOURCES})
-    get_filename_component(test_target ${sourcefile} NAME_WE)
-    message(STATUS "Configuring test target: ${test_target}")
-    add_executable(${test_target} ${sourcefile})
-    set_target_properties(${test_target} PROPERTIES INTERPROCEDURAL_OPTIMIZATION ON)
-    add_compile_options(-mavx512f -march=native)
-    target_link_libraries(${test_target} PRIVATE artea)
+    get_filename_component(bench_target ${sourcefile} NAME_WE)
+    message(STATUS "Configuring benchmark target: ${bench_target}")
+
+    add_executable(${bench_target} ${sourcefile})
+
+    # Enable Interprocedural Optimization (LTO)
+    set_target_properties(${bench_target} PROPERTIES INTERPROCEDURAL_OPTIMIZATION ON)
+
+    # Add hardware specific flags to the target
+    target_compile_options(${bench_target} PRIVATE -mavx512f -march=native)
+
+    # Link against the core library and Google Benchmark
+    # benchmark::benchmark_main provides a default main() entry point.
+    # If your source file defines its own int main(), remove benchmark::benchmark_main.
+    target_link_libraries(${bench_target} PRIVATE
+        artea
+        benchmark::benchmark
+        benchmark::benchmark_main
+    )
+
+    # Explicit optimization flags for Release builds
     if(CMAKE_BUILD_TYPE STREQUAL "Release")
-        target_compile_options(${test_target} PRIVATE -O3)
-        target_link_options(${test_target} PRIVATE -O3)
+        target_compile_options(${bench_target} PRIVATE -O3)
+        target_link_options(${bench_target} PRIVATE -O3)
     endif()
 endforeach()

@@ -1,35 +1,69 @@
+// Copyright 2026 Weitang Ye
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     https://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 /*
  * @FilePath: /Artea/tests/test_vector_dataset.cpp
  * @Author: Chandler (Weitang Ye) <weitang.ye@ntu.edu.sg>
- * @LastEditTime: 2025-12-12 08:34:30
- * @Date: 2025-10-23 15:50:42
- * @Description: Test the VectorDataset class for loading time and correctness.
+ * @Description: GoogleTest suite for VectorDataset correctness verification.
  */
 
 #include <iostream>
 #include <string>
-#include <chrono>
-#include <stdexcept>
 #include <vector>
 #include <fstream>
-#include <utility>
 #include <random>
-#include <cmath>
-#include <cassert>
+#include <filesystem>
+#include <memory>
+#include <type_traits>
 
+#include <gtest/gtest.h>
+#include <argparse/argparse.hpp>
 #include <fmt/format.h>
+#include <nlohmann/json.hpp>
 
-#include <artea/cpu/containers/vector_dataset.hpp>
-#include <artea/definitions.hpp>
-#include <artea/common/logger.hpp>
+// Artea Headers
+#include <artea/cpu/framework/artea.hpp>
 
-// --- Start of Correctness Verification Code ---
+using namespace artea;
+using namespace artea::cpu;
+
+// --- Type Definitions ---
+using vec_num_t = uint32_t;
+using vec_ele_t = float;
+// Define Traits
+using base_traits_t = BaseTraits<vec_num_t, vec_ele_t, false>;
+using vector_dataset_t = typename base_traits_t::vector_dataset_t;
+using vector_array_t = typename base_traits_t::vector_array_t;
+
+// --- Global Configuration ---
+struct TestConfig {
+    std::string config_path;
+    std::string dataset_name;
+    uint32_t num_check_samples; // Number of random vectors to verify
+} g_config;
+
+// --- Helper Functions (Reference Implementation) ---
 
 /**
  * @brief A simple, single-threaded reference implementation to read a .vecs file.
+ *        Used as Ground Truth to verify Artea's parallel loader.
+ *
  * @tparam T The element type of the vector (e.g., float, uint32_t).
  * @param file_path Path to the .fvecs or .ivecs file.
- * @return A pair containing a std::vector with all the flattened data and the dimension of vectors.
+ * @return A pair containing:
+ *         1. std::vector<T> with flattened data.
+ *         2. int representing the dimension.
  */
 template<typename T>
 std::pair<std::vector<T>, int> load_vecs_file_simple(const std::string& file_path) {
@@ -54,11 +88,12 @@ std::pair<std::vector<T>, int> load_vecs_file_simple(const std::string& file_pat
     input.seekg(0, std::ios::beg);
 
     if (file_size % record_size != 0) {
-        throw std::runtime_error("Reference loader: File size indicates corruption.");
+        throw std::runtime_error("Reference loader: File size indicates corruption or mismatch.");
     }
 
     size_t num_vectors = file_size / record_size;
     std::vector<T> data;
+    // Pre-allocate memory
     data.reserve(num_vectors * dim);
 
     int temp_dim = 0;
@@ -68,7 +103,7 @@ std::pair<std::vector<T>, int> load_vecs_file_simple(const std::string& file_pat
     for (size_t i = 0; i < num_vectors; ++i) {
         input.read(reinterpret_cast<char*>(&temp_dim), sizeof(int));
         if (temp_dim != dim) {
-            throw std::runtime_error("Reference loader: Inconsistent dimension found.");
+            throw std::runtime_error("Reference loader: Inconsistent dimension found in file.");
         }
         input.read(reinterpret_cast<char*>(buffer.data()), dim * sizeof(T));
         data.insert(data.end(), buffer.begin(), buffer.end());
@@ -77,120 +112,164 @@ std::pair<std::vector<T>, int> load_vecs_file_simple(const std::string& file_pat
     return {data, dim};
 }
 
+// --- Test Fixture ---
 
-/**
- * @brief Runs a correctness check by comparing artea's loader against a simple reference loader.
- * @tparam T The element type of the vector.
- * @tparam ArteaVecNumT The type for number of vectors in Artea's class.
- * @param file_type_name A descriptive name for the file being checked (e.g., "Base Vectors").
- * @param file_path The path to the .vecs file.
- * @param artea_array A pointer to the VectorArray loaded by the artea library.
- */
-template<typename T, typename ArteaVecNumT>
-void run_correctness_check(
-    const std::string& file_type_name,
-    const std::string& file_path,
-    artea::cpu::VectorArray<ArteaVecNumT, T>& artea_array
-) {
-    std::cout << "\n--- Running correctness check for " << file_type_name << " ---" << std::endl;
+class VectorDatasetTest : public ::testing::Test {
+protected:
+    static std::unique_ptr<vector_dataset_t> dataset;
+    static nlohmann::json json_config;
 
-    // 1. Load data using the simple reference implementation
-    auto [ref_data, ref_dim] = load_vecs_file_simple<T>(file_path);
-    size_t ref_num_vecs = ref_data.size() / ref_dim;
+    /**
+     * @brief Sets up the test suite by loading the dataset once.
+     *        This mimics the logic in VectorDataset to resolve file paths for verification.
+     */
+    static void SetUpTestSuite() {
+        if (!std::filesystem::exists(g_config.config_path)) {
+            throw std::runtime_error("Config file not found: " + g_config.config_path);
+        }
 
-    artea::logger.info(fmt::format("Reference loader: {} vectors, {} dims.", ref_num_vecs, ref_dim));
+        // 1. Load Dataset via Artea
+        logger.info(fmt::format("Loading Dataset: {} from {}", g_config.dataset_name, g_config.config_path));
+        dataset = std::make_unique<vector_dataset_t>(g_config.config_path, g_config.dataset_name);
 
-    // 2. Compare metadata (vector count and dimension)
-    auto artea_num_vecs = artea_array.get_num_vecs();
-    auto artea_dim = artea_array.get_vec_dim();
-    artea::logger.info(fmt::format("Artea loader: {} vectors, {} dims.", artea_num_vecs, artea_dim));
-
-    if (artea_dim == ref_dim && artea_num_vecs == ref_num_vecs) {
-        artea::logger.success("Metadata check PASSED.");
-    } else {
-        artea::logger.error("Metadata check FAILED.");
+        // 2. Parse JSON manually to get raw file paths for the reference loader
+        std::ifstream config_file(g_config.config_path);
+        json_config = nlohmann::json::parse(config_file);
     }
 
-    // 3. Randomly sample and compare vector data
-    constexpr int NUM_CHECKS = 1000;
-    std::mt19937 rng(std::random_device{}());
-    std::uniform_int_distribution<ArteaVecNumT> dist(0, artea_num_vecs - 1);
+    static void TearDownTestSuite() {
+        dataset.reset();
+    }
 
-    for (int i = 0; i < NUM_CHECKS; ++i) {
-        ArteaVecNumT vec_id = dist(rng);
-        T* artea_vec = artea_array.get(vec_id);
-        T* ref_vec_start = &ref_data[static_cast<size_t>(vec_id) * artea_dim];
+    /**
+     * @brief Helper to reconstruct the full path for a specific file type (base/query/gt)
+     */
+    std::string get_file_path(const std::string& type_key) {
+        auto dataset_cfg = json_config["datasets"][g_config.dataset_name];
+        std::filesystem::path root_dir = json_config["root_dir"];
+        std::filesystem::path dataset_dir = root_dir / dataset_cfg["dataset_dir"];
+        std::filesystem::path file_path = dataset_dir / dataset_cfg[type_key];
+        return file_path.string();
+    }
 
-        for (artea::vec_dim_t j = 0; j < artea_dim; ++j) {
-            if constexpr (std::is_floating_point_v<T>) {
-                const T tolerance = 1e-6f;
-                if (std::abs(artea_vec[j] - ref_vec_start[j]) >= tolerance) {
-                    artea::logger.error(fmt::format("Float data mismatch at vec_id {} dim {}: {} != {}", vec_id, j, artea_vec[j], ref_vec_start[j]));
-                }
-            } else {
-                if (artea_vec[j] != ref_vec_start[j]) {
-                    artea::logger.error(fmt::format("Integer data mismatch at vec_id {} dim {}: {} != {}", vec_id, j, artea_vec[j], ref_vec_start[j]));
+    /**
+     * @brief Generic verification logic.
+     *
+     * @tparam T Data type (float for base/query, usually int/uint32_t for GT).
+     * @tparam ArteaArrayT The type of the Artea VectorArray.
+     * @param artea_array Reference to the loaded Artea array.
+     * @param json_key The key in the JSON config ("base_path", "query_path", etc.).
+     * @param label A label for logging purposes.
+     */
+    template <typename T, typename ArteaArrayT>
+    void verify_data(ArteaArrayT& artea_array, const std::string& json_key, const std::string& label) {
+        std::string full_path = get_file_path(json_key);
+        logger.info(fmt::format("Verifying {} against file: {}", label, full_path));
+
+        // 1. Load Reference Data
+        auto [ref_data, ref_dim] = load_vecs_file_simple<T>(full_path);
+        size_t ref_num_vecs = ref_data.size() / ref_dim;
+
+        // 2. Metadata Check
+        EXPECT_EQ(artea_array.get_vec_dim(), ref_dim)
+            << "Dimension mismatch for " << label;
+        EXPECT_EQ(artea_array.get_num_vecs(), ref_num_vecs)
+            << "Vector count mismatch for " << label;
+
+        if (HasFatalFailure()) return; // Abort if metadata is wrong
+
+        // 3. Random Sampling Check
+        std::mt19937 rng(std::random_device{}());
+        std::uniform_int_distribution<size_t> dist(0, ref_num_vecs - 1);
+
+        logger.info(fmt::format("Checking {} random samples for {}...", g_config.num_check_samples, label));
+
+        for (uint32_t i = 0; i < g_config.num_check_samples; ++i) {
+            size_t vec_id = dist(rng);
+
+            // Pointer to Artea data
+            // Note: VectorArray::get returns a pointer to the start of the vector
+            const T* artea_vec = reinterpret_cast<const T*>(artea_array.get(static_cast<vec_num_t>(vec_id)));
+
+            // Pointer to Reference data
+            const T* ref_vec = &ref_data[vec_id * ref_dim];
+
+            for (int d = 0; d < ref_dim; ++d) {
+                if constexpr (std::is_floating_point_v<T>) {
+                    ASSERT_FLOAT_EQ(artea_vec[d], ref_vec[d])
+                        << fmt::format("Mismatch in {} at ID {}, Dim {}", label, vec_id, d);
+                } else {
+                    ASSERT_EQ(artea_vec[d], ref_vec[d])
+                        << fmt::format("Mismatch in {} at ID {}, Dim {}", label, vec_id, d);
                 }
             }
         }
+        logger.success(fmt::format("{} passed verification.", label));
     }
-    artea::logger.success(fmt::format("Random vector data check ({}) PASSED.", NUM_CHECKS));
+};
+
+// Define static members
+std::unique_ptr<vector_dataset_t> VectorDatasetTest::dataset = nullptr;
+nlohmann::json VectorDatasetTest::json_config;
+
+// --- Tests ---
+
+TEST_F(VectorDatasetTest, VerifyBaseVectors) {
+    ASSERT_TRUE(dataset != nullptr) << "Dataset failed to initialize.";
+    // Base vectors are usually float
+    verify_data<float>(dataset->get_base_vecs(), "base_path", "Base Vectors");
 }
 
-// --- End of Correctness Verification Code ---
+TEST_F(VectorDatasetTest, VerifyQueryVectors) {
+    ASSERT_TRUE(dataset != nullptr) << "Dataset failed to initialize.";
+    // Query vectors are usually float
+    verify_data<float>(dataset->get_query_vecs(), "query_path", "Query Vectors");
+}
 
+TEST_F(VectorDatasetTest, VerifyGroundTruthVectors) {
+    ASSERT_TRUE(dataset != nullptr) << "Dataset failed to initialize.";
+    // Ground Truth vectors are typically integer (IDs)
+    // Adjust type based on your dataset format (sift-1m GT is ivecs -> int/uint32_t)
+    verify_data<uint32_t>(dataset->get_gt_vecs(), "gt_path", "Ground Truth Vectors");
+}
 
-int main() {
-    // NOTE: Hardcoded paths are used for this test.
-    const std::string config_path = "/home/yeweitang/Artea/datasets.json";
-    const std::string root_dir = "/home/yeweitang/ANNDatasets/sift-1m/";
-    const std::string dataset_name = "sift-1m";
+// --- Main ---
 
-    std::cout << "Starting VectorDataset test for dataset: " << dataset_name << std::endl;
-    std::cout << "Using config file: " << config_path << std::endl;
+int main(int argc, char* argv[]) {
+    ::testing::InitGoogleTest(&argc, argv);
+
+    // Initialize Argument Parser
+    argparse::ArgumentParser program("test_vector_dataset_gtest");
+
+    program.add_argument("-c", "--config")
+        .help("Path to the datasets.json configuration file")
+        .default_value(std::string("../datasets.json"));
+
+    program.add_argument("-d", "--dataset")
+        .help("Name of the dataset to verify (must exist in json)")
+        .default_value(std::string("sift-1m"));
+
+    program.add_argument("-s", "--samples")
+        .help("Number of random samples to check for correctness")
+        .scan<'u', uint32_t>()
+        .default_value(uint32_t{1000});
 
     try {
-        // --- Load dataset using Artea and measure time ---
-        auto start_time = std::chrono::high_resolution_clock::now();
-
-        artea::cpu::VectorDataset<
-            uint32_t, // vecs_num_t
-            float    // vec_ele_t for base and query
-        > dataset(config_path, dataset_name);
-
-        auto end_time = std::chrono::high_resolution_clock::now();
-        std::chrono::duration<double, std::milli> elapsed_ms = end_time - start_time;
-
-        artea::logger.success("Successfully loaded the dataset using Artea.");
-        artea::logger.info(fmt::format("Time taken to load: {} ms", elapsed_ms.count()));
-
-        // --- Perform correctness check (on-par comparison) ---
-        run_correctness_check<float>(
-            "Base Vectors",
-            root_dir + "sift_base.fvecs",
-            dataset.get_base_vecs()
-        );
-
-        run_correctness_check<float>(
-            "Query Vectors",
-            root_dir + "sift_query.fvecs",
-            dataset.get_query_vecs()
-        );
-
-        run_correctness_check<uint32_t>(
-            "Ground Truth Vectors",
-            root_dir + "sift_groundtruth.ivecs",
-            dataset.get_gt_vecs()
-        );
-
-    } catch (const std::exception& e) { // Catch std::exception for broader coverage
-        artea::logger.error(fmt::format("\nAn error occurred during the test: {}", e.what()));
-        return 1;
-    } catch (...) {
-        artea::logger.error("\nAn unknown error occurred.");
+        program.parse_args(argc, argv);
+    } catch (const std::runtime_error& err) {
+        std::cerr << err.what() << std::endl;
+        std::cerr << program;
         return 1;
     }
 
-    artea::logger.success("\nAll tests completed successfully!");
-    return 0;
+    // Populate Global Config
+    g_config.config_path = program.get<std::string>("--config");
+    g_config.dataset_name = program.get<std::string>("--dataset");
+    g_config.num_check_samples = program.get<uint32_t>("--samples");
+
+    logger.info("==========================================================");
+    logger.info("      Starting VectorDataset Correctness Suite");
+    logger.info("==========================================================");
+
+    return RUN_ALL_TESTS();
 }

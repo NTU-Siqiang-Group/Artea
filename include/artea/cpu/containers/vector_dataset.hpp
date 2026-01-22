@@ -13,9 +13,6 @@
 
 #include <fmt/format.h>
 #include <nlohmann/json.hpp>
-
-#include <artea/cpu/containers/vector_array.hpp>
-#include <artea/common/definitions.hpp>
 #include <artea/common/logger.hpp>
 
 namespace artea {

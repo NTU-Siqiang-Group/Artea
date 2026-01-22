@@ -21,6 +21,7 @@
  */
 
 namespace artea {
+namespace cpu {
 
 /** @brief Find the position of the minimum element in a small fixed-size array.
   * @tparam T The type of the elements in the array.
@@ -60,5 +61,5 @@ auto max_element_pos(T* arr) -> int {
     }
 }
 
-
+} // namespace cpu
 } // namespace artea

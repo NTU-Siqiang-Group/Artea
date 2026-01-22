@@ -22,18 +22,18 @@
 namespace artea {
 namespace cpu {
 
-template <typename ComputerTraitsT, typename BufferTraitsT, typename DerivedClassT>
+template <typename UpdaterTraitsT, typename DerivedClassT>
 class NeighborUpdater {
 
-    using vertex_id_t = typename ComputerTraitsT::vertex_id_t;
-    using vertex_num_t = typename ComputerTraitsT::vertex_num_t;
-    using vec_ele_t = typename ComputerTraitsT::vec_ele_t;
-    using distance_t = typename ComputerTraitsT::distance_t;
-    using vector_array_t = typename BufferTraitsT::vector_array_t;
-    using nbr_t = typename BufferTraitsT::nbr_t;
-    using nbr_arr_t = typename BufferTraitsT::nbr_arr_t;
-    using log_table_t = typename BufferTraitsT::log_table_t;
-    using dist_func_t = typename BufferTraitsT::dist_func_t;
+    using vertex_id_t = typename UpdaterTraitsT::vertex_id_t;
+    using vertex_num_t = typename UpdaterTraitsT::vertex_num_t;
+    using vec_ele_t = typename UpdaterTraitsT::vec_ele_t;
+    using distance_t = typename UpdaterTraitsT::distance_t;
+    using vector_array_t = typename UpdaterTraitsT::vector_array_t;
+    using nbr_t = typename UpdaterTraitsT::nbr_t;
+    using nbr_arr_t = typename UpdaterTraitsT::nbr_arr_t;
+    using log_table_t = typename UpdaterTraitsT::log_table_t;
+    using dist_func_t = typename UpdaterTraitsT::dist_func_t;
 
 public:
 
@@ -44,8 +44,6 @@ public:
     ) : _dist_func(dist_func), _vecs_arr(vecs_arr), _log_table(log_table) {}
 
 protected:
-
-    virtual auto _internal_check() -> std::tuple<bool, vertex_id_t, distance_t> = 0;
 
     /** @brief Distance function used for RNG checking. */
     const dist_func_t& _dist_func;

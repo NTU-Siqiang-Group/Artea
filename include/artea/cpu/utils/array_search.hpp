@@ -24,12 +24,12 @@
 #include <functional>
 #include <vector>
 
-#include <artea/definitions.hpp>
+
 
 namespace artea {
 namespace cpu {
 
-enum class search_method_t : uint8_t {
+enum class SearchMethodT : uint8_t {
     BINARY_SEARCH = 0,
     LINEAR_SEARCH = 1
 };
@@ -47,7 +47,7 @@ template <
     typename T,
     typename container_t,
     typename array_index_t,
-    search_method_t method,
+    SearchMethodT method,
     typename compare_func_t
 >
 auto array_search(
@@ -59,7 +59,7 @@ auto array_search(
     array_index_t arr_size = static_cast<array_index_t>(arr.size());
 
     // BINARY_SEARCH (Branchless Implementation, can not be used for unsorted arrays)
-    if constexpr (method == search_method_t::BINARY_SEARCH) {
+    if constexpr (method == SearchMethodT::BINARY_SEARCH) {
         array_index_t base = 0;
         array_index_t len = arr_size;
 
@@ -91,7 +91,7 @@ auto array_search(
         return invalid_vertex_id<array_index_t>();
     }
     // LINEAR_SEARCH (can be used for unsorted arrays as well)
-    else if constexpr (method == search_method_t::LINEAR_SEARCH) {
+    else if constexpr (method == SearchMethodT::LINEAR_SEARCH) {
         for (array_index_t i = 0; i < arr_size; ++i) {
             if (!compare_func(arr[i], target) && !compare_func(target, arr[i])) {
                 return i;

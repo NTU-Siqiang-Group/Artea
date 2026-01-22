@@ -25,29 +25,26 @@
 #include <vector>
 #include <stdexcept>
 
-#include <artea/cpu/utils/direction.hppq>
-#include <artea/cpu/index/neighbor.hpp>
-#include <artea/cpu/containers/allocator.hpp>
-#include <artea/cpu/containers/vector_array.hpp>
-#include <artea/cpu/propagation/propagate_engine.hpp>
-
 namespace artea {
 namespace cpu {
 
-template <typename ComputerTraitsT, typename BufferTraitsT>
+template <typename UpdaterTraitsT>
 class RNGUpdater :
-    public NeighborUpdater<ComputerTraitsT, BufferTraitsT, RNGUpdater<ComputerTraitsT, BufferTraitsT>> {
+    public UpdaterTraitsT::template neighbor_updater_t<RNGUpdater<UpdaterTraitsT>> {
 
-    using vertex_id_t = typename ComputerTraitsT::vertex_id_t;
-    using vertex_num_t = typename ComputerTraitsT::vertex_num_t;
-    using vec_ele_t = typename ComputerTraitsT::vec_ele_t;
-    using distance_t = typename ComputerTraitsT::distance_t;
-    using vector_array_t = typename BufferTraitsT::vector_array_t;
-    using nbr_t = typename BufferTraitsT::nbr_t;
-    using nbr_arr_t = typename BufferTraitsT::nbr_arr_t;
-    using log_table_t = typename BufferTraitsT::log_table_t;
-    using dist_func_t = typename BufferTraitsT::dist_func_t;
-    using base_class_t = NeighborUpdater<ComputerTraitsT, BufferTraitsT, RNGUpdater<ComputerTraitsT, BufferTraitsT>>;
+    using vertex_id_t = typename UpdaterTraitsT::vertex_id_t;
+    using vertex_num_t = typename UpdaterTraitsT::vertex_num_t;
+    using vec_ele_t = typename UpdaterTraitsT::vec_ele_t;
+    using distance_t = typename UpdaterTraitsT::distance_t;
+    using vector_array_t = typename UpdaterTraitsT::vector_array_t;
+    using nbr_t = typename UpdaterTraitsT::nbr_t;
+    using nbr_arr_t = typename UpdaterTraitsT::nbr_arr_t;
+    using log_table_t = typename UpdaterTraitsT::log_table_t;
+    using dist_func_t = typename UpdaterTraitsT::dist_func_t;
+    using base_class_t = typename UpdaterTraitsT::template neighbor_updater_t<RNGUpdater<UpdaterTraitsT>>;
+
+    static constexpr vertex_id_t invalid_vertex_id = UpdaterTraitsT::invalid_vertex_id;
+    static constexpr distance_t nan_distance = UpdaterTraitsT::nan_distance;
 
 public:
     RNGUpdater(
@@ -73,7 +70,7 @@ public:
                 /** @brief add append operation
                   * append edge [delegated -- sacrificed]
                   */
-                this->_log_table.add_append_log(
+                this->_log_table.write_log(
                     /* executor_vid = */delegated_vid,
                     /* nbr_id = */sacrificed_vid,
                     /* new_edge_dist = */new_edge_dist
@@ -103,7 +100,7 @@ private:
                 return std::make_tuple(false, retained_nbr.get_id(), dist_to_retained);
             }
         }
-        return std::make_tuple(true, invalid_vertex_id<vertex_id_t>(), nan_distance<distance_t>());
+        return std::make_tuple(true, invalid_vertex_id, nan_distance);
     }
 
 };  // class RNGUpdater

@@ -11,8 +11,6 @@
 #include <mutex>
 
 #include <tbb/concurrent_vector.h>
-
-#include <artea/definitions.hpp>
 #include <artea/cpu/containers/allocator.hpp>
 
 namespace artea {

@@ -1,7 +1,7 @@
 /*
  * @FilePath: /Artea/include/artea/cpu/index/index_graph.hpp
  * @Author: Chandler (Weitang Ye) <weitang.ye@ntu.edu.sg>
- * @LastEditTime: 2026-01-18 14:45:17
+ * @LastEditTime: 2026-01-22 14:06:00
  * @Date: 2025-10-17 15:32:18
  * @Description:
  */
@@ -13,14 +13,7 @@
 #include <variant>
 #include <cstdint>
 #include <vector>
-
 #include <tbb/parallel_for.h>
-
-#include <artea/common/definitions.hpp>
-#include <artea/cpu/utils/direction.hpp>
-#include <artea/cpu/index/neighbor.hpp>
-#include <artea/cpu/containers/allocator.hpp>
-#include <artea/cpu/propagation/graph_op_log.hpp>
 
 namespace artea {
 namespace cpu {

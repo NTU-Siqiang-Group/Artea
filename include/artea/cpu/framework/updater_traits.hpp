@@ -1,4 +1,4 @@
-// Copyright 2025 Weitang Ye
+// Copyright 2026 Weitang Ye
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -12,58 +12,32 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+/*
+ * @FilePath: /Artea/include/artea/cpu/framework/updater_traits.hpp
+ * @Author: Chandler (Weitang Ye) <weitang.ye@ntu.edu.sg>
+ * @Description:
+ */
+
 #pragma once
-
-#include <cstddef>
-#include <vector>
-#include <utility>
-
-// #include <artea/cpu/framework/base_traits.hpp>
-// #include <artea/cpu/framework/buffer_traits.hpp>
-// #include <artea/cpu/framework/computer_traits.hpp>
 
 namespace artea {
 namespace cpu {
 
-/* ------ Forward Declarations ------ */
-template <typename UpdaterTraitsT> class NeighborUpdater;
-
+// ----- Forward Declaration  ------ //
+template <typename UpdaterTraitsT, typename DerivedClassT> class NeighborUpdater;
 template <typename UpdaterTraitsT> class RNGUpdater;
 
-/* ------ Updater Traits Definition ------ */
-
-enum class updater_policy_t : uint8_t {
-    RNG_UPDATER = 0
-};  // enum class updater_policy_t
-
-template <updater_policy_t UpdaterPolicy, typename UpdaterTraitsT>
-struct UpdaterImplSelector;
-
-template <typename UpdaterTraitsT>
-struct UpdaterImplSelector<updater_policy_t::RNG_UPDATER, typename UpdaterTraitsT> {
-    using type = RNGUpdater<UpdaterTraitsT>;
-};
-
-template <
-    typename ComputerTraitsT,
-    typename BufferTraitsT,
-    updater_policy_t UpdaterPolicy
->
+template <typename ComputerTraitsT, typename BufferTraitsT>
 struct UpdaterTraits : public ComputerTraitsT, public BufferTraitsT {
 
-public:
+    /** ------ Self Traits ------ **/
+    using updater_traits_t = UpdaterTraits<ComputerTraitsT, BufferTraitsT>;
 
-    using computer_traits_t = ComputerTraitsT;
+    template <typename DerivedClassT>
+    using neighbor_updater_t = NeighborUpdater<updater_traits_t, DerivedClassT>;
 
-    using buffer_traits_t = BufferTraitsT;
-
-    using base_traits_t = typename ComputerTraitsT::base_traits_t;
-
-    using updater_traits_t = UpdaterTraits<ComputerTraitsT, BufferTraitsT, UpdaterPolicy>;
-
-    using updater_impl_t = typename UpdaterImplSelector<UpdaterPolicy, updater_traits_t>::type;
-
-    static constexpr updater_policy_t updater_policy = UpdaterPolicy;
+    /** @brief RNG updater. */
+    using rng_updater_t = RNGUpdater<updater_traits_t>;
 
 };  // struct UpdaterTraits
 

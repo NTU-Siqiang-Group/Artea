@@ -18,35 +18,22 @@
 #include <vector>
 #include <memory>
 #include <utility>
-
 #include <tbb/parallel_for.h>
 #include <tbb/blocked_range.h>
-
-#include <artea/cpu/utils/simd_distance.hpp>
-#include <artea/cpu/index/index_graph.hpp>
-#include <artea/cpu/containers/vector_dataset.hpp>
-#include <artea/cpu/containers/vector_array.hpp>
-#include <artea/cpu/propagation/propagate_engine.hpp>
-#include <artea/cpu/propagation/rng_updater.hpp>
-#include <artea/common/definitions.hpp>
 
 namespace artea {
 namespace cpu {
 
-template <typename type_context_t>
+template <typename ContructorTraitsT>
 class GraphInitializer {
 
-    using vertex_num_t = typename type_context_t::vertex_num_t;
-    using vertex_id_t = typename type_context_t::vertex_id_t;
-    using vec_ele_t = typename type_context_t::vec_ele_t;
-    using index_graph_t = typename type_context_t::index_graph_t;
+    using vertex_num_t = typename ContructorTraitsT::vertex_num_t;
+    using vertex_id_t = typename ContructorTraitsT::vertex_id_t;
+    using vec_ele_t = typename ContructorTraitsT::vec_ele_t;
+    using index_graph_t = typename ContructorTraitsT::index_graph_t;
 
 public:
-    static random_initialize(
-        index_graph_t& index_graph
-    ) -> void {
-
-
+    static auto random_initialize(index_graph_t& index_graph) -> void {
     }   // random_initialize
 
 };  // class GraphInitializer

@@ -28,30 +28,27 @@
 #include <utility>
 #include <numeric>
 #include <limits>
-
 #include <tbb/parallel_for.h>
 #include <tbb/parallel_reduce.h>
 #include <tbb/blocked_range.h>
 
-#include <artea/cpu/containers/vector_array.hpp>
-#include <artea/cpu/partitioning/vector_router.hpp>
-#include <artea/common/definitions.hpp>
-
 namespace artea {
 namespace cpu {
 
-template <typename ComputerTraitsT, bool IntraQueryParallel = false>
+template <typename RouterTraitsT>
 class BruteforceRouter :
-    public VectorRouter<ComputerTraitsT, BruteforceRouter<ComputerTraitsT, IntraQueryParallel>>
+    public RouterTraitsT::template vector_router_t<BruteforceRouter<RouterTraitsT>>
 {
-    using vec_num_t = typename ComputerTraitsT::vec_num_t;
-    using vec_id_t = typename ComputerTraitsT::vec_id_t;
-    using vec_ele_t = typename ComputerTraitsT::vec_ele_t;
-    using distance_t = typename ComputerTraitsT::distance_t;
-    using dist_func_t = typename ComputerTraitsT::dist_func_t;
-    using vector_array_t = typename ComputerTraitsT::vector_array_t;
-    using base_vecs_t = typename ComputerTraitsT::base_vecs_t;
-    using base_class_t = VectorRouter<ComputerTraitsT, BruteforceRouter<ComputerTraitsT, IntraQueryParallel>>;
+    using vec_num_t = typename RouterTraitsT::vec_num_t;
+    using vec_id_t = typename RouterTraitsT::vec_id_t;
+    using vec_ele_t = typename RouterTraitsT::vec_ele_t;
+    using distance_t = typename RouterTraitsT::distance_t;
+    using dist_func_t = typename RouterTraitsT::dist_func_t;
+    using vector_array_t = typename RouterTraitsT::vector_array_t;
+    using base_vecs_t = typename RouterTraitsT::base_vecs_t;
+    using base_class_t = typename RouterTraitsT::template vector_router_t<BruteforceRouter<RouterTraitsT>>;
+
+    static constexpr bool intra_query_parallel = RouterTraitsT::intra_query_parallel;
 
 public:
 
@@ -69,7 +66,7 @@ public:
     /**
      * @brief Query the nearest vertex centroid for a given vector.
      *
-     * Depending on the template parameter `IntraQueryParallel`, this function runs
+     * Depending on the template parameter `intra_query_parallel`, this function runs
      * either sequentially or in parallel using TBB to find the centroid with
      * the minimum distance.
      *
@@ -77,7 +74,7 @@ public:
      * @return vec_id_t The ID of the nearest vertex.
      */
     auto query_impl(const vec_ele_t* query_vec) const -> vec_id_t {
-        if constexpr (not IntraQueryParallel) {
+        if constexpr (not intra_query_parallel) {
             // Find the vertex with the minimum distance to the query vector
             distance_t min_dist = std::numeric_limits<distance_t>::max();
             vec_id_t best_vid = 0;

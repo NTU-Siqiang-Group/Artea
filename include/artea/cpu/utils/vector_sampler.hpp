@@ -1,7 +1,7 @@
 /*
- * @FilePath: /Artea/include/artea/cpu/vector_sampler.hpp
+ * @FilePath: /Artea/include/artea/cpu/utils/vector_sampler.hpp
  * @Author: Chandler (Weitang Ye) <weitang.ye@ntu.edu.sg>
- * @LastEditTime: 2025-11-25 09:56:17
+ * @LastEditTime: 2026-01-22 15:23:42
  * @Date: 2025-11-22 11:11:23
  * @Description: Implements vector sampling logic with parallel random number generation.
  */
@@ -21,11 +21,16 @@
 namespace artea {
 namespace cpu {
 
-template <typename vertex_num_t, typename vec_ele_t>
+template <typename BaseTraitsT>
 class VectorSampler {
 
 public:
-    using vertex_id_t = vertex_num_t;
+
+    using vertex_id_t = typename BaseTraitsT::vertex_id_t;
+    using vertex_num_t = typename BaseTraitsT::vertex_num_t;
+    using vec_ele_t = typename BaseTraitsT::vec_ele_t;
+    using vector_array_t = typename BaseTraitsT::vector_array_t;
+    using random_seq_t = typename BaseTraitsT::random_seq_t;
 
     VectorSampler() = default;
     ~VectorSampler() = default;
@@ -35,12 +40,12 @@ public:
      *
      * @param source_arr The original vector array.
      * @param sampling_ratio The fraction of vectors to sample.
-     * @return VectorArray<vertex_num_t, vec_ele_t> A new vector array containing sampled data.
+     * @return vector_array_t A new vector array containing sampled data.
      */
     auto sample(
-        const VectorArray<vertex_num_t, vec_ele_t>& source_arr,
+        const vector_array_t& source_arr,
         const float sampling_ratio
-    ) const -> VectorArray<vertex_num_t, vec_ele_t> {
+    ) const -> vector_array_t {
 
         // Retrieve the total number of vertices from the source array
         vertex_num_t total_vertices = source_arr.get_num_vecs();
@@ -54,7 +59,7 @@ public:
         }
 
         auto dim = source_arr.get_vec_dim();
-        VectorArray<vertex_num_t, vec_ele_t> sampled_arr(sample_count, dim);
+        vector_array_t sampled_arr(sample_count, dim);
 
         vec_ele_t* dest_base = sampled_arr.get_all();
         const vec_ele_t* src_base = source_arr.get_all();
@@ -62,7 +67,7 @@ public:
         std::vector<vertex_id_t> indices(sample_count);
 
         // Initialize the random sequence generator with the range [0, total_vertices)
-        RandomSeq<vertex_num_t> random_seq(total_vertices);
+        random_seq_t random_seq(total_vertices);
 
         // Generate random indices in parallel chunks to maximize throughput
         tbb::parallel_for(tbb::blocked_range<vertex_num_t>(0, sample_count),
@@ -94,9 +99,9 @@ public:
      */
     __attribute__((always_inline))
     auto operator()(
-        const VectorArray<vertex_num_t, vec_ele_t>& source_arr,
+        const vector_array_t& source_arr,
         const float sampling_ratio
-    ) const -> VectorArray<vertex_num_t, vec_ele_t> {
+    ) const -> vector_array_t {
         return sample(source_arr, sampling_ratio);
     }
 

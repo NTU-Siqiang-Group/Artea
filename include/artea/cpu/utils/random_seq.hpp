@@ -1,7 +1,7 @@
 /*
  * @FilePath: /Artea/include/artea/cpu/utils/random_seq.hpp
  * @Author: Chandler (Weitang Ye) <weitang.ye@ntu.edu.sg>
- * @LastEditTime: 2025-11-27 11:41:38
+ * @LastEditTime: 2026-01-21 20:13:01
  * @Date: 2025-11-02 19:41:19
  * @Description: Modified to be thread-safe for parallel execution by using TBB thread-local storage.
  */
@@ -16,15 +16,16 @@
 #include <tbb/enumerable_thread_specific.h>
 
 #include <artea/cpu/containers/vector_array.hpp>
-#include <artea/definitions.hpp>
+
 
 namespace artea {
 namespace cpu {
 
-template <typename vec_num_t>
+template <typename BaseTraitsT>
 class RandomSeq {
 
-    using vec_id_t = vec_num_t;
+    using vec_num_t = typename BaseTraitsT::vec_num_t;
+    using vec_id_t = typename BaseTraitsT::vec_id_t;
 
     // --- Vectorized Implementation using the thread-local stream ---
     static_assert(sizeof(vec_id_t) == sizeof(int), "MKL vectorized integer generation requires a 32-bit type.");

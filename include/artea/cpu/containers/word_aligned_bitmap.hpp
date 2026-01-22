@@ -24,8 +24,6 @@
 #include <cstdint>
 #include <algorithm>
 #include <cstring>
-
-#include <artea/common/definitions.hpp>
 #include <artea/cpu/containers/allocator.hpp>
 
 namespace artea {
