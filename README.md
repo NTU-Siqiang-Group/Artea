@@ -29,7 +29,7 @@ cmake -B build -DCMAKE_BUILD_TYPE=Release \
       -D CMAKE_C_COMPILER=/usr/local/gcc-14/bin/gcc
 
 cmake --build build -j64
-./build/tests/test_simd_distance    # e.g. test the SIMD distance implementation
+./build/tests/test_simd_distance -c datasets.json -d sift-1m    # e.g. test the SIMD distance implementation
 ```
 
 > [!NOTE]
