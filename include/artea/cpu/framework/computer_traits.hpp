@@ -29,6 +29,8 @@ namespace cpu {
 
 /** ------ Forward Declaration  ------ **/
 template <typename ComputerTraitsT, std::size_t UnrollSize> class SIMDDistance;
+template <typename ComputerTraitsT, std::size_t UnrollSize> class SIMDFMA;
+template <typename ComputerTraitsT, std::size_t UnrollSize> class SIMDLinear;
 template <typename ComputerTraitsT> class RecallEstimator;
 
 /** @brief Distance metrics used for computing distances between vectors */
@@ -54,13 +56,29 @@ public:
 
     using distance_metrics_t = DistanceMetricsT;
 
+    template <std::size_t UnrollSize = 1>
+    using simd_dist_t = SIMDDistance<computer_traits_t, UnrollSize>;
+    using simdu1_dist_t = SIMDDistance<computer_traits_t, 1>;
+    using simdu2_dist_t = SIMDDistance<computer_traits_t, 2>;
+    using simdu4_dist_t = SIMDDistance<computer_traits_t, 4>;
     using dist_func_t = SIMDDistance<computer_traits_t, 1>;
 
     template <std::size_t UnrollSize = 1>
-    using simd_t = SIMDDistance<computer_traits_t, UnrollSize>;
-    using simdu1_t = SIMDDistance<computer_traits_t, 1>;
-    using simdu2_t = SIMDDistance<computer_traits_t, 2>;
-    using simdu4_t = SIMDDistance<computer_traits_t, 4>;
+    using simd_fma_t = SIMDFMA<computer_traits_t, UnrollSize>;
+    using simdu1_fma_t = SIMDFMA<computer_traits_t, 1>;
+    using simdu2_fma_t = SIMDFMA<computer_traits_t, 2>;
+    using simdu4_fma_t = SIMDFMA<computer_traits_t, 4>;
+    using fma_func_t = SIMDFMA<computer_traits_t, 1>;
+
+    template <std::size_t UnrollSize = 1>
+    using simd_linear_t = SIMDLinear<computer_traits_t, UnrollSize>;
+    using simdu1_linear_t = SIMDLinear<computer_traits_t, 1>;
+    using simdu2_linear_t = SIMDLinear<computer_traits_t, 2>;
+    using simdu4_linear_t = SIMDLinear<computer_traits_t, 4>;
+    using linear_func_t = SIMDLinear<computer_traits_t, 1>;
+
+    template <std::size_t UnrollSize = 1>
+    using fma_t = SIMDFMA<computer_traits_t, UnrollSize>;
 
     using recall_estimator_t = RecallEstimator<computer_traits_t>;
 

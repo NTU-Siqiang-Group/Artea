@@ -31,7 +31,7 @@
 #include <artea/cpu/framework/computer_traits.hpp>
 #include <artea/cpu/framework/buffer_traits.hpp>
 #include <artea/cpu/framework/router_traits.hpp>
-#include <artea/cpu/framework/updater_traits.hpp>
+#include <artea/cpu/framework/edge_generator_traits.hpp>
 #include <artea/cpu/framework/constructor_traits.hpp>
 
 #include <artea/cpu/containers/allocator.hpp>
@@ -46,10 +46,10 @@
 #include <artea/cpu/index/graph_initializer.hpp>
 #include <artea/cpu/index/graph_constructor.hpp>
 
-#include <artea/cpu/propagation/nbr_log_table.hpp>
-#include <artea/cpu/propagation/neighbor_updater.hpp>
-#include <artea/cpu/propagation/rng_updater.hpp>
-#include <artea/cpu/propagation/propagate_engine.hpp>
+#include <artea/cpu/edge_generator/nbr_log_table.hpp>
+#include <artea/cpu/edge_generator/neighbor_updater.hpp>
+#include <artea/cpu/edge_generator/rng_updater.hpp>
+#include <artea/cpu/edge_generator/propagate_engine.hpp>
 
 #include <artea/cpu/router/vector_router.hpp>
 #include <artea/cpu/router/bruteforce_router.hpp>
@@ -61,5 +61,7 @@
 #include <artea/cpu/utils/parallel.hpp>
 #include <artea/cpu/utils/random_seq.hpp>
 #include <artea/cpu/utils/simd_distance.hpp>
+#include <artea/cpu/utils/simd_fma.hpp>
+#include <artea/cpu/utils/simd_linear.hpp>
 #include <artea/cpu/utils/vector_sampler.hpp>
 #include <artea/cpu/utils/recall_estimator.hpp>

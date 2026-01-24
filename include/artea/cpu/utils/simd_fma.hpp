@@ -1,30 +1,36 @@
-/*
- * @FilePath: /Artea/include/artea/cpu/utils/simd_distance.hpp
- * @Author: Chandler (Weitang Ye) <weitang.ye@ntu.edu.sg>
- * @LastEditTime: 2026-01-23 18:59:02
- * @Date: 2025-10-18 19:10:57
- * @Description: SIMD-accelerated distance computation utilities.
- */
+// Copyright 2026 Weitang Ye
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     https://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
 
 #pragma once
 
 #include <cstddef>
 #include <cstdint>
 #include <immintrin.h>
-#include <cassert>
+#include <stdexcept>
+#include <type_traits>
 #include <artea/common/logger.hpp>
 
 namespace artea {
 namespace cpu {
 
 template <typename ComputerTraitsT, std::size_t UnrollSize = 1>
-class SIMDDistance {
+class SIMDFMA {
 
     using vec_ele_t = typename ComputerTraitsT::vec_ele_t;
-    using distance_t = typename ComputerTraitsT::distance_t;
     using vec_dim_t = typename ComputerTraitsT::vec_dim_t;
-    using distance_metrics_t = typename ComputerTraitsT::distance_metrics_t;
-    static constexpr distance_metrics_t distance_metrics = ComputerTraitsT::distance_metrics;
+    using result_t = vec_ele_t;
+
     static constexpr std::size_t unroll_size = UnrollSize;
 
     static constexpr std::size_t SIMD_REGISTER_BITS = 512;
@@ -32,7 +38,7 @@ class SIMDDistance {
     // Number of elements that can be processed in a single SIMD register
     // e.g. we can process 16 elements per chunk for float32 type
     static constexpr std::size_t SIMD_CHUNK_SIZE = [] {
-        static_assert(std::is_same_v<vec_ele_t, float>, "SIMDDistance currently supports float type only");
+        static_assert(std::is_same_v<vec_ele_t, float>, "SIMDFMA currently supports float type only");
         static_assert(
             SIMD_REGISTER_BYTES % sizeof(vec_ele_t) == 0,
             "SIMD register size must be a multiple of the element size for this utility."
@@ -42,12 +48,12 @@ class SIMDDistance {
 
 public:
 
-    SIMDDistance(const vec_dim_t vec_dim) :
+    SIMDFMA(const vec_dim_t vec_dim) :
         _vec_dim(vec_dim),
         NUM_SIMD_CHUNKS(_vec_dim / SIMD_CHUNK_SIZE),
         NUM_REMAINING_ELES(_vec_dim % SIMD_CHUNK_SIZE)
     {
-        ArteaLogger logger("SIMDDistance", LogLevelT::INFO);
+        ArteaLogger logger("SIMDFMA", LogLevelT::INFO);
         if (vec_dim % SIMD_CHUNK_SIZE != 0) {
             logger.error(
                 "Vector dimension must be a multiple of SIMD chunk size (e.g. 16 for float type)"
@@ -56,16 +62,8 @@ public:
     }
 
     __attribute__((always_inline))
-    auto operator()(const vec_ele_t* vec1, const vec_ele_t* vec2) const -> distance_t {
-        if constexpr (distance_metrics == distance_metrics_t::EUCLIDEAN) {
-            return _impl_euclidean(vec1, vec2);
-        } else if constexpr (distance_metrics == distance_metrics_t::DOT) {
-            return _impl_dot(vec1, vec2);
-        } else if constexpr (distance_metrics == distance_metrics_t::COSINE) {
-            return _impl_cosine(vec1, vec2);
-        } else {
-            throw std::runtime_error("Invalid DistanceMetrics");
-        }
+    auto operator()(const vec_ele_t* vec1, const vec_ele_t* vec2) const -> result_t {
+        return _impl_dot_float(vec1, vec2);
     }
 
 private:
@@ -76,11 +74,10 @@ private:
     /** @brief Number of remaining elements that cannot be processed in parallel */
     const std::size_t NUM_REMAINING_ELES;
 
-    __attribute__((always_inline))
-    auto _impl_euclidean(const vec_ele_t* vec1, const vec_ele_t* vec2) const -> distance_t {
-        // AVX512 implementation
+    auto _impl_dot_float(const float* vec1, const float* vec2) const -> float {
+        // AVX512 implementation for Fused Multiply-Add (Dot Product)
         // sum_chunk serves as the first accumulator (sum_chunk_0)
-        __m512 vec1_chunk, vec2_chunk, diff_chunk, sum_chunk = _mm512_set1_ps(0.0f);
+        __m512 vec1_chunk, vec2_chunk, sum_chunk = _mm512_setzero_ps();
 
         // Process SIMD chunks
         std::size_t i = 0;
@@ -89,8 +86,8 @@ private:
             for (; i < NUM_SIMD_CHUNKS; ++i) {
                 vec1_chunk = _mm512_loadu_ps(vec1 + i * SIMD_CHUNK_SIZE);
                 vec2_chunk = _mm512_loadu_ps(vec2 + i * SIMD_CHUNK_SIZE);
-                diff_chunk = _mm512_sub_ps(vec1_chunk, vec2_chunk);
-                sum_chunk = _mm512_fmadd_ps(diff_chunk, diff_chunk, sum_chunk);
+                // sum = vec1 * vec2 + sum
+                sum_chunk = _mm512_fmadd_ps(vec1_chunk, vec2_chunk, sum_chunk);
             }
         }
         else if constexpr (unroll_size == 2) {
@@ -98,31 +95,25 @@ private:
             __m512 sum_chunk_1 = _mm512_setzero_ps();
 
             // Main unrolled loop
-            // Ensure we have at least 2 chunks left to process
             for (; i + 1 < NUM_SIMD_CHUNKS; i += 2) {
                 // Chunk 0
                 vec1_chunk = _mm512_loadu_ps(vec1 + i * SIMD_CHUNK_SIZE);
                 vec2_chunk = _mm512_loadu_ps(vec2 + i * SIMD_CHUNK_SIZE);
-                diff_chunk = _mm512_sub_ps(vec1_chunk, vec2_chunk);
-                sum_chunk = _mm512_fmadd_ps(diff_chunk, diff_chunk, sum_chunk);
-
+                sum_chunk = _mm512_fmadd_ps(vec1_chunk, vec2_chunk, sum_chunk);
                 // Chunk 1
                 vec1_chunk = _mm512_loadu_ps(vec1 + (i + 1) * SIMD_CHUNK_SIZE);
                 vec2_chunk = _mm512_loadu_ps(vec2 + (i + 1) * SIMD_CHUNK_SIZE);
-                diff_chunk = _mm512_sub_ps(vec1_chunk, vec2_chunk);
-                sum_chunk_1 = _mm512_fmadd_ps(diff_chunk, diff_chunk, sum_chunk_1);
+                sum_chunk_1 = _mm512_fmadd_ps(vec1_chunk, vec2_chunk, sum_chunk_1);
             }
 
             // Merge accumulators
             sum_chunk = _mm512_add_ps(sum_chunk, sum_chunk_1);
 
             // Process remaining SIMD chunks (Tail handling for unrolling)
-            // This loop handles the cases where NUM_SIMD_CHUNKS is not a multiple of unroll_size
             for (; i < NUM_SIMD_CHUNKS; ++i) {
                 vec1_chunk = _mm512_loadu_ps(vec1 + i * SIMD_CHUNK_SIZE);
                 vec2_chunk = _mm512_loadu_ps(vec2 + i * SIMD_CHUNK_SIZE);
-                diff_chunk = _mm512_sub_ps(vec1_chunk, vec2_chunk);
-                sum_chunk = _mm512_fmadd_ps(diff_chunk, diff_chunk, sum_chunk);
+                sum_chunk = _mm512_fmadd_ps(vec1_chunk, vec2_chunk, sum_chunk);
             }
         }
         else if constexpr (unroll_size == 4) {
@@ -132,31 +123,23 @@ private:
             __m512 sum_chunk_3 = _mm512_setzero_ps();
 
             // Main unrolled loop
-            // Ensure we have at least 4 chunks left to process
             for (; i + 3 < NUM_SIMD_CHUNKS; i += 4) {
                 // Chunk 0
                 vec1_chunk = _mm512_loadu_ps(vec1 + i * SIMD_CHUNK_SIZE);
                 vec2_chunk = _mm512_loadu_ps(vec2 + i * SIMD_CHUNK_SIZE);
-                diff_chunk = _mm512_sub_ps(vec1_chunk, vec2_chunk);
-                sum_chunk = _mm512_fmadd_ps(diff_chunk, diff_chunk, sum_chunk);
-
+                sum_chunk = _mm512_fmadd_ps(vec1_chunk, vec2_chunk, sum_chunk);
                 // Chunk 1
                 vec1_chunk = _mm512_loadu_ps(vec1 + (i + 1) * SIMD_CHUNK_SIZE);
                 vec2_chunk = _mm512_loadu_ps(vec2 + (i + 1) * SIMD_CHUNK_SIZE);
-                diff_chunk = _mm512_sub_ps(vec1_chunk, vec2_chunk);
-                sum_chunk_1 = _mm512_fmadd_ps(diff_chunk, diff_chunk, sum_chunk_1);
-
+                sum_chunk_1 = _mm512_fmadd_ps(vec1_chunk, vec2_chunk, sum_chunk_1);
                 // Chunk 2
                 vec1_chunk = _mm512_loadu_ps(vec1 + (i + 2) * SIMD_CHUNK_SIZE);
                 vec2_chunk = _mm512_loadu_ps(vec2 + (i + 2) * SIMD_CHUNK_SIZE);
-                diff_chunk = _mm512_sub_ps(vec1_chunk, vec2_chunk);
-                sum_chunk_2 = _mm512_fmadd_ps(diff_chunk, diff_chunk, sum_chunk_2);
-
+                sum_chunk_2 = _mm512_fmadd_ps(vec1_chunk, vec2_chunk, sum_chunk_2);
                 // Chunk 3
                 vec1_chunk = _mm512_loadu_ps(vec1 + (i + 3) * SIMD_CHUNK_SIZE);
                 vec2_chunk = _mm512_loadu_ps(vec2 + (i + 3) * SIMD_CHUNK_SIZE);
-                diff_chunk = _mm512_sub_ps(vec1_chunk, vec2_chunk);
-                sum_chunk_3 = _mm512_fmadd_ps(diff_chunk, diff_chunk, sum_chunk_3);
+                sum_chunk_3 = _mm512_fmadd_ps(vec1_chunk, vec2_chunk, sum_chunk_3);
             }
 
             // Merge accumulators
@@ -166,37 +149,18 @@ private:
             sum_chunk = _mm512_add_ps(sum_01, sum_23);
 
             // Process remaining SIMD chunks (Tail handling for unrolling)
-            // This loop handles the cases where NUM_SIMD_CHUNKS is not a multiple of unroll_size
             for (; i < NUM_SIMD_CHUNKS; ++i) {
                 vec1_chunk = _mm512_loadu_ps(vec1 + i * SIMD_CHUNK_SIZE);
                 vec2_chunk = _mm512_loadu_ps(vec2 + i * SIMD_CHUNK_SIZE);
-                diff_chunk = _mm512_sub_ps(vec1_chunk, vec2_chunk);
-                sum_chunk = _mm512_fmadd_ps(diff_chunk, diff_chunk, sum_chunk);
+                sum_chunk = _mm512_fmadd_ps(vec1_chunk, vec2_chunk, sum_chunk);
             }
         }
 
-        // // Process remaining elements (non-multiple of 16)
-        // if (NUM_REMAINING_ELES > 0) {
-        //     throw std::runtime_error(
-        //         "Currently vector dimension must be a multiple of SIMD chunk size (e.g. 16 for float type)"
-        //     );
-        // }
-
+        // Horizontal reduction
         return _mm512_reduce_add_ps(sum_chunk);
     }
 
-    __attribute__((always_inline))
-    auto _impl_dot(const vec_ele_t* vec1, const vec_ele_t* vec2) const -> distance_t {
-        throw std::runtime_error("Currently DOT distance is not supported");
-    }
+};  // class SIMDFMA
 
-
-    __attribute__((always_inline))
-    auto _impl_cosine(const vec_ele_t* vec1, const vec_ele_t* vec2) const -> distance_t {
-        throw std::runtime_error("Currently COSINE distance is not supported");
-    }
-
-};  // class SIMDDistance
-
-}  // namespace cpu
+}   // namespace cpu
 }   // namespace artea

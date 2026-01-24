@@ -38,6 +38,8 @@ foreach(sourcefile ${BENCH_SOURCES})
         artea
         benchmark::benchmark
         benchmark::benchmark_main
+        hnswlib
+	    faiss
     )
 
     # Explicit optimization flags for Release builds

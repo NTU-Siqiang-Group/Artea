@@ -13,33 +13,35 @@
 // limitations under the License.
 
 /*
- * @FilePath: /Artea/include/artea/cpu/framework/updater_traits.hpp
+ * @FilePath: /Artea/include/artea/cpu/framework/vertex_generator_traits.hpp
  * @Author: Chandler (Weitang Ye) <weitang.ye@ntu.edu.sg>
  * @Description:
  */
+
+#include <artea/cpu/containers/allocator.hpp>
 
 #pragma once
 
 namespace artea {
 namespace cpu {
 
-// ----- Forward Declaration  ------ //
-template <typename UpdaterTraitsT, typename DerivedClassT> class NeighborUpdater;
-template <typename UpdaterTraitsT> class RNGUpdater;
+/** ------ Forward Declaration  ------ **/
+template <typename VertexGeneratorTraitsT> class OrthoLSHGenerator;
+template <typename VertexGeneratorTraitsT> class LSHTable;
 
 template <typename ComputerTraitsT, typename BufferTraitsT>
-struct UpdaterTraits : public ComputerTraitsT, public BufferTraitsT {
+struct VertexGeneratorTraits : public ComputerTraitsT, public BufferTraitsT {
 
     /** ------ Self Traits ------ **/
-    using updater_traits_t = UpdaterTraits<ComputerTraitsT, BufferTraitsT>;
+    using vertex_generator_traits_t = VertexGeneratorTraits<ComputerTraitsT, BufferTraitsT>;
 
-    template <typename DerivedClassT>
-    using neighbor_updater_t = NeighborUpdater<updater_traits_t, DerivedClassT>;
+    /** @brief Ortho LSH generator. */
+    using ortho_lsh_generator_t = OrthoLSHGenerator<vertex_generator_traits_t>;
 
-    /** @brief RNG updater. */
-    using rng_updater_t = RNGUpdater<updater_traits_t>;
+    /** @brief LSH function table type. */
+    using lsh_table_t = LSHTable<vertex_generator_traits_t>;
 
-};  // struct UpdaterTraits
+};  // struct VertexGeneratorTraits
 
 }   // namespace cpu
 }   // namespace artea

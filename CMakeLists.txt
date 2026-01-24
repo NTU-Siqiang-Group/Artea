@@ -63,27 +63,30 @@ FetchContent_Declare(
 )
 
 FetchContent_Declare(
-    hnswlib
-    GIT_REPOSITORY https://github.com/nmslib/hnswlib.git
-    GIT_TAG "v0.8.0"
+    eigen
+    GIT_REPOSITORY https://gitlab.com/libeigen/eigen.git
+    GIT_TAG "5.0.1"
 )
 
 FetchContent_Declare(
     googletest
     GIT_REPOSITORY https://github.com/google/googletest.git
-    GIT_TAG v1.17.0
+    GIT_TAG "v1.17.0"
 )
 
 FetchContent_Declare(
     benchmark
     GIT_REPOSITORY https://github.com/google/benchmark.git
-    GIT_TAG v1.9.5
+    GIT_TAG "v1.9.5"
 )
 
 # --- Google Benchmark Configuration ---
 # Disable building tests and examples for Google Benchmark to speed up the process
 set(BENCHMARK_ENABLE_TESTING OFF CACHE BOOL "Disable benchmark testing" FORCE)
 set(BENCHMARK_INSTALL_DOCS OFF CACHE BOOL "Disable benchmark docs" FORCE)
+
+# --- Hnswlib Local Configuration ---
+add_subdirectory(third_party/hnswlib)
 
 # --- Faiss Submodule Configuration ---
 # Set options to build a minimal CPU version of Faiss
@@ -93,6 +96,11 @@ set(BUILD_TESTING OFF CACHE BOOL "Disable building Faiss's own tests")
 set(FAISS_OPT_LEVEL "native" CACHE STRING "Optimize Faiss for the host CPU")
 add_subdirectory(third_party/faiss)
 
+# --- Aigen Configuration ---
+set(EIGEN_BUILD_DOC OFF CACHE BOOL "" FORCE)
+set(EIGEN_BUILD_PKGCONFIG OFF CACHE BOOL "" FORCE)
+set(BUILD_TESTING OFF CACHE BOOL "" FORCE)
+
 # --- Downloads and configures all declared content ---
 FetchContent_MakeAvailable(
 	nlohmann_json
@@ -100,7 +108,7 @@ FetchContent_MakeAvailable(
 	termcolor
 	fmt
 	range-v3
-	hnswlib
+	eigen
 	googletest
 	benchmark
 )
@@ -114,10 +122,12 @@ target_include_directories(artea INTERFACE
 # Add compiler flag for AVX512 support to artea library
 target_compile_options(artea INTERFACE -mavx512f -march=native)
 
-#
+# --- Compile Definitions (Macros) ---
 target_compile_definitions(artea INTERFACE
 	# avoid error caused by fmt library
 	FMT_USE_CONSTEVAL=0
+	# tells Eigen to redirect QR, LU, Cholesky, etc. to MKL routines
+	EIGEN_USE_MKL_ALL
 )
 
 target_link_libraries(artea INTERFACE
@@ -129,8 +139,7 @@ target_link_libraries(artea INTERFACE
     TBB::tbb
     MKL::MKL
 	range-v3::range-v3
-	hnswlib
-	faiss
+	eigen
 )
 
 include(CTest)

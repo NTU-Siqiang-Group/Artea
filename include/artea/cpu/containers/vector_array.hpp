@@ -1,7 +1,7 @@
 /*
  * @FilePath: /Artea/include/artea/cpu/containers/vector_array.hpp
  * @Author: Chandler (Weitang Ye) <weitang.ye@ntu.edu.sg>
- * @LastEditTime: 2026-01-22 16:48:58
+ * @LastEditTime: 2026-01-23 21:30:52
  * @Date: 2025-10-18 16:31:57
  * @Description:
  */
@@ -72,6 +72,137 @@ public:
     // We enable move semantics, which will be efficient as it just moves the underlying std::vector object.
     VectorArray(VectorArray&&) noexcept = default;
     VectorArray& operator=(VectorArray&&) noexcept = default;
+
+    // ==========================================
+    // Iterator Definitions
+    // ==========================================
+
+    /**
+     * @brief A stride iterator that navigates the flat storage vector by vector.
+     *
+     * When dereferenced (*it), it returns a pointer (VecEleT*) to the start
+     * of the current vector.
+     */
+    template <bool IsConst>
+    class VecIterator {
+    public:
+        // Standard iterator traits for STL compatibility
+        using iterator_category = std::random_access_iterator_tag;
+        using value_type        = VecEleT;
+        using difference_type   = std::ptrdiff_t;
+        // The 'reference' here is a pointer to the start of the vector data.
+        using reference         = typename std::conditional<IsConst, const VecEleT*, VecEleT*>::type;
+        using pointer           = typename std::conditional<IsConst, const VecEleT*, VecEleT*>::type;
+
+        using internal_ptr_t    = typename std::conditional<IsConst, const VecEleT*, VecEleT*>::type;
+
+        VecIterator() : _ptr(nullptr), _stride(0) {}
+        VecIterator(internal_ptr_t ptr, vec_dim_t stride) : _ptr(ptr), _stride(stride) {}
+
+        // Allow implicit conversion from iterator to const_iterator
+        template <bool WasConst, typename = std::enable_if_t<IsConst && !WasConst>>
+        VecIterator(const VecIterator<WasConst>& other) : _ptr(other._ptr), _stride(other._stride) {}
+
+        // Dereference: Returns the pointer to the start of the current vector
+        reference operator*() const { return _ptr; }
+
+        // Random access: it[n] returns the pointer to the nth vector relative to current
+        reference operator[](difference_type n) const { return _ptr + (n * _stride); }
+
+        // --- Increment/Decrement Operations ---
+
+        // Prefix ++
+        VecIterator& operator++() {
+            _ptr += _stride;
+            return *this;
+        }
+
+        // Postfix ++
+        VecIterator operator++(int) {
+            VecIterator temp = *this;
+            _ptr += _stride;
+            return temp;
+        }
+
+        // Prefix --
+        VecIterator& operator--() {
+            _ptr -= _stride;
+            return *this;
+        }
+
+        // Postfix --
+        VecIterator operator--(int) {
+            VecIterator temp = *this;
+            _ptr -= _stride;
+            return temp;
+        }
+
+        // --- Arithmetic Operations ---
+
+        VecIterator& operator+=(difference_type n) { _ptr += n * _stride; return *this; }
+        VecIterator& operator-=(difference_type n) { _ptr -= n * _stride; return *this; }
+
+        VecIterator operator+(difference_type n) const { return VecIterator(_ptr + n * _stride, _stride); }
+        VecIterator operator-(difference_type n) const { return VecIterator(_ptr - n * _stride, _stride); }
+
+        friend VecIterator operator+(difference_type n, const VecIterator& it) { return it + n; }
+
+        // Calculate distance (number of vectors) between iterators
+        difference_type operator-(const VecIterator& other) const {
+            if (_stride == 0) return 0;
+            return (_ptr - other._ptr) / _stride;
+        }
+
+        // --- Comparison Operations ---
+
+        bool operator==(const VecIterator& other) const { return _ptr == other._ptr; }
+        bool operator!=(const VecIterator& other) const { return _ptr != other._ptr; }
+        bool operator<(const VecIterator& other)  const { return _ptr < other._ptr; }
+        bool operator>(const VecIterator& other)  const { return _ptr > other._ptr; }
+        bool operator<=(const VecIterator& other) const { return _ptr <= other._ptr; }
+        bool operator>=(const VecIterator& other) const { return _ptr >= other._ptr; }
+
+    private:
+        internal_ptr_t _ptr;
+        vec_dim_t _stride;
+        // Grant VectorArray access to private members for construction
+        friend class VectorArray;
+    };
+
+    using iterator = VecIterator<false>;
+    using const_iterator = VecIterator<true>;
+
+    /**
+     * @brief Returns an iterator to the first vector.
+     */
+    iterator begin() {
+        return iterator(_storage.data(), _vec_dim);
+    }
+
+    /**
+     * @brief Returns an iterator to the position past the last vector.
+     */
+    iterator end() {
+        // Calculate the address immediately after the last element of the last vector
+        return iterator(_storage.data() + static_cast<std::size_t>(_num_vecs) * _vec_dim, _vec_dim);
+    }
+
+    /**
+     * @brief Returns a const iterator to the first vector.
+     */
+    const_iterator begin() const {
+        return const_iterator(_storage.data(), _vec_dim);
+    }
+
+    /**
+     * @brief Returns a const iterator to the position past the last vector.
+     */
+    const_iterator end() const {
+        return const_iterator(_storage.data() + static_cast<std::size_t>(_num_vecs) * _vec_dim, _vec_dim);
+    }
+
+    const_iterator cbegin() const { return begin(); }
+    const_iterator cend() const { return end(); }
 
     // --- Accessors ---
 

@@ -85,6 +85,9 @@ public:
     /** @brief partition identifiers. */
     using part_id_t = VertexNumT;
 
+    /** @brief number of hash functions. */
+    using hash_num_t  = uint32_t;
+
     /** @brief iteration counts. */
     using iter_t = uint32_t;
 
@@ -108,6 +111,8 @@ public:
 
     /** @brief neighbor arrays. */
     using nbr_arr_t = std::vector<nbr_t>;
+
+    using vector_t = avx512_container_t<vec_ele_t>;
 
     /** @brief vector arrays. */
     using vector_array_t = VectorArray<vertex_num_t, vec_ele_t>;

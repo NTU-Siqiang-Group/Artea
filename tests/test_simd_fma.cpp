@@ -13,9 +13,9 @@
 // limitations under the License.
 
 /*
- * @FilePath: /Artea/tests/test_simd_distance.cpp
+ * @FilePath: /Artea/tests/test_simd_fma.cpp
  * @Author: Chandler (Weitang Ye) <weitang.ye@ntu.edu.sg>
- * @Description: Comprehensive benchmark suite for SIMD distance calculations
+ * @Description: Comprehensive benchmark suite for SIMD FMA (Dot Product) calculations
  *               using Google Test for correctness and Google Benchmark for performance.
  *               (Dataset Only Version)
  */
@@ -34,6 +34,7 @@
 #include <benchmark/benchmark.h>
 // Artea Headers
 #include <artea/cpu/framework/artea.hpp>
+#include <artea/cpu/utils/simd_fma.hpp> // Include the new FMA header
 // Faiss Headers
 #include <faiss/IndexFlat.h>
 #include <faiss/utils/distances.h>
@@ -46,13 +47,13 @@ using namespace artea::cpu;
 
 // Typename Definitions
 using base_traits_t = BaseTraits<uint32_t, float, false>;
-using computer_traits_t = ComputerTraits<base_traits_t, DistanceMetricsT::EUCLIDEAN>;
+// We use DOT metric here to represent Inner Product / FMA context
+using computer_traits_t = ComputerTraits<base_traits_t, DistanceMetricsT::DOT>;
 using vector_dataset_t = typename base_traits_t::vector_dataset_t;
-using artea_simdu1_dist_t = typename computer_traits_t::simdu1_dist_t;
-using artea_simdu2_dist_t = typename computer_traits_t::simdu2_dist_t;
-using artea_simdu4_dist_t = typename computer_traits_t::simdu4_dist_t;
+
+// Define aliases for SIMDFMA with different unroll sizes
 template <std::size_t UnrollSize>
-using artea_simd_dist_t = computer_traits_t::template simd_dist_t<UnrollSize>;
+using artea_simd_fma_t = SIMDFMA<computer_traits_t, UnrollSize>;
 
 // --- Configuration & Data Provider ---
 
@@ -108,8 +109,8 @@ public:
 
         logger.info(fmt::format("Dataset loaded successfully. Dimension: {}", dim_));
 
-        // Initialize Faiss Index for DistanceComputer (using the 4 cached targets)
-        faiss_index_ = std::make_unique<faiss::IndexFlatL2>(dim_);
+        // Initialize Faiss Index for DistanceComputer (using IndexFlatIP for Inner Product)
+        faiss_index_ = std::make_unique<faiss::IndexFlatIP>(dim_);
         faiss_index_->add(4, targets_.data());
     }
 
@@ -120,7 +121,7 @@ public:
     // Returns pointer to raw array of 4 vectors
     float* get_targets_raw() { return targets_.data(); }
 
-    faiss::IndexFlatL2* get_faiss_index() { return faiss_index_.get(); }
+    faiss::IndexFlatIP* get_faiss_index() { return faiss_index_.get(); }
 
 private:
     DataProvider() = default;
@@ -128,29 +129,28 @@ private:
     uint32_t dim_ = 0;
     std::vector<float> query_vec_;
     std::vector<float> targets_; // Stores 4 concatenated vectors
-    std::unique_ptr<faiss::IndexFlatL2> faiss_index_;
+    std::unique_ptr<faiss::IndexFlatIP> faiss_index_;
 };
 
-// Helper: Naive C++ Implementation (Ground Truth)
-float cpp_L2sqr(const float* x, const float* y, const size_t d) {
+// Helper: Naive C++ Implementation for Dot Product (Ground Truth)
+float cpp_dot_product(const float* x, const float* y, const size_t d) {
     float res = 0.0f;
     for (size_t i = 0; i < d; ++i) {
-        float diff = x[i] - y[i];
-        res += diff * diff;
+        res += x[i] * y[i];
     }
     return res;
 }
 
 // --- PART 1: Google Test (Correctness) ---
 
-class SIMDCorrectnessTest : public ::testing::Test {
+class FMACorrectnessTest : public ::testing::Test {
 protected:
     void SetUp() override {
         // DataProvider is initialized in main
     }
 };
 
-TEST_F(SIMDCorrectnessTest, VerifyAgainstGroundTruth) {
+TEST_F(FMACorrectnessTest, VerifyAgainstGroundTruth) {
     auto& provider = DataProvider::instance();
     uint32_t dim = provider.get_dim();
     float* q = provider.get_query();
@@ -158,24 +158,26 @@ TEST_F(SIMDCorrectnessTest, VerifyAgainstGroundTruth) {
     // Check all 4 targets
     for (int i = 0; i < 4; ++i) {
         float* t = provider.get_target(i);
-        float gt = cpp_L2sqr(q, t, dim);
+        float gt = cpp_dot_product(q, t, dim);
 
         // 1. Artea Variants
-        artea_simdu1_dist_t artea_u1(dim);
-        artea_simdu2_dist_t artea_u2(dim);
-        artea_simdu4_dist_t artea_u4(dim);
+        artea_simd_fma_t<1> artea_u1(dim);
+        artea_simd_fma_t<2> artea_u2(dim);
+        artea_simd_fma_t<4> artea_u4(dim);
 
-        EXPECT_NEAR(artea_u1(q, t), gt, 1e-5) << "Artea Unroll-1 failed at idx " << i;
-        EXPECT_NEAR(artea_u2(q, t), gt, 1e-5) << "Artea Unroll-2 failed at idx " << i;
-        EXPECT_NEAR(artea_u4(q, t), gt, 1e-5) << "Artea Unroll-4 failed at idx " << i;
+        EXPECT_NEAR(artea_u1(q, t), gt, 1e-5) << "Artea FMA Unroll-1 failed at idx " << i;
+        EXPECT_NEAR(artea_u2(q, t), gt, 1e-5) << "Artea FMA Unroll-2 failed at idx " << i;
+        EXPECT_NEAR(artea_u4(q, t), gt, 1e-5) << "Artea FMA Unroll-4 failed at idx " << i;
 
-        // 2. Faiss Fvec
-        EXPECT_NEAR(faiss::fvec_L2sqr(q, t, dim), gt, 1e-5) << "Faiss fvec failed at idx " << i;
+        // 2. Faiss fvec_inner_product
+        EXPECT_NEAR(faiss::fvec_inner_product(q, t, dim), gt, 1e-4) << "Faiss fvec_inner_product failed at idx " << i;
 
-        // 3. HNSWLib
-        hnswlib::L2Space l2space(dim);
-        float hnsw_res = l2space.get_dist_func()(q, t, l2space.get_dist_func_param());
-        EXPECT_NEAR(hnsw_res, gt, 1e-5) << "HNSWLib failed at idx " << i;
+        // 3. HNSWLib (Note: InnerProductSpace in HNSWLib usually returns 1.0f - dot_product)
+        hnswlib::InnerProductSpace ip_space(dim);
+        float hnsw_res = ip_space.get_dist_func()(q, t, ip_space.get_dist_func_param());
+        // Recover dot product: dot = 1.0f - dist
+        float hnsw_dot = 1.0f - hnsw_res;
+        EXPECT_NEAR(hnsw_dot, gt, 1e-4) << "HNSWLib failed at idx " << i;
     }
 
     // 4. Faiss DistanceComputer (Batch & Single)
@@ -184,39 +186,40 @@ TEST_F(SIMDCorrectnessTest, VerifyAgainstGroundTruth) {
     computer->set_query(q);
 
     // Single
-    EXPECT_NEAR((*computer)(0), cpp_L2sqr(q, provider.get_target(0), dim), 1e-5);
+    // Faiss IndexFlatIP returns the Dot Product directly (larger is better), unlike HNSWLib
+    EXPECT_NEAR((*computer)(0), cpp_dot_product(q, provider.get_target(0), dim), 1e-4);
 
     // Batch
     float d0, d1, d2, d3;
     computer->distances_batch_4(0, 1, 2, 3, d0, d1, d2, d3);
-    EXPECT_NEAR(d0, cpp_L2sqr(q, provider.get_target(0), dim), 1e-5);
-    EXPECT_NEAR(d3, cpp_L2sqr(q, provider.get_target(3), dim), 1e-5);
+    EXPECT_NEAR(d0, cpp_dot_product(q, provider.get_target(0), dim), 1e-4);
+    EXPECT_NEAR(d3, cpp_dot_product(q, provider.get_target(3), dim), 1e-4);
 }
 
 // --- PART 2: Google Benchmark (Performance) ---
 
-// 1. Artea Benchmarks
+// 1. Artea FMA Benchmarks
 template <std::size_t UnrollSize>
-static void BM_Artea(benchmark::State& state) {
+static void BM_Artea_FMA(benchmark::State& state) {
     auto& provider = DataProvider::instance();
-    artea_simd_dist_t<UnrollSize> dist_func(provider.get_dim());
+    artea_simd_fma_t<UnrollSize> fma_func(provider.get_dim());
     float* q = provider.get_query();
     float* t = provider.get_target(0);
 
     for (auto _ : state) {
-        benchmark::DoNotOptimize(dist_func(q, t));
+        benchmark::DoNotOptimize(fma_func(q, t));
     }
 }
-BENCHMARK_TEMPLATE(BM_Artea, 1)->Name("Artea_Unroll_1");
-BENCHMARK_TEMPLATE(BM_Artea, 2)->Name("Artea_Unroll_2");
-BENCHMARK_TEMPLATE(BM_Artea, 4)->Name("Artea_Unroll_4");
+BENCHMARK_TEMPLATE(BM_Artea_FMA, 1)->Name("Artea_FMA_Unroll_1");
+BENCHMARK_TEMPLATE(BM_Artea_FMA, 2)->Name("Artea_FMA_Unroll_2");
+BENCHMARK_TEMPLATE(BM_Artea_FMA, 4)->Name("Artea_FMA_Unroll_4");
 
-// 2. HNSWLib Benchmark
-static void BM_HNSWLib(benchmark::State& state) {
+// 2. HNSWLib InnerProduct Benchmark
+static void BM_HNSWLib_IP(benchmark::State& state) {
     auto& provider = DataProvider::instance();
-    hnswlib::L2Space l2space(provider.get_dim());
-    auto func = l2space.get_dist_func();
-    void* param = l2space.get_dist_func_param();
+    hnswlib::InnerProductSpace ip_space(provider.get_dim());
+    auto func = ip_space.get_dist_func();
+    void* param = ip_space.get_dist_func_param();
 
     float* q = provider.get_query();
     float* t = provider.get_target(0);
@@ -225,23 +228,23 @@ static void BM_HNSWLib(benchmark::State& state) {
         benchmark::DoNotOptimize(func(q, t, param));
     }
 }
-BENCHMARK(BM_HNSWLib)->Name("HNSWLib_AVX512_Auto");
+BENCHMARK(BM_HNSWLib_IP)->Name("HNSWLib_IP_AVX512");
 
-// 3. Faiss Direct Benchmark
-static void BM_Faiss_Fvec(benchmark::State& state) {
+// 3. Faiss Direct IP Benchmark
+static void BM_Faiss_Fvec_IP(benchmark::State& state) {
     auto& provider = DataProvider::instance();
     float* q = provider.get_query();
     float* t = provider.get_target(0);
     uint32_t dim = provider.get_dim();
 
     for (auto _ : state) {
-        benchmark::DoNotOptimize(faiss::fvec_L2sqr(q, t, dim));
+        benchmark::DoNotOptimize(faiss::fvec_inner_product(q, t, dim));
     }
 }
-BENCHMARK(BM_Faiss_Fvec)->Name("Faiss_fvec_L2sqr");
+BENCHMARK(BM_Faiss_Fvec_IP)->Name("Faiss_fvec_inner_product");
 
-// 4. Faiss DistanceComputer (Single)
-static void BM_Faiss_DistComp_Single(benchmark::State& state) {
+// 4. Faiss DistanceComputer (Single) - IP
+static void BM_Faiss_DistComp_Single_IP(benchmark::State& state) {
     auto& provider = DataProvider::instance();
     auto computer = std::unique_ptr<faiss::DistanceComputer>(
         provider.get_faiss_index()->get_distance_computer()
@@ -252,10 +255,10 @@ static void BM_Faiss_DistComp_Single(benchmark::State& state) {
         benchmark::DoNotOptimize((*computer)(0));
     }
 }
-BENCHMARK(BM_Faiss_DistComp_Single)->Name("Faiss_DistComp_Single");
+BENCHMARK(BM_Faiss_DistComp_Single_IP)->Name("Faiss_DistComp_Single_IP");
 
-// 5. Faiss DistanceComputer (Batch 4)
-static void BM_Faiss_DistComp_Batch4(benchmark::State& state) {
+// 5. Faiss DistanceComputer (Batch 4) - IP
+static void BM_Faiss_DistComp_Batch4_IP(benchmark::State& state) {
     auto& provider = DataProvider::instance();
     auto computer = std::unique_ptr<faiss::DistanceComputer>(
         provider.get_faiss_index()->get_distance_computer()
@@ -264,28 +267,26 @@ static void BM_Faiss_DistComp_Batch4(benchmark::State& state) {
 
     float d0, d1, d2, d3;
 
-    // Measures throughput of processing 4 items at once
     for (auto _ : state) {
         computer->distances_batch_4(0, 1, 2, 3, d0, d1, d2, d3);
         benchmark::DoNotOptimize(d0);
     }
-    // Reflect that 4 distance calculations happened per iteration
     state.SetItemsProcessed(state.iterations() * 4);
 }
-BENCHMARK(BM_Faiss_DistComp_Batch4)->Name("Faiss_DistComp_Batch4");
+BENCHMARK(BM_Faiss_DistComp_Batch4_IP)->Name("Faiss_DistComp_Batch4_IP");
 
-// 6. Direct C++ (Baseline)
-static void BM_Cpp_Direct(benchmark::State& state) {
+// 6. Direct C++ (Baseline) - Dot Product
+static void BM_Cpp_Direct_Dot(benchmark::State& state) {
     auto& provider = DataProvider::instance();
     float* q = provider.get_query();
     float* t = provider.get_target(0);
     uint32_t dim = provider.get_dim();
 
     for (auto _ : state) {
-        benchmark::DoNotOptimize(cpp_L2sqr(q, t, dim));
+        benchmark::DoNotOptimize(cpp_dot_product(q, t, dim));
     }
 }
-BENCHMARK(BM_Cpp_Direct)->Name("Cpp_Direct_Implementation");
+BENCHMARK(BM_Cpp_Direct_Dot)->Name("Cpp_Direct_DotProduct");
 
 // --- Main Entry ---
 
@@ -293,7 +294,7 @@ int main(int argc, char** argv) {
     ::testing::InitGoogleTest(&argc, argv);
 
     // 1. Parse Arguments
-    argparse::ArgumentParser program("test_simd_distance");
+    argparse::ArgumentParser program("test_simd_fma");
 
     program.add_argument("-c", "--config").default_value(std::string("../datasets.json"))
            .help("Path to dataset config file");
@@ -312,7 +313,7 @@ int main(int argc, char** argv) {
     g_config.dataset_name = program.get<std::string>("--dataset");
 
     // 2. Initialize Data
-    logger.info("Initializing Data Provider from Dataset...");
+    logger.info("Initializing Data Provider from Dataset for FMA Tests...");
     try {
         DataProvider::instance().init();
     } catch (const std::exception& e) {
@@ -322,7 +323,7 @@ int main(int argc, char** argv) {
 
     // 3. Run Google Test (Correctness Check)
     logger.info("==========================================================");
-    logger.info(" -> Running Correctness Tests (GTest)...");
+    logger.info(" -> Running FMA Correctness Tests (GTest)...");
     logger.info("==========================================================");
     int gtest_result = RUN_ALL_TESTS();
 
@@ -337,7 +338,7 @@ int main(int argc, char** argv) {
 
     // 4. Run Google Benchmark (Performance)
     logger.info("==========================================================");
-    logger.info(" -> Running Performance Benchmarks (Google Benchmark)...");
+    logger.info(" -> Running FMA Performance Benchmarks (Google Benchmark)...");
     logger.info("==========================================================");
     ::benchmark::Initialize(&argc, argv);
     ::benchmark::RunSpecifiedBenchmarks();

@@ -12,6 +12,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+/*
+ * @FilePath: /Artea/include/artea/cpu/edge_generator/neighbor_updater.hpp
+ * @Author: Chandler (Weitang Ye) <weitang.ye@ntu.edu.sg>
+ * @Description: Neighbor updater base class for edge generation.
+ */
+
 #pragma once
 
 #include <cstddef>
@@ -22,18 +28,18 @@
 namespace artea {
 namespace cpu {
 
-template <typename UpdaterTraitsT, typename DerivedClassT>
+template <typename EdgeGeneratorTraitsT, typename DerivedClassT>
 class NeighborUpdater {
 
-    using vertex_id_t = typename UpdaterTraitsT::vertex_id_t;
-    using vertex_num_t = typename UpdaterTraitsT::vertex_num_t;
-    using vec_ele_t = typename UpdaterTraitsT::vec_ele_t;
-    using distance_t = typename UpdaterTraitsT::distance_t;
-    using vector_array_t = typename UpdaterTraitsT::vector_array_t;
-    using nbr_t = typename UpdaterTraitsT::nbr_t;
-    using nbr_arr_t = typename UpdaterTraitsT::nbr_arr_t;
-    using log_table_t = typename UpdaterTraitsT::log_table_t;
-    using dist_func_t = typename UpdaterTraitsT::dist_func_t;
+    using vertex_id_t = typename EdgeGeneratorTraitsT::vertex_id_t;
+    using vertex_num_t = typename EdgeGeneratorTraitsT::vertex_num_t;
+    using vec_ele_t = typename EdgeGeneratorTraitsT::vec_ele_t;
+    using distance_t = typename EdgeGeneratorTraitsT::distance_t;
+    using vector_array_t = typename EdgeGeneratorTraitsT::vector_array_t;
+    using nbr_t = typename EdgeGeneratorTraitsT::nbr_t;
+    using nbr_arr_t = typename EdgeGeneratorTraitsT::nbr_arr_t;
+    using log_table_t = typename EdgeGeneratorTraitsT::log_table_t;
+    using dist_func_t = typename EdgeGeneratorTraitsT::dist_func_t;
 
 public:
 

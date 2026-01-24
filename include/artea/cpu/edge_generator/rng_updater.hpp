@@ -13,9 +13,9 @@
 // limitations under the License.
 
 /*
- * @FilePath: /Artea/include/artea/cpu/propagation/rng_updater.hpp
+ * @FilePath: /Artea/include/artea/cpu/edge_generator/rng_updater.hpp
  * @Author: Chandler (Weitang Ye) <weitang.ye@ntu.edu.sg>
- * @Description:
+ * @Description: RNG-based neighbor updater for edge generation.
  */
 
 #pragma once
@@ -28,23 +28,23 @@
 namespace artea {
 namespace cpu {
 
-template <typename UpdaterTraitsT>
+template <typename EdgeGeneratorTraitsT>
 class RNGUpdater :
-    public UpdaterTraitsT::template neighbor_updater_t<RNGUpdater<UpdaterTraitsT>> {
+    public EdgeGeneratorTraitsT::template neighbor_updater_t<RNGUpdater<EdgeGeneratorTraitsT>> {
 
-    using vertex_id_t = typename UpdaterTraitsT::vertex_id_t;
-    using vertex_num_t = typename UpdaterTraitsT::vertex_num_t;
-    using vec_ele_t = typename UpdaterTraitsT::vec_ele_t;
-    using distance_t = typename UpdaterTraitsT::distance_t;
-    using vector_array_t = typename UpdaterTraitsT::vector_array_t;
-    using nbr_t = typename UpdaterTraitsT::nbr_t;
-    using nbr_arr_t = typename UpdaterTraitsT::nbr_arr_t;
-    using log_table_t = typename UpdaterTraitsT::log_table_t;
-    using dist_func_t = typename UpdaterTraitsT::dist_func_t;
-    using base_class_t = typename UpdaterTraitsT::template neighbor_updater_t<RNGUpdater<UpdaterTraitsT>>;
+    using vertex_id_t = typename EdgeGeneratorTraitsT::vertex_id_t;
+    using vertex_num_t = typename EdgeGeneratorTraitsT::vertex_num_t;
+    using vec_ele_t = typename EdgeGeneratorTraitsT::vec_ele_t;
+    using distance_t = typename EdgeGeneratorTraitsT::distance_t;
+    using vector_array_t = typename EdgeGeneratorTraitsT::vector_array_t;
+    using nbr_t = typename EdgeGeneratorTraitsT::nbr_t;
+    using nbr_arr_t = typename EdgeGeneratorTraitsT::nbr_arr_t;
+    using log_table_t = typename EdgeGeneratorTraitsT::log_table_t;
+    using dist_func_t = typename EdgeGeneratorTraitsT::dist_func_t;
+    using base_class_t = typename EdgeGeneratorTraitsT::template neighbor_updater_t<RNGUpdater<EdgeGeneratorTraitsT>>;
 
-    static constexpr vertex_id_t invalid_vertex_id = UpdaterTraitsT::invalid_vertex_id;
-    static constexpr distance_t nan_distance = UpdaterTraitsT::nan_distance;
+    static constexpr vertex_id_t invalid_vertex_id = EdgeGeneratorTraitsT::invalid_vertex_id;
+    static constexpr distance_t nan_distance = EdgeGeneratorTraitsT::nan_distance;
 
 public:
     RNGUpdater(

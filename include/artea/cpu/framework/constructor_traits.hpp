@@ -30,17 +30,17 @@ namespace cpu {
 template <
     typename ComputerTraitsT,
     typename BufferTraitsT,
-    typename UpdaterTraitsT,
+    typename EdgeGeneratorTraitsT,
     bool SelectiveSchedule = false
 >
 struct ConstructorTraits :
-    public ComputerTraitsT, public BufferTraitsT, public UpdaterTraitsT
+    public ComputerTraitsT, public BufferTraitsT, public EdgeGeneratorTraitsT
 {
     /** @brief Type for graph constructor. */
-    using graph_constructor_t = GraphConstructor<ConstructorTraits<ComputerTraitsT, BufferTraitsT, UpdaterTraitsT>>;
+    using graph_constructor_t = GraphConstructor<ConstructorTraits<ComputerTraitsT, BufferTraitsT, EdgeGeneratorTraitsT>>;
 
     /** @brief Type for propagation engine. */
-    using propagate_engine_t = PropagateEngine<ConstructorTraits<ComputerTraitsT, BufferTraitsT, UpdaterTraitsT>>;
+    using propagate_engine_t = PropagateEngine<ConstructorTraits<ComputerTraitsT, BufferTraitsT, EdgeGeneratorTraitsT>>;
 
     /** @brief Indicates whether to enable selective scheduling. */
     static constexpr bool selective_schedule = SelectiveSchedule;

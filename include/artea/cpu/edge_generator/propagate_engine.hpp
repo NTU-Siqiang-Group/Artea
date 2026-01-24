@@ -13,9 +13,9 @@
 // limitations under the License.
 
 /*
- * @FilePath: /Artea/include/artea/cpu/propagation/stacked_propagate.hpp
+ * @FilePath: /Artea/include/artea/cpu/edge_generator/propagate_engine.hpp
  * @Author: Chandler (Weitang Ye) <weitang.ye@ntu.edu.sg>
- * @Description:
+ * @Description: Propagation engine for edge generation.
  */
 
 #pragma once
@@ -38,7 +38,7 @@ class PropagateEngine {
     using vertex_num_t = typename ConstructorTraitsT::vertex_num_t;
     using vec_ele_t = typename ConstructorTraitsT::vec_ele_t;
     using vertex_id_t = typename ConstructorTraitsT::vertex_id_t;
-    using distance_t = typename ConstructorTraitsT::vec_ele_t;
+    using distance_t = typename ConstructorTraitsT::distance_t;
     using iter_t = typename ConstructorTraitsT::iter_t;
     using nbr_t = typename ConstructorTraitsT::nbr_t;
     using nbr_arr_t = typename ConstructorTraitsT::nbr_arr_t;

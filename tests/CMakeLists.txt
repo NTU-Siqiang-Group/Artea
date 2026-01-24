@@ -23,6 +23,8 @@ foreach(sourcefile ${TEST_SOURCES})
         GTest::gtest
         benchmark::benchmark
         Threads::Threads
+        hnswlib
+	    faiss
     )
     add_test(NAME ${test_target} COMMAND ${test_target})
 endforeach()
