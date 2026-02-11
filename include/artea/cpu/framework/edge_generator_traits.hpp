@@ -25,19 +25,35 @@ namespace cpu {
 
 // ----- Forward Declaration  ------ //
 template <typename EdgeGeneratorTraitsT, typename DerivedClassT> class NeighborUpdater;
-template <typename EdgeGeneratorTraitsT> class RNGUpdater;
+template <typename EdgeGeneratorTraitsT> class TriangleUpdater;
+template <typename EdgeGeneratorTraitsT> class ReverseUpdater;
+template <typename EdgeGeneratorTraitsT> class RandomUpdater;
+template <typename EdgeGeneratorTraitsT> class RandomEG;
 
-template <typename ComputerTraitsT, typename BufferTraitsT>
-struct EdgeGeneratorTraits : public ComputerTraitsT, public BufferTraitsT {
+template <typename ComputerTraitsT, typename BufferTraitsT, typename IndexTraitsT>
+struct EdgeGeneratorTraits :
+    virtual public ComputerTraitsT,
+    virtual public BufferTraitsT,
+    virtual public IndexTraitsT
+{
 
     /** ------ Self Traits ------ **/
-    using updater_traits_t = EdgeGeneratorTraits<ComputerTraitsT, BufferTraitsT>;
+    using edge_generator_traits_t = EdgeGeneratorTraits<ComputerTraitsT, BufferTraitsT, IndexTraitsT>;
 
     template <typename DerivedClassT>
-    using neighbor_updater_t = NeighborUpdater<updater_traits_t, DerivedClassT>;
+    using neighbor_updater_t = NeighborUpdater<edge_generator_traits_t, DerivedClassT>;
 
-    /** @brief RNG updater. */
-    using rng_updater_t = RNGUpdater<updater_traits_t>;
+    /** @brief Triangle updater. */
+    using triangle_updater_t = TriangleUpdater<edge_generator_traits_t>;
+
+    /** @brief Reverse edge updater. */
+    using reverse_updater_t = ReverseUpdater<edge_generator_traits_t>;
+
+    /** @brief Random neighbor updater. */
+    using random_updater_t = RandomUpdater<edge_generator_traits_t>;
+
+    /** @brief Random edge generator. */
+    using random_eg_t = RandomEG<edge_generator_traits_t>;
 
 };  // struct EdgeGeneratorTraits
 

@@ -45,7 +45,7 @@ class BruteforceRouter :
     using distance_t = typename RouterTraitsT::distance_t;
     using dist_func_t = typename RouterTraitsT::dist_func_t;
     using vector_array_t = typename RouterTraitsT::vector_array_t;
-    using base_vecs_t = typename RouterTraitsT::base_vecs_t;
+    using idlist_array_t = typename RouterTraitsT::idlist_array_t;
     using base_class_t = typename RouterTraitsT::template vector_router_t<BruteforceRouter<RouterTraitsT>>;
 
     static constexpr bool intra_query_parallel = RouterTraitsT::intra_query_parallel;
@@ -53,9 +53,10 @@ class BruteforceRouter :
 public:
 
     BruteforceRouter(
-        const base_vecs_t& base_vecs,
-        const dist_func_t& dist_func
-    ) : base_class_t(base_vecs, dist_func)
+        const vector_array_t& vecs_data,
+        const dist_func_t& dist_func,
+        const uint32_t topk
+    ) : base_class_t(vecs_data, dist_func, topk)
     {}
 
     auto initialize_impl() -> void {
@@ -64,73 +65,75 @@ public:
 
 
     /**
-     * @brief Query the nearest vertex centroid for a given vector.
-     *
-     * Depending on the template parameter `intra_query_parallel`, this function runs
-     * either sequentially or in parallel using TBB to find the centroid with
-     * the minimum distance.
+     * @brief Query the top-k nearest vertices for a given vector.
      *
      * @param query_vec Pointer to the query vector data.
-     * @return vec_id_t The ID of the nearest vertex.
+     * @return std::vector<vec_id_t> Vector containing the IDs of the top-k nearest vertices.
      */
-    auto query_impl(const vec_ele_t* query_vec) const -> vec_id_t {
-        if constexpr (not intra_query_parallel) {
-            // Find the vertex with the minimum distance to the query vector
-            distance_t min_dist = std::numeric_limits<distance_t>::max();
-            vec_id_t best_vid = 0;
-            for (vec_id_t vid = 0; vid < this->_num_vecs; ++vid) {
-                const vec_ele_t* vec = this->_base_vecs.get(vid);
-                distance_t dist = this->_dist_func(query_vec, vec);
-                if (dist < min_dist) {
-                    min_dist = dist;
-                    best_vid = vid;
+    auto query_impl(const vec_ele_t* query_vec) const -> std::vector<vec_id_t> {
+        // Create a vector to store (vertex_id, distance) pairs
+        std::vector<std::pair<vec_id_t, distance_t>> id_dist_pairs;
+        id_dist_pairs.reserve(this->_num_vecs);
+
+        // Compute distances for all vertices
+        for (vec_id_t vid = 0; vid < this->_num_vecs; ++vid) {
+            const vec_ele_t* vec = this->_vecs_data.get(vid);
+            distance_t dist = this->_dist_func(query_vec, vec);
+            id_dist_pairs.emplace_back(vid, dist);
+        }
+
+        // Partial sort to get top-k smallest distances
+        const uint32_t k = std::min(this->_topk, static_cast<uint32_t>(this->_num_vecs));
+        std::partial_sort(
+            id_dist_pairs.begin(),
+            id_dist_pairs.begin() + k,
+            id_dist_pairs.end(),
+            [](const auto& a, const auto& b) { return a.second < b.second; }
+        );
+
+        // Extract vertex IDs
+        std::vector<vec_id_t> results;
+        results.reserve(k);
+        for (uint32_t i = 0; i < k; ++i) {
+            results.push_back(id_dist_pairs[i].first);
+        }
+
+        return results;
+    }
+
+    /**
+     * @brief Perform batch queries to find the top-k nearest vertices for multiple vectors.
+     *
+     * This implementation always parallelizes the batch processing (Inter-query parallelism) using TBB.
+     * Results are stored as vectors: each query's k nearest neighbors form a single vector.
+     *
+     * @param query_vecs A VectorArray containing the query vectors.
+     * @return idlist_array_t Array with num_vecs=num_queries, dim=topk where each vector contains the top-k IDs for one query.
+     */
+    auto batch_query_impl(const typename RouterTraitsT::query_vecs_t& query_vecs) const -> idlist_array_t {
+        const vec_num_t num_queries = query_vecs.get_num_vecs();
+
+        // Pre-allocate the result container (num_queries vectors, each with dimension = topk)
+        idlist_array_t results(num_queries, this->_topk);
+
+        tbb::parallel_for(
+            // Range: Iterate over all query vectors
+            tbb::blocked_range<vec_num_t>(0, num_queries),
+
+            // Processor for a sub-range of queries
+            [&](const tbb::blocked_range<vec_num_t>& r) {
+                for (vec_num_t i = r.begin(); i != r.end(); ++i) {
+                    // Retrieve the pointer to the current query vector
+                    const vec_ele_t* current_vec = query_vecs.get(i);
+                    // Call query_impl to get top-k results (returns std::vector<vec_id_t>)
+                    auto topk_results = this->query_impl(current_vec);
+                    // Store the results using VectorArray's set interface
+                    results.set(i, topk_results.data());
                 }
             }
-            return best_vid;
-        }
-        else {
-            // Parallel reduction to find the vertex with the minimum distance
+        );
 
-            distance_t global_min_dist = std::numeric_limits<distance_t>::max();
-            vec_id_t global_best_vid = 0;
-            // Define a helper struct to hold the reduction result (distance + index)
-            struct Result {
-                distance_t min_dist;
-                vec_id_t vertex_id;
-            };
-
-            // Execute parallel reduction
-            Result final_res = tbb::parallel_reduce(
-                // Range: Iterate over all vertices
-                tbb::blocked_range<vec_id_t>(0, this->_num_vecs),
-
-                // Identity value: Max distance
-                Result { std::numeric_limits<distance_t>::max(), 0 },
-
-                // Processor for a sub-range of vertices
-                [&](const tbb::blocked_range<vec_id_t>& r, Result local_res) -> Result {
-                    for (vec_id_t vid = r.begin(); vid != r.end(); ++vid) {
-                        const vec_ele_t* vec = this->_base_vecs.get(vid);
-                        distance_t dist = this->_dist_func(query_vec, vec);
-
-                        if (dist < local_res.min_dist) {
-                            local_res.min_dist = dist;
-                            local_res.vertex_id = vid;
-                        }
-                    }
-                    return local_res;
-                },
-
-                // Join Operator: Merge results from two threads (keep the one with smaller distance)
-                [](const Result& a, const Result& b) -> Result {
-                    return (a.min_dist < b.min_dist) ? a : b;
-                }
-            );
-
-            global_best_vid = final_res.vertex_id;
-
-            return global_best_vid;
-        }
+        return results;
     }
 
 };  // class BruteforceRouter

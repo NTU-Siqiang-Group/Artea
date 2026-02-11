@@ -20,27 +20,30 @@
 
 #pragma once
 
-/** ------ Forward Declaration  ------ **/
-template <typename ConstructorTraitsT> struct PropagateEngine;
-template <typename ConstructorTraitsT> struct GraphConstructor;
-
 namespace artea {
 namespace cpu {
 
+/** ------ Forward Declaration  ------ **/
+template <typename ConstructorTraitsT> class PropagateEngine;
+template <typename ConstructorTraitsT> class GraphConstructor;
+
 template <
-    typename ComputerTraitsT,
-    typename BufferTraitsT,
+    typename VertexGeneratorTraitsT,
     typename EdgeGeneratorTraitsT,
+    typename IndexTraitsT,
     bool SelectiveSchedule = false
 >
 struct ConstructorTraits :
-    public ComputerTraitsT, public BufferTraitsT, public EdgeGeneratorTraitsT
+    public VertexGeneratorTraitsT,
+    public EdgeGeneratorTraitsT
 {
+    using contructor_traits_t = ConstructorTraits<VertexGeneratorTraitsT, EdgeGeneratorTraitsT, IndexTraitsT, SelectiveSchedule>;
+
     /** @brief Type for graph constructor. */
-    using graph_constructor_t = GraphConstructor<ConstructorTraits<ComputerTraitsT, BufferTraitsT, EdgeGeneratorTraitsT>>;
+    using graph_constructor_t = GraphConstructor<contructor_traits_t>;
 
     /** @brief Type for propagation engine. */
-    using propagate_engine_t = PropagateEngine<ConstructorTraits<ComputerTraitsT, BufferTraitsT, EdgeGeneratorTraitsT>>;
+    using propagate_engine_t = PropagateEngine<contructor_traits_t>;
 
     /** @brief Indicates whether to enable selective scheduling. */
     static constexpr bool selective_schedule = SelectiveSchedule;

@@ -1,7 +1,7 @@
 /*
  * @FilePath: /Artea/include/artea/cpu/utils/random_seq.hpp
  * @Author: Chandler (Weitang Ye) <weitang.ye@ntu.edu.sg>
- * @LastEditTime: 2026-01-21 20:13:01
+ * @LastEditTime: 2026-01-25 21:41:16
  * @Date: 2025-11-02 19:41:19
  * @Description: Modified to be thread-safe for parallel execution by using TBB thread-local storage.
  */
@@ -16,6 +16,7 @@
 #include <tbb/enumerable_thread_specific.h>
 
 #include <artea/cpu/containers/vector_array.hpp>
+#include <artea/cpu/containers/allocator.hpp>
 
 
 namespace artea {
@@ -67,12 +68,12 @@ public:
      * @brief Generate random numbers in a thread-safe manner.
      *        It automatically uses a random stream unique to the calling thread.
      *        This method can be called by single-threaded or multi-threaded code.
-     * @param rand_nbrs Reference to the vector where the generated random numbers will be stored.
-     * @param num_rand_nbrs The total number of random numbers to generate.
-     * @note  Caller must ensure that the size of rand_nbrs is at least num_rand_nbrs.
+     * @param rand_ids Reference to the vector where the generated random numbers will be stored.
+     * @param num_rand_ids The total number of random numbers to generate.
+     * @note  Caller must ensure that the size of rand_ids is at least num_rand_ids.
      */
-    auto generate(std::vector<vec_id_t>& rand_nbrs, const vec_num_t num_rand_nbrs) -> void {
-        vec_id_t* rand_nbrs_ptr = rand_nbrs.data();
+    auto generate(std::vector<vec_id_t>& rand_ids, const vec_num_t num_rand_ids) -> void {
+        vec_id_t* rand_ids_ptr = rand_ids.data();
 
         // Get the MKL stream specific to the current thread.
         // If one doesn't exist yet for this thread, TBB creates it using our factory.
@@ -80,8 +81,8 @@ public:
 
         viRngUniform(
             VSL_RNG_METHOD_UNIFORM_STD,
-            local_stream, num_rand_nbrs,
-            reinterpret_cast<int*>(rand_nbrs_ptr),
+            local_stream, num_rand_ids,
+            reinterpret_cast<int*>(rand_ids_ptr),
             0,
             static_cast<int>(_num_vecs)
         );
@@ -91,20 +92,44 @@ public:
      * @brief Generate random numbers in a thread-safe manner.
      *        It automatically uses a random stream unique to the calling thread.
      *        This method can be called by single-threaded or multi-threaded code.
-     * @param rand_nbrs_ptr Pointer to the array where the generated random numbers will be stored.
-     * @param num_rand_nbrs The total number of random numbers to generate.
-     * @note  Caller must ensure that the memory pointed by rand_nbrs_ptr is large enough
-     *        to hold num_rand_nbrs elements.
+     * @param rand_ids_ptr Pointer to the array where the generated random numbers will be stored.
+     * @param num_rand_ids The total number of random numbers to generate.
+     * @note  Caller must ensure that the memory pointed by rand_ids_ptr is large enough
+     *        to hold num_rand_ids elements.
      */
-    auto generate(vec_id_t* rand_nbrs_ptr, const vec_num_t num_rand_nbrs) -> void {
+    auto generate(vec_id_t* rand_ids_ptr, const vec_num_t num_rand_ids) -> void {
         // Get the MKL stream specific to the current thread.
         // If one doesn't exist yet for this thread, TBB creates it using our factory.
         VSLStreamStatePtr& local_stream = _tl_streams.local();
 
         viRngUniform(
             VSL_RNG_METHOD_UNIFORM_STD,
-            local_stream, num_rand_nbrs,
-            reinterpret_cast<int*>(rand_nbrs_ptr),
+            local_stream, num_rand_ids,
+            reinterpret_cast<int*>(rand_ids_ptr),
+            0,
+            static_cast<int>(_num_vecs)
+        );
+    }
+
+    /**
+     * @brief Generate random numbers in a thread-safe manner.
+     *        It automatically uses a random stream unique to the calling thread.
+     *        This method can be called by single-threaded or multi-threaded code.
+     * @param rand_ids Reference to the cache-aligned container where the generated random numbers will be stored.
+     * @param num_rand_ids The total number of random numbers to generate.
+     * @note  Caller must ensure that the size of rand_ids is at least num_rand_ids.
+     */
+    auto generate(cache_aligned_container_t<vec_id_t>& rand_ids, const vec_num_t num_rand_ids) -> void {
+        vec_id_t* rand_ids_ptr = rand_ids.data();
+
+        // Get the MKL stream specific to the current thread.
+        // If one doesn't exist yet for this thread, TBB creates it using our factory.
+        VSLStreamStatePtr& local_stream = _tl_streams.local();
+
+        viRngUniform(
+            VSL_RNG_METHOD_UNIFORM_STD,
+            local_stream, num_rand_ids,
+            reinterpret_cast<int*>(rand_ids_ptr),
             0,
             static_cast<int>(_num_vecs)
         );

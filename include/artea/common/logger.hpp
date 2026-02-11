@@ -1,7 +1,7 @@
 /*
  * @FilePath: /Artea/include/artea/common/logger.hpp
  * @Author: Chandler (Weitang Ye) <weitang.ye@ntu.edu.sg>
- * @LastEditTime: 2026-01-22 15:01:47
+ * @LastEditTime: 2026-02-02 21:04:12
  * @Date: 2025-10-23 13:26:15
  * @Description: A logger that supports colorful printing via termcolor.
  */
@@ -94,7 +94,7 @@ public:
     __attribute__((always_inline))
     auto error(const std::string& message) -> void {
         log(message, LogLevelT::ERROR);
-        // throw std::runtime_error(message);
+        throw std::runtime_error(message);
     }
 
 private:

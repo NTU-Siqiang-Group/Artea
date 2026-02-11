@@ -37,6 +37,7 @@ struct alignas(8) Neighbor {   // 8 bytes
     using distance_t = typename BaseTraitsT::distance_t;
 
     static constexpr vertex_id_t invalid_vertex_id = BaseTraitsT::invalid_vertex_id;
+    static constexpr distance_t max_distance = BaseTraitsT::max_distance;
 
     // currently we assert that vertex_id_t is uint32_t (4 bytes)
     static_assert(sizeof(vertex_num_t) == 4, "vertex_num_t must be 4 bytes.");
@@ -58,7 +59,18 @@ struct alignas(8) Neighbor {   // 8 bytes
     /** @brief Distance to the neighbor. */
     distance_t distance;               // 4 bytes
 
-    Neighbor() : nbr_id_and_status(invalid_vertex_id), distance(0.0) {}
+private:
+    /** @brief Helper function to compute nbr_id_and_status value with status flag. */
+    static constexpr auto compute_id_and_status(vertex_id_t nbr_id, bool is_new) -> vertex_id_t {
+        return is_new ? ((nbr_id & MASK_ID) | MASK_STATUS_NEW) : (nbr_id & MASK_ID);
+    }
+
+public:
+    constexpr Neighbor() : nbr_id_and_status(invalid_vertex_id), distance(0.0) {}
+
+    static constexpr auto make_invalid_nbr() -> Neighbor {
+        return Neighbor{ invalid_vertex_id, max_distance };
+    }
 
     Neighbor(const Neighbor&) = default;
     Neighbor& operator=(const Neighbor&) = default;
@@ -66,22 +78,24 @@ struct alignas(8) Neighbor {   // 8 bytes
     Neighbor& operator=(Neighbor&&) = default;
     ~Neighbor() = default;
 
+    /** @brief Create a new Neighbor with given ID and distance (2-parameter constructor for constexpr). */
+    constexpr Neighbor(
+        const vertex_id_t nbr_id,
+        const distance_t distance
+    ) : nbr_id_and_status(nbr_id & MASK_ID), distance(distance) {}
+
     /** @brief Create a new Neighbor with given ID, distance, and flags. */
-    Neighbor(
+    constexpr Neighbor(
         const vertex_id_t nbr_id,
         const distance_t distance,
         const bool is_new
-    ) : distance(distance) {
-        // Mask the ID to ensure it fits in 31 bits, then apply flags
-        nbr_id_and_status = nbr_id & MASK_ID;
-        if (is_new) {
-            nbr_id_and_status |= MASK_STATUS_NEW;
-        }
+    ) : nbr_id_and_status(compute_id_and_status(nbr_id, is_new)), distance(distance) {
+        // Mask the ID to ensure it fits in 31 bits, then apply flags using helper function
     }
 
     /** @brief Create a new Neighbor with given ID and distance, marked as "new". */
     __attribute__((always_inline))
-    static auto create_new(
+    static auto make_new_nbr(
         const vertex_id_t nbr_id,
         const distance_t distance
     ) -> Neighbor {
@@ -89,6 +103,19 @@ struct alignas(8) Neighbor {   // 8 bytes
             nbr_id,
             distance,
             true  // is_new
+        };
+    }
+
+    /** @brief Create a old Neighbor with given ID and distance, marked as "new". */
+    __attribute__((always_inline))
+    static auto make_old_nbr(
+        const vertex_id_t nbr_id,
+        const distance_t distance
+    ) -> Neighbor {
+        return Neighbor{
+            nbr_id,
+            distance,
+            false // is_new
         };
     }
 
@@ -141,13 +168,21 @@ struct alignas(8) Neighbor {   // 8 bytes
         distance = dist;
     }
 
-    // TO enable optimizations for POD types
-    static_assert(std::is_trivially_copyable<Neighbor<BaseTraitsT>>::value,
-                "Neighbor must be trivially copyable to enable vector memcpy optimizations!");
-    static_assert(std::is_trivially_destructible<Neighbor<BaseTraitsT>>::value,
-                "Neighbor must be trivially destructible!");
-
 };  // struct Neighbor
+
+// TO enable optimizations for POD types
+template <typename BaseTraitsT>
+inline constexpr bool __neighbor_is_trivially_copyable =
+    std::is_trivially_copyable<Neighbor<BaseTraitsT>>::value;
+
+template <typename BaseTraitsT>
+inline constexpr bool __neighbor_is_trivially_destructible =
+    std::is_trivially_destructible<Neighbor<BaseTraitsT>>::value;
+
+static_assert(std::is_trivially_copyable<Neighbor<BaseTraits<uint32_t, float, false>>>::value,
+            "Neighbor must be trivially copyable to enable vector memcpy optimizations!");
+static_assert(std::is_trivially_destructible<Neighbor<BaseTraits<uint32_t, float, false>>>::value,
+            "Neighbor must be trivially destructible!");
 
 /** @brief Comparator for Neighbor (Distance primary, ID secondary). */
 template <typename BaseTraitsT>

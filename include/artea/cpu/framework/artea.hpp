@@ -31,7 +31,9 @@
 #include <artea/cpu/framework/computer_traits.hpp>
 #include <artea/cpu/framework/buffer_traits.hpp>
 #include <artea/cpu/framework/router_traits.hpp>
+#include <artea/cpu/framework/vertex_generator_traits.hpp>
 #include <artea/cpu/framework/edge_generator_traits.hpp>
+#include <artea/cpu/framework/index_traits.hpp>
 #include <artea/cpu/framework/constructor_traits.hpp>
 
 #include <artea/cpu/containers/allocator.hpp>
@@ -40,26 +42,51 @@
 #include <artea/cpu/containers/locked_buffer.hpp>
 #include <artea/cpu/containers/tbb_buffer.hpp>
 #include <artea/cpu/containers/word_aligned_bitmap.hpp>
+#include <artea/cpu/containers/vertex_subset.hpp>
+#include <artea/cpu/containers/four_ary_heap.hpp>
 
 #include <artea/cpu/index/neighbor.hpp>
-#include <artea/cpu/index/index_graph.hpp>
-#include <artea/cpu/index/graph_initializer.hpp>
-#include <artea/cpu/index/graph_constructor.hpp>
+#include <artea/cpu/index/flat_graph.hpp>
+#include <artea/cpu/index/search_graph.hpp>
+
+#include <artea/cpu/constructor/graph_initializer.hpp>
+#include <artea/cpu/constructor/graph_constructor.hpp>
+
+#include <artea/cpu/vertex_generator/vertex_generator.hpp>
+#include <artea/cpu/vertex_generator/lsh_table.hpp>
+#include <artea/cpu/vertex_generator/pstable_lsh_generator.hpp>
+#include <artea/cpu/vertex_generator/ortho_lsh_generator.hpp>
+#include <artea/cpu/vertex_generator/mb_greedy_vg.hpp>
+#include <artea/cpu/vertex_generator/lb_greedy_vg.hpp>
+#include <artea/cpu/vertex_generator/random_vg.hpp>
 
 #include <artea/cpu/edge_generator/nbr_log_table.hpp>
 #include <artea/cpu/edge_generator/neighbor_updater.hpp>
-#include <artea/cpu/edge_generator/rng_updater.hpp>
+#include <artea/cpu/edge_generator/triangle_updater.hpp>
+#include <artea/cpu/edge_generator/reverse_updater.hpp>
+#include <artea/cpu/edge_generator/random_updater.hpp>
+#include <artea/cpu/edge_generator/random_eg.hpp>
 #include <artea/cpu/edge_generator/propagate_engine.hpp>
 
 #include <artea/cpu/router/vector_router.hpp>
 #include <artea/cpu/router/bruteforce_router.hpp>
 #include <artea/cpu/router/proximity_graph_router.hpp>
+#include <artea/cpu/router/candidate_entry.hpp>
+#include <artea/cpu/router/stateful_candidate_entry.hpp>
+#include <artea/cpu/router/candidate_queue_concept.hpp>
+#include <artea/cpu/router/visited_table_concept.hpp>
+#include <artea/cpu/router/visited_table_pool.hpp>
+#include <artea/cpu/router/std_candidate_queue.hpp>
+#include <artea/cpu/router/fh_candidate_queue.hpp>
+#include <artea/cpu/router/linear_candidate_queue.hpp>
 
 #include <artea/cpu/utils/bit_ops.hpp>
 #include <artea/cpu/utils/clear_cache.hpp>
 #include <artea/cpu/utils/nbr_arr_checker.hpp>
 #include <artea/cpu/utils/parallel.hpp>
 #include <artea/cpu/utils/random_seq.hpp>
+#include <artea/cpu/utils/radius_prober.hpp>
+#include <artea/cpu/utils/simple_distance.hpp>
 #include <artea/cpu/utils/simd_distance.hpp>
 #include <artea/cpu/utils/simd_fma.hpp>
 #include <artea/cpu/utils/simd_linear.hpp>

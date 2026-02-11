@@ -51,7 +51,7 @@ class PStableLSHGenerator {
     );
 
 public:
-    PStableLSHGenerator() {}
+    PStableLSHGenerator(const fma_func_t& fma_func) : _fma_func(fma_func) {}
 
     /**
      * @brief Generate standard p-stable LSH projection vectors.
@@ -97,7 +97,7 @@ public:
             bucket_scale,
             std::move(projection_vecs),
             std::move(offset_vec),
-            fma_func_t(dim)
+            _fma_func
         );
     }
 
@@ -112,7 +112,6 @@ public:
      * @param lsh_table The LSH table instance to be updated.
      */
     auto update_bucket_scale(
-        vec_dim_t dim,
         hash_num_t num_hashes,
         vec_ele_t new_bucket_scale,
         lsh_table_t& lsh_table
@@ -130,6 +129,10 @@ public:
         // Update the table with new parameters
         lsh_table.update_parameters(new_bucket_scale, std::move(new_offset_vec));
     }
+
+private:
+    const fma_func_t& _fma_func;
+
 
 };  // class PStableLSHGenerator
 

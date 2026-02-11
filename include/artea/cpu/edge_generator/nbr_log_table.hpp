@@ -41,7 +41,6 @@ class NbrLogTable {
     using log_buffer_t = typename BufferTraitsT::log_buffer_t;
     using log_container_t = typename BufferTraitsT::log_container_t;
     using nbr_arr_checker_t = typename BufferTraitsT::nbr_arr_checker_t;
-    using index_graph_t = typename BufferTraitsT::index_graph_t;
     using strict_nbr_comp_t = typename BufferTraitsT::strict_nbr_comp_t;
 
     constexpr static strict_nbr_comp_t strict_nbr_comp {};
@@ -66,7 +65,7 @@ public:
         const distance_t new_edge_dist
     ) -> void {
         #ifndef NDEBUG
-        if (is_nan_distance(new_edge_dist)) {
+        if (BufferTraitsT::is_nan_distance(new_edge_dist)) {
             logger.error("Attempted to log an operation with NaN distance.");
             throw std::runtime_error("Error: Logging an operation with NaN distance is not allowed.");
         }
@@ -88,7 +87,7 @@ public:
      * @brief Applies logs to the graph directly using Distance ordering.
      *        Precondition: graph neighbors are sorted by StrictNeighborComparator (Dist, ID).
      * @param executor_vid The vertex whose logs are to be applied.
-     * @param graph The index graph to which the logs will be applied.
+     * @param graph The bottom layer graph to which the logs will be applied.
      * @note This function can be called thread-safely for different executor_vids in parallel.
      */
     template <typename GraphType>
@@ -124,7 +123,7 @@ public:
         std::inplace_merge(cur_nbrs.begin(), middle_iter, cur_nbrs.end(), strict_nbr_comp);
 
         // * Deduplicate (std::unique)
-        // * Note that neighbors with same ID must have same distance (guaranteed by the nature of index graph)
+        // * Note that neighbors with same ID must have same distance (guaranteed by the nature of bottom layer graph)
         auto last = std::unique(cur_nbrs.begin(), cur_nbrs.end(),
             [](const auto& a, const auto& b) {
                 return a.get_id() == b.get_id();

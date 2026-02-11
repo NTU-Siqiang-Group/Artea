@@ -1,7 +1,7 @@
 /*
  * @FilePath: /Artea/include/artea/cpu/containers/vector_array.hpp
  * @Author: Chandler (Weitang Ye) <weitang.ye@ntu.edu.sg>
- * @LastEditTime: 2026-01-23 21:30:52
+ * @LastEditTime: 2026-01-26 16:14:08
  * @Date: 2025-10-18 16:31:57
  * @Description:
  */
@@ -34,6 +34,9 @@ public:
      * @brief Default constructor. Creates an empty VectorArray.
      */
     VectorArray() : _num_vecs(0), _vec_dim(0) {}
+
+
+    VectorArray(vec_dim_t dim) : _num_vecs(0), _vec_dim(dim) {}
 
     /**
      * @brief Construct a new VectorArray object with a pre-defined size, using aligned memory.
@@ -218,6 +221,12 @@ public:
     }
 
     __attribute__((always_inline))
+    auto set(vec_id_t vid, const vec_ele_t* data) -> void {
+        vec_ele_t* target = _storage.data() + static_cast<std::size_t>(vid) * _vec_dim;
+        std::copy(data, data + _vec_dim, target);
+    }
+
+    __attribute__((always_inline))
     auto get_all() -> vec_ele_t* {
         return _storage.data();
     }
@@ -251,6 +260,63 @@ public:
         _storage.reserve(new_total_elements);
         _storage.resize(new_total_elements);
         _num_vecs = new_num_vecs;
+    }
+
+    auto reserve(const vec_num_t new_num_vecs) -> void {
+        _storage.reserve(static_cast<std::size_t>(new_num_vecs) * _vec_dim);
+    }
+
+    /**
+     * @brief Appends a single vector to the end of the array.
+     * @param vec_ptr Pointer to the vector data to append (must have at least _vec_dim elements).
+     * @note This function efficiently appends data to the underlying storage using std::vector::insert.
+     */
+    auto append_vec(const vec_ele_t* vec_ptr) -> void {
+        _storage.insert(_storage.end(), vec_ptr, vec_ptr + _vec_dim);
+        _num_vecs++;
+    }
+
+    /**
+     * @brief Creates a new VectorArray containing a subset of the current vectors.
+     * @param start The starting index of the subset.
+     * @param count The number of vectors to include in the subset.
+     * @return A new VectorArray object containing the copied subset data.
+     * @throw std::out_of_range If the requested range exceeds the current array bounds.
+     */
+    auto get_subset(vec_num_t start, vec_num_t count) const -> VectorArray {
+        if (static_cast<std::size_t>(start) + count > _num_vecs) {
+            throw std::out_of_range(fmt::format(
+                "VectorArray::get_subset: Range out of bounds. Start: {}, Count: {}, Total: {}",
+                start, count, _num_vecs));
+        }
+        // Create a new instance with the target size and same dimension
+        VectorArray subset(count, _vec_dim);
+        if (count > 0) {
+            const vec_ele_t* src_ptr = this->get(start);
+            vec_ele_t* dst_ptr = subset.get_all();
+            std::size_t total_elements = static_cast<std::size_t>(count) * _vec_dim;
+            // Standard copy from source to the new storage
+            std::copy(src_ptr, src_ptr + total_elements, dst_ptr);
+        }
+        return subset;
+    }
+
+    auto get_subset(vec_num_t start, vec_num_t count, VectorArray subset) const -> void {
+        if (static_cast<std::size_t>(start) + count > _num_vecs) {
+            throw std::out_of_range(fmt::format(
+                "VectorArray::get_subset: Range out of bounds. Start: {}, Count: {}, Total: {}",
+                start, count, _num_vecs));
+        }
+        if (count > 0) {
+            const vec_ele_t* src_ptr = this->get(start);
+            vec_ele_t* dst_ptr = subset.get_all();
+            if (subset.get_num_vecs() != count) {
+                subset.resize(count);
+            }
+            std::size_t total_elements = static_cast<std::size_t>(count) * _vec_dim;
+            // Standard copy from source to the new storage
+            std::copy(src_ptr, src_ptr + total_elements, dst_ptr);
+        }
     }
 
     /**

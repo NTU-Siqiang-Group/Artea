@@ -24,10 +24,6 @@
 #include <vector>
 #include <stdexcept>
 
-
-#include <artea/cpu/index/neighbor.hpp>
-#include <artea/cpu/containers/allocator.hpp>
-
 namespace artea {
 namespace cpu {
 
@@ -48,7 +44,7 @@ public:
 
     static auto no_nan_check(const nbr_arr_t& nbrs) -> bool {
         for (std::size_t i = 0; i < nbrs.size(); ++i) {
-            if (is_nan_distance(nbrs[i].get_distance())) {
+            if (BaseTraitsT::is_nan_distance(nbrs[i].get_distance())) {
                 logger.error("Neighbor array contains NaN distances before applying logs.");
                 // throw std::runtime_error("Error: Neighbor array contains NaN distances before applying logs.");
                 return false;

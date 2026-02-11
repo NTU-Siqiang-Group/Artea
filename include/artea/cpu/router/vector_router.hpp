@@ -37,18 +37,20 @@ class VectorRouter {
     using distance_t = typename RouterTraitsT::distance_t;
     using dist_func_t = typename RouterTraitsT::dist_func_t;
     using vector_array_t = typename RouterTraitsT::vector_array_t;
-    using base_vecs_t = typename RouterTraitsT::base_vecs_t;
     using query_vecs_t = typename RouterTraitsT::query_vecs_t;
+    using idlist_array_t = typename RouterTraitsT::idlist_array_t;
 
 public:
 
     VectorRouter(
-        const base_vecs_t& base_vecs,
-        const dist_func_t& dist_func
+        const vector_array_t& vecs_data,
+        const dist_func_t& dist_func,
+        const uint32_t topk
     ) :
-        _num_vecs(base_vecs.get_num_vecs()),
-        _base_vecs(base_vecs),
-        _dist_func(dist_func)
+        _num_vecs(vecs_data.get_num_vecs()),
+        _vecs_data(vecs_data),
+        _dist_func(dist_func),
+        _topk(topk)
     {}
 
     /**
@@ -60,57 +62,40 @@ public:
     }
 
     /**
-     * @brief Query the nearest vertex for a single vector.
+     * @brief Query the top-k nearest vertices for a single vector.
      *
      * @param query_vec Pointer to the query vector data.
-     * @return vec_id_t The ID of the nearest vertex.
+     * @return std::vector<vertex_id_t> Vector containing the IDs of the top-k nearest vertices.
      */
     __attribute__((always_inline))
-    auto query(const vec_ele_t* query_vec) const -> vec_id_t {
+    auto query(const vec_ele_t* query_vec) const -> std::vector<vec_id_t> {
         return static_cast<const DerivedClassT*>(this)->query_impl(query_vec);
     }
 
     /**
-     * @brief Perform batch queries to find the nearest vertex for multiple vectors.
-     *
-     * This implementation always parallelizes the batch processing (Inter-query parallelism) using TBB
+     * @brief Perform batch queries to find the top-k nearest vertices for multiple vectors.
      *
      * @param query_vecs A VectorArray containing the query vectors.
-     * @return std::vector<vec_id_t> A vector containing the ID of the nearest vertex for each query.
+     * @return idlist_array_t Array with num_vecs=num_queries, dim=topk where each vector contains the top-k IDs for one query.
      */
-    auto batch_query(const query_vecs_t& query_vecs) const -> std::vector<vec_id_t> {
-        const vec_num_t num_queries = query_vecs.get_num_vecs();
-        std::vector<vec_id_t> results(num_queries);
-        tbb::parallel_for(
-            // Range: Iterate over all query vectors
-            tbb::blocked_range<vec_num_t>(0, num_queries),
-
-            // Processor for a sub-range of queries
-            [&](const tbb::blocked_range<vec_num_t>& r) {
-                for (vec_num_t i = r.begin(); i != r.end(); ++i) {
-                    // Retrieve the pointer to the current query vector
-                    const vec_ele_t* current_vec = query_vecs.get(i);
-                    // Call query_impl.
-                    vec_id_t best_vid = static_cast<const DerivedClassT*>(this)->query_impl(current_vec);
-                    // Store the result
-                    results[i] = static_cast<vec_id_t>(best_vid);
-                }
-            }
-        );
-
-        return results;
+    __attribute__((always_inline))
+    auto batch_query(const query_vecs_t& query_vecs) const -> idlist_array_t {
+        return static_cast<const DerivedClassT*>(this)->batch_query_impl(query_vecs);
     }
 
 protected:
 
-    /** @brief Target number of vertices (K). */
+    /** @brief Number of vectors in the dataset. */
     const vec_num_t _num_vecs;
 
-    /** @brief Reference to the target base vectors. */
-    const base_vecs_t& _base_vecs;
+    /** @brief Reference to the vector data. */
+    const vector_array_t& _vecs_data;
 
     /** @brief Reference to the injected distance function functor. */
     const dist_func_t& _dist_func;
+
+    /** @brief Number of nearest neighbors to return. */
+    const uint32_t _topk;
 
 };  // class VectorRouter
 

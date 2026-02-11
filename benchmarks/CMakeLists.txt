@@ -15,7 +15,7 @@
 cmake_minimum_required(VERSION 3.16)
 
 # Renamed project to reflect that these are benchmarks
-project(ArteaBenchmarks CXX)
+project(ArteaBench CXX)
 
 file(GLOB BENCH_SOURCES "*.cpp")
 

@@ -22,6 +22,8 @@
 
 #include <cmath>
 #include <utility>
+#include <random>
+#include <algorithm>
 
 namespace artea {
 namespace cpu {
@@ -127,8 +129,30 @@ public:
         _offset_vec = std::move(new_offset_vec);
     }
 
+    /**
+     * @brief Update the bucket scale of an existing LSH table.
+     *        This method regenerates the random offsets 'b' to match the new scale range [0, r],
+     *        but reuses the expensive orthogonal projection vectors 'A'.
+     *
+     * @param num_hashes Number of hash functions.
+     * @param new_bucket_scale The new bucket width 'r'.
+     * @param lsh_table The LSH table instance to be updated.
+     */
+    auto update_bucket_scale(vec_ele_t new_bucket_scale) -> void {
+        // Setup random number generator
+        std::random_device rd;
+        std::mt19937 gen(rd());
+        std::uniform_real_distribution<double> uniform_dist(0.0, static_cast<double>(new_bucket_scale));
+        _bucket_scale = new_bucket_scale;
+        _inv_bucket_scale = static_cast<vec_ele_t>(1.0) / new_bucket_scale;
+        for (std::size_t i = 0; i < _num_hashes; ++i) {
+            _offset_vec[i] = static_cast<vec_ele_t>(uniform_dist(gen));
+        }
+    }
+
 private:
 
+    /** @brief Number of hash functions */
     hash_num_t _num_hashes;
 
     /** @brief Projection vectors used for p-stable hashing */
@@ -137,8 +161,10 @@ private:
     /** @brief Offset scalar used for p-stable hashing */
     vector_t _offset_vec;
 
+    /** @brief Bucket scale parameter 'r' */
     vec_ele_t _bucket_scale;
 
+    /** @brief Inverse of bucket scale parameter '1/r' (for fast division) */
     vec_ele_t _inv_bucket_scale;
 
     /** @brief FMA function used for projection */

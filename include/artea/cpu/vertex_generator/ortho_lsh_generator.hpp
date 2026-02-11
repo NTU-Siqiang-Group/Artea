@@ -50,7 +50,7 @@ class OrthoLSHGenerator {
     );
 
 public:
-    OrthoLSHGenerator() {}
+    OrthoLSHGenerator(const fma_func_t& fma_func) : _fma_func(fma_func) {}
 
     /**
      * @brief Generate orthogonal LSH projection vectors.
@@ -62,13 +62,12 @@ public:
         vector_array_t projection_vecs(num_hashes, dim);
         vector_t offset_vec(num_hashes);
         std::size_t num_blocks = (num_hashes + dim - 1) / dim;
+        /** The scale factor ensures that the LSH buckets are uniformly distributed. */
+        const float scale_factor = std::sqrt(static_cast<float>(dim));
 
         std::random_device rd;
         std::mt19937 gen(rd());
         std::normal_distribution<double> norm_dist(0.0, 1.0);
-        /**
-         * @brief Math Theory: Why is the scale factor needed here?
-         */
         std::uniform_real_distribution<double> uniform_dist(0.0, static_cast<double>(bucket_scale));
         for (std::size_t block_idx = 0; block_idx < num_blocks; ++block_idx) {
             // Using MatrixXd ensures high precision during decomposition.
@@ -103,14 +102,14 @@ public:
             bucket_scale,
             std::move(projection_vecs),
             std::move(offset_vec),
-            fma_func_t(dim)
+            _fma_func
         );
     }
 
     /**
      * @brief Update the bucket scale of an existing LSH table.
      *        This method regenerates the random offsets 'b' to match the new scale range [0, r],
-     *        but reuses the expensive orthogonal projection vectors 'A'.
+     *        but reuses the existing projection vectors 'A'.
      *
      * @param dim Dimensionality of vectors (unused here but kept for interface consistency).
      * @param num_hashes Number of hash functions.
@@ -118,23 +117,26 @@ public:
      * @param lsh_table The LSH table instance to be updated.
      */
     auto update_bucket_scale(
-        vec_dim_t dim,
         hash_num_t num_hashes,
         vec_ele_t new_bucket_scale,
         lsh_table_t& lsh_table
     ) -> void {
         vector_t new_offset_vec(num_hashes);
-        // Setup random number generator
+        vec_ele_t* new_offset_data = new_offset_vec.data();
+
         std::random_device rd;
         std::mt19937 gen(rd());
-        std::uniform_real_distribution<double> uniform_dist(0.0, static_cast<double>(new_bucket_scale));
-        for (std::size_t i = 0; i < num_hashes; ++i) {
-            new_offset_vec[i] = static_cast<vec_ele_t>(uniform_dist(gen));
+        std::uniform_real_distribution<vec_ele_t> uniform_dist(0.0, new_bucket_scale);
+
+        for (hash_num_t i = 0; i < num_hashes; ++i) {
+            new_offset_data[i] = uniform_dist(gen);
         }
-        // Update the LSH table with new parameters,
-        // keeps the existing projection vectors but replaces r and b
+        // Update the table with new parameters
         lsh_table.update_parameters(new_bucket_scale, std::move(new_offset_vec));
     }
+
+private:
+    const fma_func_t& _fma_func;
 
 };  // class OrthoLSHGenerator
 

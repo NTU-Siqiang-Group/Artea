@@ -30,10 +30,10 @@ class GraphInitializer {
     using vertex_num_t = typename ContructorTraitsT::vertex_num_t;
     using vertex_id_t = typename ContructorTraitsT::vertex_id_t;
     using vec_ele_t = typename ContructorTraitsT::vec_ele_t;
-    using index_graph_t = typename ContructorTraitsT::index_graph_t;
+    using flat_graph_t = typename ContructorTraitsT::flat_graph_t;
 
 public:
-    static auto random_initialize(index_graph_t& index_graph) -> void {
+    static auto random_initialize(flat_graph_t& flat_graph) -> void {
     }   // random_initialize
 
 };  // class GraphInitializer

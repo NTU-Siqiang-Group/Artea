@@ -12,7 +12,13 @@ project(Artea LANGUAGES C CXX)
 #     message(WARNING "IPO/LTO is not supported: ${output}")
 # endif()
 
-set(CMAKE_CXX_STANDARD 17)
+# --- Compiler specific Warning Suppression ---
+if(CMAKE_CXX_COMPILER_ID MATCHES "IntelLLVM")
+	add_compile_options(-Wno-unknown-warning-option)
+	add_compile_options(-diag-disable=10430)
+endif()
+
+set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 set(CMAKE_INSTALL_RPATH_USE_LINK_PATH ON)
@@ -53,7 +59,7 @@ FetchContent_Declare(
 FetchContent_Declare(
 	fmt
 	GIT_REPOSITORY https://github.com/fmtlib/fmt.git
-	GIT_TAG "10.1.1" # Using a slightly older but common version
+	GIT_TAG "12.1.0"
 )
 
 FetchContent_Declare(
@@ -120,7 +126,7 @@ target_include_directories(artea INTERFACE
 )
 
 # Add compiler flag for AVX512 support to artea library
-target_compile_options(artea INTERFACE -mavx512f -march=native)
+target_compile_options(artea INTERFACE -mavx512f -march=native -Wno-deprecated-literal-operator)
 
 # --- Compile Definitions (Macros) ---
 target_compile_definitions(artea INTERFACE
@@ -147,3 +153,4 @@ include(CTest)
 # --- 5. Include subdirectories ---
 add_subdirectory(tests)
 add_subdirectory(benchmarks)
+add_subdirectory(micro_benchmarks)

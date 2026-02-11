@@ -22,6 +22,8 @@
 
 #include <vector>
 #include <utility>
+#include <type_traits>
+#include <stdexcept>
 
 #include <tbb/parallel_for.h>
 #include <tbb/blocked_range.h>
@@ -45,22 +47,28 @@ class PropagateEngine {
     using log_buffer_t = typename ConstructorTraitsT::log_buffer_t;
     using log_container_t = typename ConstructorTraitsT::log_container_t;
     using log_table_t = typename ConstructorTraitsT::log_table_t;
-    using index_graph_t = typename ConstructorTraitsT::index_graph_t;
     using word_aligned_bitmap_t = typename ConstructorTraitsT::word_aligned_bitmap_t;
+    using flat_graph_t = typename ConstructorTraitsT::flat_graph_t;
 
     static constexpr bool selective_schedule = ConstructorTraitsT::selective_schedule;
 
 public:
-    PropagateEngine(index_graph_t& index_graph) :
-        _log_table(index_graph.get_num_vertices()),
-        _index_graph(index_graph),
-        _executor_bitmap(index_graph.get_num_vertices())
+    PropagateEngine(const vertex_num_t num_vertices) :
+        _log_table(num_vertices),
+        _executor_bitmap(num_vertices),
+        _flat_graph(nullptr)
     {}
 
-    template <typename udf_updater_t>
+    /** @brief Set the flat graph to operate on. */
+    __attribute__((always_inline))
+    auto set_graph(flat_graph_t& flat_graph) -> void {
+        _flat_graph = &flat_graph;
+    }
+
+    template <typename UdfUpdaterT>
     auto propagate(
         const vertex_id_t pivot_vid,
-        udf_updater_t& udf_updater
+        UdfUpdaterT& udf_updater
     ) -> void {
         #ifndef NDEBUG
         if constexpr (selective_schedule) {
@@ -71,16 +79,13 @@ public:
         }
         #endif
 
-        nbr_arr_t& origin_nbrs = _index_graph.fetch_nbrs(pivot_vid);
-        nbr_arr_t retained_nbrs;
-        retained_nbrs.reserve(origin_nbrs.size());
-        udf_updater(pivot_vid, origin_nbrs, retained_nbrs);
-        std::swap(origin_nbrs, retained_nbrs);
+        nbr_arr_t& origin_nbrs = _flat_graph->fetch_nbrs(pivot_vid);
+        udf_updater(pivot_vid, origin_nbrs);
     }
 
-    template <typename udf_updater_t>
-    auto propagate(udf_updater_t& udf_updater) -> void {
-        const vertex_num_t num_vertices = _index_graph.get_num_vertices();
+    template <typename UdfUpdaterT>
+    auto propagate(UdfUpdaterT& udf_updater) -> void {
+        const vertex_num_t num_vertices = _flat_graph->get_num_vertices();
 
         // Dense Mode: Iterate all vertices
         if constexpr (not selective_schedule) {
@@ -88,7 +93,7 @@ public:
                 tbb::blocked_range<vertex_id_t>(0, num_vertices),
                 [&](const tbb::blocked_range<vertex_id_t>& r) {
                     for (vertex_id_t pivot_vid = r.begin(); pivot_vid != r.end(); ++pivot_vid) {
-                        propagate<udf_updater_t>(pivot_vid, udf_updater);
+                        propagate<UdfUpdaterT>(pivot_vid, udf_updater);
                     }
                 }
             );
@@ -107,14 +112,14 @@ public:
                         const vertex_id_t base_vid = word_idx << word_aligned_bitmap_t::WORD_SHIFT;
                         // Bit Scanning: Iterate only set bits
                         while (word_mask != 0) {
-                            // Find index of the least significant bit (0-63)
+                            // Fast Locating: Find index of the least significant bit (0-63)
                             int offset = count_trailing_zeros(word_mask);
 
                             vertex_id_t pivot_vid = base_vid + offset;
 
                             // Boundary check for the very last word
                             if (pivot_vid < num_vertices) {
-                                propagate<udf_updater_t>(pivot_vid, udf_updater);
+                                propagate<UdfUpdaterT>(pivot_vid, udf_updater);
                             }
 
                             // Clear the bit we just processed
@@ -126,20 +131,20 @@ public:
         }
     }
 
-    /** @brief Merge the logged operations for a single vertex back to the index graph.
+    /** @brief Merge the logged operations for a single vertex back to the flat graph.
       * @param executor_vid The vertex id whose logged operations are to be merged.
     */
     __attribute__((always_inline))
     auto merge_logs(const vertex_id_t executor_vid) -> void {
         // Logic decoupled to NbrLogTable
-        _log_table.apply_logs(executor_vid, _index_graph);
+        _log_table.apply_logs(executor_vid, *_flat_graph);
     }
 
-    /** @brief Merge the logged operations for all vertices back to the index graph. */
+    /** @brief Merge the logged operations for all vertices back to the flat graph. */
     auto merge_logs() -> void {
         // Dense Mode: Iterate all vertices
         if constexpr (not selective_schedule) {
-            const vertex_num_t num_vertices = _index_graph.get_num_vertices();
+            const vertex_num_t num_vertices = _flat_graph->get_num_vertices();
             tbb::parallel_for(
                 tbb::blocked_range<vertex_id_t>(0, num_vertices),
                 [&](const tbb::blocked_range<vertex_id_t>& r) {
@@ -174,7 +179,7 @@ public:
                         for (vertex_id_t vid = start_vid; vid < end_vid; ++vid) {
                             auto& log_container = _log_table.get_log_container(vid);
                             if (!log_container.empty()) {
-                                _log_table.apply_logs(vid, _index_graph);
+                                _log_table.apply_logs(vid, *_flat_graph);
                                 next_round_mask |= (1ULL << (vid & word_aligned_bitmap_t::WORD_MASK));
                             }
                         }
@@ -187,16 +192,16 @@ public:
         }
     }
 
-    template <typename udf_updater_t, bool selective_schedule>
-    auto next(udf_updater_t& udf_updater) -> void {
-        propagate<udf_updater_t>(udf_updater);
+    template <typename UdfUpdaterT>
+    auto next(UdfUpdaterT& udf_updater) -> void {
+        propagate<UdfUpdaterT>(udf_updater);
         merge_logs();
     }
 
-    template <typename udf_updater_t>
-    auto run(const iter_t num_iters, udf_updater_t& udf_updater) -> void {
+    template <typename UdfUpdaterT>
+    auto run(const iter_t num_iters, UdfUpdaterT& udf_updater) -> void {
         for (iter_t iter = 0; iter < num_iters; ++iter) {
-            next<udf_updater_t>(udf_updater);
+            next<UdfUpdaterT>(udf_updater);
         }
     }
 
@@ -211,16 +216,63 @@ public:
         return _executor_bitmap;
     }
 
+    /** @brief Factory method to create an updater of the specified type.
+      * @tparam UpdaterT The updater type to create (e.g., triangle_updater_t, reverse_updater_t, random_updater_t).
+      * @tparam Args Variadic template for additional constructor arguments.
+      * @param dist_func Distance function reference (required by all updaters).
+      * @param args Additional arguments specific to the updater type.
+      * @return An instance of the requested updater type.
+      *
+      * @note This factory method automatically provides vecs_arr, log_table,
+      *       and max_nbr_size from the internal flat_graph. User only needs
+      *       to provide dist_func and updater-specific parameters.
+      *
+      * Supported updaters:
+      *   - triangle_updater_t: Requires scale_coeffs and optional shifted_coeffs
+      *   - reverse_updater_t: No additional parameters required
+      *   - random_updater_t: Requires rand_gen_size (num_vertices is auto-provided)
+      */
+    template <typename UpdaterT, typename... Args>
+    auto make_updater(
+        const typename ConstructorTraitsT::dist_func_t& dist_func,
+        Args&&... args
+    ) -> UpdaterT {
+        using triangle_updater_t = typename ConstructorTraitsT::triangle_updater_t;
+        using reverse_updater_t = typename ConstructorTraitsT::reverse_updater_t;
+        using random_updater_t = typename ConstructorTraitsT::random_updater_t;
+
+        const auto& vecs_arr = _flat_graph->get_vecs_data();
+        auto& log_table = _log_table;
+        const auto max_nbr_size = _flat_graph->get_max_nbr_size();
+        const auto num_vertices = _flat_graph->get_num_vertices();
+
+        if constexpr (std::is_same_v<UpdaterT, triangle_updater_t>) {
+            // TriangleUpdater constructor signature:
+            // TriangleUpdater(dist_func, vecs_arr, log_table, max_nbr_size, scale_coeffs, shifted_coeffs)
+            return UpdaterT(dist_func, vecs_arr, log_table, max_nbr_size, std::forward<Args>(args)...);
+        } else if constexpr (std::is_same_v<UpdaterT, reverse_updater_t>) {
+            // ReverseUpdater constructor signature:
+            // ReverseUpdater(dist_func, vecs_arr, log_table)
+            return UpdaterT(dist_func, vecs_arr, log_table);
+        } else if constexpr (std::is_same_v<UpdaterT, random_updater_t>) {
+            // RandomUpdater constructor signature:
+            // RandomUpdater(dist_func, vecs_arr, log_table, num_vertices, rand_gen_size)
+            return UpdaterT(dist_func, vecs_arr, log_table, num_vertices, std::forward<Args>(args)...);
+        } else {
+            throw std::runtime_error("Unsupported updater type");
+        }
+    }
+
 private:
 
     /** @brief Operation log table for recording graph operations during propagation. */
     log_table_t _log_table;
 
-    /** @brief Reference to the index graph being propagated. */
-    index_graph_t& _index_graph;
-
     /** @brief Bitmap to track which vertices have pending operations. */
     word_aligned_bitmap_t _executor_bitmap;
+
+    /** @brief Pointer to the flat graph being operated on. */
+    flat_graph_t* _flat_graph;
 
 };  // class PropagateEngine
 

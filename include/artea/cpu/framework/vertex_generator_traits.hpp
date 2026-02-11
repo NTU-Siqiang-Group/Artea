@@ -18,28 +18,52 @@
  * @Description:
  */
 
-#include <artea/cpu/containers/allocator.hpp>
-
 #pragma once
 
 namespace artea {
 namespace cpu {
 
 /** ------ Forward Declaration  ------ **/
+template <typename VertexGeneratorTraitsT, typename DerivedClassT> class VertexGenerator;
 template <typename VertexGeneratorTraitsT> class OrthoLSHGenerator;
+template <typename VertexGeneratorTraitsT> class PStableLSHGenerator;
 template <typename VertexGeneratorTraitsT> class LSHTable;
+template <typename VertexGeneratorTraitsT> class MBGreedyVG;
+template <typename VertexGeneratorTraitsT> class LBGreedyVG;
+template <typename VertexGeneratorTraitsT> class RandomVG;
 
-template <typename ComputerTraitsT, typename BufferTraitsT>
-struct VertexGeneratorTraits : public ComputerTraitsT, public BufferTraitsT {
+template <typename ComputerTraitsT>
+struct VertexGeneratorTraits : virtual public ComputerTraitsT {
 
     /** ------ Self Traits ------ **/
-    using vertex_generator_traits_t = VertexGeneratorTraits<ComputerTraitsT, BufferTraitsT>;
+    using vertex_generator_traits_t = VertexGeneratorTraits<ComputerTraitsT>;
+
+    /** @brief Vertex subset result type. */
+    using vertex_subset_t = typename ComputerTraitsT::vertex_subset_t;
+
+    /** @brief Approximate r-net result type (alias for vertex_subset_t). */
+    using approx_rnet_t = vertex_subset_t;
 
     /** @brief Ortho LSH generator. */
     using ortho_lsh_generator_t = OrthoLSHGenerator<vertex_generator_traits_t>;
 
+    /** @brief P-Stable LSH generator. */
+    using pstable_lsh_generator_t = PStableLSHGenerator<vertex_generator_traits_t>;
+
     /** @brief LSH function table type. */
     using lsh_table_t = LSHTable<vertex_generator_traits_t>;
+
+    /** @brief Mini batch greedy vertex generator. */
+    using mb_greedy_vg_t = MBGreedyVG<vertex_generator_traits_t>;
+
+    /** @brief Large batch greedy vertex generator. */
+    using lb_greedy_vg_t = LBGreedyVG<vertex_generator_traits_t>;
+
+    /** @brief Random vertex generator. */
+    using random_vg_t = RandomVG<vertex_generator_traits_t>;
+
+    template <typename DerivedClassT>
+    using vertex_generator_t = VertexGenerator<vertex_generator_traits_t, DerivedClassT>;
 
 };  // struct VertexGeneratorTraits
 
