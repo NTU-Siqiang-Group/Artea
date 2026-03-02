@@ -114,7 +114,7 @@ public:
      * 5. Mark all retained neighbors as old and replace origin_nbrs with the pruned array.
      */
     template <PruningConditionT ConditionType = PruningConditionT::scaled_ineq>
-    auto operator()(
+    auto update_impl(
         const vertex_id_t pivot_vid,
         nbr_arr_t& origin_nbrs
     ) -> void {

@@ -88,7 +88,7 @@ BENCHMARK(BM_HNSWLib)->Name("HNSWLib_L2");
 
 int main(int argc, char** argv) {
     argparse::ArgumentParser program("bench_simd_distance");
-    program.add_argument("-c", "--config").default_value(std::string("./datasets.json"));
+    program.add_argument("-c", "--config").default_value(std::string("./configs/datasets.json"));
     program.add_argument("-d", "--dataset").default_value(std::string("sift-1m"));
     try { program.parse_args(argc, argv); } catch (...) { return 1; }
     g_config.config_path = program.get<std::string>("--config");

@@ -65,7 +65,7 @@ public:
      * @param pivot_vid The vertex whose outgoing edges we're processing.
      * @param origin_nbrs The neighbor array of pivot_vid (not modified).
      */
-    auto operator()(
+    auto update_impl(
         const vertex_id_t pivot_vid,
         nbr_arr_t& origin_nbrs
     ) -> void {

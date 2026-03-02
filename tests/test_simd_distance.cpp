@@ -108,7 +108,7 @@ TEST(DistanceCorrectness, VerifyMultiTargetAndEngines) {
 int main(int argc, char** argv) {
     ::testing::InitGoogleTest(&argc, argv);
     argparse::ArgumentParser program("test_simd_distance");
-    program.add_argument("-c", "--config").default_value(std::string("./datasets.json"));
+    program.add_argument("-c", "--config").default_value(std::string("./configs/datasets.json"));
     program.add_argument("-d", "--dataset").default_value(std::string("sift-1m"));
     program.add_argument("-s", "--samples").default_value(10).scan<'i', int>().help("Number of samples to test");
     program.add_argument("-v", "--verbose").default_value(false).implicit_value(true);

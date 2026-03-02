@@ -15,40 +15,12 @@
 #include <benchmark/benchmark.h>
 #include <argparse/argparse.hpp>
 #include <artea/cpu/framework/artea.hpp>
+#include <artea/cpu/framework/default_context.hpp>
 #include <memory>
 #include <vector>
 
+using namespace artea::cpu::default_context;
 using namespace artea;
-using namespace artea::cpu;
-
-using base_traits_t = BaseTraits<uint32_t, float, false>;
-using computer_traits_t = ComputerTraits<base_traits_t, DistanceMetricsT::EUCLIDEAN>;
-using buffer_traits_t = BufferTraits<base_traits_t, BufferPolicyT::LOCKED_BUFFER_WITH_MUTEX, /* BufCapacity = */32>;
-using index_traits_t = IndexTraits<base_traits_t>;
-using edge_generator_traits_t = EdgeGeneratorTraits<computer_traits_t, buffer_traits_t, index_traits_t>;
-using vertex_generator_traits_t = VertexGeneratorTraits<computer_traits_t>;
-
-using constructor_traits_t = ConstructorTraits<
-    vertex_generator_traits_t,
-    edge_generator_traits_t,
-    index_traits_t,
-    false  // selective_schedule
->;
-
-using vec_num_t = typename base_traits_t::vec_num_t;
-using vec_dim_t = typename base_traits_t::vec_dim_t;
-using iter_t = typename base_traits_t::iter_t;
-using ratio_t = typename base_traits_t::ratio_t;
-using nbr_arr_t = typename base_traits_t::nbr_arr_t;
-using dist_func_t = typename computer_traits_t::dist_func_t;
-using vector_array_t = typename computer_traits_t::vector_array_t;
-using vector_dataset_t = typename computer_traits_t::vector_dataset_t;
-using flat_graph_t = typename index_traits_t::flat_graph_t;
-using random_eg_t = typename edge_generator_traits_t::random_eg_t;
-using triangle_updater_t = typename edge_generator_traits_t::triangle_updater_t;
-using reverse_updater_t = typename edge_generator_traits_t::reverse_updater_t;
-using random_updater_t = typename edge_generator_traits_t::random_updater_t;
-using propagate_engine_t = typename constructor_traits_t::propagate_engine_t;
 
 struct BenchConfig {
     std::string config_path;
@@ -60,7 +32,7 @@ struct BenchConfig {
     iter_t num_iters;
     ratio_t scale_coeffs;
     ratio_t shifted_coeffs;
-    int64_t iterations;
+    int64_t repetitions;
 };
 
 BenchConfig g_config;
@@ -135,23 +107,22 @@ private:
     std::vector<nbr_arr_t> initial_nbrs_;
 };
 
-// Benchmark for PropagateEngine with TriangleUpdater
-static void BM_PropagateEngine(benchmark::State& state) {
+// Benchmark for PropagateEngine with TriangleUpdater (with selective scheduling)
+static void BM_TriangleUpdater(benchmark::State& state) {
     auto& provider = DataProvider::instance();
     const auto& dist_func = provider.get_dist_func();
     flat_graph_t& flat_graph = provider.get_flat_graph();
     const vec_num_t num_vertices = provider.get_num_base_vecs();
 
-    // Create PropagateEngine instance
-    propagate_engine_t propagate_engine(num_vertices);
-    propagate_engine.set_graph(flat_graph);
-
     // Set max_nbr_size on the flat graph
     flat_graph.set_max_nbr_size(g_config.max_nbr_size);
 
+    // Create PropagateEngine instance
+    propagate_engine_ss_t propagate_engine(num_vertices, dist_func);
+    propagate_engine.set_graph(flat_graph);
+
     // Create TriangleUpdater using the factory method
     auto triangle_updater = propagate_engine.make_updater<triangle_updater_t>(
-        dist_func,
         g_config.scale_coeffs,
         g_config.shifted_coeffs
     );
@@ -172,7 +143,50 @@ static void BM_PropagateEngine(benchmark::State& state) {
 
     state.SetItemsProcessed(state.iterations() * num_vertices * g_config.num_iters);
     state.SetLabel(fmt::format(
-        "vertices={}, iters={}, max_nbrs={}",
+        "vertices={}, iters={}, max_nbrs={}, selective_schedule=true",
+        num_vertices,
+        g_config.num_iters,
+        g_config.max_nbr_size
+    ));
+}
+
+// Benchmark for PropagateEngine with TriangleUpdater (without selective scheduling)
+static void BM_TriangleUpdater_NoSS(benchmark::State& state) {
+    auto& provider = DataProvider::instance();
+    const auto& dist_func = provider.get_dist_func();
+    flat_graph_t& flat_graph = provider.get_flat_graph();
+    const vec_num_t num_vertices = provider.get_num_base_vecs();
+
+    // Set max_nbr_size on the flat graph
+    flat_graph.set_max_nbr_size(g_config.max_nbr_size);
+
+    // Create PropagateEngine instance without selective scheduling
+    propagate_engine_noss_t propagate_engine(num_vertices, dist_func);
+    propagate_engine.set_graph(flat_graph);
+
+    // Create TriangleUpdater using the factory method
+    auto triangle_updater = propagate_engine.make_updater<triangle_updater_t>(
+        g_config.scale_coeffs,
+        g_config.shifted_coeffs
+    );
+
+    for (auto _ : state) {
+        // Reset graph to initial state before each benchmark iteration
+        state.PauseTiming();
+        provider.reset_graph();
+        state.ResumeTiming();
+
+        // Run the propagation for specified iterations
+        propagate_engine.run(g_config.num_iters, triangle_updater);
+
+        // Prevent optimization from removing the work
+        benchmark::DoNotOptimize(flat_graph);
+        benchmark::ClobberMemory();
+    }
+
+    state.SetItemsProcessed(state.iterations() * num_vertices * g_config.num_iters);
+    state.SetLabel(fmt::format(
+        "vertices={}, iters={}, max_nbrs={}, selective_schedule=false",
         num_vertices,
         g_config.num_iters,
         g_config.max_nbr_size
@@ -187,11 +201,11 @@ static void BM_ReverseUpdater(benchmark::State& state) {
     const vec_num_t num_vertices = provider.get_num_base_vecs();
 
     // Create PropagateEngine instance
-    propagate_engine_t propagate_engine(num_vertices);
+    propagate_engine_ss_t propagate_engine(num_vertices, dist_func);
     propagate_engine.set_graph(flat_graph);
 
     // Create ReverseUpdater using the factory method
-    auto reverse_updater = propagate_engine.make_updater<reverse_updater_t>(dist_func);
+    auto reverse_updater = propagate_engine.make_updater<reverse_updater_t>();
 
     for (auto _ : state) {
         // Reset graph to initial state before each benchmark iteration
@@ -209,7 +223,44 @@ static void BM_ReverseUpdater(benchmark::State& state) {
 
     state.SetItemsProcessed(state.iterations() * num_vertices * g_config.num_iters);
     state.SetLabel(fmt::format(
-        "vertices={}, iters={}, init_nbrs={}",
+        "vertices={}, iters={}, init_nbrs={}, selective_schedule=true",
+        num_vertices,
+        g_config.num_iters,
+        g_config.init_nbr_size
+    ));
+}
+
+// Benchmark for PropagateEngine with ReverseUpdater (without selective scheduling)
+static void BM_ReverseUpdater_NoSS(benchmark::State& state) {
+    auto& provider = DataProvider::instance();
+    const auto& dist_func = provider.get_dist_func();
+    flat_graph_t& flat_graph = provider.get_flat_graph();
+    const vec_num_t num_vertices = provider.get_num_base_vecs();
+
+    // Create PropagateEngine instance without selective scheduling
+    propagate_engine_noss_t propagate_engine(num_vertices, dist_func);
+    propagate_engine.set_graph(flat_graph);
+
+    // Create ReverseUpdater using the factory method
+    auto reverse_updater = propagate_engine.make_updater<reverse_updater_t>();
+
+    for (auto _ : state) {
+        // Reset graph to initial state before each benchmark iteration
+        state.PauseTiming();
+        provider.reset_graph();
+        state.ResumeTiming();
+
+        // Run the propagation for specified iterations
+        propagate_engine.run(g_config.num_iters, reverse_updater);
+
+        // Prevent optimization from removing the work
+        benchmark::DoNotOptimize(flat_graph);
+        benchmark::ClobberMemory();
+    }
+
+    state.SetItemsProcessed(state.iterations() * num_vertices * g_config.num_iters);
+    state.SetLabel(fmt::format(
+        "vertices={}, iters={}, init_nbrs={}, selective_schedule=false",
         num_vertices,
         g_config.num_iters,
         g_config.init_nbr_size
@@ -224,14 +275,11 @@ static void BM_RandomUpdater(benchmark::State& state) {
     const vec_num_t num_vertices = provider.get_num_base_vecs();
 
     // Create PropagateEngine instance
-    propagate_engine_t propagate_engine(num_vertices);
+    propagate_engine_ss_t propagate_engine(num_vertices, dist_func);
     propagate_engine.set_graph(flat_graph);
 
     // Create RandomUpdater using the factory method
-    auto random_updater = propagate_engine.make_updater<random_updater_t>(
-        dist_func,
-        g_config.rand_gen_size
-    );
+    auto random_updater = propagate_engine.make_updater<random_updater_t>(g_config.rand_gen_size);
 
     for (auto _ : state) {
         // Reset graph to initial state before each benchmark iteration
@@ -249,7 +297,44 @@ static void BM_RandomUpdater(benchmark::State& state) {
 
     state.SetItemsProcessed(state.iterations() * num_vertices * g_config.num_iters);
     state.SetLabel(fmt::format(
-        "vertices={}, iters={}, rand_gen_size={}",
+        "vertices={}, iters={}, rand_gen_size={}, selective_schedule=true",
+        num_vertices,
+        g_config.num_iters,
+        g_config.rand_gen_size
+    ));
+}
+
+// Benchmark for PropagateEngine with RandomUpdater (without selective scheduling)
+static void BM_RandomUpdater_NoSS(benchmark::State& state) {
+    auto& provider = DataProvider::instance();
+    const auto& dist_func = provider.get_dist_func();
+    flat_graph_t& flat_graph = provider.get_flat_graph();
+    const vec_num_t num_vertices = provider.get_num_base_vecs();
+
+    // Create PropagateEngine instance without selective scheduling
+    propagate_engine_noss_t propagate_engine(num_vertices, dist_func);
+    propagate_engine.set_graph(flat_graph);
+
+    // Create RandomUpdater using the factory method
+    auto random_updater = propagate_engine.make_updater<random_updater_t>(g_config.rand_gen_size);
+
+    for (auto _ : state) {
+        // Reset graph to initial state before each benchmark iteration
+        state.PauseTiming();
+        provider.reset_graph();
+        state.ResumeTiming();
+
+        // Run the propagation for specified iterations
+        propagate_engine.run(g_config.num_iters, random_updater);
+
+        // Prevent optimization from removing the work
+        benchmark::DoNotOptimize(flat_graph);
+        benchmark::ClobberMemory();
+    }
+
+    state.SetItemsProcessed(state.iterations() * num_vertices * g_config.num_iters);
+    state.SetLabel(fmt::format(
+        "vertices={}, iters={}, rand_gen_size={}, selective_schedule=false",
         num_vertices,
         g_config.num_iters,
         g_config.rand_gen_size
@@ -267,7 +352,7 @@ int main(int argc, char** argv) {
 
     // Dataset configuration
     program.add_argument("-c", "--config")
-        .default_value(std::string("./datasets.json"))
+        .default_value(std::string("./configs/datasets.json"))
         .help("Path to dataset configuration file");
 
     program.add_argument("-d", "--dataset")
@@ -296,7 +381,7 @@ int main(int argc, char** argv) {
         .help("Number of random neighbors to generate per vertex (for RandomUpdater)");
 
     program.add_argument("--num-iters")
-        .default_value(5)
+        .default_value(10)
         .scan<'i', int>()
         .help("Number of propagation iterations to run");
 
@@ -311,10 +396,10 @@ int main(int argc, char** argv) {
         .help("Shifted coefficient for triangle inequality pruning");
 
     // Benchmark control
-    program.add_argument("-i", "--iterations")
-        .default_value(int64_t(10))
+    program.add_argument("-r", "--repetitions")
+        .default_value(int64_t(5))
         .scan<'i', int64_t>()
-        .help("Number of iterations for benchmarks");
+        .help("Number of repetitions for benchmarks");
 
     program.add_argument("-h", "--help")
         .default_value(false)
@@ -343,7 +428,7 @@ int main(int argc, char** argv) {
     g_config.num_iters = static_cast<iter_t>(program.get<int>("--num-iters"));
     g_config.scale_coeffs = static_cast<ratio_t>(program.get<double>("--scale-coeffs"));
     g_config.shifted_coeffs = static_cast<ratio_t>(program.get<double>("--shifted-coeffs"));
-    g_config.iterations = program.get<int64_t>("--iterations");
+    g_config.repetitions = program.get<int64_t>("--repetitions");
 
     logger.info(fmt::format("Benchmark Configuration:"));
     logger.info(fmt::format("  Dataset: {}", g_config.dataset_name));
@@ -355,7 +440,7 @@ int main(int argc, char** argv) {
     logger.info(fmt::format("  Propagation iterations: {}", g_config.num_iters));
     logger.info(fmt::format("  Scale coeffs: {}", g_config.scale_coeffs));
     logger.info(fmt::format("  Shifted coeffs: {}", g_config.shifted_coeffs));
-    logger.info(fmt::format("  Benchmark iterations: {}", g_config.iterations));
+    logger.info(fmt::format("  Benchmark repetitions: {}", g_config.repetitions));
 
     DataProvider::instance().init();
 
@@ -363,20 +448,35 @@ int main(int argc, char** argv) {
     logger.info(fmt::format("  Dimension: {}", DataProvider::instance().get_dim()));
     logger.info(fmt::format("  Base vectors: {}", DataProvider::instance().get_num_base_vecs()));
 
-    // Dynamically register benchmark with runtime-parsed repetitions
-    benchmark::RegisterBenchmark("BM_TriangleUpdater", BM_PropagateEngine)
+    // Register benchmarks
+    benchmark::RegisterBenchmark("BM_TriangleUpdater_NoSS", BM_TriangleUpdater_NoSS)
         ->Unit(benchmark::kMillisecond)
-        ->Repetitions(g_config.iterations)
-        ->ReportAggregatesOnly(false);  // Show individual repetition results
+        ->Repetitions(g_config.repetitions)
+        ->ReportAggregatesOnly(false);
+
+    benchmark::RegisterBenchmark("BM_TriangleUpdater", BM_TriangleUpdater)
+        ->Unit(benchmark::kMillisecond)
+        ->Repetitions(g_config.repetitions)
+        ->ReportAggregatesOnly(false);
+
+    benchmark::RegisterBenchmark("BM_ReverseUpdater_NoSS", BM_ReverseUpdater_NoSS)
+        ->Unit(benchmark::kMillisecond)
+        ->Repetitions(g_config.repetitions)
+        ->ReportAggregatesOnly(false);
 
     benchmark::RegisterBenchmark("BM_ReverseUpdater", BM_ReverseUpdater)
         ->Unit(benchmark::kMillisecond)
-        ->Repetitions(g_config.iterations)
+        ->Repetitions(g_config.repetitions)
+        ->ReportAggregatesOnly(false);
+
+    benchmark::RegisterBenchmark("BM_RandomUpdater_NoSS", BM_RandomUpdater_NoSS)
+        ->Unit(benchmark::kMillisecond)
+        ->Repetitions(g_config.repetitions)
         ->ReportAggregatesOnly(false);
 
     benchmark::RegisterBenchmark("BM_RandomUpdater", BM_RandomUpdater)
         ->Unit(benchmark::kMillisecond)
-        ->Repetitions(g_config.iterations)
+        ->Repetitions(g_config.repetitions)
         ->ReportAggregatesOnly(false);
 
     // Initialize and run Google Benchmark

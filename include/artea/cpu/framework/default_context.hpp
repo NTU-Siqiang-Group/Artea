@@ -1,0 +1,128 @@
+// Copyright 2026 Weitang Ye
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     https://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+#pragma once
+
+namespace artea {
+namespace cpu {
+namespace default_context {
+
+// Type definitions using EUCLIDEAN, LOCKED_BUFFER_WITH_MUTEX
+using vec_num_t = uint32_t;
+using vec_ele_t = float;
+
+using base_traits_t = BaseTraits<vec_num_t, vec_ele_t, false>;
+using computer_traits_t = ComputerTraits<base_traits_t, DistanceMetricsT::EUCLIDEAN>;
+using buffer_traits_t = BufferTraits<base_traits_t, BufferPolicyT::LOCKED_BUFFER_WITH_MUTEX, 32>;
+using index_traits_t = IndexTraits<base_traits_t>;
+using edge_generator_traits_t = EdgeGeneratorTraits<computer_traits_t, buffer_traits_t, index_traits_t>;
+using vertex_generator_traits_t = VertexGeneratorTraits<computer_traits_t>;
+using graph_factory_traits_t = GraphFactoryTraits<
+    vertex_generator_traits_t,
+    edge_generator_traits_t,
+    index_traits_t
+>;
+
+// Base types from BaseTraits
+using vec_dim_t = typename base_traits_t::vec_dim_t;
+using vertex_num_t = typename base_traits_t::vertex_num_t;
+using vertex_id_t = typename base_traits_t::vertex_id_t;
+using vec_id_t = typename base_traits_t::vec_id_t;
+using vec_ele_t = typename base_traits_t::vec_ele_t;
+using distance_t = typename base_traits_t::distance_t;
+using ratio_t = typename base_traits_t::ratio_t;
+using cluster_num_t = typename base_traits_t::cluster_num_t;
+using cluster_id_t = typename base_traits_t::cluster_id_t;
+using part_num_t = typename base_traits_t::part_num_t;
+using part_id_t = typename base_traits_t::part_id_t;
+using batch_id_t = typename base_traits_t::batch_id_t;
+using hash_num_t = typename base_traits_t::hash_num_t;
+using iter_t = typename base_traits_t::iter_t;
+using nbr_t = typename base_traits_t::nbr_t;
+using nbr_arr_t = typename base_traits_t::nbr_arr_t;
+using nbr_comp_t = typename base_traits_t::nbr_comp_t;
+using strict_nbr_comp_t = typename base_traits_t::strict_nbr_comp_t;
+using nbr_id_comp_t = typename base_traits_t::nbr_id_comp_t;
+using nbr_dist_comp_t = typename base_traits_t::nbr_dist_comp_t;
+using word_aligned_bitmap_t = typename base_traits_t::word_aligned_bitmap_t;
+using thread_local_bitmap_t = typename base_traits_t::thread_local_bitmap_t;
+using version_tag_table_t = typename base_traits_t::version_tag_table_t;
+using csr_graph_t = typename base_traits_t::csr_graph_t;
+using vector_t = typename base_traits_t::vector_t;
+using vector_array_t = typename base_traits_t::vector_array_t;
+using idlist_array_t = typename base_traits_t::idlist_array_t;
+using vector_dataset_t = typename base_traits_t::vector_dataset_t;
+using base_vecs_t = typename base_traits_t::base_vecs_t;
+using query_vecs_t = typename base_traits_t::query_vecs_t;
+using ground_truth_t = typename base_traits_t::ground_truth_t;
+using vector_sampler_t = typename base_traits_t::vector_sampler_t;
+using nbr_arr_checker_t = typename base_traits_t::nbr_arr_checker_t;
+using random_seq_t = typename base_traits_t::random_seq_t;
+using vertex_subset_t = typename base_traits_t::vertex_subset_t;
+using pruning_condition_t = typename base_traits_t::pruning_condition_t;
+
+// Computer types from ComputerTraits
+using distance_metrics_t = typename computer_traits_t::distance_metrics_t;
+using dist_func_t = typename computer_traits_t::dist_func_t;
+using simdu1_dist_t = typename computer_traits_t::simdu1_dist_t;
+using simdu2_dist_t = typename computer_traits_t::simdu2_dist_t;
+using simdu4_dist_t = typename computer_traits_t::simdu4_dist_t;
+using fma_func_t = typename computer_traits_t::fma_func_t;
+using simdu1_fma_t = typename computer_traits_t::simdu1_fma_t;
+using simdu2_fma_t = typename computer_traits_t::simdu2_fma_t;
+using simdu4_fma_t = typename computer_traits_t::simdu4_fma_t;
+using linear_func_t = typename computer_traits_t::linear_func_t;
+using simdu1_linear_t = typename computer_traits_t::simdu1_linear_t;
+using simdu2_linear_t = typename computer_traits_t::simdu2_linear_t;
+using simdu4_linear_t = typename computer_traits_t::simdu4_linear_t;
+using recall_estimator_t = typename computer_traits_t::recall_estimator_t;
+using radius_prober_t = typename computer_traits_t::radius_prober_t;
+
+// Buffer types from BufferTraits
+using buffer_policy_t = typename buffer_traits_t::buffer_policy_t;
+using log_buffer_t = typename buffer_traits_t::log_buffer_t;
+using log_container_t = typename buffer_traits_t::log_container_t;
+using log_table_t = typename buffer_traits_t::log_table_t;
+
+// Index types from IndexTraits
+using flat_graph_t = typename index_traits_t::flat_graph_t;
+using search_graph_t = typename index_traits_t::search_graph_t;
+
+// Edge generator types from EdgeGeneratorTraits
+using triangle_updater_t = typename edge_generator_traits_t::triangle_updater_t;
+using reverse_updater_t = typename edge_generator_traits_t::reverse_updater_t;
+using random_updater_t = typename edge_generator_traits_t::random_updater_t;
+using random_eg_t = typename edge_generator_traits_t::random_eg_t;
+
+// Vertex generator types from VertexGeneratorTraits
+using approx_rnet_t = typename vertex_generator_traits_t::approx_rnet_t;
+using ortho_lsh_generator_t = typename vertex_generator_traits_t::ortho_lsh_generator_t;
+using pstable_lsh_generator_t = typename vertex_generator_traits_t::pstable_lsh_generator_t;
+using lsh_table_t = typename vertex_generator_traits_t::lsh_table_t;
+using mb_greedy_vg_t = typename vertex_generator_traits_t::mb_greedy_vg_t;
+using lb_greedy_vg_t = typename vertex_generator_traits_t::lb_greedy_vg_t;
+using random_vg_t = typename vertex_generator_traits_t::random_vg_t;
+
+// Graph factory types from GraphFactoryTraits
+using conv_graph_factory_t = typename graph_factory_traits_t::conv_graph_factory_t;
+
+// Propagate engine from EdgeGeneratorTraits
+using propagate_engine_ss_t = typename edge_generator_traits_t::propagate_engine_t<true>;
+using propagate_engine_noss_t = typename edge_generator_traits_t::propagate_engine_t<false>;
+// Currently, NO SELECTIVE SCHEDULING is faster
+using propagate_engine_t = propagate_engine_noss_t;
+
+}   // namespace default_context
+}   // namespace cpu
+}   // namespace artea

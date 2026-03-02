@@ -127,6 +127,22 @@ public:
         }
     }
 
+    /** @brief Set all bits to 1. */
+    __attribute__((always_inline))
+    void set_all() {
+        if (!_data.empty()) {
+            std::memset(_data.data(), 0xFF, _data.size() * sizeof(word_t));
+        }
+    }
+
+    /** @brief Set a specific bit to 1. */
+    __attribute__((always_inline))
+    void set(const size_t bit_index) {
+        const size_t word_idx = bit_index >> WORD_SHIFT;
+        const size_t bit_offset = bit_index & WORD_MASK;
+        _data[word_idx] |= (1ULL << bit_offset);
+    }
+
     /** @brief Access raw data */
     __attribute__((always_inline))
     const container_t& data() const { return _data; }

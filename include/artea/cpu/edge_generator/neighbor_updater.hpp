@@ -49,6 +49,20 @@ public:
         log_table_t& log_table
     ) : _dist_func(dist_func), _vecs_arr(vecs_arr), _log_table(log_table) {}
 
+    /**
+     * @brief Operator that delegates to the derived class's update_impl.
+     *
+     * This uses CRTP (Curiously Recurring Template Pattern) to call the derived
+     * class's update_impl method without virtual function overhead.
+     */
+    __attribute__((always_inline))
+    auto operator()(
+        const vertex_id_t pivot_vid,
+        nbr_arr_t& origin_nbrs
+    ) -> void {
+        static_cast<DerivedClassT*>(this)->update_impl(pivot_vid, origin_nbrs);
+    }
+
 protected:
 
     /** @brief Distance function used for RNG checking. */

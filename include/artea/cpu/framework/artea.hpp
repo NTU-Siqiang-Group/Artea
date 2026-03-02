@@ -34,7 +34,7 @@
 #include <artea/cpu/framework/vertex_generator_traits.hpp>
 #include <artea/cpu/framework/edge_generator_traits.hpp>
 #include <artea/cpu/framework/index_traits.hpp>
-#include <artea/cpu/framework/constructor_traits.hpp>
+#include <artea/cpu/framework/graph_factory_traits.hpp>
 
 #include <artea/cpu/containers/allocator.hpp>
 #include <artea/cpu/containers/vector_array.hpp>
@@ -49,8 +49,9 @@
 #include <artea/cpu/index/flat_graph.hpp>
 #include <artea/cpu/index/search_graph.hpp>
 
-#include <artea/cpu/constructor/graph_initializer.hpp>
-#include <artea/cpu/constructor/graph_constructor.hpp>
+#include <artea/cpu/graph_factory/graph_initializer.hpp>
+#include <artea/cpu/graph_factory/flat_graph_factory.hpp>
+#include <artea/cpu/graph_factory/conv_graph_factory.hpp>
 
 #include <artea/cpu/vertex_generator/vertex_generator.hpp>
 #include <artea/cpu/vertex_generator/lsh_table.hpp>

@@ -31,7 +31,8 @@ namespace cpu {
 
 template <typename EdgeGeneratorTraitsT>
 class RandomUpdater :
-    public EdgeGeneratorTraitsT::template neighbor_updater_t<RandomUpdater<EdgeGeneratorTraitsT>> {
+    public EdgeGeneratorTraitsT::template neighbor_updater_t<RandomUpdater<EdgeGeneratorTraitsT>>
+{
 
     using vertex_id_t = typename EdgeGeneratorTraitsT::vertex_id_t;
     using vertex_num_t = typename EdgeGeneratorTraitsT::vertex_num_t;
@@ -79,7 +80,7 @@ public:
      *       propagate engine, as RandomSeq uses thread-local storage for random
      *       number generation.
      */
-    auto operator()(
+    auto update_impl(
         const vertex_id_t pivot_vid,
         nbr_arr_t& origin_nbrs
     ) -> void {
@@ -103,14 +104,17 @@ public:
 
             // Get the random neighbor vector and compute distance
             const vec_ele_t* rand_nbr_vec = this->_vecs_arr.get(rand_nbr_id);
-            distance_t dist = this->_dist_func(pivot_vec, rand_nbr_vec);
+            distance_t rand_nbr_dist = this->_dist_func(pivot_vec, rand_nbr_vec);
 
-            // Write the random edge to the log table
+            // [✔️] // Write the random edge to the log table
             this->_log_table.write_log(
                 /* executor_vid = */pivot_vid,
                 /* nbr_id = */rand_nbr_id,
-                /* new_edge_dist = */dist
+                /* new_edge_dist = */rand_nbr_dist
             );
+
+            // [❌] // Directly write to origin_nbrs
+            // origin_nbrs.emplace_back(rand_nbr_id, rand_nbr_dist, /* is_new = */true);
         }
     }
 

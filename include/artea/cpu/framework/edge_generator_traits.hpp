@@ -29,6 +29,7 @@ template <typename EdgeGeneratorTraitsT> class TriangleUpdater;
 template <typename EdgeGeneratorTraitsT> class ReverseUpdater;
 template <typename EdgeGeneratorTraitsT> class RandomUpdater;
 template <typename EdgeGeneratorTraitsT> class RandomEG;
+template <typename EdgeGeneratorTraitsT, bool SelectiveSchedule> class PropagateEngine;
 
 template <typename ComputerTraitsT, typename BufferTraitsT, typename IndexTraitsT>
 struct EdgeGeneratorTraits :
@@ -54,6 +55,10 @@ struct EdgeGeneratorTraits :
 
     /** @brief Random edge generator. */
     using random_eg_t = RandomEG<edge_generator_traits_t>;
+
+    /** @brief Type for propagation engine. */
+    template <bool SelectiveSchedule>
+    using propagate_engine_t = PropagateEngine<edge_generator_traits_t, SelectiveSchedule>;
 
 };  // struct EdgeGeneratorTraits
 

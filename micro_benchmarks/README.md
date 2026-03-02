@@ -10,7 +10,7 @@ Benchmarks the RandomEG (Random Edge Generator) for graph initialization.
 **Purpose**: Measures the time to randomly initialize a graph's edges.
 
 **Parameters**:
-- `-c, --config`: Path to dataset configuration file (default: `./datasets.json`)
+- `-c, --config`: Path to dataset configuration file (default: `./configs/datasets.json`)
 - `-d, --dataset`: Dataset name (default: `sift-1m`)
 - `--init-nbrs`: Number of random neighbors to generate for each vertex (default: 32)
 - `--reserved-nbrs`: Reserved neighbor array size for the graph (default: 32)
@@ -18,7 +18,7 @@ Benchmarks the RandomEG (Random Edge Generator) for graph initialization.
 
 **Example**:
 ```bash
-./build/micro_benchmarks/bench_random_eg -c ./datasets.json --dataset sift-1m --init-nbrs 32 --reserved-nbrs 32 -i 10
+./build/micro_benchmarks/bench_random_eg -c ./configs/datasets.json --dataset sift-1m --init-nbrs 32 --reserved-nbrs 32 -i 10
 ```
 
 ---
@@ -29,7 +29,7 @@ Benchmarks the PropagateEngine with TriangleUpdater for RNG pruning.
 **Purpose**: Measures the propagation time for running multiple iterations of edge generation with triangle inequality pruning.
 
 **Parameters**:
-- `-c, --config`: Path to dataset configuration file (default: `./datasets.json`)
+- `-c, --config`: Path to dataset configuration file (default: `./configs/datasets.json`)
 - `-d, --dataset`: Dataset name (default: `sift-1m`)
 - `--init-nbrs`: Number of random neighbors for initial graph (default: 32)
 - `--reserved-nbrs`: Reserved neighbor array size (default: 32)
@@ -41,7 +41,7 @@ Benchmarks the PropagateEngine with TriangleUpdater for RNG pruning.
 
 **Example**:
 ```bash
-./build/micro_benchmarks/bench_propagate_engine -c ./datasets.json --dataset sift-1m --init-nbrs 32 --max-nbrs 64 --num-iters 5 -i 10
+./build/micro_benchmarks/bench_propagate_engine -c ./configs/datasets.json --dataset sift-1m --init-nbrs 32 --max-nbrs 64 --num-iters 5 -i 10
 ```
 
 **Note**: Each benchmark iteration resets the graph to its initial random state, ensuring consistent and reproducible measurements. Within each iteration, `propagate_engine.run()` performs the specified number of propagation iterations on the same graph.
@@ -54,7 +54,7 @@ Benchmarks the PropagateEngine with ReverseUpdater for bidirectional edge genera
 **Purpose**: Measures the time to add reverse edges to a sparse directed graph, converting it into a bidirectional graph.
 
 **Parameters**:
-- `-c, --config`: Path to dataset configuration file (default: `./datasets.json`)
+- `-c, --config`: Path to dataset configuration file (default: `./configs/datasets.json`)
 - `-d, --dataset`: Dataset name (default: `sift-1m`)
 - `--init-nbrs`: Number of random neighbors for initial sparse graph (default: 32)
 - `--reserved-nbrs`: Reserved neighbor array size (default: 32)
@@ -63,7 +63,7 @@ Benchmarks the PropagateEngine with ReverseUpdater for bidirectional edge genera
 
 **Example**:
 ```bash
-./build/micro_benchmarks/bench_reverse_updater -c ./datasets.json --dataset sift-1m --init-nbrs 32 --num-iters 1 -i 10
+./build/micro_benchmarks/bench_reverse_updater -c ./configs/datasets.json --dataset sift-1m --init-nbrs 32 --num-iters 1 -i 10
 ```
 
 **Note**: This benchmark starts with a sparse random graph and adds reverse edges to make it bidirectional. Each benchmark iteration resets the graph to its initial sparse state before running the reverse updater.

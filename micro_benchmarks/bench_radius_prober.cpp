@@ -102,7 +102,7 @@ int main(int argc, char** argv) {
 
     // Dataset configuration
     program.add_argument("-c", "--config")
-        .default_value(std::string("./datasets.json"))
+        .default_value(std::string("./configs/datasets.json"))
         .help("Path to dataset configuration file");
 
     program.add_argument("-d", "--dataset")

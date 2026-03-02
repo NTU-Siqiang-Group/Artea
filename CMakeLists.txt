@@ -86,6 +86,18 @@ FetchContent_Declare(
     GIT_TAG "v1.9.5"
 )
 
+FetchContent_Declare(
+    indicators
+    GIT_REPOSITORY https://github.com/p-ranav/indicators.git
+    GIT_TAG "v2.3"
+)
+
+FetchContent_Declare(
+    tabulate
+    GIT_REPOSITORY https://github.com/p-ranav/tabulate.git
+    GIT_TAG "v1.5"
+)
+
 # --- Google Benchmark Configuration ---
 # Disable building tests and examples for Google Benchmark to speed up the process
 set(BENCHMARK_ENABLE_TESTING OFF CACHE BOOL "Disable benchmark testing" FORCE)
@@ -117,6 +129,8 @@ FetchContent_MakeAvailable(
 	eigen
 	googletest
 	benchmark
+	indicators
+	tabulate
 )
 
 # --- Define core "artea" library ---
@@ -146,6 +160,8 @@ target_link_libraries(artea INTERFACE
     MKL::MKL
 	range-v3::range-v3
 	eigen
+	indicators
+	tabulate::tabulate
 )
 
 include(CTest)
@@ -154,3 +170,4 @@ include(CTest)
 add_subdirectory(tests)
 add_subdirectory(benchmarks)
 add_subdirectory(micro_benchmarks)
+add_subdirectory(examples)

@@ -27,38 +27,11 @@
 
 // Artea Headers
 #include <artea/cpu/framework/artea.hpp>
-
-using namespace artea;
-using namespace artea::cpu;
+#include <artea/cpu/framework/simple_tests_context.hpp>
 
 // Type definitions using SIMPLE_EUCLIDEAN for low-dimensional vectors
-using vec_num_t = uint32_t;
-using vec_ele_t = float;
-using base_traits_t = BaseTraits<vec_num_t, vec_ele_t, false>;
-using computer_traits_t = ComputerTraits<base_traits_t, DistanceMetricsT::SIMPLE_EUCLIDEAN>;
-using buffer_traits_t = BufferTraits<base_traits_t, BufferPolicyT::LOCKED_BUFFER_WITH_MUTEX, 32>;
-using index_traits_t = IndexTraits<base_traits_t>;
-using edge_generator_traits_t = EdgeGeneratorTraits<computer_traits_t, buffer_traits_t, index_traits_t>;
-using vertex_generator_traits_t = VertexGeneratorTraits<computer_traits_t>;
-using constructor_traits_t = ConstructorTraits<
-    vertex_generator_traits_t,
-    edge_generator_traits_t,
-    index_traits_t,
-    false
->;
-
-using dist_func_t = typename computer_traits_t::dist_func_t;
-using vector_array_t = typename computer_traits_t::vector_array_t;
-using vertex_id_t = typename base_traits_t::vertex_id_t;
-using distance_t = typename base_traits_t::distance_t;
-using ratio_t = typename base_traits_t::ratio_t;
-using nbr_t = typename base_traits_t::nbr_t;
-using nbr_arr_t = typename base_traits_t::nbr_arr_t;
-using triangle_updater_t = typename edge_generator_traits_t::triangle_updater_t;
-using reverse_updater_t = typename edge_generator_traits_t::reverse_updater_t;
-using random_updater_t = typename edge_generator_traits_t::random_updater_t;
-using flat_graph_t = typename index_traits_t::flat_graph_t;
-using propagate_engine_t = typename constructor_traits_t::propagate_engine_t;
+using namespace artea;
+using namespace artea::cpu::simple_tests_context;
 
 class PropagateEngineCorrectnessTest : public ::testing::Test {
 protected:
@@ -206,14 +179,10 @@ TEST_F(PropagateEngineCorrectnessTest, TrianglePruningWithPropagateEngine) {
 
     flat_graph_->set_max_nbr_size(max_nbr_size);
 
-    propagate_engine_t propagate_engine(num_vertices_);
+    propagate_engine_ss_t propagate_engine(num_vertices_, *dist_func_);
     propagate_engine.set_graph(*flat_graph_);
 
-    auto triangle_updater = propagate_engine.make_updater<triangle_updater_t>(
-        *dist_func_,
-        scale_coeffs,
-        shifted_coeffs
-    );
+    auto triangle_updater = propagate_engine.make_updater<triangle_updater_t>(scale_coeffs, shifted_coeffs);
 
     // Apply triangle pruning for 5 iterations
     propagate_engine.run(5, triangle_updater);
@@ -273,15 +242,12 @@ TEST_F(PropagateEngineCorrectnessTest, IntegratedRandomAndReverseUpdater) {
 
     logger.info("Step 1: Starting with empty graph");
 
-    propagate_engine_t propagate_engine(num_vertices_);
+    propagate_engine_ss_t propagate_engine(num_vertices_, *dist_func_);
     propagate_engine.set_graph(*flat_graph_);
 
     // Step 2: Apply RandomUpdater to generate asymmetric edges
     const vec_num_t rand_gen_size = 5;
-    auto random_updater = propagate_engine.make_updater<random_updater_t>(
-        *dist_func_,
-        rand_gen_size
-    );
+    auto random_updater = propagate_engine.make_updater<random_updater_t>(rand_gen_size);
 
     propagate_engine.run(1, random_updater);
 
@@ -310,7 +276,7 @@ TEST_F(PropagateEngineCorrectnessTest, IntegratedRandomAndReverseUpdater) {
         << "RandomUpdater should generate asymmetric edges (missing reverse edges)";
 
     // Step 3: Apply reverse updater
-    auto reverse_updater = propagate_engine.make_updater<reverse_updater_t>(*dist_func_);
+    auto reverse_updater = propagate_engine.make_updater<reverse_updater_t>();
     propagate_engine.run(1, reverse_updater);
 
     size_t edges_after_reverse = 0;
@@ -380,14 +346,10 @@ TEST_F(PropagateEngineCorrectnessTest, ScaledTrianglePruning) {
 
     flat_graph_->set_max_nbr_size(max_nbr_size);
 
-    propagate_engine_t propagate_engine(num_vertices_);
+    propagate_engine_ss_t propagate_engine(num_vertices_, *dist_func_);
     propagate_engine.set_graph(*flat_graph_);
 
-    auto triangle_updater = propagate_engine.make_updater<triangle_updater_t>(
-        *dist_func_,
-        scale_coeffs,
-        shifted_coeffs
-    );
+    auto triangle_updater = propagate_engine.make_updater<triangle_updater_t>(scale_coeffs, shifted_coeffs);
 
     propagate_engine.run(5, triangle_updater);
 
@@ -442,10 +404,10 @@ TEST_F(PropagateEngineCorrectnessTest, NeighborsSortedAfterPruning) {
     const vec_num_t max_nbr_size = 6;
     flat_graph_->set_max_nbr_size(max_nbr_size);
 
-    propagate_engine_t propagate_engine(num_vertices_);
+    propagate_engine_ss_t propagate_engine(num_vertices_, *dist_func_);
     propagate_engine.set_graph(*flat_graph_);
 
-    auto triangle_updater = propagate_engine.make_updater<triangle_updater_t>(*dist_func_, 1.0, 0.0);
+    auto triangle_updater = propagate_engine.make_updater<triangle_updater_t>(1.0, 0.0);
 
     propagate_engine.run(5, triangle_updater);
 
@@ -472,15 +434,12 @@ TEST_F(PropagateEngineCorrectnessTest, RandomUpdaterGeneratesEdges) {
 
     logger.info("Testing RandomUpdater with empty initial graph:");
 
-    propagate_engine_t propagate_engine(num_vertices_);
+    propagate_engine_ss_t propagate_engine(num_vertices_, *dist_func_);
     propagate_engine.set_graph(*flat_graph_);
 
     const vec_num_t rand_gen_size = 5;  // Generate 5 random neighbors per vertex
 
-    auto random_updater = propagate_engine.make_updater<random_updater_t>(
-        *dist_func_,
-        rand_gen_size
-    );
+    auto random_updater = propagate_engine.make_updater<random_updater_t>(rand_gen_size);
 
     // Run one iteration of random edge generation
     propagate_engine.run(1, random_updater);
@@ -535,15 +494,12 @@ TEST_F(PropagateEngineCorrectnessTest, RandomUpdaterThreadSafety) {
         nbrs_arr[u].clear();
     }
 
-    propagate_engine_t propagate_engine(num_vertices_);
+    propagate_engine_ss_t propagate_engine(num_vertices_, *dist_func_);
     propagate_engine.set_graph(*flat_graph_);
 
     const vec_num_t rand_gen_size = 10;
 
-    auto random_updater = propagate_engine.make_updater<random_updater_t>(
-        *dist_func_,
-        rand_gen_size
-    );
+    auto random_updater = propagate_engine.make_updater<random_updater_t>(rand_gen_size);
 
     // Run multiple iterations to stress test thread safety
     propagate_engine.run(3, random_updater);
@@ -564,6 +520,53 @@ TEST_F(PropagateEngineCorrectnessTest, RandomUpdaterThreadSafety) {
 
     logger.info(fmt::format("Thread safety test: {} total edges after 3 iterations", total_edges));
     EXPECT_GT(total_edges, 0) << "Should have generated edges in parallel";
+}
+
+// Test with selective scheduling disabled (propagate_engine_noss_t)
+TEST_F(PropagateEngineCorrectnessTest, TrianglePruningWithoutSelectiveScheduling) {
+    // Create initial complete graph
+    auto& nbrs_arr = flat_graph_->get_nbrs_arr();
+
+    for (vertex_id_t u = 0; u < num_vertices_; ++u) {
+        nbr_arr_t& nbrs = nbrs_arr[u];
+        for (vertex_id_t v = 0; v < num_vertices_; ++v) {
+            if (v != u) {
+                distance_t dist = compute_distance(u, v);
+                nbrs.push_back(nbr_t(v, dist, true));
+            }
+        }
+        std::sort(nbrs.begin(), nbrs.end(),
+            [](const nbr_t& a, const nbr_t& b) {
+                return a.get_distance() < b.get_distance();
+            });
+    }
+
+    const ratio_t scale_coeffs = 1.0;
+    const ratio_t shifted_coeffs = 0.0;
+    const vec_num_t max_nbr_size = 6;
+
+    flat_graph_->set_max_nbr_size(max_nbr_size);
+
+    propagate_engine_noss_t propagate_engine(num_vertices_, *dist_func_);
+    propagate_engine.set_graph(*flat_graph_);
+
+    auto triangle_updater = propagate_engine.make_updater<triangle_updater_t>(scale_coeffs, shifted_coeffs);
+
+    propagate_engine.run(5, triangle_updater);
+
+    logger.info("Testing without selective scheduling:");
+    for (vertex_id_t u = 0; u < std::min(num_vertices_, static_cast<vec_num_t>(5)); ++u) {
+        const auto& nbrs = nbrs_arr[u];
+        std::string nbr_list;
+        for (size_t i = 0; i < nbrs.size(); ++i) {
+            nbr_list += fmt::format("({}, {:.3f})", nbrs[i].get_id(), nbrs[i].get_distance());
+            if (i < nbrs.size() - 1) nbr_list += ", ";
+        }
+        logger.info(fmt::format("  v{} -> [{}]", u, nbr_list));
+    }
+
+    EXPECT_TRUE(verify_rng_property(nbrs_arr, scale_coeffs, shifted_coeffs))
+        << "Graph does not satisfy RNG property without selective scheduling";
 }
 
 int main(int argc, char** argv) {

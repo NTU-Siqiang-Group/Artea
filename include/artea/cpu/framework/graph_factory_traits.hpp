@@ -13,7 +13,7 @@
 // limitations under the License.
 
 /*
- * @FilePath: /Artea/include/artea/cpu/framework/constructor_traits.hpp
+ * @FilePath: /Artea/include/artea/cpu/framework/graph_factory_traits.hpp
  * @Author: Chandler (Weitang Ye) <weitang.ye@ntu.edu.sg>
  * @Description:
  */
@@ -24,31 +24,27 @@ namespace artea {
 namespace cpu {
 
 /** ------ Forward Declaration  ------ **/
-template <typename ConstructorTraitsT> class PropagateEngine;
-template <typename ConstructorTraitsT> class GraphConstructor;
+template <typename GraphFactoryTraitsT, typename DerivedClassT> class FlatGraphFactory;
+template <typename GraphFactoryTraitsT> class ConvGraphFactory;
 
 template <
     typename VertexGeneratorTraitsT,
     typename EdgeGeneratorTraitsT,
-    typename IndexTraitsT,
-    bool SelectiveSchedule = false
+    typename IndexTraitsT
 >
-struct ConstructorTraits :
+struct GraphFactoryTraits :
     public VertexGeneratorTraitsT,
     public EdgeGeneratorTraitsT
 {
-    using contructor_traits_t = ConstructorTraits<VertexGeneratorTraitsT, EdgeGeneratorTraitsT, IndexTraitsT, SelectiveSchedule>;
+    using graph_factory_traits_t = GraphFactoryTraits<VertexGeneratorTraitsT, EdgeGeneratorTraitsT, IndexTraitsT>;
 
-    /** @brief Type for graph constructor. */
-    using graph_constructor_t = GraphConstructor<contructor_traits_t>;
+    /** @brief Type for graph factory. */
+    template <typename DerivedClassT>
+    using flat_graph_factory_t = FlatGraphFactory<graph_factory_traits_t, DerivedClassT>;
 
-    /** @brief Type for propagation engine. */
-    using propagate_engine_t = PropagateEngine<contructor_traits_t>;
+    using conv_graph_factory_t = ConvGraphFactory<graph_factory_traits_t>;
 
-    /** @brief Indicates whether to enable selective scheduling. */
-    static constexpr bool selective_schedule = SelectiveSchedule;
-
-};  // struct ConstructorTraits
+};  // struct GraphFactoryTraits
 
 }   // namespace cpu
 }   // namespace artea

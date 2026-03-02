@@ -97,6 +97,40 @@ public:
         throw std::runtime_error(message);
     }
 
+    /**
+     * @brief Print a message without header prefix (for custom formatting)
+     * @param message The message to print
+     */
+    auto print(const std::string& message) -> void {
+        std::cout << message << termcolor::reset << std::endl;
+    }
+
+    /**
+     * @brief Print a colored message without header prefix
+     * @param message The message to print
+     * @param color The termcolor manipulator (pass as function pointer or lambda)
+     */
+    auto print(const std::string& message, std::ostream& (*color)(std::ostream&)) -> void {
+        std::cout << color << message << termcolor::reset << std::endl;
+    }
+
+    /**
+     * @brief Print a message without header prefix and without newline
+     * @param message The message to print
+     */
+    auto print_inline(const std::string& message) -> void {
+        std::cout << message << termcolor::reset;
+    }
+
+    /**
+     * @brief Print a colored message without header prefix and without newline
+     * @param message The message to print
+     * @param color The termcolor manipulator (pass as function pointer or lambda)
+     */
+    auto print_inline(const std::string& message, std::ostream& (*color)(std::ostream&)) -> void {
+        std::cout << color << message << termcolor::reset;
+    }
+
 private:
     std::string _logger_name;
     LogLevelT _system_level;

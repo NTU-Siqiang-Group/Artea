@@ -78,13 +78,13 @@ public:
     Neighbor& operator=(Neighbor&&) = default;
     ~Neighbor() = default;
 
-    /** @brief Create a new Neighbor with given ID and distance (2-parameter constructor for constexpr). */
+    /** @brief Create a Neighbor with given ID and distance (2-parameter constructor for constexpr). */
     constexpr Neighbor(
         const vertex_id_t nbr_id,
         const distance_t distance
     ) : nbr_id_and_status(nbr_id & MASK_ID), distance(distance) {}
 
-    /** @brief Create a new Neighbor with given ID, distance, and flags. */
+    /** @brief Create a Neighbor with given ID, distance, and flags. */
     constexpr Neighbor(
         const vertex_id_t nbr_id,
         const distance_t distance,

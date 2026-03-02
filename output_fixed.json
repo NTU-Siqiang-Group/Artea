@@ -1,0 +1,63 @@
+{
+    "metadata": {
+        "name": "VectorPushBack",
+        "repetitions": 10,
+        "warmup_count": 3
+    },
+    "results": [
+        {
+            "iterations": 45,
+            "mean_time_ns": 2882.4,
+            "repetition": 1
+        },
+        {
+            "iterations": 107,
+            "mean_time_ns": 2489.2803738317757,
+            "repetition": 2
+        },
+        {
+            "iterations": 146,
+            "mean_time_ns": 1828.6027397260275,
+            "repetition": 3
+        },
+        {
+            "iterations": 149,
+            "mean_time_ns": 1818.3892617449665,
+            "repetition": 4
+        },
+        {
+            "iterations": 156,
+            "mean_time_ns": 1715.5961538461538,
+            "repetition": 5
+        },
+        {
+            "iterations": 151,
+            "mean_time_ns": 1916.390728476821,
+            "repetition": 6
+        },
+        {
+            "iterations": 162,
+            "mean_time_ns": 1813.888888888889,
+            "repetition": 7
+        },
+        {
+            "iterations": 152,
+            "mean_time_ns": 1907.0,
+            "repetition": 8
+        },
+        {
+            "iterations": 159,
+            "mean_time_ns": 1877.8930817610062,
+            "repetition": 9
+        },
+        {
+            "iterations": 154,
+            "mean_time_ns": 1787.6493506493507,
+            "repetition": 10
+        }
+    ],
+    "statistics": {
+        "mean_time_ns": 1929.8868031348545,
+        "stddev_time_ns": 215.84358805157817
+    }
+}

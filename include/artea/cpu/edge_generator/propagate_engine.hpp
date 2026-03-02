@@ -24,66 +24,69 @@
 #include <utility>
 #include <type_traits>
 #include <stdexcept>
+#include <bit>
 
 #include <tbb/parallel_for.h>
 #include <tbb/blocked_range.h>
 #include <tbb/enumerable_thread_specific.h>
 #include <tbb/task_arena.h>
-#include <artea/cpu/utils/bit_ops.hpp>
 
 namespace artea {
 namespace cpu {
 
-template <typename ConstructorTraitsT>
+template <typename EdgeGeneratorTraitsT, bool SelectiveSchedule = false>
 class PropagateEngine {
 
-    using vertex_num_t = typename ConstructorTraitsT::vertex_num_t;
-    using vec_ele_t = typename ConstructorTraitsT::vec_ele_t;
-    using vertex_id_t = typename ConstructorTraitsT::vertex_id_t;
-    using distance_t = typename ConstructorTraitsT::distance_t;
-    using iter_t = typename ConstructorTraitsT::iter_t;
-    using nbr_t = typename ConstructorTraitsT::nbr_t;
-    using nbr_arr_t = typename ConstructorTraitsT::nbr_arr_t;
-    using log_buffer_t = typename ConstructorTraitsT::log_buffer_t;
-    using log_container_t = typename ConstructorTraitsT::log_container_t;
-    using log_table_t = typename ConstructorTraitsT::log_table_t;
-    using word_aligned_bitmap_t = typename ConstructorTraitsT::word_aligned_bitmap_t;
-    using flat_graph_t = typename ConstructorTraitsT::flat_graph_t;
+    using vertex_num_t = typename EdgeGeneratorTraitsT::vertex_num_t;
+    using vec_ele_t = typename EdgeGeneratorTraitsT::vec_ele_t;
+    using vertex_id_t = typename EdgeGeneratorTraitsT::vertex_id_t;
+    using distance_t = typename EdgeGeneratorTraitsT::distance_t;
+    using iter_t = typename EdgeGeneratorTraitsT::iter_t;
+    using nbr_t = typename EdgeGeneratorTraitsT::nbr_t;
+    using nbr_arr_t = typename EdgeGeneratorTraitsT::nbr_arr_t;
+    using log_buffer_t = typename EdgeGeneratorTraitsT::log_buffer_t;
+    using log_container_t = typename EdgeGeneratorTraitsT::log_container_t;
+    using log_table_t = typename EdgeGeneratorTraitsT::log_table_t;
+    using word_aligned_bitmap_t = typename EdgeGeneratorTraitsT::word_aligned_bitmap_t;
+    using flat_graph_t = typename EdgeGeneratorTraitsT::flat_graph_t;
+    using dist_func_t = typename EdgeGeneratorTraitsT::dist_func_t;
 
-    static constexpr bool selective_schedule = ConstructorTraitsT::selective_schedule;
+    template <typename DerivedClassT>
+    using neighbor_updater_t = typename EdgeGeneratorTraitsT::template neighbor_updater_t<DerivedClassT>;
+
+    static constexpr bool selective_schedule = SelectiveSchedule;
 
 public:
-    PropagateEngine(const vertex_num_t num_vertices) :
+    PropagateEngine(const vertex_num_t num_vertices, const dist_func_t& dist_func) :
         _log_table(num_vertices),
         _executor_bitmap(num_vertices),
-        _flat_graph(nullptr)
+        _flat_graph(nullptr),
+        _dist_func(dist_func)
     {}
 
     /** @brief Set the flat graph to operate on. */
     __attribute__((always_inline))
     auto set_graph(flat_graph_t& flat_graph) -> void {
         _flat_graph = &flat_graph;
+
+        // Initialize executor bitmap for selective scheduling
+        if constexpr (selective_schedule) {
+            _executor_bitmap.set_all();
+        }
     }
 
     template <typename UdfUpdaterT>
+        requires std::derived_from<UdfUpdaterT, neighbor_updater_t<UdfUpdaterT>>
     auto propagate(
         const vertex_id_t pivot_vid,
         UdfUpdaterT& udf_updater
     ) -> void {
-        #ifndef NDEBUG
-        if constexpr (selective_schedule) {
-            if (!_executor_bitmap.test(pivot_vid)) {
-                // No pending operations; skip propagation
-                return;
-            }
-        }
-        #endif
-
         nbr_arr_t& origin_nbrs = _flat_graph->fetch_nbrs(pivot_vid);
         udf_updater(pivot_vid, origin_nbrs);
     }
 
     template <typename UdfUpdaterT>
+        requires std::derived_from<UdfUpdaterT, neighbor_updater_t<UdfUpdaterT>>
     auto propagate(UdfUpdaterT& udf_updater) -> void {
         const vertex_num_t num_vertices = _flat_graph->get_num_vertices();
 
@@ -113,12 +116,12 @@ public:
                         // Bit Scanning: Iterate only set bits
                         while (word_mask != 0) {
                             // Fast Locating: Find index of the least significant bit (0-63)
-                            int offset = count_trailing_zeros(word_mask);
+                            int offset = std::countr_zero(word_mask);
 
                             vertex_id_t pivot_vid = base_vid + offset;
 
-                            // Boundary check for the very last word
-                            if (pivot_vid < num_vertices) {
+                            // Boundary check for the very last word (rarely false)
+                            if (__builtin_expect(pivot_vid < num_vertices, 1)) {
                                 propagate<UdfUpdaterT>(pivot_vid, udf_updater);
                             }
 
@@ -193,12 +196,14 @@ public:
     }
 
     template <typename UdfUpdaterT>
+        requires std::derived_from<UdfUpdaterT, neighbor_updater_t<UdfUpdaterT>>
     auto next(UdfUpdaterT& udf_updater) -> void {
         propagate<UdfUpdaterT>(udf_updater);
         merge_logs();
     }
 
     template <typename UdfUpdaterT>
+        requires std::derived_from<UdfUpdaterT, neighbor_updater_t<UdfUpdaterT>>
     auto run(const iter_t num_iters, UdfUpdaterT& udf_updater) -> void {
         for (iter_t iter = 0; iter < num_iters; ++iter) {
             next<UdfUpdaterT>(udf_updater);
@@ -219,13 +224,12 @@ public:
     /** @brief Factory method to create an updater of the specified type.
       * @tparam UpdaterT The updater type to create (e.g., triangle_updater_t, reverse_updater_t, random_updater_t).
       * @tparam Args Variadic template for additional constructor arguments.
-      * @param dist_func Distance function reference (required by all updaters).
       * @param args Additional arguments specific to the updater type.
       * @return An instance of the requested updater type.
       *
-      * @note This factory method automatically provides vecs_arr, log_table,
-      *       and max_nbr_size from the internal flat_graph. User only needs
-      *       to provide dist_func and updater-specific parameters.
+      * @note This factory method automatically provides dist_func, vecs_arr, log_table,
+      *       and max_nbr_size from the internal state. User only needs
+      *       to provide updater-specific parameters.
       *
       * Supported updaters:
       *   - triangle_updater_t: Requires scale_coeffs and optional shifted_coeffs
@@ -233,13 +237,10 @@ public:
       *   - random_updater_t: Requires rand_gen_size (num_vertices is auto-provided)
       */
     template <typename UpdaterT, typename... Args>
-    auto make_updater(
-        const typename ConstructorTraitsT::dist_func_t& dist_func,
-        Args&&... args
-    ) -> UpdaterT {
-        using triangle_updater_t = typename ConstructorTraitsT::triangle_updater_t;
-        using reverse_updater_t = typename ConstructorTraitsT::reverse_updater_t;
-        using random_updater_t = typename ConstructorTraitsT::random_updater_t;
+    auto make_updater(Args&&... args) -> UpdaterT {
+        using triangle_updater_t = typename EdgeGeneratorTraitsT::triangle_updater_t;
+        using reverse_updater_t = typename EdgeGeneratorTraitsT::reverse_updater_t;
+        using random_updater_t = typename EdgeGeneratorTraitsT::random_updater_t;
 
         const auto& vecs_arr = _flat_graph->get_vecs_data();
         auto& log_table = _log_table;
@@ -249,15 +250,15 @@ public:
         if constexpr (std::is_same_v<UpdaterT, triangle_updater_t>) {
             // TriangleUpdater constructor signature:
             // TriangleUpdater(dist_func, vecs_arr, log_table, max_nbr_size, scale_coeffs, shifted_coeffs)
-            return UpdaterT(dist_func, vecs_arr, log_table, max_nbr_size, std::forward<Args>(args)...);
+            return UpdaterT(_dist_func, vecs_arr, log_table, max_nbr_size, std::forward<Args>(args)...);
         } else if constexpr (std::is_same_v<UpdaterT, reverse_updater_t>) {
             // ReverseUpdater constructor signature:
             // ReverseUpdater(dist_func, vecs_arr, log_table)
-            return UpdaterT(dist_func, vecs_arr, log_table);
+            return UpdaterT(_dist_func, vecs_arr, log_table);
         } else if constexpr (std::is_same_v<UpdaterT, random_updater_t>) {
             // RandomUpdater constructor signature:
             // RandomUpdater(dist_func, vecs_arr, log_table, num_vertices, rand_gen_size)
-            return UpdaterT(dist_func, vecs_arr, log_table, num_vertices, std::forward<Args>(args)...);
+            return UpdaterT(_dist_func, vecs_arr, log_table, num_vertices, std::forward<Args>(args)...);
         } else {
             throw std::runtime_error("Unsupported updater type");
         }
@@ -273,6 +274,9 @@ private:
 
     /** @brief Pointer to the flat graph being operated on. */
     flat_graph_t* _flat_graph;
+
+    /** @brief Distance function reference. */
+    const dist_func_t& _dist_func;
 
 };  // class PropagateEngine
 
