@@ -49,7 +49,6 @@
 #include <artea/cpu/index/flat_graph.hpp>
 #include <artea/cpu/index/search_graph.hpp>
 
-#include <artea/cpu/graph_factory/graph_initializer.hpp>
 #include <artea/cpu/graph_factory/flat_graph_factory.hpp>
 #include <artea/cpu/graph_factory/conv_graph_factory.hpp>
 
