@@ -15,10 +15,8 @@
 /*
  * @FilePath: /Artea/include/artea/cpu/framework/artea.hpp
  * @Author: Chandler (Weitang Ye) <weitang.ye@ntu.edu.sg>
- * @Description:
+ * @Description: Including the file is all you need.
  */
-
-// Including the file is all you need.
 
 #pragma once
 
