@@ -106,6 +106,10 @@ set(BENCHMARK_INSTALL_DOCS OFF CACHE BOOL "Disable benchmark docs" FORCE)
 # --- Hnswlib Local Configuration ---
 add_subdirectory(third_party/hnswlib)
 
+# --- Arena Benchmark Configuration ---
+set(BUILD_EXAMPLES OFF CACHE BOOL "Disable arena-benchmark examples" FORCE)
+add_subdirectory(third_party/arena-benchmark)
+
 # --- Faiss Submodule Configuration ---
 # Set options to build a minimal CPU version of Faiss
 set(FAISS_ENABLE_GPU OFF CACHE BOOL "Disable Faiss GPU support")

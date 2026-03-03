@@ -34,8 +34,8 @@ foreach(sourcefile ${MICROBENCH_SOURCES})
     # Link against the core library and Google Benchmark
     target_link_libraries(${bench_target} PRIVATE
         artea
+        arena_benchmark
         benchmark::benchmark
-        benchmark::benchmark_main
         hnswlib
 	    faiss
     )

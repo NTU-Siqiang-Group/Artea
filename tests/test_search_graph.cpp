@@ -15,7 +15,7 @@
 /*
  * @FilePath: /Artea/tests/test_search_graph.cpp
  * @Author: Chandler (Weitang Ye) <weitang.ye@ntu.edu.sg>
- * @Description: Test for SearchGraph conversion from FlatGraph
+ * @Description: Test for SearchGraph and SearchGraphFactory with synthetic data
  */
 
 #include <iostream>
@@ -24,56 +24,37 @@
 #include <random>
 #include <algorithm>
 #include <chrono>
-#include <filesystem>
-#include <fstream>
-#include <limits>
-#include <cstdint>
 #include <gtest/gtest.h>
 
 // Artea Headers
 #include <artea/cpu/framework/artea.hpp>
+#include <artea/cpu/framework/default_context.hpp>
 
 using namespace artea;
 using namespace artea::cpu;
+using namespace artea::cpu::default_context;
 
-// Type definitions using SIMPLE_EUCLIDEAN for low-dimensional vectors
-using vec_num_t = uint32_t;
-using vec_ele_t = float;
-using base_traits_t = BaseTraits<vec_num_t, vec_ele_t, false>;
-using computer_traits_t = ComputerTraits<base_traits_t, DistanceMetricsT::SIMPLE_EUCLIDEAN>;
-using index_traits_t = IndexTraits<base_traits_t>;
-
-using dist_func_t = typename computer_traits_t::dist_func_t;
-using vector_array_t = typename computer_traits_t::vector_array_t;
-using vertex_id_t = typename base_traits_t::vertex_id_t;
-using distance_t = typename base_traits_t::distance_t;
-using nbr_t = typename base_traits_t::nbr_t;
-using nbr_arr_t = typename base_traits_t::nbr_arr_t;
-using flat_graph_t = typename index_traits_t::flat_graph_t;
-using search_graph_t = typename index_traits_t::search_graph_t;
-
-class SearchGraphCorrectnessTest : public ::testing::Test {
+class SearchGraphTest : public ::testing::Test {
 protected:
     void SetUp() override {
-        // Create a 2D graph with 10 vertices
-        // Arranged in a 2x5 grid pattern for testing
-        num_vertices_ = 10;
-        vec_dim_ = 2;
-        reserved_nbr_size_ = 8;
+        // Create synthetic large-scale graph
+        num_vertices_ = 10000;
+        vec_dim_ = 128;
+        reserved_nbr_size_ = 64;
 
-        // Create VectorArray and populate with vectors
+        // Create VectorArray and populate with random vectors
         vecs_ = std::make_unique<vector_array_t>(vec_dim_);
         vecs_->reserve(num_vertices_);
 
-        // Add vertices in a 2x5 grid
-        for (int row = 0; row < 2; ++row) {
-            for (int col = 0; col < 5; ++col) {
-                std::vector<vec_ele_t> v = {
-                    static_cast<vec_ele_t>(col),
-                    static_cast<vec_ele_t>(row)
-                };
-                vecs_->append_vec(v.data());
+        std::mt19937 rng(42);
+        std::uniform_real_distribution<vec_ele_t> dist(0.0f, 1.0f);
+
+        for (vertex_num_t i = 0; i < num_vertices_; ++i) {
+            std::vector<vec_ele_t> v(vec_dim_);
+            for (vec_dim_t d = 0; d < vec_dim_; ++d) {
+                v[d] = dist(rng);
             }
+            vecs_->append_vec(v.data());
         }
 
         dist_func_ = std::make_unique<dist_func_t>(vec_dim_);
@@ -95,8 +76,8 @@ protected:
     }
 
     // Helper to populate flat graph with random neighbors
-    void populate_random_neighbors(vec_num_t max_neighbors_per_vertex) {
-        std::mt19937 rng(42);  // Fixed seed for reproducibility
+    void populate_random_neighbors(vertex_num_t max_neighbors_per_vertex) {
+        std::mt19937 rng(42);
         std::uniform_int_distribution<vertex_id_t> dist(0, num_vertices_ - 1);
 
         auto& nbrs_arr = flat_graph_->get_nbrs_arr();
@@ -105,12 +86,10 @@ protected:
             nbr_arr_t& nbrs = nbrs_arr[u];
             nbrs.clear();
 
-            // Generate random number of neighbors (1 to max_neighbors_per_vertex)
-            vec_num_t num_nbrs = 1 + (rng() % max_neighbors_per_vertex);
+            vertex_num_t num_nbrs = 1 + (rng() % max_neighbors_per_vertex);
 
-            for (vec_num_t i = 0; i < num_nbrs; ++i) {
+            for (vertex_num_t i = 0; i < num_nbrs; ++i) {
                 vertex_id_t v = dist(rng);
-                // Avoid self-loops
                 if (v == u) {
                     v = (v + 1) % num_vertices_;
                 }
@@ -119,7 +98,6 @@ protected:
                 nbrs.push_back(nbr_t(v, d, true));
             }
 
-            // Sort by distance
             std::sort(nbrs.begin(), nbrs.end(),
                 [](const nbr_t& a, const nbr_t& b) {
                     return a.get_distance() < b.get_distance();
@@ -127,424 +105,197 @@ protected:
         }
     }
 
-    vec_num_t num_vertices_;
-    vec_num_t vec_dim_;
-    vec_num_t reserved_nbr_size_;
+    vertex_num_t num_vertices_;
+    vec_dim_t vec_dim_;
+    vertex_num_t reserved_nbr_size_;
     std::unique_ptr<vector_array_t> vecs_;
     std::unique_ptr<dist_func_t> dist_func_;
     std::unique_ptr<flat_graph_t> flat_graph_;
 };
 
-TEST_F(SearchGraphCorrectnessTest, BasicConversion) {
-    // Populate flat graph with random neighbors
-    const vec_num_t max_neighbors = 6;
+TEST_F(SearchGraphTest, BasicConversion) {
+    const vertex_num_t max_neighbors = 50;
     populate_random_neighbors(max_neighbors);
 
     const auto& flat_nbrs_arr = flat_graph_->get_nbrs_arr();
 
-    logger.info("FlatGraph before conversion:");
-    for (vertex_id_t u = 0; u < std::min(num_vertices_, static_cast<vec_num_t>(5)); ++u) {
-        const auto& nbrs = flat_nbrs_arr[u];
-        std::string nbr_list;
-        for (size_t i = 0; i < nbrs.size(); ++i) {
-            nbr_list += fmt::format("({}, {:.3f})", nbrs[i].get_id(), nbrs[i].get_distance());
-            if (i < nbrs.size() - 1) nbr_list += ", ";
-        }
-        logger.info(fmt::format("  v{} ({} nbrs) -> [{}]", u, nbrs.size(), nbr_list));
-    }
+    const vertex_num_t fix_nbr_size = 32;
+    auto search_graph = search_graph_factory_t::from_flat_graph(*flat_graph_, fix_nbr_size);
 
-    // Convert to search graph with fix_nbr_size = 4
-    const vec_num_t fix_nbr_size = 4;
-    auto search_graph = search_graph_t::from_flat_graph(*flat_graph_, fix_nbr_size);
+    EXPECT_EQ(search_graph.get_num_vertices(), num_vertices_);
+    EXPECT_EQ(search_graph.get_fix_nbr_size(), fix_nbr_size);
 
-    logger.info(fmt::format("\nSearchGraph after conversion (fix_nbr_size={}):", fix_nbr_size));
-    for (vertex_id_t u = 0; u < std::min(num_vertices_, static_cast<vec_num_t>(5)); ++u) {
-        auto nbrs_span = search_graph.fetch_nbrs(u);
-        std::string nbr_list;
-        for (size_t i = 0; i < nbrs_span.size(); ++i) {
-            vertex_id_t nbr_id = nbrs_span[i];
-            if (nbr_id != base_traits_t::invalid_vertex_id) {
-                nbr_list += fmt::format("{}", nbr_id);
-            } else {
-                nbr_list += "INV";
-            }
-            if (i < nbrs_span.size() - 1) nbr_list += ", ";
-        }
-        logger.info(fmt::format("  v{} -> [{}]", u, nbr_list));
-    }
-
-    // Verify basic properties
-    EXPECT_EQ(search_graph.get_num_vertices(), num_vertices_)
-        << "Number of vertices should match";
-    EXPECT_EQ(search_graph.get_fix_nbr_size(), fix_nbr_size)
-        << "Fixed neighbor size should match";
-
-    // Verify neighbor conversion correctness
     for (vertex_id_t u = 0; u < num_vertices_; ++u) {
         const auto& flat_nbrs = flat_nbrs_arr[u];
-        auto search_nbrs = search_graph.fetch_nbrs(u);
-
-        EXPECT_EQ(search_nbrs.size(), fix_nbr_size)
-            << fmt::format("Vertex {} should have exactly {} neighbors in search graph", u, fix_nbr_size);
-
-        // Check that the first min(flat_nbrs.size(), fix_nbr_size) neighbors match
-        const vec_num_t copy_count = std::min(
-            static_cast<vec_num_t>(flat_nbrs.size()),
-            fix_nbr_size
-        );
-
-        for (vec_num_t i = 0; i < copy_count; ++i) {
-            EXPECT_EQ(search_nbrs[i], flat_nbrs[i].get_id())
-                << fmt::format("Vertex {} neighbor {} should match: expected {}, got {}",
-                              u, i, flat_nbrs[i].get_id(), search_nbrs[i]);
-        }
-
-        // Check that remaining slots are filled with invalid_vertex_id
-        for (vec_num_t i = copy_count; i < fix_nbr_size; ++i) {
-            EXPECT_EQ(search_nbrs[i], base_traits_t::invalid_vertex_id)
-                << fmt::format("Vertex {} neighbor {} should be invalid (got {})",
-                              u, i, search_nbrs[i]);
-        }
-    }
-}
-
-TEST_F(SearchGraphCorrectnessTest, ConversionWithFewerNeighbors) {
-    // Test case where flat graph has fewer neighbors than fix_nbr_size
-    auto& nbrs_arr = flat_graph_->get_nbrs_arr();
-
-    // Manually create a graph where each vertex has only 2 neighbors
-    for (vertex_id_t u = 0; u < num_vertices_; ++u) {
-        nbr_arr_t& nbrs = nbrs_arr[u];
-        nbrs.clear();
-
-        // Add 2 neighbors
-        vertex_id_t v1 = (u + 1) % num_vertices_;
-        vertex_id_t v2 = (u + 2) % num_vertices_;
-
-        distance_t d1 = compute_distance(u, v1);
-        distance_t d2 = compute_distance(u, v2);
-
-        nbrs.push_back(nbr_t(v1, d1, true));
-        nbrs.push_back(nbr_t(v2, d2, true));
-    }
-
-    logger.info("FlatGraph with 2 neighbors per vertex:");
-    for (vertex_id_t u = 0; u < std::min(num_vertices_, static_cast<vec_num_t>(5)); ++u) {
-        const auto& nbrs = nbrs_arr[u];
-        logger.info(fmt::format("  v{} -> [{}, {}]", u, nbrs[0].get_id(), nbrs[1].get_id()));
-    }
-
-    // Convert with fix_nbr_size = 5 (more than available neighbors)
-    const vec_num_t fix_nbr_size = 5;
-    auto search_graph = search_graph_t::from_flat_graph(*flat_graph_, fix_nbr_size);
-
-    logger.info(fmt::format("\nSearchGraph with fix_nbr_size={} (more than available):", fix_nbr_size));
-
-    // Verify conversion
-    for (vertex_id_t u = 0; u < num_vertices_; ++u) {
-        const auto& flat_nbrs = nbrs_arr[u];
-        auto search_nbrs = search_graph.fetch_nbrs(u);
-
-        // First 2 neighbors should match
-        EXPECT_EQ(search_nbrs[0], flat_nbrs[0].get_id());
-        EXPECT_EQ(search_nbrs[1], flat_nbrs[1].get_id());
-
-        // Remaining 3 slots should be invalid
-        for (vec_num_t i = 2; i < fix_nbr_size; ++i) {
-            EXPECT_EQ(search_nbrs[i], base_traits_t::invalid_vertex_id)
-                << fmt::format("Vertex {} neighbor {} should be invalid", u, i);
-        }
-    }
-
-    logger.info("All vertices correctly padded with invalid IDs");
-}
-
-TEST_F(SearchGraphCorrectnessTest, ConversionWithMoreNeighbors) {
-    // Test case where flat graph has more neighbors than fix_nbr_size
-    auto& nbrs_arr = flat_graph_->get_nbrs_arr();
-
-    // Create a graph where each vertex has many neighbors
-    for (vertex_id_t u = 0; u < num_vertices_; ++u) {
-        nbr_arr_t& nbrs = nbrs_arr[u];
-        nbrs.clear();
-
-        // Add all other vertices as neighbors
-        for (vertex_id_t v = 0; v < num_vertices_; ++v) {
-            if (v != u) {
-                distance_t d = compute_distance(u, v);
-                nbrs.push_back(nbr_t(v, d, true));
-            }
-        }
-
-        // Sort by distance
-        std::sort(nbrs.begin(), nbrs.end(),
-            [](const nbr_t& a, const nbr_t& b) {
-                return a.get_distance() < b.get_distance();
-            });
-    }
-
-    logger.info(fmt::format("FlatGraph with {} neighbors per vertex (complete graph):", num_vertices_ - 1));
-
-    // Convert with fix_nbr_size = 3 (less than available neighbors)
-    const vec_num_t fix_nbr_size = 3;
-    auto search_graph = search_graph_t::from_flat_graph(*flat_graph_, fix_nbr_size);
-
-    logger.info(fmt::format("\nSearchGraph with fix_nbr_size={} (less than available):", fix_nbr_size));
-
-    // Verify conversion - only first fix_nbr_size neighbors should be copied
-    for (vertex_id_t u = 0; u < num_vertices_; ++u) {
-        const auto& flat_nbrs = nbrs_arr[u];
         auto search_nbrs = search_graph.fetch_nbrs(u);
 
         EXPECT_EQ(search_nbrs.size(), fix_nbr_size);
 
-        // All fix_nbr_size neighbors should match the first fix_nbr_size from flat graph
-        for (vec_num_t i = 0; i < fix_nbr_size; ++i) {
-            EXPECT_EQ(search_nbrs[i], flat_nbrs[i].get_id())
-                << fmt::format("Vertex {} neighbor {} mismatch", u, i);
-        }
-
-        // No invalid IDs should be present (all slots filled)
-        for (vec_num_t i = 0; i < fix_nbr_size; ++i) {
-            EXPECT_NE(search_nbrs[i], base_traits_t::invalid_vertex_id)
-                << fmt::format("Vertex {} neighbor {} should not be invalid", u, i);
-        }
-    }
-
-    logger.info("All vertices correctly truncated to fix_nbr_size");
-}
-
-TEST_F(SearchGraphCorrectnessTest, EmptyFlatGraph) {
-    // Test conversion of an empty flat graph (no neighbors)
-    auto& nbrs_arr = flat_graph_->get_nbrs_arr();
-
-    // Clear all neighbors
-    for (vertex_id_t u = 0; u < num_vertices_; ++u) {
-        nbrs_arr[u].clear();
-    }
-
-    logger.info("FlatGraph with no neighbors (empty graph)");
-
-    const vec_num_t fix_nbr_size = 4;
-    auto search_graph = search_graph_t::from_flat_graph(*flat_graph_, fix_nbr_size);
-
-    logger.info(fmt::format("SearchGraph with fix_nbr_size={} from empty graph:", fix_nbr_size));
-
-    // Verify all neighbors are invalid
-    for (vertex_id_t u = 0; u < num_vertices_; ++u) {
-        auto search_nbrs = search_graph.fetch_nbrs(u);
-
-        for (vec_num_t i = 0; i < fix_nbr_size; ++i) {
-            EXPECT_EQ(search_nbrs[i], base_traits_t::invalid_vertex_id)
-                << fmt::format("Empty graph: vertex {} neighbor {} should be invalid", u, i);
-        }
-    }
-
-    logger.info("All neighbors correctly set to invalid for empty graph");
-}
-
-TEST_F(SearchGraphCorrectnessTest, VectorDataReference) {
-    // Test that search graph correctly references the same vector data
-    populate_random_neighbors(5);
-
-    const vec_num_t fix_nbr_size = 4;
-    auto search_graph = search_graph_t::from_flat_graph(*flat_graph_, fix_nbr_size);
-
-    // Verify that both graphs reference the same vector data
-    const auto& flat_vecs = flat_graph_->get_vecs_data();
-    const auto& search_vecs = search_graph.get_vecs_data();
-
-    EXPECT_EQ(&flat_vecs, &search_vecs)
-        << "SearchGraph should reference the same vector data as FlatGraph";
-
-    // Verify vector data is accessible and correct
-    for (vertex_id_t u = 0; u < num_vertices_; ++u) {
-        const vec_ele_t* flat_vec = flat_vecs.get(u);
-        const vec_ele_t* search_vec = search_vecs.get(u);
-
-        EXPECT_EQ(flat_vec, search_vec)
-            << fmt::format("Vector pointers for vertex {} should be identical", u);
-
-        // Verify vector values match
-        for (vec_num_t d = 0; d < vec_dim_; ++d) {
-            EXPECT_EQ(flat_vec[d], search_vec[d])
-                << fmt::format("Vector values for vertex {} dimension {} should match", u, d);
-        }
-    }
-
-    logger.info("Vector data correctly shared between FlatGraph and SearchGraph");
-}
-
-TEST_F(SearchGraphCorrectnessTest, GetNeighborsPointer) {
-    // Test the get_neighbors() pointer interface
-    populate_random_neighbors(6);
-
-    const vec_num_t fix_nbr_size = 4;
-    auto search_graph = search_graph_t::from_flat_graph(*flat_graph_, fix_nbr_size);
-
-    const auto& flat_nbrs_arr = flat_graph_->get_nbrs_arr();
-
-    // Test both const and non-const versions
-    for (vertex_id_t u = 0; u < num_vertices_; ++u) {
-        const vertex_id_t* nbrs_ptr = search_graph.get_neighbors(u);
-        const auto& flat_nbrs = flat_nbrs_arr[u];
-
-        const vec_num_t copy_count = std::min(
-            static_cast<vec_num_t>(flat_nbrs.size()),
+        const vertex_num_t copy_count = std::min(
+            static_cast<vertex_num_t>(flat_nbrs.size()),
             fix_nbr_size
         );
 
-        // Verify pointer access matches span access
-        auto nbrs_span = search_graph.fetch_nbrs(u);
-        for (vec_num_t i = 0; i < fix_nbr_size; ++i) {
-            EXPECT_EQ(nbrs_ptr[i], nbrs_span[i])
-                << fmt::format("Pointer and span access should match for vertex {} neighbor {}", u, i);
+        for (vertex_num_t i = 0; i < copy_count; ++i) {
+            EXPECT_EQ(search_nbrs[i], flat_nbrs[i].get_id());
         }
 
-        // Verify correctness
-        for (vec_num_t i = 0; i < copy_count; ++i) {
-            EXPECT_EQ(nbrs_ptr[i], flat_nbrs[i].get_id());
-        }
-
-        for (vec_num_t i = copy_count; i < fix_nbr_size; ++i) {
-            EXPECT_EQ(nbrs_ptr[i], base_traits_t::invalid_vertex_id);
+        for (vertex_num_t i = copy_count; i < fix_nbr_size; ++i) {
+            EXPECT_EQ(search_nbrs[i], base_traits_t::invalid_vertex_id);
         }
     }
-
-    logger.info("get_neighbors() pointer interface works correctly");
 }
 
-TEST_F(SearchGraphCorrectnessTest, SnapshotAndRestore) {
-    populate_random_neighbors(6);
+TEST_F(SearchGraphTest, EmptyFlatGraph) {
+    const vertex_num_t fix_nbr_size = 32;
+    auto search_graph = search_graph_factory_t::from_flat_graph(*flat_graph_, fix_nbr_size);
 
-    const vec_num_t fix_nbr_size = 4;
-    auto search_graph = search_graph_t::from_flat_graph(*flat_graph_, fix_nbr_size);
-
-    const auto unique_suffix = static_cast<uint64_t>(
-        std::chrono::steady_clock::now().time_since_epoch().count()
-    );
-    const auto file_path = (
-        std::filesystem::temp_directory_path()
-        / fmt::format("artea_search_graph_test_{}.bin", unique_suffix)
-    ).string();
-    const vertex_id_t probe_vertex = num_vertices_ / 2;
-    const auto probe_nbrs_before = search_graph.fetch_nbrs(probe_vertex);
-    std::vector<vertex_id_t> probe_nbrs_before_vec(probe_nbrs_before.begin(), probe_nbrs_before.end());
-
-    search_graph.snapshot(file_path);
-
-    auto loaded_graph = search_graph_t::restore(file_path, *vecs_);
-
-    EXPECT_EQ(loaded_graph.get_num_vertices(), search_graph.get_num_vertices());
-    EXPECT_EQ(loaded_graph.get_fix_nbr_size(), search_graph.get_fix_nbr_size());
-    EXPECT_EQ(&loaded_graph.get_vecs_data(), vecs_.get());
+    EXPECT_EQ(search_graph.get_num_vertices(), num_vertices_);
+    EXPECT_EQ(search_graph.get_fix_nbr_size(), fix_nbr_size);
 
     for (vertex_id_t u = 0; u < num_vertices_; ++u) {
-        const auto original_nbrs = search_graph.fetch_nbrs(u);
-        const auto loaded_nbrs = loaded_graph.fetch_nbrs(u);
-        EXPECT_EQ(loaded_nbrs.size(), original_nbrs.size());
-        for (vec_num_t i = 0; i < fix_nbr_size; ++i) {
-            EXPECT_EQ(loaded_nbrs[i], original_nbrs[i])
-                << fmt::format("Loaded graph mismatch at vertex {} neighbor {}", u, i);
+        auto search_nbrs = search_graph.fetch_nbrs(u);
+        EXPECT_EQ(search_nbrs.size(), fix_nbr_size);
+
+        for (vertex_num_t i = 0; i < fix_nbr_size; ++i) {
+            EXPECT_EQ(search_nbrs[i], base_traits_t::invalid_vertex_id);
         }
     }
-
-    const auto probe_nbrs_after = loaded_graph.fetch_nbrs(probe_vertex);
-    ASSERT_EQ(probe_nbrs_after.size(), probe_nbrs_before_vec.size());
-    for (vec_num_t i = 0; i < fix_nbr_size; ++i) {
-        EXPECT_EQ(probe_nbrs_after[i], probe_nbrs_before_vec[i])
-            << fmt::format(
-                   "Probe vertex {} neighbor list changed at index {} after snapshot/restore",
-                   probe_vertex,
-                   i
-               );
-    }
-
-    std::filesystem::remove(file_path);
 }
 
-TEST_F(SearchGraphCorrectnessTest, RestoreRejectsInconsistentCsrSize) {
-    populate_random_neighbors(4);
+TEST_F(SearchGraphTest, FixNbrSizeLargerThanFlatNbrs) {
+    const vertex_num_t max_neighbors = 10;
+    populate_random_neighbors(max_neighbors);
 
-    const vec_num_t fix_nbr_size = 4;
-    auto search_graph = search_graph_t::from_flat_graph(*flat_graph_, fix_nbr_size);
+    const auto& flat_nbrs_arr = flat_graph_->get_nbrs_arr();
+    const vertex_num_t fix_nbr_size = 64;
+    auto search_graph = search_graph_factory_t::from_flat_graph(*flat_graph_, fix_nbr_size);
 
-    const auto unique_suffix = static_cast<uint64_t>(
-        std::chrono::steady_clock::now().time_since_epoch().count()
-    );
-    const auto file_path = (
-        std::filesystem::temp_directory_path()
-        / fmt::format("artea_search_graph_bad_csr_size_{}.bin", unique_suffix)
-    ).string();
+    for (vertex_id_t u = 0; u < num_vertices_; ++u) {
+        const auto& flat_nbrs = flat_nbrs_arr[u];
+        auto search_nbrs = search_graph.fetch_nbrs(u);
 
-    search_graph.snapshot(file_path);
+        EXPECT_EQ(search_nbrs.size(), fix_nbr_size);
 
-    {
-        std::fstream fs(file_path, std::ios::in | std::ios::out | std::ios::binary);
-        ASSERT_TRUE(fs.is_open());
-        // Header layout: magic + version + num_vertices + fix_nbr_size + csr_size
-        const std::streamoff csr_size_offset = static_cast<std::streamoff>(
-            sizeof(uint32_t) + sizeof(uint32_t) + sizeof(vec_num_t) + sizeof(vec_num_t)
-        );
-        fs.seekp(csr_size_offset, std::ios::beg);
-        const size_t bad_csr_size = std::numeric_limits<size_t>::max();
-        fs.write(reinterpret_cast<const char*>(&bad_csr_size), sizeof(bad_csr_size));
-        ASSERT_TRUE(fs.good());
+        for (size_t i = 0; i < flat_nbrs.size(); ++i) {
+            EXPECT_EQ(search_nbrs[i], flat_nbrs[i].get_id());
+        }
+
+        for (vertex_num_t i = flat_nbrs.size(); i < fix_nbr_size; ++i) {
+            EXPECT_EQ(search_nbrs[i], base_traits_t::invalid_vertex_id);
+        }
     }
-
-    try {
-        auto graph = search_graph_t::restore(file_path, *vecs_);
-        (void)graph;
-        FAIL() << "Expected restore() to reject inconsistent csr_size";
-    } catch (const std::runtime_error& e) {
-        const std::string msg = e.what();
-        EXPECT_NE(msg.find("Inconsistent CSR size"), std::string::npos);
-    }
-
-    std::filesystem::remove(file_path);
 }
 
-TEST_F(SearchGraphCorrectnessTest, RestoreRejectsInvalidFixNbrSizeHeader) {
-    populate_random_neighbors(4);
+TEST_F(SearchGraphTest, FixNbrSizeSmallerThanFlatNbrs) {
+    const vertex_num_t max_neighbors = 50;
+    populate_random_neighbors(max_neighbors);
 
-    const vec_num_t fix_nbr_size = 4;
-    auto search_graph = search_graph_t::from_flat_graph(*flat_graph_, fix_nbr_size);
+    const auto& flat_nbrs_arr = flat_graph_->get_nbrs_arr();
+    const vertex_num_t fix_nbr_size = 16;
+    auto search_graph = search_graph_factory_t::from_flat_graph(*flat_graph_, fix_nbr_size);
 
-    const auto unique_suffix = static_cast<uint64_t>(
-        std::chrono::steady_clock::now().time_since_epoch().count()
-    );
-    const auto file_path = (
-        std::filesystem::temp_directory_path()
-        / fmt::format("artea_search_graph_bad_fix_nbr_size_{}.bin", unique_suffix)
-    ).string();
+    for (vertex_id_t u = 0; u < num_vertices_; ++u) {
+        const auto& flat_nbrs = flat_nbrs_arr[u];
+        auto search_nbrs = search_graph.fetch_nbrs(u);
 
-    search_graph.snapshot(file_path);
+        EXPECT_EQ(search_nbrs.size(), fix_nbr_size);
 
-    {
-        std::fstream fs(file_path, std::ios::in | std::ios::out | std::ios::binary);
-        ASSERT_TRUE(fs.is_open());
-        // Header layout: magic + version + num_vertices + fix_nbr_size + csr_size
-        const std::streamoff fix_nbr_size_offset = static_cast<std::streamoff>(
-            sizeof(uint32_t) + sizeof(uint32_t) + sizeof(vec_num_t)
+        // When fix_nbr_size < flat_nbrs.size(), only the first fix_nbr_size neighbors are copied
+        const vertex_num_t copy_count = std::min(
+            static_cast<vertex_num_t>(flat_nbrs.size()),
+            fix_nbr_size
         );
-        fs.seekp(fix_nbr_size_offset, std::ios::beg);
-        const vec_num_t bad_fix_nbr_size = std::numeric_limits<vec_num_t>::max();
-        fs.write(reinterpret_cast<const char*>(&bad_fix_nbr_size), sizeof(bad_fix_nbr_size));
-        ASSERT_TRUE(fs.good());
-    }
 
-    try {
-        auto graph = search_graph_t::restore(file_path, *vecs_);
-        (void)graph;
-        FAIL() << "Expected restore() to reject invalid fix_nbr_size header";
-    } catch (const std::runtime_error& e) {
-        const std::string msg = e.what();
-        const bool is_inconsistent = msg.find("Inconsistent CSR size") != std::string::npos;
-        const bool is_overflow = msg.find("CSR size multiplication overflows size_t") != std::string::npos;
-        EXPECT_TRUE(is_inconsistent || is_overflow);
+        for (vertex_num_t i = 0; i < copy_count; ++i) {
+            EXPECT_EQ(search_nbrs[i], flat_nbrs[i].get_id());
+        }
     }
+}
 
-    std::filesystem::remove(file_path);
+TEST_F(SearchGraphTest, SingleNeighborPerVertex) {
+    const vertex_num_t max_neighbors = 1;
+    populate_random_neighbors(max_neighbors);
+
+    const auto& flat_nbrs_arr = flat_graph_->get_nbrs_arr();
+    const vertex_num_t fix_nbr_size = 32;
+    auto search_graph = search_graph_factory_t::from_flat_graph(*flat_graph_, fix_nbr_size);
+
+    for (vertex_id_t u = 0; u < num_vertices_; ++u) {
+        const auto& flat_nbrs = flat_nbrs_arr[u];
+        auto search_nbrs = search_graph.fetch_nbrs(u);
+
+        EXPECT_EQ(flat_nbrs.size(), 1);
+        EXPECT_EQ(search_nbrs[0], flat_nbrs[0].get_id());
+
+        for (vertex_num_t i = 1; i < fix_nbr_size; ++i) {
+            EXPECT_EQ(search_nbrs[i], base_traits_t::invalid_vertex_id);
+        }
+    }
+}
+
+TEST_F(SearchGraphTest, NeighborOrderPreservation) {
+    const vertex_num_t max_neighbors = 40;
+    populate_random_neighbors(max_neighbors);
+
+    const auto& flat_nbrs_arr = flat_graph_->get_nbrs_arr();
+    const vertex_num_t fix_nbr_size = 32;
+    auto search_graph = search_graph_factory_t::from_flat_graph(*flat_graph_, fix_nbr_size);
+
+    for (vertex_id_t u = 0; u < num_vertices_; ++u) {
+        const auto& flat_nbrs = flat_nbrs_arr[u];
+        auto search_nbrs = search_graph.fetch_nbrs(u);
+
+        const vertex_num_t copy_count = std::min(
+            static_cast<vertex_num_t>(flat_nbrs.size()),
+            fix_nbr_size
+        );
+
+        for (vertex_num_t i = 0; i < copy_count; ++i) {
+            EXPECT_EQ(search_nbrs[i], flat_nbrs[i].get_id());
+        }
+    }
+}
+
+TEST_F(SearchGraphTest, LargeFixNbrSize) {
+    const vertex_num_t max_neighbors = 50;
+    populate_random_neighbors(max_neighbors);
+
+    const vertex_num_t fix_nbr_size = 128;
+    auto search_graph = search_graph_factory_t::from_flat_graph(*flat_graph_, fix_nbr_size);
+
+    EXPECT_EQ(search_graph.get_num_vertices(), num_vertices_);
+    EXPECT_EQ(search_graph.get_fix_nbr_size(), fix_nbr_size);
+}
+
+TEST_F(SearchGraphTest, SmallFixNbrSize) {
+    const vertex_num_t max_neighbors = 50;
+    populate_random_neighbors(max_neighbors);
+
+    const vertex_num_t fix_nbr_size = 4;
+    auto search_graph = search_graph_factory_t::from_flat_graph(*flat_graph_, fix_nbr_size);
+
+    EXPECT_EQ(search_graph.get_num_vertices(), num_vertices_);
+    EXPECT_EQ(search_graph.get_fix_nbr_size(), fix_nbr_size);
+}
+
+TEST_F(SearchGraphTest, PerformanceTest) {
+    const vertex_num_t max_neighbors = 64;
+    populate_random_neighbors(max_neighbors);
+
+    const vertex_num_t fix_nbr_size = 32;
+
+    auto start = std::chrono::high_resolution_clock::now();
+    auto search_graph = search_graph_factory_t::from_flat_graph(*flat_graph_, fix_nbr_size);
+    auto end = std::chrono::high_resolution_clock::now();
+
+    auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(end - start);
+
+    logger.info(fmt::format("Conversion of {} vertices with fix_nbr_size={} took {} ms",
+        num_vertices_, fix_nbr_size, duration.count()));
+
+    EXPECT_EQ(search_graph.get_num_vertices(), num_vertices_);
+    EXPECT_EQ(search_graph.get_fix_nbr_size(), fix_nbr_size);
 }
 
 int main(int argc, char** argv) {

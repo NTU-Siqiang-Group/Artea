@@ -116,6 +116,7 @@ using random_vg_t = typename vertex_generator_traits_t::random_vg_t;
 
 // Graph factory types from GraphFactoryTraits
 using conv_graph_factory_t = typename graph_factory_traits_t::conv_graph_factory_t;
+using search_graph_factory_t = typename graph_factory_traits_t::search_graph_factory_t;
 
 // Propagate engine from EdgeGeneratorTraits
 using propagate_engine_ss_t = typename edge_generator_traits_t::propagate_engine_t<true>;
