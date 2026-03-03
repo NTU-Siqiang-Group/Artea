@@ -1,5 +1,5 @@
 # --- 1. Project basic configuration ---
-cmake_minimum_required(VERSION 3.16)
+cmake_minimum_required(VERSION 3.24)
 cmake_policy(SET CMP0135 NEW) # Use modern timestamp behavior
 project(Artea LANGUAGES C CXX)
 
@@ -86,17 +86,17 @@ FetchContent_Declare(
     GIT_TAG "v1.9.5"
 )
 
-FetchContent_Declare(
-    indicators
-    GIT_REPOSITORY https://github.com/p-ranav/indicators.git
-    GIT_TAG "v2.3"
-)
+# FetchContent_Declare(
+#     indicators
+#     GIT_REPOSITORY https://github.com/p-ranav/indicators.git
+#     GIT_TAG "v2.3"
+# )
 
-FetchContent_Declare(
-    tabulate
-    GIT_REPOSITORY https://github.com/p-ranav/tabulate.git
-    GIT_TAG "v1.5"
-)
+# FetchContent_Declare(
+#     tabulate
+#     GIT_REPOSITORY https://github.com/p-ranav/tabulate.git
+#     GIT_TAG "v1.5"
+# )
 
 # --- Google Benchmark Configuration ---
 # Disable building tests and examples for Google Benchmark to speed up the process
@@ -129,8 +129,6 @@ FetchContent_MakeAvailable(
 	eigen
 	googletest
 	benchmark
-	indicators
-	tabulate
 )
 
 # --- Define core "artea" library ---
@@ -160,8 +158,6 @@ target_link_libraries(artea INTERFACE
     MKL::MKL
 	range-v3::range-v3
 	eigen
-	indicators
-	tabulate::tabulate
 )
 
 include(CTest)

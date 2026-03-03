@@ -23,6 +23,11 @@
 #include <memory>
 #include <random>
 #include <algorithm>
+#include <chrono>
+#include <filesystem>
+#include <fstream>
+#include <limits>
+#include <cstdint>
 #include <gtest/gtest.h>
 
 // Artea Headers
@@ -407,6 +412,139 @@ TEST_F(SearchGraphCorrectnessTest, GetNeighborsPointer) {
     }
 
     logger.info("get_neighbors() pointer interface works correctly");
+}
+
+TEST_F(SearchGraphCorrectnessTest, SnapshotAndRestore) {
+    populate_random_neighbors(6);
+
+    const vec_num_t fix_nbr_size = 4;
+    auto search_graph = search_graph_t::from_flat_graph(*flat_graph_, fix_nbr_size);
+
+    const auto unique_suffix = static_cast<uint64_t>(
+        std::chrono::steady_clock::now().time_since_epoch().count()
+    );
+    const auto file_path = (
+        std::filesystem::temp_directory_path()
+        / fmt::format("artea_search_graph_test_{}.bin", unique_suffix)
+    ).string();
+    const vertex_id_t probe_vertex = num_vertices_ / 2;
+    const auto probe_nbrs_before = search_graph.fetch_nbrs(probe_vertex);
+    std::vector<vertex_id_t> probe_nbrs_before_vec(probe_nbrs_before.begin(), probe_nbrs_before.end());
+
+    search_graph.snapshot(file_path);
+
+    auto loaded_graph = search_graph_t::restore(file_path, *vecs_);
+
+    EXPECT_EQ(loaded_graph.get_num_vertices(), search_graph.get_num_vertices());
+    EXPECT_EQ(loaded_graph.get_fix_nbr_size(), search_graph.get_fix_nbr_size());
+    EXPECT_EQ(&loaded_graph.get_vecs_data(), vecs_.get());
+
+    for (vertex_id_t u = 0; u < num_vertices_; ++u) {
+        const auto original_nbrs = search_graph.fetch_nbrs(u);
+        const auto loaded_nbrs = loaded_graph.fetch_nbrs(u);
+        EXPECT_EQ(loaded_nbrs.size(), original_nbrs.size());
+        for (vec_num_t i = 0; i < fix_nbr_size; ++i) {
+            EXPECT_EQ(loaded_nbrs[i], original_nbrs[i])
+                << fmt::format("Loaded graph mismatch at vertex {} neighbor {}", u, i);
+        }
+    }
+
+    const auto probe_nbrs_after = loaded_graph.fetch_nbrs(probe_vertex);
+    ASSERT_EQ(probe_nbrs_after.size(), probe_nbrs_before_vec.size());
+    for (vec_num_t i = 0; i < fix_nbr_size; ++i) {
+        EXPECT_EQ(probe_nbrs_after[i], probe_nbrs_before_vec[i])
+            << fmt::format(
+                   "Probe vertex {} neighbor list changed at index {} after snapshot/restore",
+                   probe_vertex,
+                   i
+               );
+    }
+
+    std::filesystem::remove(file_path);
+}
+
+TEST_F(SearchGraphCorrectnessTest, RestoreRejectsInconsistentCsrSize) {
+    populate_random_neighbors(4);
+
+    const vec_num_t fix_nbr_size = 4;
+    auto search_graph = search_graph_t::from_flat_graph(*flat_graph_, fix_nbr_size);
+
+    const auto unique_suffix = static_cast<uint64_t>(
+        std::chrono::steady_clock::now().time_since_epoch().count()
+    );
+    const auto file_path = (
+        std::filesystem::temp_directory_path()
+        / fmt::format("artea_search_graph_bad_csr_size_{}.bin", unique_suffix)
+    ).string();
+
+    search_graph.snapshot(file_path);
+
+    {
+        std::fstream fs(file_path, std::ios::in | std::ios::out | std::ios::binary);
+        ASSERT_TRUE(fs.is_open());
+        // Header layout: magic + version + num_vertices + fix_nbr_size + csr_size
+        const std::streamoff csr_size_offset = static_cast<std::streamoff>(
+            sizeof(uint32_t) + sizeof(uint32_t) + sizeof(vec_num_t) + sizeof(vec_num_t)
+        );
+        fs.seekp(csr_size_offset, std::ios::beg);
+        const size_t bad_csr_size = std::numeric_limits<size_t>::max();
+        fs.write(reinterpret_cast<const char*>(&bad_csr_size), sizeof(bad_csr_size));
+        ASSERT_TRUE(fs.good());
+    }
+
+    try {
+        auto graph = search_graph_t::restore(file_path, *vecs_);
+        (void)graph;
+        FAIL() << "Expected restore() to reject inconsistent csr_size";
+    } catch (const std::runtime_error& e) {
+        const std::string msg = e.what();
+        EXPECT_NE(msg.find("Inconsistent CSR size"), std::string::npos);
+    }
+
+    std::filesystem::remove(file_path);
+}
+
+TEST_F(SearchGraphCorrectnessTest, RestoreRejectsInvalidFixNbrSizeHeader) {
+    populate_random_neighbors(4);
+
+    const vec_num_t fix_nbr_size = 4;
+    auto search_graph = search_graph_t::from_flat_graph(*flat_graph_, fix_nbr_size);
+
+    const auto unique_suffix = static_cast<uint64_t>(
+        std::chrono::steady_clock::now().time_since_epoch().count()
+    );
+    const auto file_path = (
+        std::filesystem::temp_directory_path()
+        / fmt::format("artea_search_graph_bad_fix_nbr_size_{}.bin", unique_suffix)
+    ).string();
+
+    search_graph.snapshot(file_path);
+
+    {
+        std::fstream fs(file_path, std::ios::in | std::ios::out | std::ios::binary);
+        ASSERT_TRUE(fs.is_open());
+        // Header layout: magic + version + num_vertices + fix_nbr_size + csr_size
+        const std::streamoff fix_nbr_size_offset = static_cast<std::streamoff>(
+            sizeof(uint32_t) + sizeof(uint32_t) + sizeof(vec_num_t)
+        );
+        fs.seekp(fix_nbr_size_offset, std::ios::beg);
+        const vec_num_t bad_fix_nbr_size = std::numeric_limits<vec_num_t>::max();
+        fs.write(reinterpret_cast<const char*>(&bad_fix_nbr_size), sizeof(bad_fix_nbr_size));
+        ASSERT_TRUE(fs.good());
+    }
+
+    try {
+        auto graph = search_graph_t::restore(file_path, *vecs_);
+        (void)graph;
+        FAIL() << "Expected restore() to reject invalid fix_nbr_size header";
+    } catch (const std::runtime_error& e) {
+        const std::string msg = e.what();
+        const bool is_inconsistent = msg.find("Inconsistent CSR size") != std::string::npos;
+        const bool is_overflow = msg.find("CSR size multiplication overflows size_t") != std::string::npos;
+        EXPECT_TRUE(is_inconsistent || is_overflow);
+    }
+
+    std::filesystem::remove(file_path);
 }
 
 int main(int argc, char** argv) {
