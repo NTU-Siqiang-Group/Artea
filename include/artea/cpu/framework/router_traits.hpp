@@ -29,7 +29,9 @@ namespace cpu {
 /** ------ Forward Declaration  ------ **/
 template <typename RouterTraitsT, typename DerivedClassT> class VectorRouter;
 template <typename RouterTraitsT> class BruteforceRouter;
-template <typename RouterTraitsT, CandidateQueue CandidateQueueImpl, VisitedTable VisitedTableImpl> class MonolayerGraphRouter;
+template <typename RouterTraitsT, CandidateQueue CandidateQueueImpl, VisitedTable VisitedTableImpl>
+    requires CandidateQueue<CandidateQueueImpl> && VisitedTable<VisitedTableImpl>
+class MonolayerGraphRouter;
 template <typename RouterTraitsT> struct CandidateEntry;
 template <typename RouterTraitsT> struct CandidateEntryComparator;
 template <typename RouterTraitsT> struct StatefulCandidateEntry;

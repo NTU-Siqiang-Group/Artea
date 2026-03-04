@@ -28,10 +28,9 @@
 #include <tbb/parallel_for.h>
 #include <tbb/blocked_range.h>
 
-#include <artea/cpu/router/vector_router.hpp>
+#include <artea/cpu/utils/parallel.hpp>
 #include <artea/cpu/router/candidate_queue_concept.hpp>
 #include <artea/cpu/router/visited_table_concept.hpp>
-#include <artea/cpu/utils/parallel.hpp>
 
 namespace artea {
 namespace cpu {
@@ -40,7 +39,7 @@ template <
     typename RouterTraitsT,
     CandidateQueue CandidateQueueImpl = typename RouterTraitsT::std_candidate_queue_t,
     VisitedTable VisitedTableImpl = typename RouterTraitsT::thread_local_bitmap_t
->
+>   requires CandidateQueue<CandidateQueueImpl> && VisitedTable<VisitedTableImpl>
 class MonolayerGraphRouter :
     public RouterTraitsT::template vector_router_t<MonolayerGraphRouter<RouterTraitsT, CandidateQueueImpl, VisitedTableImpl>>
 {
