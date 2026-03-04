@@ -31,9 +31,7 @@ foreach(sourcefile ${EXAMPLE_SOURCES})
     target_compile_options(${example_target} PRIVATE -mavx512f -march=native)
 
     # Link against the core library
-    target_link_libraries(${example_target} PRIVATE
-        artea
-    )
+    target_link_libraries(${example_target} PRIVATE artea)
 
     # Explicit optimization flags for Release builds
     if(CMAKE_BUILD_TYPE STREQUAL "Release")

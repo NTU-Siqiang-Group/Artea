@@ -23,6 +23,10 @@
 #include <artea/cpu/framework/default_context.hpp>
 #include <filesystem>
 #include <chrono>
+#include <sstream>
+#include <iomanip>
+#include <fstream>
+#include <nlohmann/json.hpp>
 
 using namespace artea;
 using namespace artea::cpu;
@@ -55,13 +59,13 @@ int main(int argc, char** argv) {
         .help("Output directory for the graph file");
 
     program.add_argument("--extracted-nbr-size")
-        .default_value(uint32_t(64))
+        .default_value(uint32_t(32))
         .scan<'u', uint32_t>()
         .help("Fixed number of neighbors for search graph (extracted from flat graph)");
 
     // Graph construction parameters
     program.add_argument("--max-nbr-size")
-        .default_value(uint32_t(32))
+        .default_value(uint32_t(64))
         .scan<'u', uint32_t>()
         .help("Maximum number of neighbors per vertex");
 
@@ -161,15 +165,52 @@ int main(int argc, char** argv) {
     search_graph_t search_graph = search_graph_factory.from_flat_graph(flat_graph, extracted_nbr_size);
 
     // Save graph
-    std::filesystem::path output_path = std::filesystem::path(output_dir) / (dataset_name + ".conv_graph.index");
+    std::string subdir = "conv_graph." + dataset_name;
+
+    // Format coefficients with 2 decimal places
+    std::ostringstream sc_stream, sh_stream;
+    sc_stream << std::fixed << std::setprecision(2) << params.scale_coeffs;
+    sh_stream << std::fixed << std::setprecision(2) << params.shifted_coeffs;
+
+    std::string filename = "mns" + std::to_string(params.max_nbr_size) +
+                          "_ens" + std::to_string(extracted_nbr_size) +
+                          "_sc" + sc_stream.str() +
+                          "_sh" + sh_stream.str() +
+                          "_noi" + std::to_string(params.num_outer_iters) +
+                          "_nii" + std::to_string(params.num_inner_iters) + ".index";
+    std::filesystem::path output_path = std::filesystem::path(output_dir) / subdir / filename;
     logger.info(fmt::format("Saving graph to {}...", output_path.string()));
 
     // Create output directory if it doesn't exist
-    std::filesystem::create_directories(output_dir);
+    std::filesystem::create_directories(output_path.parent_path());
 
     search_graph.snapshot(output_path.string());
 
     logger.info("Graph saved successfully");
+
+    // Update index registry JSON
+    std::filesystem::path registry_path = std::filesystem::path(output_dir) / "index_registry.json";
+
+    // Prepare parameters JSON
+    nlohmann::json index_params;
+    index_params["dataset"] = dataset_name;
+    index_params["max_nbr_size"] = params.max_nbr_size;
+    index_params["extracted_nbr_size"] = extracted_nbr_size;
+    index_params["scale_coeffs"] = params.scale_coeffs;
+    index_params["shifted_coeffs"] = params.shifted_coeffs;
+    index_params["num_outer_iters"] = params.num_outer_iters;
+    index_params["num_inner_iters"] = params.num_inner_iters;
+
+    // Use relative path from project root: output_dir/subdir/filename
+    std::filesystem::path relative_index_path = std::filesystem::path(output_dir) / subdir / filename;
+
+    // Register the index
+    index_register_util_t::register_index(
+        registry_path,
+        "conv_graph",
+        index_params,
+        relative_index_path.string()
+    );
 
     return 0;
 }

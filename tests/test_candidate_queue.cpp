@@ -30,9 +30,6 @@
 
 // Artea Headers
 #include <artea/cpu/framework/artea.hpp>
-#include <artea/cpu/router/std_candidate_queue.hpp>
-#include <artea/cpu/router/linear_candidate_queue.hpp>
-#include <artea/cpu/router/fh_candidate_queue.hpp>
 
 using namespace artea;
 using namespace artea::cpu;

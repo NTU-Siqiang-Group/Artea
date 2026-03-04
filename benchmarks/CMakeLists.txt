@@ -32,12 +32,11 @@ foreach(sourcefile ${BENCH_SOURCES})
     target_compile_options(${bench_target} PRIVATE -mavx512f -march=native)
 
     # Link against the core library and Google Benchmark
-    # benchmark::benchmark_main provides a default main() entry point.
-    # If your source file defines its own int main(), remove benchmark::benchmark_main.
     target_link_libraries(${bench_target} PRIVATE
         artea
         benchmark::benchmark
-        benchmark::benchmark_main
+        arena_benchmark
+        argparse::argparse
         hnswlib
 	    faiss
     )

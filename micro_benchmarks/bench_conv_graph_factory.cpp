@@ -160,7 +160,7 @@ int main(int argc, char** argv) {
     // Initialize parameter sets
     g_config.param_sets = {
         // Set 1: max_nbrs=32, outer_iters=4, inner_iters=14, scale=1.10, shift=0.00
-        {32, 64, 1.10, 0.00, 4, 14}
+        {32, 64, 1.10, 0.00, 4, 14},
         // Set 2: max_nbrs=64, outer_iters=4, inner_iters=14, scale=1.00, shift=0.00
         {64, 128, 1.00, 0.00, 4, 14}
     };

@@ -17,6 +17,7 @@
 #include <algorithm>
 #include <tbb/parallel_for.h>
 #include <tbb/blocked_range.h>
+#include <artea/common/logger.hpp>
 
 namespace artea {
 namespace cpu {
@@ -41,6 +42,16 @@ public:
         const flat_graph_t& flat_graph,
         const vertex_num_t extracted_nbr_size
     ) -> search_graph_t {
+        const vertex_num_t max_nbr_size = flat_graph.get_max_nbr_size();
+
+        // Validate extracted_nbr_size does not exceed max_nbr_size
+        if (extracted_nbr_size > max_nbr_size) {
+            logger.error(fmt::format(
+                "extracted_nbr_size ({}) cannot exceed max_nbr_size ({})",
+                extracted_nbr_size, max_nbr_size
+            ));
+        }
+
         const vertex_num_t num_vertices = flat_graph.get_num_vertices();
         const auto& vecs_data = flat_graph.get_vecs_data();
         const auto& nbrs_arr = flat_graph.get_nbrs_arr();

@@ -31,8 +31,28 @@ JOBS="${JOBS:-64}"
 MIN_CMAKE_VERSION="${MIN_CMAKE_VERSION:-3.24.0}"
 CMAKE_BIN="${CMAKE_BIN:-cmake}"
 
+# Parse command line arguments
+while [[ $# -gt 0 ]]; do
+    case $1 in
+        --debug)
+            BUILD_TYPE="Debug"
+            shift
+            ;;
+        --release)
+            BUILD_TYPE="Release"
+            shift
+            ;;
+        *)
+            log_error "Unknown option: $1"
+            echo "Usage: $0 [--debug|--release]"
+            exit 1
+            ;;
+    esac
+done
+
 log_info "Project root: ${PROJECT_ROOT}"
 log_info "Build directory: ${BUILD_DIR}"
+log_info "Build type: ${BUILD_TYPE}"
 log_info "CMake binary: ${CMAKE_BIN}"
 check_cmake_version "${CMAKE_BIN}" "${MIN_CMAKE_VERSION}"
 

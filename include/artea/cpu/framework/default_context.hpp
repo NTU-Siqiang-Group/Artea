@@ -118,6 +118,9 @@ using random_vg_t = typename vertex_generator_traits_t::random_vg_t;
 using conv_graph_factory_t = typename graph_factory_traits_t::conv_graph_factory_t;
 using search_graph_factory_t = typename graph_factory_traits_t::search_graph_factory_t;
 
+// Utility types
+using index_register_util_t = IndexRegisterUtil;
+
 // Propagate engine from EdgeGeneratorTraits
 using propagate_engine_ss_t = typename edge_generator_traits_t::propagate_engine_t<true>;
 using propagate_engine_noss_t = typename edge_generator_traits_t::propagate_engine_t<false>;

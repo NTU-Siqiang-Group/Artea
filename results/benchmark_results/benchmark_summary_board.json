@@ -1,28 +1,28 @@
 {
   "board_name": "Benchmark Summary Board",
-  "generated_at_unix_ms": 1772545967699,
+  "generated_at_unix_ms": 1772624255762,
   "group_by_key": "",
   "row_count": 2,
   "rows": [
     {
-      "avg_cpu_time": 7574.967864199999,
-      "avg_items_per_second": 126027.8,
-      "avg_real_time": 7934.776686131954,
+      "avg_cpu_time": 148.60803431999997,
+      "avg_items_per_second": 65564.6,
+      "avg_real_time": 152.52803936600685,
       "avg_time_per_item": 0.0,
-      "extra_info": "vertices=1000000, max_nbrs=32, reserved_nbrs=64, outer_iters=4, inner_iters=14, scale=1.10, shift=0.00",
-      "instance_name": "BM_ConvGraphFactory_Set2",
-      "median_real_time": 7924.469571560621,
+      "extra_info": "topk=10, queue_size=200, max_nbr_size=64, extracted_nbr_size=20",
+      "instance_name": "conv_graph/sift-1m/64_20_1.00_0.00_4_14/10_200",
+      "median_real_time": 152.1637573838234,
       "repetitions": 5,
       "time_unit": "ms"
     },
     {
-      "avg_cpu_time": 18686.310812400003,
-      "avg_items_per_second": 50020.0,
-      "avg_real_time": 19998.07642623782,
+      "avg_cpu_time": 173.80504856333337,
+      "avg_items_per_second": 56344.600000000006,
+      "avg_real_time": 181.19447823613882,
       "avg_time_per_item": 0.0,
-      "extra_info": "vertices=1000000, max_nbrs=64, reserved_nbrs=128, outer_iters=4, inner_iters=14, scale=1.00, shift=0.00",
-      "instance_name": "BM_ConvGraphFactory_Set1",
-      "median_real_time": 20071.741301566362,
+      "extra_info": "topk=10, queue_size=200, max_nbr_size=32, extracted_nbr_size=20",
+      "instance_name": "conv_graph/sift-1m/32_20_1.00_0.00_4_14/10_200",
+      "median_real_time": 168.94752345979214,
       "repetitions": 5,
       "time_unit": "ms"
     }

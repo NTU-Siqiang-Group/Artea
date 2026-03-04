@@ -76,7 +76,7 @@ public:
 
         // generate random edges first
         random_eg_t random_eg(dist_func);
-        random_eg.generate(flat_graph, /* init_nbr_size */ max_nbr_size);
+        random_eg.generate(flat_graph, /* init_nbr_size = */ max_nbr_size);
         propagate_engine_t propagate_engine(num_vertices, dist_func);
         propagate_engine.set_graph(flat_graph);
         // Create triangle updater and reverse updater

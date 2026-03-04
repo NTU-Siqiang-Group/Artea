@@ -70,14 +70,14 @@
 #include <artea/cpu/router/vector_router.hpp>
 #include <artea/cpu/router/bruteforce_router.hpp>
 #include <artea/cpu/router/proximity_graph_router.hpp>
-#include <artea/cpu/router/candidate_entry.hpp>
-#include <artea/cpu/router/stateful_candidate_entry.hpp>
+#include <artea/cpu/router/data_structures/candidate_entry.hpp>
+#include <artea/cpu/router/data_structures/stateful_candidate_entry.hpp>
 #include <artea/cpu/router/candidate_queue_concept.hpp>
 #include <artea/cpu/router/visited_table_concept.hpp>
-#include <artea/cpu/router/visited_table_pool.hpp>
-#include <artea/cpu/router/std_candidate_queue.hpp>
-#include <artea/cpu/router/fh_candidate_queue.hpp>
-#include <artea/cpu/router/linear_candidate_queue.hpp>
+#include <artea/cpu/router/data_structures/visited_table_pool.hpp>
+#include <artea/cpu/router/data_structures/std_candidate_queue.hpp>
+#include <artea/cpu/router/data_structures/fh_candidate_queue.hpp>
+#include <artea/cpu/router/data_structures/linear_candidate_queue.hpp>
 
 #include <artea/cpu/utils/bit_ops.hpp>
 #include <artea/cpu/utils/clear_cache.hpp>
@@ -85,6 +85,7 @@
 #include <artea/cpu/utils/parallel.hpp>
 #include <artea/cpu/utils/random_seq.hpp>
 #include <artea/cpu/utils/radius_prober.hpp>
+#include <artea/cpu/utils/index_register_util.hpp>
 #include <artea/cpu/utils/simple_distance.hpp>
 #include <artea/cpu/utils/simd_distance.hpp>
 #include <artea/cpu/utils/simd_fma.hpp>

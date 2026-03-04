@@ -1,4 +1,6 @@
 /build/
 /.vscode
 /.claude
-CLAUDE.mdgraph_index_repo/*.index
+CLAUDE.md
+graph_index_repo/**/*.index
+graph_index_repo/**/

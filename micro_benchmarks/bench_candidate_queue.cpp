@@ -22,9 +22,6 @@
 #include <benchmark/benchmark.h>
 #include <argparse/argparse.hpp>
 #include <artea/cpu/framework/artea.hpp>
-#include <artea/cpu/router/std_candidate_queue.hpp>
-#include <artea/cpu/router/linear_candidate_queue.hpp>
-#include <artea/cpu/router/fh_candidate_queue.hpp>
 
 #include <random>
 #include <vector>
