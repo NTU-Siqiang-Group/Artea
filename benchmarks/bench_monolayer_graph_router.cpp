@@ -13,12 +13,12 @@
 // limitations under the License.
 
 /*
- * @FilePath: /Artea/benchmarks/bench_proximity_graph_router.cpp
+ * @FilePath: /Artea/benchmarks/bench_monolayer_graph_router.cpp
  * @Author: Chandler (Weitang Ye) <weitang.ye@ntu.edu.sg>
- * @Description: Benchmark proximity graph router search performance
+ * @Description: Benchmark monolayer graph router search performance
  */
 
-#include "proximity_graph_router_bench.hpp"
+#include "monolayer_graph_router_bench.hpp"
 #include <argparse/argparse.hpp>
 #include <fstream>
 #include <set>
@@ -35,8 +35,8 @@ std::map<std::string, std::unique_ptr<vector_dataset_t>> artea::benchmarks::g_da
 std::map<std::string, idlist_array_t> artea::benchmarks::g_search_results;
 
 int main(int argc, char** argv) {
-    argparse::ArgumentParser program("bench_proximity_graph_router");
-    program.add_description("Benchmark for proximity graph router");
+    argparse::ArgumentParser program("bench_monolayer_graph_router");
+    program.add_description("Benchmark for monolayer graph router");
 
     // Dataset configuration
     program.add_argument("-c", "--config")

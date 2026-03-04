@@ -13,7 +13,7 @@
 // limitations under the License.
 
 /*
- * @FilePath: /Artea/include/artea/cpu/router/proximity_graph_router.hpp
+ * @FilePath: /Artea/include/artea/cpu/router/monolayer_graph_router.hpp
  * @Author: Chandler (Weitang Ye) <weitang.ye@ntu.edu.sg>
  * @Description:
  */
@@ -41,8 +41,8 @@ template <
     CandidateQueue CandidateQueueImpl = typename RouterTraitsT::std_candidate_queue_t,
     VisitedTable VisitedTableImpl = typename RouterTraitsT::thread_local_bitmap_t
 >
-class ProximityGraphRouter :
-    public RouterTraitsT::template vector_router_t<ProximityGraphRouter<RouterTraitsT, CandidateQueueImpl, VisitedTableImpl>>
+class MonolayerGraphRouter :
+    public RouterTraitsT::template vector_router_t<MonolayerGraphRouter<RouterTraitsT, CandidateQueueImpl, VisitedTableImpl>>
 {
 
     using candidate_queue_t = CandidateQueueImpl;
@@ -57,12 +57,12 @@ class ProximityGraphRouter :
     using idlist_array_t = typename RouterTraitsT::idlist_array_t;
     using search_graph_t = typename RouterTraitsT::search_graph_t;
     using random_seq_t = typename RouterTraitsT::random_seq_t;
-    using base_class_t = typename RouterTraitsT::template vector_router_t<ProximityGraphRouter<RouterTraitsT, CandidateQueueImpl, VisitedTableImpl>>;
+    using base_class_t = typename RouterTraitsT::template vector_router_t<MonolayerGraphRouter<RouterTraitsT, CandidateQueueImpl, VisitedTableImpl>>;
     static constexpr bool intra_query_parallel = RouterTraitsT::intra_query_parallel;
 
 public:
 
-    ProximityGraphRouter(
+    MonolayerGraphRouter(
         const vector_array_t& vecs_data,
         const dist_func_t& dist_func,
         const search_graph_t& search_graph,
@@ -288,7 +288,7 @@ private:
     /** @brief Thread-safe random sequence generator (internally uses thread-local MKL streams). */
     mutable random_seq_t _random_seq;
 
-};  // class ProximityGraphRouter
+};  // class MonolayerGraphRouter
 
 }   // namespace cpu
 }   // namespace artea

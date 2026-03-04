@@ -13,9 +13,9 @@
 // limitations under the License.
 
 /*
- * @FilePath: /Artea/benchmarks/proximity_graph_router_bench.hpp
+ * @FilePath: /Artea/benchmarks/monolayer_graph_router_bench.hpp
  * @Author: Chandler (Weitang Ye) <weitang.ye@ntu.edu.sg>
- * @Description: Proximity graph router benchmark utilities
+ * @Description: Monolayer graph router benchmark utilities
  */
 
 #pragma once
@@ -137,7 +137,7 @@ inline auto make_benchmark_func(const SearchParams& params, const std::string& b
 
         // Create router with correct template parameters
         using router_traits_t = RouterTraits<computer_traits_t, index_traits_t, false>;
-        using router_t = ProximityGraphRouter<router_traits_t>;
+        using router_t = MonolayerGraphRouter<router_traits_t>;
 
         router_t router(
             dataset.get_base_vecs(),

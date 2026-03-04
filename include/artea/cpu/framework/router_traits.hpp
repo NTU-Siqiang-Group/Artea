@@ -29,7 +29,7 @@ namespace cpu {
 /** ------ Forward Declaration  ------ **/
 template <typename RouterTraitsT, typename DerivedClassT> class VectorRouter;
 template <typename RouterTraitsT> class BruteforceRouter;
-template <typename RouterTraitsT, CandidateQueue CandidateQueueImpl, VisitedTable VisitedTableImpl> class ProximityGraphRouter;
+template <typename RouterTraitsT, CandidateQueue CandidateQueueImpl, VisitedTable VisitedTableImpl> class MonolayerGraphRouter;
 template <typename RouterTraitsT> struct CandidateEntry;
 template <typename RouterTraitsT> struct CandidateEntryComparator;
 template <typename RouterTraitsT> struct StatefulCandidateEntry;
@@ -92,9 +92,9 @@ struct RouterTraits : public ComputerTraitsT, public IndexTraitsT
     template <VisitedTable VisitedTableImpl = typename router_traits_t::version_tag_table_t>
     using visited_table_pool_t = VisitedTablePool<router_traits_t, VisitedTableImpl>;
 
-    /** @brief Type for proximity graph router. */
+    /** @brief Type for monolayer graph router. */
     template <CandidateQueue CandidateQueueImpl = std_candidate_queue_t, VisitedTable VisitedTableImpl = typename router_traits_t::thread_local_bitmap_t>
-    using proximity_graph_router_t = ProximityGraphRouter<router_traits_t, CandidateQueueImpl, VisitedTableImpl>;
+    using monolayer_graph_router_t = MonolayerGraphRouter<router_traits_t, CandidateQueueImpl, VisitedTableImpl>;
 
     /** @brief Indicates whether to enable intra-query parallelism. */
     static constexpr bool intra_query_parallel = IntraQueryParallel;
