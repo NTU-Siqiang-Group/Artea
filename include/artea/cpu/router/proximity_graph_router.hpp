@@ -166,7 +166,7 @@ public:
             if (current_id == RouterTraitsT::invalid_vertex_id) { break; }
             // Explore neighbors of current vertex
             const vertex_id_t* neighbors = _search_graph.get_neighbors(current_id);
-            const vertex_num_t nbr_count = _search_graph.get_fix_nbr_size();
+            const vertex_num_t nbr_count = _search_graph.get_extracted_nbr_size();
 
             for (vertex_num_t i = 0; i < nbr_count; ++i) {
                 const vertex_id_t nbr_id = neighbors[i];
@@ -235,7 +235,7 @@ public:
 
             // Explore neighbors of current vertex
             const vertex_id_t* neighbors = _search_graph.get_neighbors(current_id);
-            const vertex_num_t nbr_count = _search_graph.get_fix_nbr_size();
+            const vertex_num_t nbr_count = _search_graph.get_extracted_nbr_size();
 
             for (vertex_num_t i = 0; i < nbr_count; ++i) {
                 const vertex_id_t nbr_id = neighbors[i];

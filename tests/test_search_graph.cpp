@@ -119,45 +119,45 @@ TEST_F(SearchGraphTest, BasicConversion) {
 
     const auto& flat_nbrs_arr = flat_graph_->get_nbrs_arr();
 
-    const vertex_num_t fix_nbr_size = 32;
-    auto search_graph = search_graph_factory_t::from_flat_graph(*flat_graph_, fix_nbr_size);
+    const vertex_num_t extracted_nbr_size = 32;
+    auto search_graph = search_graph_factory_t::from_flat_graph(*flat_graph_, extracted_nbr_size);
 
     EXPECT_EQ(search_graph.get_num_vertices(), num_vertices_);
-    EXPECT_EQ(search_graph.get_fix_nbr_size(), fix_nbr_size);
+    EXPECT_EQ(search_graph.get_extracted_nbr_size(), extracted_nbr_size);
 
     for (vertex_id_t u = 0; u < num_vertices_; ++u) {
         const auto& flat_nbrs = flat_nbrs_arr[u];
         auto search_nbrs = search_graph.fetch_nbrs(u);
 
-        EXPECT_EQ(search_nbrs.size(), fix_nbr_size);
+        EXPECT_EQ(search_nbrs.size(), extracted_nbr_size);
 
         const vertex_num_t copy_count = std::min(
             static_cast<vertex_num_t>(flat_nbrs.size()),
-            fix_nbr_size
+            extracted_nbr_size
         );
 
         for (vertex_num_t i = 0; i < copy_count; ++i) {
             EXPECT_EQ(search_nbrs[i], flat_nbrs[i].get_id());
         }
 
-        for (vertex_num_t i = copy_count; i < fix_nbr_size; ++i) {
+        for (vertex_num_t i = copy_count; i < extracted_nbr_size; ++i) {
             EXPECT_EQ(search_nbrs[i], base_traits_t::invalid_vertex_id);
         }
     }
 }
 
 TEST_F(SearchGraphTest, EmptyFlatGraph) {
-    const vertex_num_t fix_nbr_size = 32;
-    auto search_graph = search_graph_factory_t::from_flat_graph(*flat_graph_, fix_nbr_size);
+    const vertex_num_t extracted_nbr_size = 32;
+    auto search_graph = search_graph_factory_t::from_flat_graph(*flat_graph_, extracted_nbr_size);
 
     EXPECT_EQ(search_graph.get_num_vertices(), num_vertices_);
-    EXPECT_EQ(search_graph.get_fix_nbr_size(), fix_nbr_size);
+    EXPECT_EQ(search_graph.get_extracted_nbr_size(), extracted_nbr_size);
 
     for (vertex_id_t u = 0; u < num_vertices_; ++u) {
         auto search_nbrs = search_graph.fetch_nbrs(u);
-        EXPECT_EQ(search_nbrs.size(), fix_nbr_size);
+        EXPECT_EQ(search_nbrs.size(), extracted_nbr_size);
 
-        for (vertex_num_t i = 0; i < fix_nbr_size; ++i) {
+        for (vertex_num_t i = 0; i < extracted_nbr_size; ++i) {
             EXPECT_EQ(search_nbrs[i], base_traits_t::invalid_vertex_id);
         }
     }
@@ -168,20 +168,20 @@ TEST_F(SearchGraphTest, FixNbrSizeLargerThanFlatNbrs) {
     populate_random_neighbors(max_neighbors);
 
     const auto& flat_nbrs_arr = flat_graph_->get_nbrs_arr();
-    const vertex_num_t fix_nbr_size = 64;
-    auto search_graph = search_graph_factory_t::from_flat_graph(*flat_graph_, fix_nbr_size);
+    const vertex_num_t extracted_nbr_size = 64;
+    auto search_graph = search_graph_factory_t::from_flat_graph(*flat_graph_, extracted_nbr_size);
 
     for (vertex_id_t u = 0; u < num_vertices_; ++u) {
         const auto& flat_nbrs = flat_nbrs_arr[u];
         auto search_nbrs = search_graph.fetch_nbrs(u);
 
-        EXPECT_EQ(search_nbrs.size(), fix_nbr_size);
+        EXPECT_EQ(search_nbrs.size(), extracted_nbr_size);
 
         for (size_t i = 0; i < flat_nbrs.size(); ++i) {
             EXPECT_EQ(search_nbrs[i], flat_nbrs[i].get_id());
         }
 
-        for (vertex_num_t i = flat_nbrs.size(); i < fix_nbr_size; ++i) {
+        for (vertex_num_t i = flat_nbrs.size(); i < extracted_nbr_size; ++i) {
             EXPECT_EQ(search_nbrs[i], base_traits_t::invalid_vertex_id);
         }
     }
@@ -192,19 +192,19 @@ TEST_F(SearchGraphTest, FixNbrSizeSmallerThanFlatNbrs) {
     populate_random_neighbors(max_neighbors);
 
     const auto& flat_nbrs_arr = flat_graph_->get_nbrs_arr();
-    const vertex_num_t fix_nbr_size = 16;
-    auto search_graph = search_graph_factory_t::from_flat_graph(*flat_graph_, fix_nbr_size);
+    const vertex_num_t extracted_nbr_size = 16;
+    auto search_graph = search_graph_factory_t::from_flat_graph(*flat_graph_, extracted_nbr_size);
 
     for (vertex_id_t u = 0; u < num_vertices_; ++u) {
         const auto& flat_nbrs = flat_nbrs_arr[u];
         auto search_nbrs = search_graph.fetch_nbrs(u);
 
-        EXPECT_EQ(search_nbrs.size(), fix_nbr_size);
+        EXPECT_EQ(search_nbrs.size(), extracted_nbr_size);
 
-        // When fix_nbr_size < flat_nbrs.size(), only the first fix_nbr_size neighbors are copied
+        // When extracted_nbr_size < flat_nbrs.size(), only the first extracted_nbr_size neighbors are copied
         const vertex_num_t copy_count = std::min(
             static_cast<vertex_num_t>(flat_nbrs.size()),
-            fix_nbr_size
+            extracted_nbr_size
         );
 
         for (vertex_num_t i = 0; i < copy_count; ++i) {
@@ -218,8 +218,8 @@ TEST_F(SearchGraphTest, SingleNeighborPerVertex) {
     populate_random_neighbors(max_neighbors);
 
     const auto& flat_nbrs_arr = flat_graph_->get_nbrs_arr();
-    const vertex_num_t fix_nbr_size = 32;
-    auto search_graph = search_graph_factory_t::from_flat_graph(*flat_graph_, fix_nbr_size);
+    const vertex_num_t extracted_nbr_size = 32;
+    auto search_graph = search_graph_factory_t::from_flat_graph(*flat_graph_, extracted_nbr_size);
 
     for (vertex_id_t u = 0; u < num_vertices_; ++u) {
         const auto& flat_nbrs = flat_nbrs_arr[u];
@@ -228,7 +228,7 @@ TEST_F(SearchGraphTest, SingleNeighborPerVertex) {
         EXPECT_EQ(flat_nbrs.size(), 1);
         EXPECT_EQ(search_nbrs[0], flat_nbrs[0].get_id());
 
-        for (vertex_num_t i = 1; i < fix_nbr_size; ++i) {
+        for (vertex_num_t i = 1; i < extracted_nbr_size; ++i) {
             EXPECT_EQ(search_nbrs[i], base_traits_t::invalid_vertex_id);
         }
     }
@@ -239,8 +239,8 @@ TEST_F(SearchGraphTest, NeighborOrderPreservation) {
     populate_random_neighbors(max_neighbors);
 
     const auto& flat_nbrs_arr = flat_graph_->get_nbrs_arr();
-    const vertex_num_t fix_nbr_size = 32;
-    auto search_graph = search_graph_factory_t::from_flat_graph(*flat_graph_, fix_nbr_size);
+    const vertex_num_t extracted_nbr_size = 32;
+    auto search_graph = search_graph_factory_t::from_flat_graph(*flat_graph_, extracted_nbr_size);
 
     for (vertex_id_t u = 0; u < num_vertices_; ++u) {
         const auto& flat_nbrs = flat_nbrs_arr[u];
@@ -248,7 +248,7 @@ TEST_F(SearchGraphTest, NeighborOrderPreservation) {
 
         const vertex_num_t copy_count = std::min(
             static_cast<vertex_num_t>(flat_nbrs.size()),
-            fix_nbr_size
+            extracted_nbr_size
         );
 
         for (vertex_num_t i = 0; i < copy_count; ++i) {
@@ -261,41 +261,41 @@ TEST_F(SearchGraphTest, LargeFixNbrSize) {
     const vertex_num_t max_neighbors = 50;
     populate_random_neighbors(max_neighbors);
 
-    const vertex_num_t fix_nbr_size = 128;
-    auto search_graph = search_graph_factory_t::from_flat_graph(*flat_graph_, fix_nbr_size);
+    const vertex_num_t extracted_nbr_size = 128;
+    auto search_graph = search_graph_factory_t::from_flat_graph(*flat_graph_, extracted_nbr_size);
 
     EXPECT_EQ(search_graph.get_num_vertices(), num_vertices_);
-    EXPECT_EQ(search_graph.get_fix_nbr_size(), fix_nbr_size);
+    EXPECT_EQ(search_graph.get_extracted_nbr_size(), extracted_nbr_size);
 }
 
 TEST_F(SearchGraphTest, SmallFixNbrSize) {
     const vertex_num_t max_neighbors = 50;
     populate_random_neighbors(max_neighbors);
 
-    const vertex_num_t fix_nbr_size = 4;
-    auto search_graph = search_graph_factory_t::from_flat_graph(*flat_graph_, fix_nbr_size);
+    const vertex_num_t extracted_nbr_size = 4;
+    auto search_graph = search_graph_factory_t::from_flat_graph(*flat_graph_, extracted_nbr_size);
 
     EXPECT_EQ(search_graph.get_num_vertices(), num_vertices_);
-    EXPECT_EQ(search_graph.get_fix_nbr_size(), fix_nbr_size);
+    EXPECT_EQ(search_graph.get_extracted_nbr_size(), extracted_nbr_size);
 }
 
 TEST_F(SearchGraphTest, PerformanceTest) {
     const vertex_num_t max_neighbors = 64;
     populate_random_neighbors(max_neighbors);
 
-    const vertex_num_t fix_nbr_size = 32;
+    const vertex_num_t extracted_nbr_size = 32;
 
     auto start = std::chrono::high_resolution_clock::now();
-    auto search_graph = search_graph_factory_t::from_flat_graph(*flat_graph_, fix_nbr_size);
+    auto search_graph = search_graph_factory_t::from_flat_graph(*flat_graph_, extracted_nbr_size);
     auto end = std::chrono::high_resolution_clock::now();
 
     auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(end - start);
 
-    logger.info(fmt::format("Conversion of {} vertices with fix_nbr_size={} took {} ms",
-        num_vertices_, fix_nbr_size, duration.count()));
+    logger.info(fmt::format("Conversion of {} vertices with extracted_nbr_size={} took {} ms",
+        num_vertices_, extracted_nbr_size, duration.count()));
 
     EXPECT_EQ(search_graph.get_num_vertices(), num_vertices_);
-    EXPECT_EQ(search_graph.get_fix_nbr_size(), fix_nbr_size);
+    EXPECT_EQ(search_graph.get_extracted_nbr_size(), extracted_nbr_size);
 }
 
 int main(int argc, char** argv) {

@@ -41,20 +41,20 @@ public:
     /**
      * @brief Construct a new Search Graph object.
      * @param num_vertices The total number of vertices in the graph.
-     * @param fix_nbr_size Fixed number of neighbors per vertex.
+     * @param extracted_nbr_size Fixed number of neighbors per vertex.
      * @param vecs_data Reference to the vector data for this graph.
      */
     SearchGraph(
         const vertex_num_t num_vertices,
-        const vertex_num_t fix_nbr_size,
+        const vertex_num_t extracted_nbr_size,
         const vector_array_t& vecs_data
     ) :
         _num_vertices(num_vertices),
-        _fix_nbr_size(fix_nbr_size),
+        _extracted_nbr_size(extracted_nbr_size),
         _vecs_data(vecs_data)
     {
-        // Allocate CSR storage: num_vertices * fix_nbr_size
-        _csr_nbrs.resize(static_cast<size_t>(num_vertices) * fix_nbr_size);
+        // Allocate CSR storage: num_vertices * extracted_nbr_size
+        _csr_nbrs.resize(static_cast<size_t>(num_vertices) * extracted_nbr_size);
     }
 
     // Copying is deleted
@@ -73,8 +73,8 @@ public:
     }
 
     __attribute__((always_inline))
-    auto get_fix_nbr_size() const -> vertex_num_t {
-        return _fix_nbr_size;
+    auto get_extracted_nbr_size() const -> vertex_num_t {
+        return _extracted_nbr_size;
     }
 
     /**
@@ -84,7 +84,7 @@ public:
      */
     __attribute__((always_inline))
     auto get_neighbors(const vertex_id_t src) const -> const vertex_id_t* {
-        return &_csr_nbrs[static_cast<size_t>(src) * _fix_nbr_size];
+        return &_csr_nbrs[static_cast<size_t>(src) * _extracted_nbr_size];
     }
 
     /**
@@ -94,7 +94,7 @@ public:
      */
     __attribute__((always_inline))
     auto get_neighbors(const vertex_id_t src) -> vertex_id_t* {
-        return &_csr_nbrs[static_cast<size_t>(src) * _fix_nbr_size];
+        return &_csr_nbrs[static_cast<size_t>(src) * _extracted_nbr_size];
     }
 
     /**
@@ -105,8 +105,8 @@ public:
     __attribute__((always_inline))
     auto fetch_nbrs(const vertex_id_t src) const -> std::span<const vertex_id_t> {
         return std::span<const vertex_id_t>(
-            &_csr_nbrs[static_cast<size_t>(src) * _fix_nbr_size],
-            _fix_nbr_size
+            &_csr_nbrs[static_cast<size_t>(src) * _extracted_nbr_size],
+            _extracted_nbr_size
         );
     }
 
@@ -118,8 +118,8 @@ public:
     __attribute__((always_inline))
     auto fetch_nbrs(const vertex_id_t src) -> std::span<vertex_id_t> {
         return std::span<vertex_id_t>(
-            &_csr_nbrs[static_cast<size_t>(src) * _fix_nbr_size],
-            _fix_nbr_size
+            &_csr_nbrs[static_cast<size_t>(src) * _extracted_nbr_size],
+            _extracted_nbr_size
         );
     }
 
@@ -156,13 +156,13 @@ public:
         const uint32_t magic = k_file_magic;
         const uint32_t version = k_file_version;
         const vertex_num_t num_vertices = _num_vertices;
-        const vertex_num_t fix_nbr_size = _fix_nbr_size;
+        const vertex_num_t extracted_nbr_size = _extracted_nbr_size;
         const size_t csr_size = _csr_nbrs.size();
 
         ofs.write(reinterpret_cast<const char*>(&magic), sizeof(magic));
         ofs.write(reinterpret_cast<const char*>(&version), sizeof(version));
         ofs.write(reinterpret_cast<const char*>(&num_vertices), sizeof(num_vertices));
-        ofs.write(reinterpret_cast<const char*>(&fix_nbr_size), sizeof(fix_nbr_size));
+        ofs.write(reinterpret_cast<const char*>(&extracted_nbr_size), sizeof(extracted_nbr_size));
         ofs.write(reinterpret_cast<const char*>(&csr_size), sizeof(csr_size));
 
         if (!_csr_nbrs.empty()) {
@@ -200,13 +200,13 @@ public:
         uint32_t magic = 0;
         uint32_t version = 0;
         vertex_num_t num_vertices = 0;
-        vertex_num_t fix_nbr_size = 0;
+        vertex_num_t extracted_nbr_size = 0;
         size_t csr_size = 0;
 
         ifs.read(reinterpret_cast<char*>(&magic), sizeof(magic));
         ifs.read(reinterpret_cast<char*>(&version), sizeof(version));
         ifs.read(reinterpret_cast<char*>(&num_vertices), sizeof(num_vertices));
-        ifs.read(reinterpret_cast<char*>(&fix_nbr_size), sizeof(fix_nbr_size));
+        ifs.read(reinterpret_cast<char*>(&extracted_nbr_size), sizeof(extracted_nbr_size));
         ifs.read(reinterpret_cast<char*>(&csr_size), sizeof(csr_size));
 
         if (!ifs.good()) {
@@ -222,20 +222,20 @@ public:
         }
 
         if (
-            fix_nbr_size != 0
+            extracted_nbr_size != 0
             && static_cast<size_t>(num_vertices)
-                   > std::numeric_limits<size_t>::max() / static_cast<size_t>(fix_nbr_size)
+                   > std::numeric_limits<size_t>::max() / static_cast<size_t>(extracted_nbr_size)
         ) {
             throw std::runtime_error("CSR size multiplication overflows size_t: " + file_path);
         }
 
         const size_t expected_csr_size =
-            static_cast<size_t>(num_vertices) * static_cast<size_t>(fix_nbr_size);
+            static_cast<size_t>(num_vertices) * static_cast<size_t>(extracted_nbr_size);
         if (csr_size != expected_csr_size) {
             throw std::runtime_error("Inconsistent CSR size in file: " + file_path);
         }
 
-        SearchGraph<IndexTraitsT> search_graph(num_vertices, fix_nbr_size, vecs_data);
+        SearchGraph<IndexTraitsT> search_graph(num_vertices, extracted_nbr_size, vecs_data);
         if (search_graph._csr_nbrs.size() != csr_size) {
             throw std::runtime_error("Internal CSR size mismatch while loading: " + file_path);
         }
@@ -263,7 +263,7 @@ private:
     vertex_num_t _num_vertices;
 
     /** @brief Fixed number of neighbors per vertex. */
-    vertex_num_t _fix_nbr_size;
+    vertex_num_t _extracted_nbr_size;
 
     /** @brief CSR format neighbor storage: dense, cache-aligned array. */
     csr_graph_t _csr_nbrs;
