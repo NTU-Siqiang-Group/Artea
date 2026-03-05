@@ -106,29 +106,29 @@ public:
     void load_index(const std::string& index_path, const std::string& dataset_name) {
         const auto& dataset = DataProvider::get_dataset(dataset_name);
 
-        logger.info(fmt::format("Loading search graph from {}...", index_path));
-        _search_graph = std::make_unique<search_graph_t>(
-            search_graph_t::restore(index_path, dataset.get_base_vecs())
+        logger.info(fmt::format("Loading flat search graph from {}...", index_path));
+        _search_graph = std::make_unique<flat_search_graph_t>(
+            flat_search_graph_t::restore(index_path, dataset.get_base_vecs())
         );
 
         vertex_num_t num_vertices = _search_graph->get_num_vertices();
         vertex_num_t extracted_nbr_size = _search_graph->get_extracted_nbr_size();
 
-        logger.info(fmt::format("Search graph loaded:"));
+        logger.info(fmt::format("Flat search graph loaded:"));
         logger.info(fmt::format("  Vertices: {}", num_vertices));
         logger.info(fmt::format("  Extracted neighbors: {}", extracted_nbr_size));
     }
 
-    const search_graph_t& get_search_graph() const { return *_search_graph; }
+    const flat_search_graph_t& get_search_graph() const { return *_search_graph; }
 
 private:
-    std::unique_ptr<search_graph_t> _search_graph;
+    std::unique_ptr<flat_search_graph_t> _search_graph;
 };
 
 inline auto make_benchmark_func(const SearchParams& params, const std::string& bench_name) {
     return [params, bench_name](benchmark::State& state) {
         const auto& dataset = DataProvider::get_dataset(params.dataset_name);
-        const auto& search_graph = IndexProvider::instance().get_search_graph();
+        const auto& flat_search_graph = IndexProvider::instance().get_search_graph();
         const vec_dim_t dim = dataset.get_vec_dim();
         const vertex_num_t num_queries = dataset.get_num_query_vecs();
 
@@ -136,13 +136,10 @@ inline auto make_benchmark_func(const SearchParams& params, const std::string& b
         dist_func_t dist_func(dim);
 
         // Create router with correct template parameters
-        using router_traits_t = RouterTraits<computer_traits_t, index_traits_t, false>;
-        using router_t = MonolayerGraphRouter<router_traits_t>;
-
-        router_t router(
+        monolayer_graph_router_t router(
             dataset.get_base_vecs(),
             dist_func,
-            search_graph,
+            flat_search_graph,
             params.topk,
             params.candidate_queue_size
         );
@@ -165,8 +162,6 @@ inline auto make_benchmark_func(const SearchParams& params, const std::string& b
 
         // Store the last result for recall calculation
         g_search_results[bench_name] = std::move(results);
-
-        state.SetItemsProcessed(state.iterations() * num_queries);
     };
 }
 

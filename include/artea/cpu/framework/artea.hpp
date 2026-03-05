@@ -45,11 +45,11 @@
 
 #include <artea/cpu/index/neighbor.hpp>
 #include <artea/cpu/index/flat_graph.hpp>
-#include <artea/cpu/index/search_graph.hpp>
+#include <artea/cpu/index/flat_search_graph.hpp>
 
 #include <artea/cpu/graph_factory/flat_graph_factory.hpp>
 #include <artea/cpu/graph_factory/conv_graph_factory.hpp>
-#include <artea/cpu/graph_factory/search_graph_factory.hpp>
+#include <artea/cpu/graph_factory/flat_search_graph_factory.hpp>
 
 #include <artea/cpu/vertex_generator/vertex_generator.hpp>
 #include <artea/cpu/vertex_generator/lsh_table.hpp>

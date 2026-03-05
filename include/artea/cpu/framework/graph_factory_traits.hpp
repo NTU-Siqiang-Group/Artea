@@ -26,7 +26,7 @@ namespace cpu {
 /** ------ Forward Declaration  ------ **/
 template <typename GraphFactoryTraitsT, typename DerivedClassT> class FlatGraphFactory;
 template <typename GraphFactoryTraitsT> class ConvGraphFactory;
-template <typename IndexTraitsT> class SearchGraphFactory;
+template <typename IndexTraitsT> class FlatSearchGraphFactory;
 
 template <
     typename VertexGeneratorTraitsT,
@@ -45,7 +45,7 @@ struct GraphFactoryTraits :
 
     using conv_graph_factory_t = ConvGraphFactory<graph_factory_traits_t>;
 
-    using search_graph_factory_t = SearchGraphFactory<typename IndexTraitsT::index_traits_t>;
+    using flat_search_graph_factory_t = FlatSearchGraphFactory<typename IndexTraitsT::index_traits_t>;
 
 };  // struct GraphFactoryTraits
 

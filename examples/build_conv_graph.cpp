@@ -61,7 +61,7 @@ int main(int argc, char** argv) {
     program.add_argument("--extracted-nbr-size")
         .default_value(uint32_t(32))
         .scan<'u', uint32_t>()
-        .help("Fixed number of neighbors for search graph (extracted from flat graph)");
+        .help("Fixed number of neighbors for flat search graph (extracted from flat graph)");
 
     // Graph construction parameters
     program.add_argument("--max-nbr-size")
@@ -159,10 +159,10 @@ int main(int argc, char** argv) {
 
     logger.info(fmt::format("Graph construction completed in {:.2f} seconds", duration.count() / 1000.0));
 
-    // Convert to search graph
-    logger.info("Converting to search graph...");
-    search_graph_factory_t search_graph_factory;
-    search_graph_t search_graph = search_graph_factory.from_flat_graph(flat_graph, extracted_nbr_size);
+    // Convert to flat search graph
+    logger.info("Converting to flat search graph...");
+    flat_search_graph_factory_t flat_search_graph_factory;
+    flat_search_graph_t flat_search_graph = flat_search_graph_factory.from_flat_graph(flat_graph, extracted_nbr_size);
 
     // Save graph
     std::string subdir = "conv_graph." + dataset_name;
@@ -184,7 +184,7 @@ int main(int argc, char** argv) {
     // Create output directory if it doesn't exist
     std::filesystem::create_directories(output_path.parent_path());
 
-    search_graph.snapshot(output_path.string());
+    flat_search_graph.snapshot(output_path.string());
 
     logger.info("Graph saved successfully");
 

@@ -54,7 +54,7 @@ class MonolayerGraphRouter :
     using dist_func_t = typename RouterTraitsT::dist_func_t;
     using vector_array_t = typename RouterTraitsT::vector_array_t;
     using idlist_array_t = typename RouterTraitsT::idlist_array_t;
-    using search_graph_t = typename RouterTraitsT::search_graph_t;
+    using flat_search_graph_t = typename RouterTraitsT::flat_search_graph_t;
     using random_seq_t = typename RouterTraitsT::random_seq_t;
     using base_class_t = typename RouterTraitsT::template vector_router_t<MonolayerGraphRouter<RouterTraitsT, CandidateQueueImpl, VisitedTableImpl>>;
     static constexpr bool intra_query_parallel = RouterTraitsT::intra_query_parallel;
@@ -64,11 +64,11 @@ public:
     MonolayerGraphRouter(
         const vector_array_t& vecs_data,
         const dist_func_t& dist_func,
-        const search_graph_t& search_graph,
+        const flat_search_graph_t& flat_search_graph,
         const uint32_t topk,
         const vertex_num_t candidate_queue_size = 16
     ) : base_class_t(vecs_data, dist_func, topk),
-        _search_graph(search_graph),
+        _flat_search_graph(flat_search_graph),
         _candidate_queue_size(candidate_queue_size),
         _visited_table_pool(vecs_data.get_num_vecs()),
         _random_seq(vecs_data.get_num_vecs())
@@ -164,8 +164,8 @@ public:
             // Check for invalid entry or early termination
             if (current_id == RouterTraitsT::invalid_vertex_id) { break; }
             // Explore neighbors of current vertex
-            const vertex_id_t* neighbors = _search_graph.get_neighbors(current_id);
-            const vertex_num_t nbr_count = _search_graph.get_extracted_nbr_size();
+            const vertex_id_t* neighbors = _flat_search_graph.get_neighbors(current_id);
+            const vertex_num_t nbr_count = _flat_search_graph.get_extracted_nbr_size();
 
             for (vertex_num_t i = 0; i < nbr_count; ++i) {
                 const vertex_id_t nbr_id = neighbors[i];
@@ -233,8 +233,8 @@ public:
             }
 
             // Explore neighbors of current vertex
-            const vertex_id_t* neighbors = _search_graph.get_neighbors(current_id);
-            const vertex_num_t nbr_count = _search_graph.get_extracted_nbr_size();
+            const vertex_id_t* neighbors = _flat_search_graph.get_neighbors(current_id);
+            const vertex_num_t nbr_count = _flat_search_graph.get_extracted_nbr_size();
 
             for (vertex_num_t i = 0; i < nbr_count; ++i) {
                 const vertex_id_t nbr_id = neighbors[i];
@@ -275,8 +275,8 @@ private:
         );
     }
 
-    /** @brief Reference to the search graph for neighbor access. */
-    const search_graph_t& _search_graph;
+    /** @brief Reference to the flat search graph for neighbor access. */
+    const flat_search_graph_t& _flat_search_graph;
 
     /** @brief Candidate queue size for beam search. */
     vertex_num_t _candidate_queue_size = 0;

@@ -1,8 +1,8 @@
 /*
- * @FilePath: /Artea/include/artea/cpu/index/search_graph.hpp
+ * @FilePath: /Artea/include/artea/cpu/index/flat_search_graph.hpp
  * @Author: Chandler (Weitang Ye) <weitang.ye@ntu.edu.sg>
  * @Date: 2026-02-05
- * @Description: Search graph with CSR format for efficient neighbor access.
+ * @Description: Flat search graph with CSR format for efficient neighbor access.
  */
 
 #pragma once
@@ -24,11 +24,11 @@ namespace artea {
 namespace cpu {
 
 /**
- * @brief Search graph using CSR (Compressed Sparse Row) format for efficient neighbor access.
+ * @brief Flat search graph using CSR (Compressed Sparse Row) format for efficient neighbor access.
  * @tparam IndexTraitsT The index traits type.
  */
 template <typename IndexTraitsT>
-class SearchGraph {
+class FlatSearchGraph {
 
     using vertex_num_t = typename IndexTraitsT::vertex_num_t;
     using vertex_id_t = typename IndexTraitsT::vertex_id_t;
@@ -39,12 +39,12 @@ class SearchGraph {
 
 public:
     /**
-     * @brief Construct a new Search Graph object.
+     * @brief Construct a new Flat Search Graph object.
      * @param num_vertices The total number of vertices in the graph.
      * @param extracted_nbr_size Fixed number of neighbors per vertex.
      * @param vecs_data Reference to the vector data for this graph.
      */
-    SearchGraph(
+    FlatSearchGraph(
         const vertex_num_t num_vertices,
         const vertex_num_t extracted_nbr_size,
         const vector_array_t& vecs_data
@@ -58,12 +58,12 @@ public:
     }
 
     // Copying is deleted
-    SearchGraph(const SearchGraph&) = delete;
-    SearchGraph& operator=(const SearchGraph&) = delete;
+    FlatSearchGraph(const FlatSearchGraph&) = delete;
+    FlatSearchGraph& operator=(const FlatSearchGraph&) = delete;
 
     // default move constructor and assignment
-    SearchGraph(SearchGraph&&) noexcept = default;
-    SearchGraph& operator=(SearchGraph&&) noexcept = default;
+    FlatSearchGraph(FlatSearchGraph&&) noexcept = default;
+    FlatSearchGraph& operator=(FlatSearchGraph&&) noexcept = default;
 
     // --- Public Interface ---
 
@@ -139,7 +139,7 @@ public:
     }
 
     /**
-     * @brief Snapshot search graph to a binary file.
+     * @brief Snapshot flat search graph to a binary file.
      * @param file_path Target file path.
      */
     auto snapshot(const std::string& file_path) const -> void {
@@ -150,7 +150,7 @@ public:
 
         std::ofstream ofs(file_path, std::ios::binary | std::ios::trunc);
         if (!ofs.is_open()) {
-            throw std::runtime_error("Failed to open file for snapshotting search graph: " + file_path);
+            throw std::runtime_error("Failed to open file for snapshotting flat search graph: " + file_path);
         }
 
         const uint32_t magic = k_file_magic;
@@ -173,20 +173,20 @@ public:
         }
 
         if (!ofs.good()) {
-            throw std::runtime_error("Failed while writing search graph to file: " + file_path);
+            throw std::runtime_error("Failed while writing flat search graph to file: " + file_path);
         }
     }
 
     /**
-     * @brief Restore search graph from a snapshot binary file.
+     * @brief Restore flat search graph from a snapshot binary file.
      * @param file_path Source file path.
      * @param vecs_data Reference to the vector data that this graph should bind to.
-     * @return Loaded SearchGraph instance.
+     * @return Loaded FlatSearchGraph instance.
      */
     static auto restore(
         const std::string& file_path,
         const vector_array_t& vecs_data
-    ) -> SearchGraph<IndexTraitsT> {
+    ) -> FlatSearchGraph<IndexTraitsT> {
         static_assert(
             std::is_trivially_copyable_v<vertex_id_t>,
             "vertex_id_t must be trivially copyable for binary loading."
@@ -194,7 +194,7 @@ public:
 
         std::ifstream ifs(file_path, std::ios::binary);
         if (!ifs.is_open()) {
-            throw std::runtime_error("Failed to open file for loading search graph: " + file_path);
+            throw std::runtime_error("Failed to open file for loading flat search graph: " + file_path);
         }
 
         uint32_t magic = 0;
@@ -210,15 +210,15 @@ public:
         ifs.read(reinterpret_cast<char*>(&csr_size), sizeof(csr_size));
 
         if (!ifs.good()) {
-            throw std::runtime_error("Failed to read search graph header from file: " + file_path);
+            throw std::runtime_error("Failed to read flat search graph header from file: " + file_path);
         }
 
         if (magic != k_file_magic) {
-            throw std::runtime_error("Invalid search graph file magic: " + file_path);
+            throw std::runtime_error("Invalid flat search graph file magic: " + file_path);
         }
 
         if (version != k_file_version) {
-            throw std::runtime_error("Unsupported search graph file version: " + file_path);
+            throw std::runtime_error("Unsupported flat search graph file version: " + file_path);
         }
 
         if (
@@ -235,23 +235,23 @@ public:
             throw std::runtime_error("Inconsistent CSR size in file: " + file_path);
         }
 
-        SearchGraph<IndexTraitsT> search_graph(num_vertices, extracted_nbr_size, vecs_data);
-        if (search_graph._csr_nbrs.size() != csr_size) {
+        FlatSearchGraph<IndexTraitsT> flat_search_graph(num_vertices, extracted_nbr_size, vecs_data);
+        if (flat_search_graph._csr_nbrs.size() != csr_size) {
             throw std::runtime_error("Internal CSR size mismatch while loading: " + file_path);
         }
 
-        if (!search_graph._csr_nbrs.empty()) {
+        if (!flat_search_graph._csr_nbrs.empty()) {
             ifs.read(
-                reinterpret_cast<char*>(search_graph._csr_nbrs.data()),
-                static_cast<std::streamsize>(search_graph._csr_nbrs.size() * sizeof(vertex_id_t))
+                reinterpret_cast<char*>(flat_search_graph._csr_nbrs.data()),
+                static_cast<std::streamsize>(flat_search_graph._csr_nbrs.size() * sizeof(vertex_id_t))
             );
         }
 
         if (!ifs.good()) {
-            throw std::runtime_error("Failed to read search graph data from file: " + file_path);
+            throw std::runtime_error("Failed to read flat search graph data from file: " + file_path);
         }
 
-        return search_graph;
+        return flat_search_graph;
     }
 
 
@@ -271,7 +271,7 @@ private:
     /** @brief Const reference to vector data for this graph. */
     const vector_array_t& _vecs_data;
 
-};  // class SearchGraph
+};  // class FlatSearchGraph
 
 }   // namespace cpu
 }   // namespace artea

@@ -107,30 +107,6 @@ public:
         return _vecs_data;
     }
 
-    // --- Inter-layer edge accessors ---
-
-    /**
-     * @brief Get inter-layer edges.
-     * @return Reference to inter-layer edges container.
-     */
-    __attribute__((always_inline))
-    auto get_inter_layer_edges() -> std::vector<vertex_id_t>& {
-        return _inter_layer_edges;
-    }
-
-    __attribute__((always_inline))
-    auto get_inter_layer_edges() const -> const std::vector<vertex_id_t>& {
-        return _inter_layer_edges;
-    }
-
-    /**
-     * @brief Initialize inter-layer edges with the given size.
-     * @param size The number of inter-layer edges to allocate.
-     */
-    auto init_inter_layer_edges(const vertex_num_t size) -> void {
-        _inter_layer_edges.resize(size);
-    }
-
 protected:
     /** @brief Number of vertices in the graph. */
     vertex_num_t _num_vertices;
@@ -146,9 +122,6 @@ protected:
 
     /** @brief Const reference to vector data for this layer. */
     const vector_array_t& _vecs_data;
-
-    /** @brief Inter-layer edges: maps vertex in current layer to vertex in next layer. */
-    std::vector<vertex_id_t> _inter_layer_edges;
 
 };  // class FlatGraph
 

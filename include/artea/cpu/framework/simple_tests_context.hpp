@@ -96,7 +96,7 @@ using log_table_t = typename buffer_traits_t::log_table_t;
 
 // Index types from IndexTraits
 using flat_graph_t = typename index_traits_t::flat_graph_t;
-using search_graph_t = typename index_traits_t::search_graph_t;
+using flat_search_graph_t = typename index_traits_t::flat_search_graph_t;
 
 // Edge generator types from EdgeGeneratorTraits
 using triangle_updater_t = typename edge_generator_traits_t::triangle_updater_t;

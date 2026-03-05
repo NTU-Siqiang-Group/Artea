@@ -25,7 +25,7 @@ namespace cpu {
 
 /** ------ Forward Declaration  ------ **/
 template <typename IndexTraitsT> class FlatGraph;
-template <typename IndexTraitsT> class SearchGraph;
+template <typename IndexTraitsT> class FlatSearchGraph;
 
 template <typename BaseTraitsT>
 struct IndexTraits : virtual public BaseTraitsT {
@@ -39,8 +39,8 @@ struct IndexTraits : virtual public BaseTraitsT {
     /** @brief Flat graph type. */
     using flat_graph_t = FlatGraph<index_traits_t>;
 
-    /** @brief Search graph type (CSR format). */
-    using search_graph_t = SearchGraph<index_traits_t>;
+    /** @brief Flat search graph type (CSR format). */
+    using flat_search_graph_t = FlatSearchGraph<index_traits_t>;
 
 };  // struct IndexTraits
 

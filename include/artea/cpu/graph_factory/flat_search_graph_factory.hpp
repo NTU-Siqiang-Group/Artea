@@ -23,25 +23,25 @@ namespace artea {
 namespace cpu {
 
 template <typename IndexTraitsT>
-class SearchGraphFactory {
+class FlatSearchGraphFactory {
 
     using vertex_num_t = typename IndexTraitsT::vertex_num_t;
     using vertex_id_t = typename IndexTraitsT::vertex_id_t;
     using vector_array_t = typename IndexTraitsT::vector_array_t;
     using flat_graph_t = typename IndexTraitsT::flat_graph_t;
-    using search_graph_t = typename IndexTraitsT::search_graph_t;
+    using flat_search_graph_t = typename IndexTraitsT::flat_search_graph_t;
 
 public:
     /**
-     * @brief Factory method to convert a FlatGraph to SearchGraph in parallel.
+     * @brief Factory method to convert a FlatGraph to FlatSearchGraph in parallel.
      * @param flat_graph The source flat graph to convert from.
-     * @param extracted_nbr_size Fixed number of neighbors per vertex in the search graph.
-     * @return A new SearchGraph instance.
+     * @param extracted_nbr_size Fixed number of neighbors per vertex in the flat search graph.
+     * @return A new FlatSearchGraph instance.
      */
     static auto from_flat_graph(
         const flat_graph_t& flat_graph,
         const vertex_num_t extracted_nbr_size
-    ) -> search_graph_t {
+    ) -> flat_search_graph_t {
         const vertex_num_t max_nbr_size = flat_graph.get_max_nbr_size();
 
         // Validate extracted_nbr_size does not exceed max_nbr_size
@@ -56,11 +56,11 @@ public:
         const auto& vecs_data = flat_graph.get_vecs_data();
         const auto& nbrs_arr = flat_graph.get_nbrs_arr();
 
-        // Create the search graph
-        search_graph_t search_graph(num_vertices, extracted_nbr_size, vecs_data);
+        // Create the flat search graph
+        flat_search_graph_t flat_search_graph(num_vertices, extracted_nbr_size, vecs_data);
 
-        // Copy neighbors from FlatGraph to SearchGraph in parallel
-        auto& csr_nbrs = search_graph.get_csr_nbrs();
+        // Copy neighbors from FlatGraph to FlatSearchGraph in parallel
+        auto& csr_nbrs = flat_search_graph.get_csr_nbrs();
         const vertex_id_t invalid_id = IndexTraitsT::invalid_vertex_id;
 
         tbb::parallel_for(
@@ -88,10 +88,10 @@ public:
             }
         );
 
-        return search_graph;
+        return flat_search_graph;
     }
 
-};  // class SearchGraphFactory
+};  // class FlatSearchGraphFactory
 
 }   // namespace cpu
 }   // namespace artea
