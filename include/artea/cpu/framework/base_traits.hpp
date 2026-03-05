@@ -93,6 +93,12 @@ public:
     /** @brief partition identifiers. */
     using part_id_t = VertexNumT;
 
+    /** @brief number of layers. */
+    using layer_num_t = uint32_t;
+
+    /** @brief layer identifiers. */
+    using layer_id_t = uint32_t;
+
     /** @brief batch identifiers. */
     using batch_id_t = uint32_t;
 

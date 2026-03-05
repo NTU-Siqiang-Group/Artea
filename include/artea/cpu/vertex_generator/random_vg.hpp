@@ -62,45 +62,6 @@ public:
     }
 
     /**
-     * @brief Generate random vertex subset (IDs and vector data)
-     * @return Vertex subset with random IDs and vectors
-     */
-    auto gen_subset(
-        const vector_array_t& base_vecs,
-        const vertex_num_t result_size
-    ) -> vertex_subset_t {
-        const vec_dim_t vec_dim = base_vecs.get_vec_dim();
-        const vec_num_t total_base_vecs = base_vecs.get_num_vecs();
-
-        // Initialize result vertex subset
-        vertex_subset_t vertex_subset(vec_dim);
-
-        if (total_base_vecs == 0 || result_size == 0) {
-            return vertex_subset;
-        }
-
-        // Determine actual result size (cannot exceed total base vecs)
-        const vertex_num_t actual_result_size = std::min(result_size, static_cast<vertex_num_t>(total_base_vecs));
-
-        // Reserve space
-        vertex_subset.reserve(actual_result_size);
-
-        // Generate random indices using RandomSeq
-        random_seq_t random_seq(total_base_vecs);
-        std::vector<vec_id_t> random_ids(actual_result_size);
-        random_seq.generate(random_ids, actual_result_size);
-
-        // Fill the vertex subset with random IDs and corresponding vectors
-        for (vec_num_t i = 0; i < actual_result_size; ++i) {
-            const vec_id_t vec_id = random_ids[i];
-            vertex_subset.vec_ids.push_back(vec_id);
-            vertex_subset.vectors.append_vec(base_vecs.get(vec_id));
-        }
-
-        return vertex_subset;
-    }
-
-    /**
      * @brief Default generate method (returns ID array only)
      */
     auto generate(

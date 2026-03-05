@@ -98,23 +98,18 @@ public:
             vertex_id_t rand_nbr_id = rand_ids_buffer[i];
 
             // Skip if the random ID is the pivot itself
-            if (rand_nbr_id == pivot_vid) {
-                continue;
-            }
+            if (rand_nbr_id == pivot_vid) { continue; }
 
             // Get the random neighbor vector and compute distance
             const vec_ele_t* rand_nbr_vec = this->_vecs_arr.get(rand_nbr_id);
             distance_t rand_nbr_dist = this->_dist_func(pivot_vec, rand_nbr_vec);
 
-            // [✔️] // Write the random edge to the log table
+            // Write the random edge to the log table
             this->_log_table.write_log(
                 /* executor_vid = */pivot_vid,
                 /* nbr_id = */rand_nbr_id,
                 /* new_edge_dist = */rand_nbr_dist
             );
-
-            // [❌] // Directly write to origin_nbrs
-            // origin_nbrs.emplace_back(rand_nbr_id, rand_nbr_dist, /* is_new = */true);
         }
     }
 

@@ -149,125 +149,6 @@ public:
                 }
             }
 
-            if (qualifying_candidates.size() < term_thresh) { break; }
-        }
-
-        return result_ids;
-    }
-
-    /**
-     * @brief Generate vertex subset (IDs and vector data)
-     * @return Vertex subset with IDs and vectors
-     */
-    auto gen_subset(
-        const vector_array_t& base_vecs,
-        const distance_t min_radius,
-        const vertex_num_t max_result_size,
-        const vertex_num_t batch_size = 512,
-        const vertex_num_t term_thresh = 17
-    ) -> approx_rnet_t {
-        const vec_dim_t vec_dim = base_vecs.get_vec_dim();
-        const vec_num_t total_base_vecs = base_vecs.get_num_vecs();
-
-        // Initialize result approximate r-net
-        approx_rnet_t approx_rnet(vec_dim);
-        approx_rnet.reserve(max_result_size);
-
-        if (total_base_vecs == 0) { return approx_rnet; }
-
-        // Start with the first vector as the initial point
-        approx_rnet.vec_ids.push_back(0);
-        approx_rnet.vectors.append_vec(base_vecs.get(0));
-
-        vec_num_t batch_start = 0;
-
-        // Main loop: iteratively add all qualifying points from each batch
-        while (approx_rnet.get_num_vecs() < max_result_size) {
-            batch_start += batch_size;
-            if (batch_start >= total_base_vecs) { break; }
-
-            const vec_num_t batch_end = std::min(batch_start + batch_size, total_base_vecs);
-            const vec_num_t current_batch_size = batch_end - batch_start;
-
-            // Thread-local storage for qualifying candidates
-            tbb::enumerable_thread_specific<std::vector<CandidateInfo>> thread_local_candidates;
-
-            // Parallel computation: for each candidate, check distance to existing approx_rnet
-            tbb::parallel_for(
-                tbb::blocked_range<vec_num_t>(0, current_batch_size),
-                [&](const tbb::blocked_range<vec_num_t>& r) {
-                    auto& local_candidates = thread_local_candidates.local();
-
-                    for (vec_num_t local_idx = r.begin(); local_idx != r.end(); ++local_idx) {
-                        const vec_num_t candidate_idx = batch_start + local_idx;
-                        const vec_ele_t* candidate_vec = base_vecs.get(candidate_idx);
-
-                        distance_t min_distance = std::numeric_limits<distance_t>::max();
-                        bool is_qualifying = true;
-
-                        // Check distance to all existing points in approx_rnet
-                        // Early termination if any distance < min_radius
-                        for (vec_num_t ret_idx = 0; ret_idx < approx_rnet.get_num_vecs(); ++ret_idx) {
-                            distance_t dist = _dist_func(candidate_vec, approx_rnet.vectors.get(ret_idx));
-                            if (dist < min_radius) {
-                                // Early termination: this point cannot be added
-                                is_qualifying = false;
-                                break;
-                            }
-                            min_distance = std::min(min_distance, dist);
-                        }
-
-                        if (is_qualifying) {
-                            local_candidates.push_back({candidate_idx, min_distance});
-                        }
-                    }
-                }
-            );
-
-            // Collect all qualifying candidates from thread-local storage
-            std::vector<CandidateInfo> qualifying_candidates;
-            for (const auto& local_candidates : thread_local_candidates) {
-                qualifying_candidates.insert(
-                    qualifying_candidates.end(),
-                    local_candidates.begin(),
-                    local_candidates.end()
-                );
-            }
-
-            // Sort candidates by min_dist_to_rnet in descending order
-            // Prioritize candidates that are farther from existing approx_rnet
-            std::sort(qualifying_candidates.begin(), qualifying_candidates.end(),
-                [](const CandidateInfo& a, const CandidateInfo& b) {
-                    return a.min_dist_to_rnet > b.min_dist_to_rnet;
-                }
-            );
-
-            // Track points added in this batch for intra-batch conflict checking
-            std::vector<const vec_ele_t*> batch_added_vecs;
-            batch_added_vecs.reserve(qualifying_candidates.size());
-
-            // Serially add qualifying candidates, checking against points added within this batch
-            for (const auto& candidate : qualifying_candidates) {
-                if (approx_rnet.get_num_vecs() >= max_result_size) { break; }
-
-                const vec_ele_t* candidate_vec = base_vecs.get(candidate.vec_id);
-
-                // Check distance against all points added in this batch
-                bool conflicts_with_batch = false;
-                for (const vec_ele_t* batch_vec : batch_added_vecs) {
-                    if (_dist_func(candidate_vec, batch_vec) < min_radius) {
-                        conflicts_with_batch = true;
-                        break;
-                    }
-                }
-
-                if (!conflicts_with_batch) {
-                    approx_rnet.vec_ids.push_back(candidate.vec_id);
-                    approx_rnet.vectors.append_vec(candidate_vec);
-                    batch_added_vecs.push_back(candidate_vec);
-                }
-            }
-
             /**
              * @brief Termination condition based on statistical coverage analysis.
              *
@@ -292,7 +173,7 @@ public:
             if (qualifying_candidates.size() < term_thresh) { break; }
         }
 
-        return approx_rnet;
+        return result_ids;
     }
 
     /**

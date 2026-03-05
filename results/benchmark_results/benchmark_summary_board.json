@@ -1,28 +1,28 @@
 {
   "board_name": "Benchmark Summary Board",
-  "generated_at_unix_ms": 1772630111909,
+  "generated_at_unix_ms": 1772689066388,
   "group_by_key": "",
   "row_count": 2,
   "rows": [
     {
-      "avg_cpu_time": 155.33162600666665,
-      "avg_items_per_second": 63774.0,
-      "avg_real_time": 157.0287811383605,
+      "avg_cpu_time": 150.4237041700001,
+      "avg_items_per_second": 64433.4,
+      "avg_real_time": 155.4681323096156,
       "avg_time_per_item": 0.0,
-      "extra_info": "topk=10, queue_size=200, max_nbr_size=64, extracted_nbr_size=20",
-      "instance_name": "conv_graph/sift-1m/64_20_1.00_0.00_4_14/10_200",
-      "median_real_time": 153.60980946570635,
+      "extra_info": "topk=20, queue_size=200, max_nbr_size=64, extracted_nbr_size=20",
+      "instance_name": "conv_graph/sift-1m/64_20_1.00_0.00_4_14/20_200",
+      "median_real_time": 150.75293742120266,
       "repetitions": 5,
       "time_unit": "ms"
     },
     {
-      "avg_cpu_time": 198.4290054166666,
-      "avg_items_per_second": 50848.200000000004,
-      "avg_real_time": 198.523252705733,
+      "avg_cpu_time": 189.87541128333328,
+      "avg_items_per_second": 52382.4,
+      "avg_real_time": 193.71682237833738,
       "avg_time_per_item": 0.0,
-      "extra_info": "topk=10, queue_size=200, max_nbr_size=32, extracted_nbr_size=20",
-      "instance_name": "conv_graph/sift-1m/32_20_1.00_0.00_4_14/10_200",
-      "median_real_time": 200.63311358292898,
+      "extra_info": "topk=20, queue_size=200, max_nbr_size=32, extracted_nbr_size=20",
+      "instance_name": "conv_graph/sift-1m/32_20_1.00_0.00_4_14/20_200",
+      "median_real_time": 174.86991547048092,
       "repetitions": 5,
       "time_unit": "ms"
     }

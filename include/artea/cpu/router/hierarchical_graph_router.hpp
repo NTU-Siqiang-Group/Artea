@@ -37,6 +37,20 @@ class HierarchicalGraphRouter :
         HierarchicalGraphRouterImpl<RouterTraitsT, CandidateQueueImpl, VisitedTableImpl>>
 {
 
+    using candidate_queue_t = CandidateQueueImpl;
+    using visited_table_t = VisitedTableImpl;
+    using visited_table_pool_t = typename RouterTraitsT::template visited_table_pool_t<VisitedTableImpl>;
+    using vertex_num_t = typename RouterTraitsT::vertex_num_t;
+    using vertex_id_t = typename RouterTraitsT::vertex_id_t;
+    using vec_ele_t = typename RouterTraitsT::vec_ele_t;
+    using distance_t = typename RouterTraitsT::distance_t;
+    using dist_func_t = typename RouterTraitsT::dist_func_t;
+    using vector_array_t = typename RouterTraitsT::vector_array_t;
+    using idlist_array_t = typename RouterTraitsT::idlist_array_t;
+    using flat_search_graph_t = typename RouterTraitsT::flat_search_graph_t;
+    using hierarchical_search_graph_t = typename RouterTraitsT::hierarchical_search_graph_t;
+
+
 };  // class HierarchicalGraphRouter
 
 }   // namespace cpu
