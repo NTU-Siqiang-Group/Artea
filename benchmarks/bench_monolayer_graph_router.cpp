@@ -188,7 +188,7 @@ int main(int argc, char** argv) {
     // Register benchmarks for each parameter set
     for (const auto& params : g_config.param_sets) {
         // Load the index for this parameter set
-        IndexProvider::instance().load_index(params.index_path, params.dataset_name);
+        IndexProvider::instance().load_index(params.index_path, params.dataset_name, params.extracted_nbr_size);
 
         // Format: algorithm/dataset/mns_ens_sc_sh_noi_nii/topk_queue
         std::string bench_name = fmt::format(

@@ -103,16 +103,15 @@ public:
         return inst;
     }
 
-    void load_index(const std::string& index_path, const std::string& dataset_name) {
+    void load_index(const std::string& index_path, const std::string& dataset_name, const vertex_num_t extracted_nbr_size) {
         const auto& dataset = DataProvider::get_dataset(dataset_name);
 
         logger.info(fmt::format("Loading flat search graph from {}...", index_path));
         _search_graph = std::make_unique<flat_search_graph_t>(
-            flat_search_graph_t::restore(index_path, dataset.get_base_vecs())
+            flat_search_graph_factory_t::from_index_file(index_path, extracted_nbr_size, dataset.get_base_vecs())
         );
 
         vertex_num_t num_vertices = _search_graph->get_num_vertices();
-        vertex_num_t extracted_nbr_size = _search_graph->get_extracted_nbr_size();
 
         logger.info(fmt::format("Flat search graph loaded:"));
         logger.info(fmt::format("  Vertices: {}", num_vertices));

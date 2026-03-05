@@ -159,12 +159,7 @@ int main(int argc, char** argv) {
 
     logger.info(fmt::format("Graph construction completed in {:.2f} seconds", duration.count() / 1000.0));
 
-    // Convert to flat search graph
-    logger.info("Converting to flat search graph...");
-    flat_search_graph_factory_t flat_search_graph_factory;
-    flat_search_graph_t flat_search_graph = flat_search_graph_factory.from_flat_graph(flat_graph, extracted_nbr_size);
-
-    // Save graph
+    // Save flat graph
     std::string subdir = "conv_graph." + dataset_name;
 
     // Format coefficients with 2 decimal places
@@ -179,12 +174,12 @@ int main(int argc, char** argv) {
                           "_noi" + std::to_string(params.num_outer_iters) +
                           "_nii" + std::to_string(params.num_inner_iters) + ".index";
     std::filesystem::path output_path = std::filesystem::path(output_dir) / subdir / filename;
-    logger.info(fmt::format("Saving graph to {}...", output_path.string()));
+    logger.info(fmt::format("Saving flat graph to {}...", output_path.string()));
 
     // Create output directory if it doesn't exist
     std::filesystem::create_directories(output_path.parent_path());
 
-    flat_search_graph.snapshot(output_path.string());
+    flat_graph.snapshot(output_path.string());
 
     logger.info("Graph saved successfully");
 

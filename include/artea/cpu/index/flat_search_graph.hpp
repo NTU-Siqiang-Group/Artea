@@ -10,15 +10,6 @@
 #include <cstddef>
 #include <vector>
 #include <span>
-#include <string>
-#include <fstream>
-#include <limits>
-#include <cstdint>
-#include <type_traits>
-#include <stdexcept>
-#include <algorithm>
-#include <tbb/parallel_for.h>
-#include <tbb/blocked_range.h>
 
 namespace artea {
 namespace cpu {
@@ -138,127 +129,7 @@ public:
         return _vecs_data;
     }
 
-    /**
-     * @brief Snapshot flat search graph to a binary file.
-     * @param file_path Target file path.
-     */
-    auto snapshot(const std::string& file_path) const -> void {
-        static_assert(
-            std::is_trivially_copyable_v<vertex_id_t>,
-            "vertex_id_t must be trivially copyable for binary snapshot."
-        );
-
-        std::ofstream ofs(file_path, std::ios::binary | std::ios::trunc);
-        if (!ofs.is_open()) {
-            throw std::runtime_error("Failed to open file for snapshotting flat search graph: " + file_path);
-        }
-
-        const uint32_t magic = k_file_magic;
-        const uint32_t version = k_file_version;
-        const vertex_num_t num_vertices = _num_vertices;
-        const vertex_num_t extracted_nbr_size = _extracted_nbr_size;
-        const size_t csr_size = _csr_nbrs.size();
-
-        ofs.write(reinterpret_cast<const char*>(&magic), sizeof(magic));
-        ofs.write(reinterpret_cast<const char*>(&version), sizeof(version));
-        ofs.write(reinterpret_cast<const char*>(&num_vertices), sizeof(num_vertices));
-        ofs.write(reinterpret_cast<const char*>(&extracted_nbr_size), sizeof(extracted_nbr_size));
-        ofs.write(reinterpret_cast<const char*>(&csr_size), sizeof(csr_size));
-
-        if (!_csr_nbrs.empty()) {
-            ofs.write(
-                reinterpret_cast<const char*>(_csr_nbrs.data()),
-                static_cast<std::streamsize>(_csr_nbrs.size() * sizeof(vertex_id_t))
-            );
-        }
-
-        if (!ofs.good()) {
-            throw std::runtime_error("Failed while writing flat search graph to file: " + file_path);
-        }
-    }
-
-    /**
-     * @brief Restore flat search graph from a snapshot binary file.
-     * @param file_path Source file path.
-     * @param vecs_data Reference to the vector data that this graph should bind to.
-     * @return Loaded FlatSearchGraph instance.
-     */
-    static auto restore(
-        const std::string& file_path,
-        const vector_array_t& vecs_data
-    ) -> FlatSearchGraph<IndexTraitsT> {
-        static_assert(
-            std::is_trivially_copyable_v<vertex_id_t>,
-            "vertex_id_t must be trivially copyable for binary loading."
-        );
-
-        std::ifstream ifs(file_path, std::ios::binary);
-        if (!ifs.is_open()) {
-            throw std::runtime_error("Failed to open file for loading flat search graph: " + file_path);
-        }
-
-        uint32_t magic = 0;
-        uint32_t version = 0;
-        vertex_num_t num_vertices = 0;
-        vertex_num_t extracted_nbr_size = 0;
-        size_t csr_size = 0;
-
-        ifs.read(reinterpret_cast<char*>(&magic), sizeof(magic));
-        ifs.read(reinterpret_cast<char*>(&version), sizeof(version));
-        ifs.read(reinterpret_cast<char*>(&num_vertices), sizeof(num_vertices));
-        ifs.read(reinterpret_cast<char*>(&extracted_nbr_size), sizeof(extracted_nbr_size));
-        ifs.read(reinterpret_cast<char*>(&csr_size), sizeof(csr_size));
-
-        if (!ifs.good()) {
-            throw std::runtime_error("Failed to read flat search graph header from file: " + file_path);
-        }
-
-        if (magic != k_file_magic) {
-            throw std::runtime_error("Invalid flat search graph file magic: " + file_path);
-        }
-
-        if (version != k_file_version) {
-            throw std::runtime_error("Unsupported flat search graph file version: " + file_path);
-        }
-
-        if (
-            extracted_nbr_size != 0
-            && static_cast<size_t>(num_vertices)
-                   > std::numeric_limits<size_t>::max() / static_cast<size_t>(extracted_nbr_size)
-        ) {
-            throw std::runtime_error("CSR size multiplication overflows size_t: " + file_path);
-        }
-
-        const size_t expected_csr_size =
-            static_cast<size_t>(num_vertices) * static_cast<size_t>(extracted_nbr_size);
-        if (csr_size != expected_csr_size) {
-            throw std::runtime_error("Inconsistent CSR size in file: " + file_path);
-        }
-
-        FlatSearchGraph<IndexTraitsT> flat_search_graph(num_vertices, extracted_nbr_size, vecs_data);
-        if (flat_search_graph._csr_nbrs.size() != csr_size) {
-            throw std::runtime_error("Internal CSR size mismatch while loading: " + file_path);
-        }
-
-        if (!flat_search_graph._csr_nbrs.empty()) {
-            ifs.read(
-                reinterpret_cast<char*>(flat_search_graph._csr_nbrs.data()),
-                static_cast<std::streamsize>(flat_search_graph._csr_nbrs.size() * sizeof(vertex_id_t))
-            );
-        }
-
-        if (!ifs.good()) {
-            throw std::runtime_error("Failed to read flat search graph data from file: " + file_path);
-        }
-
-        return flat_search_graph;
-    }
-
-
 private:
-    static constexpr uint32_t k_file_magic = 0x41524753;   // "SGRA"
-    static constexpr uint32_t k_file_version = 1;
-
     /** @brief Number of vertices in the graph. */
     vertex_num_t _num_vertices;
 

@@ -15,6 +15,7 @@
 #pragma once
 
 #include <algorithm>
+#include <string>
 #include <tbb/parallel_for.h>
 #include <tbb/blocked_range.h>
 #include <artea/common/logger.hpp>
@@ -89,6 +90,25 @@ public:
         );
 
         return flat_search_graph;
+    }
+
+    /**
+     * @brief Factory method to load FlatGraph from file and convert to FlatSearchGraph.
+     * @param file_path Path to the flat graph index file.
+     * @param extracted_nbr_size Fixed number of neighbors per vertex in the flat search graph.
+     * @param vecs_data Reference to the vector data.
+     * @return A new FlatSearchGraph instance.
+     */
+    static auto from_index_file(
+        const std::string& file_path,
+        const vertex_num_t extracted_nbr_size,
+        const vector_array_t& vecs_data
+    ) -> flat_search_graph_t {
+        // Load FlatGraph from file
+        flat_graph_t flat_graph = flat_graph_t::restore(file_path, vecs_data);
+
+        // Convert to FlatSearchGraph
+        return from_flat_graph(flat_graph, extracted_nbr_size);
     }
 
 };  // class FlatSearchGraphFactory
