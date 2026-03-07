@@ -105,7 +105,7 @@ int main(int argc, char** argv) {
     logger.info(fmt::format("  Radius: {:.6f}", result.radius));
     logger.info(fmt::format("  Vectors sampled: {}", result.num_vecs_sampled));
     logger.info(fmt::format("  Distances computed: {}", result.num_distances_computed));
-    logger.info(fmt::format("  Time elapsed: {:.2f} seconds", duration.count() / 1000.0));
+    logger.info(fmt::format("  Time elapsed: {:.3f} seconds", duration.count() / 1000.0));
 
     return 0;
 }

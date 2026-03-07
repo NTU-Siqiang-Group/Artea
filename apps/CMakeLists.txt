@@ -16,6 +16,9 @@ cmake_minimum_required(VERSION 3.16)
 
 project(ArteaExamples CXX)
 
+# Create bin directory in project root
+file(MAKE_DIRECTORY ${CMAKE_SOURCE_DIR}/bin)
+
 file(GLOB EXAMPLE_SOURCES "*.cpp")
 
 foreach(sourcefile ${EXAMPLE_SOURCES})
@@ -38,4 +41,12 @@ foreach(sourcefile ${EXAMPLE_SOURCES})
         target_compile_options(${example_target} PRIVATE -O3)
         target_link_options(${example_target} PRIVATE -O3)
     endif()
+
+    # Create symlink in project root bin/ directory
+    add_custom_command(TARGET ${example_target} POST_BUILD
+        COMMAND ${CMAKE_COMMAND} -E create_symlink
+        ${CMAKE_BINARY_DIR}/apps/${example_target}
+        ${CMAKE_SOURCE_DIR}/bin/${example_target}
+        COMMENT "Creating symlink for ${example_target} in project root bin/"
+    )
 endforeach()
