@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-./build/examples/build_conv_graph \
+./build/apps/build_conv_graph \
     --max-nbr-size 32 \
     --reserved-nbr-size 64 \
     --extracted-nbr-size 20 \
@@ -21,7 +21,7 @@
 
 echo "--------------------------------------------------------------------"
 
-./build/examples/build_conv_graph \
+./build/apps/build_conv_graph \
     --max-nbr-size 64 \
     --reserved-nbr-size 96 \
     --extracted-nbr-size 20 \

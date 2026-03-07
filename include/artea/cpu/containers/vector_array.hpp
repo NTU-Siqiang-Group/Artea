@@ -1,7 +1,7 @@
 /*
  * @FilePath: /Artea/include/artea/cpu/containers/vector_array.hpp
  * @Author: Chandler (Weitang Ye) <weitang.ye@ntu.edu.sg>
- * @LastEditTime: 2026-01-26 16:14:08
+ * @LastEditTime: 2026-03-05 16:07:08
  * @Date: 2025-10-18 16:31:57
  * @Description:
  */
@@ -15,6 +15,8 @@
 #include <stdexcept>
 #include <omp.h>
 #include <utility> // For std::move
+#include <tbb/parallel_for.h>
+#include <tbb/blocked_range.h>
 #include <artea/cpu/containers/allocator.hpp>
 #include <artea/common/logger.hpp>
 
@@ -277,58 +279,52 @@ public:
     }
 
     /**
-     * @brief Creates a new VectorArray containing a subset of the current vectors.
-     * @param start The starting index of the subset.
-     * @param count The number of vectors to include in the subset.
-     * @return A new VectorArray object containing the copied subset data.
-     * @throw std::out_of_range If the requested range exceeds the current array bounds.
+     * @brief Creates and returns a subset of vectors.
+     * @param start The starting index of the subset to copy.
+     * @param count The number of vectors to copy.
+     * @return A new VectorArray containing the subset of vectors.
      */
     auto get_subset(vec_num_t start, vec_num_t count) const -> VectorArray {
         if (static_cast<std::size_t>(start) + count > _num_vecs) {
-            throw std::out_of_range(fmt::format(
+            logger.error(fmt::format(
                 "VectorArray::get_subset: Range out of bounds. Start: {}, Count: {}, Total: {}",
                 start, count, _num_vecs));
         }
-        // Create a new instance with the target size and same dimension
         VectorArray subset(count, _vec_dim);
         if (count > 0) {
             const vec_ele_t* src_ptr = this->get(start);
             vec_ele_t* dst_ptr = subset.get_all();
             std::size_t total_elements = static_cast<std::size_t>(count) * _vec_dim;
-            // Standard copy from source to the new storage
             std::copy(src_ptr, src_ptr + total_elements, dst_ptr);
         }
         return subset;
     }
 
-    auto get_subset(vec_num_t start, vec_num_t count, VectorArray subset) const -> void {
-        if (static_cast<std::size_t>(start) + count > _num_vecs) {
-            throw std::out_of_range(fmt::format(
-                "VectorArray::get_subset: Range out of bounds. Start: {}, Count: {}, Total: {}",
-                start, count, _num_vecs));
-        }
-        if (count > 0) {
-            const vec_ele_t* src_ptr = this->get(start);
-            vec_ele_t* dst_ptr = subset.get_all();
-            if (subset.get_num_vecs() != count) {
-                subset.resize(count);
-            }
-            std::size_t total_elements = static_cast<std::size_t>(count) * _vec_dim;
-            // Standard copy from source to the new storage
-            std::copy(src_ptr, src_ptr + total_elements, dst_ptr);
-        }
+    auto get_subset(std::vector<vec_id_t> vec_ids) const -> VectorArray {
+        vec_num_t count = static_cast<vec_num_t>(vec_ids.size());
+        VectorArray subset(count, _vec_dim);
+
+        tbb::parallel_for(tbb::blocked_range<vec_num_t>(0, count),
+            [&](const tbb::blocked_range<vec_num_t>& range) {
+                for (vec_num_t i = range.begin(); i != range.end(); ++i) {
+                    const vec_ele_t* src_ptr = this->get(vec_ids[i]);
+                    vec_ele_t* dst_ptr = subset.get(i);
+                    std::copy(src_ptr, src_ptr + _vec_dim, dst_ptr);
+                }
+            });
+
+        return subset;
     }
 
     /**
      * @brief Loads vector data from a file, replacing existing data.
      * @param fvecs_file_path The path to the .fvecs or .ivecs file.
-     * @throw std::runtime_error If the file is invalid, corrupted, or dimensions are inconsistent.
      */
     auto from_vecs_file(const std::string& fvecs_file_path) -> void {
 
         std::ifstream temp_file(fvecs_file_path, std::ios::binary);
         if (!temp_file.is_open()) {
-            throw std::runtime_error("Error: Could not open file " + fvecs_file_path);
+            logger.error("Error: Could not open file " + fvecs_file_path);
         }
 
         // --- Determine dimension from the first vector ---
@@ -343,7 +339,7 @@ public:
         }
 
         if (first_dim <= 0) {
-            throw std::runtime_error("Error: Vector dimension read from file must be positive.");
+            logger.error("Error: Vector dimension read from file must be positive.");
         }
 
         // --- Determine the number of vectors from file size ---
@@ -353,11 +349,11 @@ public:
 
         const std::streamoff record_size = sizeof(int) + static_cast<std::streamoff>(first_dim) * sizeof(vec_ele_t);
         if (record_size <= 0) { // Should not happen with positive dimension
-            throw std::runtime_error("Error: Calculated record size is invalid.");
+            logger.error("Error: Calculated record size is invalid.");
         }
 
         if (file_size % record_size != 0) {
-            throw std::runtime_error("Error: File size indicates a malformed or incomplete file.");
+            logger.error("Error: File size indicates a malformed or incomplete file.");
         }
 
         vec_num_t num_vecs_in_file = static_cast<vec_num_t>(file_size / record_size);
@@ -431,11 +427,11 @@ public:
         } // End of parallel region.
 
         if (error_flag) {
-            // If an error occurred, reset the object to a clean state before throwing.
+            // If an error occurred, reset the object to a clean state.
             _storage.clear();
             _num_vecs = 0;
             _vec_dim = 0;
-            throw std::runtime_error(error_message);
+            logger.error(error_message);
         }
     }
 

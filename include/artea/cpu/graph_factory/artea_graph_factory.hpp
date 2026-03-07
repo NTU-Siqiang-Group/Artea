@@ -12,3 +12,41 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+template <typename GraphFactoryTraitsT>
+class ArteaGraphFactory :
+    public GraphFactoryTraitsT::template hierarchical_graph_factory_t<ArteaGraphFactory<GraphFactoryTraitsT>>,
+{
+    using vertex_num_t = typename GraphFactoryTraitsT::vertex_num_t;
+    using vertex_id_t = typename GraphFactoryTraitsT::vertex_id_t;
+    using vec_ele_t = typename GraphFactoryTraitsT::vec_ele_t;
+    using iter_t = typename GraphFactoryTraitsT::iter_t;
+    using ratio_t = typename GraphFactoryTraitsT::ratio_t;
+    using dist_func_t = typename GraphFactoryTraitsT::dist_func_t;
+    using flat_graph_t = typename GraphFactoryTraitsT::flat_graph_t;
+    using conv_graph_t = typename GraphFactoryTraitsT::conv_graph_t;
+    using conv_graph_factory_t = typename GraphFactoryTraitsT::conv_graph_factory_t;
+    using hierarchical_graph_t = typename GraphFactoryTraitsT::hierarchical_graph_t;
+    using vector_dataset_t = typename GraphFactoryTraitsT::vector_dataset_t;
+
+    // vertex generators type
+    using mb_greedy_vg_t = typename GraphFactoryTraitsT::mb_greedy_vg_t;
+    using lb_greedy_vg_t = typename GraphFactoryTraitsT::lb_greedy_vg_t;
+    using random_vg_t = typename RandomVG<vertex_generator_traits_t>;
+
+    /** @brief construct a new artea graph */
+    auto construct_graph_impl(
+        const vector_dataset_t& dataset,
+        const vertex_num_t bl_max_nbr_size,
+        const vertex_num_t ul_max_nbr_size,
+        const vertex_num_t bl_reserved_nbr_size,
+        const vertex_num_t ul_reserved_nbr_size,
+        const distance_t min_radius,
+        const ratio_t beta_factor,
+        const ratio_t scale_coeffs,
+        const ratio_t shifted_coeffs,
+        const iter_t num_outer_iters,   // recommend param: 4
+        const iter_t num_inner_iters    // recommend param: 14
+    ) -> hierarchical_graph_t {
+        // 1. 先调用
+    }
+};

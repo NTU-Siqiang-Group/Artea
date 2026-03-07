@@ -191,8 +191,14 @@ int main(int argc, char** argv) {
     index_params["dataset"] = dataset_name;
     index_params["max_nbr_size"] = params.max_nbr_size;
     index_params["extracted_nbr_size"] = extracted_nbr_size;
-    index_params["scale_coeffs"] = params.scale_coeffs;
-    index_params["shifted_coeffs"] = params.shifted_coeffs;
+
+    // Format coefficients with 2 decimal places for JSON
+    std::ostringstream scale_stream, shifted_stream;
+    scale_stream << std::fixed << std::setprecision(2) << params.scale_coeffs;
+    shifted_stream << std::fixed << std::setprecision(2) << params.shifted_coeffs;
+    index_params["scale_coeffs"] = std::stod(scale_stream.str());
+    index_params["shifted_coeffs"] = std::stod(shifted_stream.str());
+
     index_params["num_outer_iters"] = params.num_outer_iters;
     index_params["num_inner_iters"] = params.num_inner_iters;
 

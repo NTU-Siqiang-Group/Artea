@@ -153,8 +153,8 @@ TEST_F(RadiusProberTest, ProbeSmallQuantiles) {
 
     vec_num_t num_vecs = std::min(g_config.num_samples, static_cast<int>(base_vecs.get_num_vecs()));
 
-    // Probe very small quantiles (0.01%, 0.05%, 0.1%)
-    std::vector<float> quantiles = {0.0001f, 0.0005f, 0.001f};
+    // Probe very small quantiles (0.01%, 0.05%, 0.15%)
+    std::vector<float> quantiles = {0.0001f, 0.0005f, 0.0015f};
     std::vector<typename radius_prober_t::ProbeResult> results;
 
     logger.info("Small Quantile Results:");

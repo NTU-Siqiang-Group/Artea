@@ -40,6 +40,7 @@ using namespace artea::cpu;
 
 // --- Type Definitions ---
 using vec_num_t = uint32_t;
+using vec_dim_t = uint32_t;
 using vec_ele_t = float;
 // Define Traits
 using base_traits_t = BaseTraits<vec_num_t, vec_ele_t, false>;
@@ -231,6 +232,47 @@ TEST_F(VectorDatasetTest, VerifyGroundTruthVectors) {
     // Ground Truth vectors are typically integer (IDs)
     // Adjust type based on your dataset format (sift-1m GT is ivecs -> int/uint32_t)
     verify_data<uint32_t>(dataset->get_gt_vecs(), "gt_path", "Ground Truth Vectors");
+}
+
+TEST_F(VectorDatasetTest, VerifyGetSubset) {
+    ASSERT_TRUE(dataset != nullptr) << "Dataset failed to initialize.";
+
+    auto& base_vecs = dataset->get_base_vecs();
+    vec_num_t total_vecs = base_vecs.get_num_vecs();
+    vec_dim_t dim = base_vecs.get_vec_dim();
+
+    // Test with random subset of vector IDs
+    std::mt19937 rng(std::random_device{}());
+    std::uniform_int_distribution<vec_num_t> dist(0, total_vecs - 1);
+
+    // Create a list of random vector IDs
+    std::vector<vec_num_t> vec_ids;
+    vec_num_t subset_size = std::min(static_cast<vec_num_t>(1000), total_vecs);
+    for (vec_num_t i = 0; i < subset_size; ++i) {
+        vec_ids.push_back(dist(rng));
+    }
+
+    logger.info(fmt::format("Testing get_subset with {} random vectors...", subset_size));
+
+    // Get subset using the parallel implementation
+    auto subset = base_vecs.get_subset(vec_ids);
+
+    // Verify metadata
+    EXPECT_EQ(subset.get_num_vecs(), subset_size) << "Subset size mismatch";
+    EXPECT_EQ(subset.get_vec_dim(), dim) << "Subset dimension mismatch";
+
+    // Verify data correctness
+    for (vec_num_t i = 0; i < subset_size; ++i) {
+        const float* original_vec = base_vecs.get(vec_ids[i]);
+        const float* subset_vec = subset.get(i);
+
+        for (vec_dim_t d = 0; d < dim; ++d) {
+            ASSERT_FLOAT_EQ(subset_vec[d], original_vec[d])
+                << fmt::format("Mismatch in subset at index {}, dim {}", i, d);
+        }
+    }
+
+    logger.success("get_subset passed verification.");
 }
 
 // --- Main ---

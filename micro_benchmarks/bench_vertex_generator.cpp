@@ -193,29 +193,35 @@ int main(int argc, char** argv) {
 
     // Algorithm parameters
     program.add_argument("-r", "--min-radius")
-        .default_value(100.0f)
-        .help("Minimum radius for approximate r-net construction")
+        .default_value(90000.0f)
+        .help("Minimum radius (squared) for approximate r-net construction. "
+              "Use RadiusProber with quantile=0.05 for 95% coverage target.")
         .scan<'g', float>();
 
     program.add_argument("-m", "--max-result-size")
-        .default_value(10000u)
-        .help("Maximum number of vertices in the result")
+        .default_value(100000u)
+        .help("Maximum number of vertices in the result. "
+              "For 95% coverage, set to at least 5% of dataset size.")
         .scan<'u', uint32_t>();
 
     // Batch-specific parameters
     program.add_argument("--small-batch-size")
         .default_value(64u)
-        .help("Batch size for MBGreedyVG")
+        .help("Batch size for MBGreedyVG (recommended: 64-128 for balanced performance)")
         .scan<'u', uint32_t>();
 
     program.add_argument("--large-batch-size")
         .default_value(512u)
-        .help("Batch size for LBGreedyVG")
+        .help("Batch size for LBGreedyVG (recommended: 512 for 95% coverage)")
         .scan<'u', uint32_t>();
 
     program.add_argument("--term-thresh")
         .default_value(17u)
-        .help("Termination threshold for LBGreedyVG")
+        .help("Termination threshold for LBGreedyVG. "
+              "For 95% coverage with 96% confidence: "
+              "batch_size=512 -> term_thresh=17, "
+              "batch_size=1024 -> term_thresh=39, "
+              "batch_size=2048 -> term_thresh=85")
         .scan<'u', uint32_t>();
 
     // Benchmark control

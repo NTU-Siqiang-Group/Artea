@@ -17,10 +17,26 @@
 namespace artea {
 namespace cpu {
 
+/**
+ * @brief Base class for vertex generators using CRTP (Curiously Recurring Template Pattern).
+ * @tparam VertexGeneratorTraitsT The vertex generator traits type.
+ * @tparam DerivedClassT The derived class type (CRTP).
+ */
 template <typename VertexGeneratorTraitsT, typename DerivedClassT>
 class VertexGenerator {
+
+public:
+    /**
+     * @brief Generate method that delegates to the derived class's generate_impl.
+     * This enables static polymorphism.
+     */
+    template <typename... Args>
+    auto generate(Args&&... args) {
+        return static_cast<DerivedClassT*>(this)->generate_impl(std::forward<Args>(args)...);
+    }
 
 };  // class VertexGenerator
 
 }   // namespace cpu
 }   // namespace artea
+

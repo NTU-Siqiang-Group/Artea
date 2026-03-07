@@ -26,6 +26,9 @@ namespace cpu {
 /** ------ Forward Declaration  ------ **/
 template <typename IndexTraitsT> class FlatGraph;
 template <typename IndexTraitsT> class FlatSearchGraph;
+template <typename IndexTraitsT> class HierarchicalGraph;
+template <typename IndexTraitsT> class HierarchicalSearchGraph;
+template <typename IndexTraitsT> class InterLayerLinks;
 
 template <typename BaseTraitsT>
 struct IndexTraits : virtual public BaseTraitsT {
@@ -41,6 +44,15 @@ struct IndexTraits : virtual public BaseTraitsT {
 
     /** @brief Flat search graph type (CSR format). */
     using flat_search_graph_t = FlatSearchGraph<index_traits_t>;
+
+    /** @brief Hierarchical graph type. */
+    using hierarchical_graph_t = HierarchicalGraph<index_traits_t>;
+
+    /** @brief Hierarchical search graph type. */
+    using hierarchical_search_graph_t = HierarchicalSearchGraph<index_traits_t>;
+
+    /** @brief Inter-layer links type. */
+    using inter_layer_links_t = InterLayerLinks<index_traits_t>;
 
 };  // struct IndexTraits
 

@@ -111,14 +111,14 @@ int main(int argc, char** argv) {
 
     // Algorithm parameters
     program.add_argument("-n", "--num-samples")
-        .default_value(100)
+        .default_value(1000)
         .scan<'i', int>()
         .help("Number of vectors to sample from the dataset");
 
     program.add_argument("-q", "--quantile")
-        .default_value(0.01f)
+        .default_value(0.001f)
         .scan<'g', float>()
-        .help("Target quantile (e.g., 0.01 for 1%, 0.05 for 5%)");
+        .help("Target quantile (e.g., 0.001 for 0.1%, 0.01 for 1%, 0.05 for 5%)");
 
     // Benchmark control
     program.add_argument("-i", "--iterations")

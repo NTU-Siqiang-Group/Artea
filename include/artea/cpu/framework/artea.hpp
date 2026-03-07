@@ -46,6 +46,9 @@
 #include <artea/cpu/index/neighbor.hpp>
 #include <artea/cpu/index/flat_graph.hpp>
 #include <artea/cpu/index/flat_search_graph.hpp>
+#include <artea/cpu/index/inter_layer_links.hpp>
+#include <artea/cpu/index/hierarchical_graph.hpp>
+#include <artea/cpu/index/hierarchical_search_graph.hpp>
 
 #include <artea/cpu/graph_factory/flat_graph_factory.hpp>
 #include <artea/cpu/graph_factory/conv_graph_factory.hpp>

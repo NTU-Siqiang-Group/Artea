@@ -75,7 +75,6 @@ public:
         vec_num_t batch_start = 0;
 
         while (result_ids.size() < max_result_size) {
-            batch_start += batch_size;
             if (batch_start >= total_base_vecs) { break; }
 
             const vec_num_t batch_end = std::min(batch_start + batch_size, total_base_vecs);
@@ -161,25 +160,40 @@ public:
              *
              * Example with batch_size=512 and term_thresh=17:
              * - If p=5% (5% uncovered, 95% covered): μ=25.6, σ=4.93
-             *   P(X ≥ 17) ≈ Φ(1.74) ≈ 96% confidence to continue sampling
+             *   P(X ≥ 17) ≈ Φ(1.75) ≈ 96% confidence to continue sampling
              *
              * Interpretation: With term_thresh=17 and batch_size=512, the algorithm
              * continues with ~96% confidence when uncovered rate ≥5% (coverage ≤95%),
-             * and terminates when coverage reaches ~96-97%, ensuring a dense r-net.
+             * and terminates when coverage reaches ~95-96%, ensuring a dense r-net.
+             *
+             * Parameter Selection Guide (for 95% coverage target, 96% confidence):
+             * ┌────────────┬──────────┬─────────────┬────────────────────────┐
+             * │ Batch Size │ μ (mean) │ σ (std dev) │ term_thresh (96% conf) │
+             * ├────────────┼──────────┼─────────────┼────────────────────────┤
+             * │    512     │  25.6    │    4.93     │          17            │
+             * │   1024     │  51.2    │    6.97     │          39            │
+             * │   2048     │  102.4   │    9.86     │          85            │
+             * └────────────┴──────────┴─────────────┴────────────────────────┘
+             *
+             * Formula: term_thresh = μ - z·σ = np - z·√(np(1-p))
+             *   where z ≈ 1.75 for 96% confidence
+             *   and p = 0.05 for 95% coverage target (5% uncovered rate)
              *
              * NOTE: This check is performed AFTER merging the current batch to ensure
              * that qualifying candidates from this batch are not discarded.
              */
             if (qualifying_candidates.size() < term_thresh) { break; }
+
+            batch_start += batch_size;
         }
 
         return result_ids;
     }
 
     /**
-     * @brief Default generate method (returns ID array only)
+     * @brief Default generate_impl method (returns ID array only)
      */
-    auto generate(
+    auto generate_impl(
         const vector_array_t& base_vecs,
         const distance_t min_radius,
         const vertex_num_t max_result_size,

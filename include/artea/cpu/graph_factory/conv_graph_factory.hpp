@@ -55,7 +55,7 @@ class ConvGraphFactory :
 public:
     ConvGraphFactory() {}
 
-    /** @brief construct a new graph */
+    /** @brief construct a new convergent graph */
     auto construct_graph_impl(
         const vector_dataset_t& dataset,
         const vertex_num_t max_nbr_size,

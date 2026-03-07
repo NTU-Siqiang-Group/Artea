@@ -62,9 +62,9 @@ public:
     }
 
     /**
-     * @brief Default generate method (returns ID array only)
+     * @brief Default generate_impl method (returns ID array only)
      */
-    auto generate(
+    auto generate_impl(
         const vector_array_t& base_vecs,
         const vertex_num_t result_size
     ) -> std::vector<vec_id_t> {

@@ -58,13 +58,13 @@ public:
         const vector_array_t& vecs_data,
         const vertex_num_t num_vertices,
         const vertex_num_t bl_max_nbr_size = 16,
-        const vertex_num_t bl_reserved_nbr_size = 32,
         const vertex_num_t ul_max_nbr_size = 24,
+        const vertex_num_t bl_reserved_nbr_size = 32,
         const vertex_num_t ul_reserved_nbr_size = 48
     ) : _num_vertices(num_vertices),
         _bl_max_nbr_size(bl_max_nbr_size),
-        _bl_reserved_nbr_size(bl_reserved_nbr_size),
         _ul_max_nbr_size(ul_max_nbr_size),
+        _bl_reserved_nbr_size(bl_reserved_nbr_size),
         _ul_reserved_nbr_size(ul_reserved_nbr_size),
         _vecs_data(vecs_data),
         _bottom_layer_graph(std::make_unique<flat_graph_t>(vecs_data, num_vertices, bl_max_nbr_size, bl_reserved_nbr_size))
