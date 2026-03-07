@@ -15,7 +15,7 @@
 /*
  * @FilePath: /Artea/include/artea/cpu/utils/radius_prober.hpp
  * @Author: Chandler (Weitang Ye) <weitang.ye@ntu.edu.sg>
- * @Description: Probe distance distribution quantiles by sampling points and computing pairwise distances
+ * @Description: Probe distance distribution quantiles by sampling independent vector pairs
  */
 
 #pragma once
@@ -29,6 +29,7 @@
 #include <tbb/enumerable_thread_specific.h>
 #include <artea/cpu/containers/vector_array.hpp>
 #include <artea/cpu/utils/random_seq.hpp>
+#include <boost/math/distributions/normal.hpp>
 
 namespace artea {
 namespace cpu {
@@ -44,14 +45,16 @@ class RadiusProber {
     using random_seq_t = typename ComputerTraitsT::random_seq_t;
     using dist_func_t = typename ComputerTraitsT::dist_func_t;
 
+    // Batch size for sampling to reduce memory usage
+    static constexpr vec_num_t SAMPLING_BATCH_SIZE = 100000;
+
 public:
     /**
      * @brief Result containing the quantile radius value
      */
     struct ProbeResult {
         distance_t radius;                  // Estimated quantile radius value
-        vec_num_t num_vecs_sampled;         // Number of vectors sampled
-        vec_num_t num_distances_computed;   // Number of pairwise distances computed
+        vec_num_t num_dists_sampled;        // Number of independent distance samples
         float quantile;                     // The quantile that was estimated
     };
 
@@ -62,20 +65,82 @@ public:
     RadiusProber(const dist_func_t& dist_func) : _dist_func(dist_func) {}
 
     /**
-     * @brief Probe a quantile from the distance distribution
+     * @brief Compute required number of distance samples
      *
-     * This method samples vectors from the dataset, computes all pairwise distances
-     * among the sampled vectors, and returns the specified quantile of those distances.
+     * Uses the formula: m = Z^2 * (1-p) / (p * delta^2)
+     * where Z is the critical value from standard normal distribution
+     *
+     * @param quantile Target quantile (e.g., 0.0005 for 0.05%, 0.001 for 0.1%)
+     * @param confidence Confidence level (e.g., 0.95 for 95%, 0.99 for 99%)
+     * @param relative_err Relative error (e.g., 0.1 for 10%, 0.2 for 20%)
+     * @return Required number of distance samples
+     */
+    static auto compute_num_dists_sampled(
+        float quantile,
+        float confidence,
+        float relative_err
+    ) -> vec_num_t {
+        if (quantile <= 0.0f || quantile >= 1.0f) {
+            throw std::invalid_argument("quantile must be in (0, 1)");
+        }
+        if (confidence <= 0.0f || confidence >= 1.0f) {
+            throw std::invalid_argument("confidence must be in (0, 1)");
+        }
+        if (relative_err <= 0.0f) {
+            throw std::invalid_argument("relative_err must be positive");
+        }
+
+        // Calculate alpha and Z-value
+        float alpha = 1.0f - confidence;
+        boost::math::normal_distribution<float> normal(0.0f, 1.0f);
+        float z_value = boost::math::quantile(normal, 1.0f - alpha / 2.0f);
+
+        // Calculate required samples: m = Z^2 * (1-p) / (p * delta^2)
+        float m = (z_value * z_value * (1.0f - quantile)) / (quantile * relative_err * relative_err);
+
+        return static_cast<vec_num_t>(std::ceil(m));
+    }
+
+    /**
+     * @brief Probe a quantile with automatic sample size calculation
+     *
+     * This overload automatically computes the required number of distance samples
+     * based on the desired confidence level and relative error.
      *
      * @param base_vecs The dataset to probe
-     * @param quantile Target quantile (e.g., 0.01 for 1%, 0.05 for 5%, 0.10 for 10%)
-     * @param num_vecs_to_sample Number of vectors to sample from the dataset
+     * @param quantile Target quantile (e.g., 0.0005 for 0.05%, 0.001 for 0.1%)
+     * @param confidence Confidence level (e.g., 0.95 for 95%, 0.99 for 99%)
+     * @param relative_err Relative error (e.g., 0.1 for 10%, 0.2 for 20%)
      * @return ProbeResult containing the quantile radius and sampling information
      */
     auto probe(
         const vector_array_t& base_vecs,
         float quantile,
-        vec_num_t num_vecs_to_sample
+        float confidence,
+        float relative_err
+    ) -> ProbeResult {
+        vec_num_t num_distances = compute_num_dists_sampled(quantile, confidence, relative_err);
+        return probe(base_vecs, quantile, num_distances);
+    }
+
+    /**
+     * @brief Probe a quantile from the distance distribution
+     *
+     * This method samples independent pairs of vectors from the dataset by:
+     * 1. Processing in batches to reduce memory usage
+     * 2. For each batch: sampling batch_size vectors as first endpoints and batch_size as second endpoints
+     * 3. Computing distances between corresponding pairs
+     * This ensures distance samples are i.i.d. (independent and identically distributed).
+     *
+     * @param base_vecs The dataset to probe
+     * @param quantile Target quantile (e.g., 0.0005 for 0.05%, 0.001 for 0.1%)
+     * @param num_distances_to_sample Number of independent distance samples to compute
+     * @return ProbeResult containing the quantile radius and sampling information
+     */
+    auto probe(
+        const vector_array_t& base_vecs,
+        float quantile,
+        vec_num_t num_distances_to_sample
     ) -> ProbeResult {
 
         if (quantile <= 0.0f || quantile >= 1.0f) {
@@ -87,33 +152,44 @@ public:
             throw std::invalid_argument("Dataset must contain at least 2 vectors");
         }
 
-        if (num_vecs_to_sample < 2) {
-            throw std::invalid_argument("num_vecs_to_sample must be at least 2");
+        if (num_distances_to_sample < 1) {
+            throw std::invalid_argument("num_distances_to_sample must be at least 1");
         }
 
-        if (num_vecs_to_sample > total_vecs) {
-            num_vecs_to_sample = total_vecs;
+        // Allocate result vector for all distances
+        std::vector<distance_t> distances;
+        distances.reserve(num_distances_to_sample);
+
+        // Process in batches to reduce memory usage
+        vec_num_t remaining = num_distances_to_sample;
+        while (remaining > 0) {
+            vec_num_t batch_size = std::min(remaining, SAMPLING_BATCH_SIZE);
+
+            // Sample two independent sets of vector indices for this batch
+            std::vector<vec_id_t> vec_ids_1 = sample_vec_ids(total_vecs, batch_size);
+            std::vector<vec_id_t> vec_ids_2 = sample_vec_ids(total_vecs, batch_size);
+
+            // Compute distances for this batch
+            std::vector<distance_t> batch_distances = compute_paired_distances(base_vecs, vec_ids_1, vec_ids_2);
+
+            // Append to result
+            distances.insert(distances.end(), batch_distances.begin(), batch_distances.end());
+
+            remaining -= batch_size;
         }
-
-        // Sample vectors from the dataset
-        vector_array_t sampled_vecs = sample_vecs(base_vecs, num_vecs_to_sample);
-
-        // Compute all pairwise distances among sampled vectors
-        std::vector<distance_t> pairwise_distances = compute_pairwise_distances(sampled_vecs);
 
         // Sort distances
-        std::sort(pairwise_distances.begin(), pairwise_distances.end());
+        std::sort(distances.begin(), distances.end());
 
         // Extract quantile value
-        vec_num_t quantile_index = static_cast<vec_num_t>(quantile * pairwise_distances.size());
-        if (quantile_index >= pairwise_distances.size()) {
-            quantile_index = pairwise_distances.size() - 1;
+        vec_num_t quantile_index = static_cast<vec_num_t>(quantile * distances.size());
+        if (quantile_index >= distances.size()) {
+            quantile_index = distances.size() - 1;
         }
 
         ProbeResult result;
-        result.radius = pairwise_distances[quantile_index];
-        result.num_vecs_sampled = num_vecs_to_sample;
-        result.num_distances_computed = static_cast<vec_num_t>(pairwise_distances.size());
+        result.radius = distances[quantile_index];
+        result.num_dists_sampled = num_distances_to_sample;
         result.quantile = quantile;
 
         return result;
@@ -123,113 +199,57 @@ private:
     const dist_func_t& _dist_func;
 
     /**
-     * @brief Sample vectors from the dataset
+     * @brief Sample vector IDs uniformly at random
      *
-     * @param base_vecs The dataset
-     * @param num_vecs Number of vectors to sample
-     * @return Vector array containing sampled vectors
+     * @param total_vecs Total number of vectors in the dataset
+     * @param num_samples Number of IDs to sample
+     * @return Vector of sampled vector IDs
      */
-    auto sample_vecs(
-        const vector_array_t& base_vecs,
-        vec_num_t num_vecs
-    ) -> vector_array_t {
-
-        const vec_num_t total_vecs = base_vecs.get_num_vecs();
-        const vec_num_t vec_dim = base_vecs.get_vec_dim();
+    auto sample_vec_ids(
+        vec_num_t total_vecs,
+        vec_num_t num_samples
+    ) -> std::vector<vec_id_t> {
 
         // Initialize random generator
         random_seq_t rand_gen(total_vecs);
 
         // Generate random indices
-        std::vector<vec_id_t> sampled_indices(num_vecs);
+        std::vector<vec_id_t> sampled_ids(num_samples);
 
         tbb::parallel_for(
-            tbb::blocked_range<vec_num_t>(0, num_vecs),
+            tbb::blocked_range<vec_num_t>(0, num_samples),
             [&](const tbb::blocked_range<vec_num_t>& r) {
-                rand_gen.generate(sampled_indices.data() + r.begin(), r.size());
+                rand_gen.generate(sampled_ids.data() + r.begin(), r.size());
             }
         );
 
-        // Copy sampled vectors to new array
-        vector_array_t sampled_vecs(num_vecs, vec_dim);
-
-        tbb::parallel_for(
-            tbb::blocked_range<vec_num_t>(0, num_vecs),
-            [&](const tbb::blocked_range<vec_num_t>& r) {
-                for (vec_num_t i = r.begin(); i != r.end(); ++i) {
-                    vec_id_t source_idx = sampled_indices[i];
-                    const vec_ele_t* source_vec = base_vecs.get(source_idx);
-                    vec_ele_t* dest_vec = sampled_vecs.get(i);
-                    std::copy(source_vec, source_vec + vec_dim, dest_vec);
-                }
-            }
-        );
-
-        return sampled_vecs;
+        return sampled_ids;
     }
 
     /**
-     * @brief Compute all pairwise distances among vectors
+     * @brief Compute distances between corresponding pairs of vectors
      *
-     * @param vecs Vector array of vectors
-     * @return Vector of all pairwise distances
+     * @param base_vecs The dataset
+     * @param vec_ids_1 First set of vector IDs
+     * @param vec_ids_2 Second set of vector IDs
+     * @return Vector of distances between vec_ids_1[i] and vec_ids_2[i]
      */
-    auto compute_pairwise_distances(
-        const vector_array_t& vecs
+    auto compute_paired_distances(
+        const vector_array_t& base_vecs,
+        const std::vector<vec_id_t>& vec_ids_1,
+        const std::vector<vec_id_t>& vec_ids_2
     ) -> std::vector<distance_t> {
 
-        const vec_num_t num_vecs = vecs.get_num_vecs();
+        const vec_num_t num_pairs = static_cast<vec_num_t>(vec_ids_1.size());
+        std::vector<distance_t> distances(num_pairs);
 
-        // Calculate number of unique pairs: n*(n-1)/2
-        const vec_num_t num_pairs = (num_vecs * (num_vecs - 1)) / 2;
-
-        // Create thread-local storage for each thread's local distance array
-        tbb::enumerable_thread_specific<std::vector<distance_t>> thread_local_dists;
-
-        // Compute pairwise distances in parallel
         tbb::parallel_for(
-            tbb::blocked_range<vec_num_t>(0, num_vecs - 1),
+            tbb::blocked_range<vec_num_t>(0, num_pairs),
             [&](const tbb::blocked_range<vec_num_t>& r) {
-                // Get this thread's local distance array
-                auto& local_dists = thread_local_dists.local();
-
                 for (vec_num_t i = r.begin(); i != r.end(); ++i) {
-                    const vec_ele_t* vec_i = vecs.get(i);
-
-                    // Compute distances to all vectors j > i
-                    for (vec_num_t j = i + 1; j < num_vecs; ++j) {
-                        const vec_ele_t* vec_j = vecs.get(j);
-                        local_dists.push_back(_dist_func(vec_i, vec_j));
-                    }
-                }
-            }
-        );
-
-        // Concatenate all thread-local arrays into the final result in parallel
-        std::vector<distance_t> distances;
-        distances.resize(num_pairs);
-
-        // Collect all thread-local arrays
-        std::vector<const std::vector<distance_t>*> local_arrays;
-        for (const auto& local_dists : thread_local_dists) {
-            local_arrays.push_back(&local_dists);
-        }
-
-        // Calculate prefix sums to determine starting positions for each thread's data
-        std::vector<vec_num_t> start_positions(local_arrays.size() + 1, 0);
-        for (size_t i = 0; i < local_arrays.size(); ++i) {
-            start_positions[i + 1] = start_positions[i] + static_cast<vec_num_t>(local_arrays[i]->size());
-        }
-
-        // Parallel copy from local arrays to final result
-        // Each thread copies its own data to the correct position
-        tbb::parallel_for(
-            tbb::blocked_range<size_t>(0, local_arrays.size()),
-            [&](const tbb::blocked_range<size_t>& r) {
-                for (size_t i = r.begin(); i != r.end(); ++i) {
-                    const auto& local_dists = *local_arrays[i];
-                    std::copy(local_dists.begin(), local_dists.end(),
-                              distances.begin() + start_positions[i]);
+                    const vec_ele_t* vec_1 = base_vecs.get(vec_ids_1[i]);
+                    const vec_ele_t* vec_2 = base_vecs.get(vec_ids_2[i]);
+                    distances[i] = _dist_func(vec_1, vec_2);
                 }
             }
         );

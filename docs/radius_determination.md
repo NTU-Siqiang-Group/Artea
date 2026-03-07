@@ -75,108 +75,75 @@ Therefore, approximately **663,500 samples** are required to estimate $P_{0.1}$ 
 
 ## (2) RadiusProber Mathematical Derivation
 
-### (2.1) Problem Statement
+### (2.1) Problem Statement and Independence Requirement
 
-Given a dataset $\mathcal{D}$ of $n$ vectors, we want to estimate the $p$-th quantile of the pairwise distance distribution. The RadiusProber algorithm:
+Given a dataset $\mathcal{D}$ of $n$ vectors, we want to estimate the $p$-th quantile of the pairwise distance distribution.
 
-1. Samples $s$ vectors from $\mathcal{D}$
-2. Computes all $\binom{s}{2} = \frac{s(s-1)}{2}$ pairwise distances
-3. Returns the empirical $p$-th quantile of these distances
+**Critical Statistical Requirement:** To apply the quantile estimation theory from Section (1), we need **independent and identically distributed (i.i.d.)** distance samples. However, if we sample $s$ vectors and compute all $\binom{s}{2}$ pairwise distances, these distances **share endpoints** and are therefore **not independent**.
 
-### (2.2) Number of Distance Computations
+**Solution:** The RadiusProber algorithm ensures independence by:
 
-For $s$ sampled vectors, the number of unique pairwise distances is:
+1. Sampling $m$ vectors uniformly at random as the **first endpoints** (with replacement)
+2. Sampling $m$ vectors uniformly at random as the **second endpoints** (with replacement)
+3. Computing distances between corresponding pairs: $d_i = \text{dist}(\text{vec}_1[i], \text{vec}_2[i])$ for $i = 1, \ldots, m$
 
-$$m = \binom{s}{2} = \frac{s(s-1)}{2}$$
+This produces $m$ **independent** distance samples, allowing us to directly apply the formulas from Section (1).
 
-**Examples:**
+### (2.2) Sample Size Determination
 
-| Sampled Vectors $s$ | Pairwise Distances $m$ | Computational Cost |
-|---------------------|------------------------|-------------------|
-| 100 | 4,950 | ~5K |
-| 500 | 124,750 | ~125K |
-| 1,000 | 499,500 | ~500K |
-| 2,000 | 1,999,000 | ~2M |
-| 5,000 | 12,497,500 | ~12.5M |
-| 10,000 | 49,995,000 | ~50M |
+From Section (1.3), to estimate a quantile with:
+- Target quantile $p$ (e.g., $p = 0.0005$ for $P_{0.05}$)
+- Confidence level $(1-\alpha)$ (e.g., 95% or 99%)
+- Relative error $\delta$ (e.g., 10%)
 
-### (2.3) Statistical Properties
+We need $m$ **independent distance samples** where:
 
-Let $D_{ij}$ denote the distance between vectors $i$ and $j$ in the full dataset $\mathcal{D}$. The true $p$-th quantile of the distance distribution is $\xi_p$.
+$$\boxed{m = \frac{Z_{\alpha/2}^2 (1-p)}{p \delta^2}}$$
 
-When we sample $s$ vectors and compute $m = \binom{s}{2}$ pairwise distances, we obtain an empirical quantile $\hat{\xi}_p$. The question is: **How many vector samples $s$ do we need to ensure $\hat{\xi}_p$ is close to $\xi_p$?**
+**Key Simplification:** Unlike the old approach, we no longer need to convert between vector samples and distance samples. The parameter $m$ directly specifies the number of distance samples to collect.
 
-### (2.4) Sample Size Determination
-
-From Section (1), we know that to estimate a quantile with:
-- Confidence level $(1-\alpha)$
-- Relative error $\delta$
-
-We need $m$ **distance samples** where:
-
-$$m = \frac{Z_{\alpha/2}^2 (1-p)}{p \delta^2}$$
-
-Since RadiusProber computes $\binom{s}{2} = \frac{s(s-1)}{2}$ distances from $s$ vectors, we need:
-
-$$\frac{s(s-1)}{2} \ge m$$
-
-Solving for $s$:
-
-$$s(s-1) \ge 2m$$
-
-$$s^2 - s - 2m \ge 0$$
-
-Using the quadratic formula:
-
-$$s \ge \frac{1 + \sqrt{1 + 8m}}{2}$$
-
-For large $m$, this approximates to:
-
-$$\boxed{s \approx \sqrt{2m}}$$
-
-### (2.5) Practical Examples
+### (2.3) Practical Examples
 
 #### Example: Estimating $P_{0.1}$ (0.1% percentile) with 99% confidence and 10% relative error
 
 From Section (1.4), we need $m \approx 663,500$ distance samples.
 
-Required vector samples:
-$$s \approx \sqrt{2 \times 663,500} = \sqrt{1,327,000} \approx 1,152$$
-
-**Verification:** $\binom{1,152}{2} = \frac{1,152 \times 1,151}{2} = 663,576 \approx 663,500$ ✓
+**With the new independent sampling approach:** Simply set `num_distances_to_sample = 663,500`.
 
 **Summary table**:
 
-| Target | $p$ | Confidence | $\delta$ | Distance Samples $m$ | Vector Samples $s$ | Actual Distances |
-|--------|-----|------------|----------|---------------------|-------------------|------------------|
-| $P_{0.1}$ | 0.001 | 95% | 10% | 384,160 | 877 | 384,126 |
-| $P_{0.1}$ | 0.001 | 99% | 10% | 663,500 | 1,152 | 663,576 |
-| $P_{0.1}$ | 0.001 | 99% | 20% | 165,875 | 576 | 165,600 |
-| $P_{0.05}$ | 0.0005 | 95% | 10% | 768,320 | 1,240 | 768,780 |
-| $P_{0.05}$ | 0.0005 | 99% | 10% | 1,327,000 | 1,629 | 1,325,406 |
-| $P_{0.01}$ | 0.0001 | 95% | 10% | 3,841,600 | 2,772 | 3,842,406 |
-| $P_{0.01}$ | 0.0001 | 99% | 10% | 6,635,000 | 3,643 | 6,636,663 |
+| Target | $p$ | Confidence | $\delta$ | Required Distance Samples $m$ |
+|--------|-----|------------|----------|-------------------------------|
+| $P_{0.1}$ | 0.001 | 95% | 10% | 384,160 |
+| $P_{0.1}$ | 0.001 | 99% | 10% | 663,500 |
+| $P_{0.1}$ | 0.001 | 99% | 20% | 165,875 |
+| $P_{0.05}$ | 0.0005 | 95% | 10% | 768,320 |
+| $P_{0.05}$ | 0.0005 | 99% | 10% | 1,327,000 |
+| $P_{0.01}$ | 0.0001 | 95% | 10% | 3,841,600 |
+| $P_{0.01}$ | 0.0001 | 99% | 10% | 6,635,000 |
 
-### (2.7) Implementation Notes
+### (2.4) Implementation Notes
 
 The RadiusProber implementation in `radius_prober.hpp`:
 
-1. **Sampling** (lines 132-169): Uses `RandomSeq` to sample $s$ vectors uniformly at random;
-2. **Distance Computation** (lines 177-238): Computes all $\binom{s}{2}$ pairwise distances in parallel using TBB;
-3. **Quantile Extraction** (lines 104-111): Sorts distances and returns the empirical $p$-th quantile;
+1. **Independent Sampling**: Samples two independent sets of $m$ vector IDs using `RandomSeq` (with replacement)
+2. **Paired Distance Computation**: Computes $m$ distances between corresponding pairs in parallel using TBB
+3. **Quantile Extraction**: Sorts distances and returns the empirical $p$-th quantile
 
-**Time Complexity:** $O(s^2 \cdot d)$ where $d$ is the vector dimension
+**Time Complexity:** $O(m \cdot d)$ where $d$ is the vector dimension
 
-**Space Complexity:** $O(s^2)$ for storing all pairwise distances
+**Space Complexity:** $O(m)$ for storing distance samples
 
 **Parallelization:** Both sampling and distance computation are parallelized using TBB for efficiency.
 
-### (2.8) Parameter Recommendations
+**Key Advantage:** This approach ensures statistical independence of distance samples, which is required for the quantile estimation formulas to be valid.
+
+### (2.5) Parameter Recommendations
 
 For ANNS applications targeting $P_{0.1}$ (0.1% percentile):
 
-- **Standard estimation** (95% confidence, 10% error): $s \approx 877$ → $m \approx 384,000$ distances
-- **High-confidence estimation** (99% confidence, 10% error): $s \approx 1,152$ → $m \approx 664,000$ distances
-- **Relaxed-error estimation** (99% confidence, 20% error): $s \approx 576$ → $m \approx 166,000$ distances
+- **Standard estimation** (95% confidence, 10% error): $m \approx 384,000$ distances
+- **High-confidence estimation** (99% confidence, 10% error): $m \approx 664,000$ distances
+- **Relaxed-error estimation** (99% confidence, 20% error): $m \approx 166,000$ distances
 
-**Trade-off:** More samples provide better quantile estimates but increase computational cost quadratically.
+**Trade-off:** More samples provide better quantile estimates but increase computational cost linearly (not quadratically as in the old approach).

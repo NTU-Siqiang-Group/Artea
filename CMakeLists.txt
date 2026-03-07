@@ -39,6 +39,9 @@ message(STATUS "TBB_DIR: ${TBB_DIR}")
 # --- Find Intel MKL ---
 find_package(MKL REQUIRED)
 
+# --- Find Boost (for math/statistics) ---
+find_package(Boost REQUIRED)
+
 FetchContent_Declare(
 	nlohmann_json
 	URL https://github.com/nlohmann/json/releases/download/v3.11.2/json.tar.xz
@@ -162,6 +165,7 @@ target_link_libraries(artea INTERFACE
     MKL::MKL
 	range-v3::range-v3
 	eigen
+	Boost::boost
 )
 
 include(CTest)

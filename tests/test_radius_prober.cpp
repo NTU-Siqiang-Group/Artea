@@ -39,7 +39,7 @@ using radius_prober_t = typename computer_traits_t::radius_prober_t;
 struct TestConfig {
     std::string config_path;
     std::string dataset_name;
-    int num_samples;
+    int num_dists_sampled;
     bool verbose;
 } g_config;
 
@@ -79,26 +79,24 @@ TEST_F(RadiusProberTest, ProbeQuantile) {
 
     if (g_config.verbose) {
         logger.info(fmt::format("Base vectors size: {}", base_vecs.get_num_vecs()));
-        logger.info(fmt::format("Sampling {} vectors for probe", g_config.num_samples));
+        logger.info(fmt::format("Sampling {} distance pairs for probe", g_config.num_dists_sampled));
     }
 
     radius_prober_t prober(dist_func);
 
-    // Probe 1% quantile with specified number of vectors
+    // Probe 1% quantile with specified number of distance samples
     float quantile = 0.01f;
-    vec_num_t num_vecs = std::min(g_config.num_samples, static_cast<int>(base_vecs.get_num_vecs()));
+    vec_num_t num_distances = g_config.num_dists_sampled;
 
-    auto result = prober.probe(base_vecs, quantile, num_vecs);
+    auto result = prober.probe(base_vecs, quantile, num_distances);
 
     logger.info(fmt::format("Quantile Result:"));
     logger.info(fmt::format("  {:.1f}% quantile: {:.4f}", result.quantile * 100.0f, result.radius));
-    logger.info(fmt::format("  Vectors sampled: {}", result.num_vecs_sampled));
-    logger.info(fmt::format("  Distances computed: {}", result.num_distances_computed));
+    logger.info(fmt::format("  Distance samples: {}", result.num_dists_sampled));
 
     // Verify result
     EXPECT_EQ(result.quantile, quantile);
-    EXPECT_EQ(result.num_vecs_sampled, num_vecs);
-    EXPECT_EQ(result.num_distances_computed, (num_vecs * (num_vecs - 1)) / 2);
+    EXPECT_EQ(result.num_dists_sampled, num_distances);
     EXPECT_GT(result.radius, 0.0f);
 }
 
@@ -111,12 +109,12 @@ TEST_F(RadiusProberTest, ProbeMultipleQuantiles) {
 
     if (g_config.verbose) {
         logger.info(fmt::format("Base vectors size: {}", base_vecs.get_num_vecs()));
-        logger.info(fmt::format("Sampling {} vectors for probe", g_config.num_samples));
+        logger.info(fmt::format("Sampling {} distance pairs for probe", g_config.num_dists_sampled));
     }
 
     radius_prober_t prober(dist_func);
 
-    vec_num_t num_vecs = std::min(g_config.num_samples, static_cast<int>(base_vecs.get_num_vecs()));
+    vec_num_t num_distances = g_config.num_dists_sampled;
 
     // Probe different quantiles
     std::vector<float> quantiles = {0.01f, 0.05f, 0.10f, 0.25f, 0.50f, 0.75f, 0.99f};
@@ -124,7 +122,7 @@ TEST_F(RadiusProberTest, ProbeMultipleQuantiles) {
 
     logger.info("Multiple Quantile Results:");
     for (float q : quantiles) {
-        auto result = prober.probe(base_vecs, q, num_vecs);
+        auto result = prober.probe(base_vecs, q, num_distances);
         results.push_back(result);
 
         logger.info(fmt::format("  {:.1f}% quantile: {:.4f}",
@@ -146,12 +144,12 @@ TEST_F(RadiusProberTest, ProbeSmallQuantiles) {
 
     if (g_config.verbose) {
         logger.info(fmt::format("Base vectors size: {}", base_vecs.get_num_vecs()));
-        logger.info(fmt::format("Sampling {} vectors for probe", g_config.num_samples));
+        logger.info(fmt::format("Sampling {} distance pairs for probe", g_config.num_dists_sampled));
     }
 
     radius_prober_t prober(dist_func);
 
-    vec_num_t num_vecs = std::min(g_config.num_samples, static_cast<int>(base_vecs.get_num_vecs()));
+    vec_num_t num_distances = g_config.num_dists_sampled;
 
     // Probe very small quantiles (0.01%, 0.05%, 0.15%)
     std::vector<float> quantiles = {0.0001f, 0.0005f, 0.0015f};
@@ -159,7 +157,7 @@ TEST_F(RadiusProberTest, ProbeSmallQuantiles) {
 
     logger.info("Small Quantile Results:");
     for (float q : quantiles) {
-        auto result = prober.probe(base_vecs, q, num_vecs);
+        auto result = prober.probe(base_vecs, q, num_distances);
         results.push_back(result);
 
         logger.info(fmt::format("  {:.2f}% quantile: {:.4f}",
@@ -183,7 +181,7 @@ int main(int argc, char** argv) {
     argparse::ArgumentParser program("test_radius_prober");
     program.add_argument("-c", "--config").default_value(std::string("./configs/datasets.json"));
     program.add_argument("-d", "--dataset").default_value(std::string("sift-1m"));
-    program.add_argument("-n", "--num-samples").default_value(10000).scan<'i', int>();
+    program.add_argument("-m", "--num-dists").default_value(100000).scan<'i', int>();
     program.add_argument("-v", "--verbose").default_value(false).implicit_value(true);
 
     try {
@@ -196,7 +194,7 @@ int main(int argc, char** argv) {
 
     g_config.config_path = program.get<std::string>("--config");
     g_config.dataset_name = program.get<std::string>("--dataset");
-    g_config.num_samples = program.get<int>("--num-samples");
+    g_config.num_dists_sampled = program.get<int>("--num-dists");
     g_config.verbose = program.get<bool>("--verbose");
 
     DataProvider::instance().init();

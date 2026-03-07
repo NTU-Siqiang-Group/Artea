@@ -32,7 +32,7 @@ using radius_prober_t = typename computer_traits_t::radius_prober_t;
 struct BenchConfig {
     std::string config_path;
     std::string dataset_name;
-    int num_samples;
+    int num_dists_sampled;
     float quantile;
     int64_t iterations;
 };
@@ -80,12 +80,12 @@ static void BM_RadiusProber(benchmark::State& state) {
     const auto& base_vecs = provider.get_base_vecs();
     const auto& dist_func = provider.get_dist_func();
 
-    vec_num_t num_vecs = std::min(g_config.num_samples, static_cast<int>(base_vecs.get_num_vecs()));
+    vec_num_t num_distances = g_config.num_dists_sampled;
 
     radius_prober_t prober(dist_func);
 
     for (auto _ : state) {
-        auto result = prober.probe(base_vecs, g_config.quantile, num_vecs);
+        auto result = prober.probe(base_vecs, g_config.quantile, num_distances);
         benchmark::DoNotOptimize(result);
     }
 
@@ -110,15 +110,15 @@ int main(int argc, char** argv) {
         .help("Dataset name");
 
     // Algorithm parameters
-    program.add_argument("-n", "--num-samples")
-        .default_value(1000)
+    program.add_argument("-m", "--num-dists")
+        .default_value(100000)
         .scan<'i', int>()
-        .help("Number of vectors to sample from the dataset");
+        .help("Number of independent distance samples");
 
     program.add_argument("-q", "--quantile")
         .default_value(0.001f)
         .scan<'g', float>()
-        .help("Target quantile (e.g., 0.001 for 0.1%, 0.01 for 1%, 0.05 for 5%)");
+        .help("Target quantile (e.g., 0.0005 for 0.05%, 0.001 for 0.1%, 0.01 for 1%)");
 
     // Benchmark control
     program.add_argument("-i", "--iterations")
@@ -146,14 +146,14 @@ int main(int argc, char** argv) {
 
     g_config.config_path = program.get<std::string>("--config");
     g_config.dataset_name = program.get<std::string>("--dataset");
-    g_config.num_samples = program.get<int>("--num-samples");
+    g_config.num_dists_sampled = program.get<int>("--num-dists");
     g_config.quantile = program.get<float>("--quantile");
     g_config.iterations = program.get<int64_t>("--iterations");
 
     logger.info(fmt::format("Benchmark Configuration:"));
     logger.info(fmt::format("  Dataset: {}", g_config.dataset_name));
     logger.info(fmt::format("  Config path: {}", g_config.config_path));
-    logger.info(fmt::format("  Num samples: {}", g_config.num_samples));
+    logger.info(fmt::format("  Num distance samples: {}", g_config.num_dists_sampled));
     logger.info(fmt::format("  Quantile: {:.4f}", g_config.quantile));
     logger.info(fmt::format("  Iterations: {}", g_config.iterations));
 
