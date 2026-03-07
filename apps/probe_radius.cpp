@@ -23,6 +23,7 @@
 #include <artea/cpu/framework/default_context.hpp>
 #include <iostream>
 #include <iomanip>
+#include <chrono>
 
 using namespace artea;
 using namespace artea::cpu;
@@ -43,14 +44,14 @@ int main(int argc, char** argv) {
 
     // Probing parameters
     program.add_argument("-q", "--quantile")
-        .default_value(0.001f)
+        .default_value(0.0005f)
         .scan<'g', float>()
-        .help("Target quantile (e.g., 0.001 for 0.1%, 0.01 for 1%, 0.05 for 5%)");
+        .help("Target quantile (e.g., 0.0005 for 0.05%, 0.001 for 0.1%, 0.01 for 1%)");
 
     program.add_argument("-n", "--num-samples")
-        .default_value(uint32_t(1152))
+        .default_value(uint32_t(1629))
         .scan<'u', uint32_t>()
-        .help("Number of vectors to sample from the dataset");
+        .help("Number of vectors to sample from the dataset (1629 for P_0.05 at 99% confidence)");
 
     try {
         program.parse_args(argc, argv);
@@ -91,7 +92,12 @@ int main(int argc, char** argv) {
 
     // Probe radius
     logger.info("Probing radius...");
+    auto start_time = std::chrono::high_resolution_clock::now();
+
     auto result = prober.probe(dataset.get_base_vecs(), quantile, num_samples);
+
+    auto end_time = std::chrono::high_resolution_clock::now();
+    auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(end_time - start_time);
 
     // Display results
     logger.info(fmt::format("Probing Results:"));
@@ -99,6 +105,7 @@ int main(int argc, char** argv) {
     logger.info(fmt::format("  Radius: {:.6f}", result.radius));
     logger.info(fmt::format("  Vectors sampled: {}", result.num_vecs_sampled));
     logger.info(fmt::format("  Distances computed: {}", result.num_distances_computed));
+    logger.info(fmt::format("  Time elapsed: {:.2f} seconds", duration.count() / 1000.0));
 
     return 0;
 }
