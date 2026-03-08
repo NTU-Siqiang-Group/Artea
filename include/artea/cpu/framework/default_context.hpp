@@ -72,6 +72,7 @@ using ground_truth_t = typename base_traits_t::ground_truth_t;
 using vector_sampler_t = typename base_traits_t::vector_sampler_t;
 using nbr_arr_checker_t = typename base_traits_t::nbr_arr_checker_t;
 using random_seq_t = typename base_traits_t::random_seq_t;
+using random_seq_nr_t = typename base_traits_t::random_seq_nr_t;
 using vertex_subset_t = typename base_traits_t::vertex_subset_t;
 using pruning_condition_t = typename base_traits_t::pruning_condition_t;
 

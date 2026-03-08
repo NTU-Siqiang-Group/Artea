@@ -40,6 +40,7 @@ class HierarchicalSearchGraph {
     using vertex_id_t = typename IndexTraitsT::vertex_id_t;
     using vector_array_t = typename IndexTraitsT::vector_array_t;
     using flat_search_graph_t = typename IndexTraitsT::flat_search_graph_t;
+    using inter_layer_links_t = typename IndexTraitsT::inter_layer_links_t;
 
 public:
     /**
@@ -186,6 +187,9 @@ protected:
 
     /** @brief Flat search graphs for the upper layers. */
     std::vector<std::unique_ptr<flat_search_graph_t>> _upper_layer_graphs;
+
+    /** @brief links vertex between two adjacent layers */
+    inter_layer_links_t inter_layer_links;
 
 };  // class HierarchicalSearchGraph
 

@@ -138,8 +138,8 @@ TEST(BruteforceRouterTest, BatchTopKQuery) {
         );
 
         // Create subset of query vectors if needed
-        auto query_subset = query_vecs.get_subset(0, num_queries);
-        auto gt_subset = gt_vecs.get_subset(0, num_queries);
+        auto query_subset = query_vecs.extract_subset(0, num_queries);
+        auto gt_subset = gt_vecs.extract_subset(0, num_queries);
 
         // Use batch_query - returns idlist_array_t with dim=k
         auto batch_results = router.batch_query(query_subset);

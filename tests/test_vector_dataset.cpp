@@ -252,10 +252,10 @@ TEST_F(VectorDatasetTest, VerifyGetSubset) {
         vec_ids.push_back(dist(rng));
     }
 
-    logger.info(fmt::format("Testing get_subset with {} random vectors...", subset_size));
+    logger.info(fmt::format("Testing extract_subset with {} random vectors...", subset_size));
 
     // Get subset using the parallel implementation
-    auto subset = base_vecs.get_subset(vec_ids);
+    auto subset = base_vecs.extract_subset(vec_ids);
 
     // Verify metadata
     EXPECT_EQ(subset.get_num_vecs(), subset_size) << "Subset size mismatch";
@@ -272,7 +272,7 @@ TEST_F(VectorDatasetTest, VerifyGetSubset) {
         }
     }
 
-    logger.success("get_subset passed verification.");
+    logger.success("extract_subset passed verification.");
 }
 
 // --- Main ---

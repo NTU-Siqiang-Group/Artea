@@ -48,23 +48,25 @@ Consider the case that estimating $P_{0.1}$ (The 0.1-th percentile) with confide
 
 $$s \approx {Z_{\alpha/2}^2} / \left( {p \cdot \delta^2} \right)$$
 
-For $99\%$ confidence, $Z_{\alpha/2} = Z_{0.005} = 2.576$. Substituting the values:
+For $99\%$ confidence, $Z_{\alpha/2} = Z_{0.005} = 2.5758$. Substituting the values:
 
-$$s \approx \frac{2.576^2}{0.001 \times 0.1^2} = \frac{6.635}{0.00001} = 663,500$$
+$$s \approx \frac{2.5758^2}{0.001 \times 0.1^2} = \frac{6.6348}{0.00001} = 663,480$$
 
-Therefore, approximately **663,500 samples** are required to estimate $P_{0.1}$ with $99\%$ confidence and $10\%$ relative error.
+Therefore, approximately **663,000 samples** are required to estimate $P_{0.1}$ with $99\%$ confidence and $10\%$ relative error.
+
+**Note:** The implementation uses precise Z-values from Boost.Math (e.g., $Z_{99\%} = 2.5758$) rather than approximations (2.576).
 
 #### Additional Examples
 
 | Target Percentile | $p$ | Confidence $(1-\alpha)$ | $Z_{\alpha/2}$ | Relative Error $\delta$ | Required Samples $s$ |
 |-------------------|-----|-------------------------|----------------|-------------------------|---------------------|
-| $P_{0.1}$ (0.1%)  | 0.001 | 95% | 1.96 | 10% | $\approx 384,160$ |
-| $P_{0.1}$ (0.1%)  | 0.001 | 99% | 2.576 | 10% | $\approx 663,500$ |
-| $P_{0.1}$ (0.1%)  | 0.001 | 99% | 2.576 | 20% | $\approx 165,875$ |
-| $P_{0.05}$ (0.05%) | 0.0005 | 95% | 1.96 | 10% | $\approx 768,320$ |
-| $P_{0.05}$ (0.05%) | 0.0005 | 99% | 2.576 | 10% | $\approx 1,327,000$ |
-| $P_{0.01}$ (0.01%) | 0.0001 | 95% | 1.96 | 10% | $\approx 3,841,600$ |
-| $P_{0.01}$ (0.01%) | 0.0001 | 99% | 2.576 | 10% | $\approx 6,635,000$ |
+| $P_{0.1}$ (0.1%)  | 0.001 | 95% | 1.9600 | 10% | $\approx 384,000$ |
+| $P_{0.1}$ (0.1%)  | 0.001 | 99% | 2.5758 | 10% | $\approx 663,000$ |
+| $P_{0.1}$ (0.1%)  | 0.001 | 99% | 2.5758 | 20% | $\approx 166,000$ |
+| $P_{0.05}$ (0.05%) | 0.0005 | 95% | 1.9600 | 10% | $\approx 768,000$ |
+| $P_{0.05}$ (0.05%) | 0.0005 | 99% | 2.5758 | 10% | $\approx 1,326,000$ |
+| $P_{0.01}$ (0.01%) | 0.0001 | 95% | 1.9600 | 10% | $\approx 3,841,000$ |
+| $P_{0.01}$ (0.01%) | 0.0001 | 99% | 2.5758 | 10% | $\approx 6,634,000$ |
 
 
 **Key Observations:**
@@ -106,21 +108,21 @@ $$\boxed{m = \frac{Z_{\alpha/2}^2 (1-p)}{p \delta^2}}$$
 
 #### Example: Estimating $P_{0.1}$ (0.1% percentile) with 99% confidence and 10% relative error
 
-From Section (1.4), we need $m \approx 663,500$ distance samples.
+From Section (1.4), we need $m \approx 662,827$ distance samples.
 
-**With the new independent sampling approach:** Simply set `num_distances_to_sample = 663,500`.
+**With the new independent sampling approach:** Simply set `num_distances_to_sample = 662,827`.
 
 **Summary table**:
 
 | Target | $p$ | Confidence | $\delta$ | Required Distance Samples $m$ |
 |--------|-----|------------|----------|-------------------------------|
-| $P_{0.1}$ | 0.001 | 95% | 10% | 384,160 |
-| $P_{0.1}$ | 0.001 | 99% | 10% | 663,500 |
-| $P_{0.1}$ | 0.001 | 99% | 20% | 165,875 |
-| $P_{0.05}$ | 0.0005 | 95% | 10% | 768,320 |
-| $P_{0.05}$ | 0.0005 | 99% | 10% | 1,327,000 |
-| $P_{0.01}$ | 0.0001 | 95% | 10% | 3,841,600 |
-| $P_{0.01}$ | 0.0001 | 99% | 10% | 6,635,000 |
+| $P_{0.1}$ | 0.001 | 95% | 10% | 383,762 |
+| $P_{0.1}$ | 0.001 | 99% | 10% | 662,827 |
+| $P_{0.1}$ | 0.001 | 99% | 20% | 165,707 |
+| $P_{0.05}$ | 0.0005 | 95% | 10% | 767,908 |
+| $P_{0.05}$ | 0.0005 | 99% | 10% | 1,326,316 |
+| $P_{0.01}$ | 0.0001 | 95% | 10% | 3,841,076 |
+| $P_{0.01}$ | 0.0001 | 99% | 10% | 6,634,234 |
 
 ### (2.4) Implementation Notes
 
@@ -143,7 +145,7 @@ The RadiusProber implementation in `radius_prober.hpp`:
 For ANNS applications targeting $P_{0.1}$ (0.1% percentile):
 
 - **Standard estimation** (95% confidence, 10% error): $m \approx 384,000$ distances
-- **High-confidence estimation** (99% confidence, 10% error): $m \approx 664,000$ distances
+- **High-confidence estimation** (99% confidence, 10% error): $m \approx 663,000$ distances
 - **Relaxed-error estimation** (99% confidence, 20% error): $m \approx 166,000$ distances
 
 **Trade-off:** More samples provide better quantile estimates but increase computational cost linearly (not quadratically as in the old approach).

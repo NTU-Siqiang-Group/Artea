@@ -12,6 +12,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+enum class VGPolicyT {
+    ramdom_selection,
+    rnet_selection
+};
+
 template <typename GraphFactoryTraitsT>
 class ArteaGraphFactory :
     public GraphFactoryTraitsT::template hierarchical_graph_factory_t<ArteaGraphFactory<GraphFactoryTraitsT>>,
@@ -33,6 +38,8 @@ class ArteaGraphFactory :
     using lb_greedy_vg_t = typename GraphFactoryTraitsT::lb_greedy_vg_t;
     using random_vg_t = typename RandomVG<vertex_generator_traits_t>;
 
+public:
+
     /** @brief construct a new artea graph from vector array */
     static auto construct_graph_impl(
         const vector_array_t& base_vecs,
@@ -50,7 +57,13 @@ class ArteaGraphFactory :
 
     }
 
-    // auto construct_hierarchical_vertex(
+    template <VGPolicyT VGPolicy>
+    auto construct_hier_vertex(
+        const vector_array_t& base_vecs,
+        hierarchical_graph_t& artea_graph,
+        // optional args
+    ) -> void {
 
-    // ) ->
+    }
+
 };

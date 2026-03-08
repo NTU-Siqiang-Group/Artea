@@ -43,6 +43,7 @@ class HierarchicalGraph {
     using nbr_arr_t = typename IndexTraitsT::nbr_arr_t;
     using vector_array_t = typename IndexTraitsT::vector_array_t;
     using flat_graph_t = typename IndexTraitsT::flat_graph_t;
+    using inter_layer_links_t = typename IndexTraitsT::inter_layer_links_t;
 
 public:
     /**
@@ -225,6 +226,8 @@ protected:
 
     /** @brief Flat graphs for the upper layers. */
     std::vector<std::unique_ptr<flat_graph_t>> _upper_layer_graphs;
+
+    inter_layer_links_t inter_layer_links;
 
 };  // class HierarchicalGraph
 
