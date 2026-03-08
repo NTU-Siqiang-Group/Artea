@@ -111,7 +111,6 @@ using approx_rnet_t = typename vertex_generator_traits_t::approx_rnet_t;
 using ortho_lsh_generator_t = typename vertex_generator_traits_t::ortho_lsh_generator_t;
 using pstable_lsh_generator_t = typename vertex_generator_traits_t::pstable_lsh_generator_t;
 using lsh_table_t = typename vertex_generator_traits_t::lsh_table_t;
-using mb_greedy_vg_t = typename vertex_generator_traits_t::mb_greedy_vg_t;
 using lb_greedy_vg_t = typename vertex_generator_traits_t::lb_greedy_vg_t;
 using random_vg_t = typename vertex_generator_traits_t::random_vg_t;
 

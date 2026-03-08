@@ -62,6 +62,11 @@ struct VertexSubset {
         return vecs_data.get_num_vecs();
     }
 
+    /** @brief Get the number of vectors in the subset (alias for get_num_vecs) */
+    auto size() const -> vec_num_t {
+        return get_num_vecs();
+    }
+
     /** @brief Reserve space for n vectors */
     void reserve(vec_num_t n) {
         vec_ids.reserve(n);

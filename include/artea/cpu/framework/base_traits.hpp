@@ -41,6 +41,7 @@ template <typename BaseTraitsT> class VectorDataset;
 template <typename BaseTraitsT> class VectorSampler;
 template <typename BaseTraitsT> class NbrArrChecker;
 template <typename BaseTraitsT> class RandomSeq;
+template <typename BaseTraitsT> class RandomSeqNR;
 template <typename BaseTraitsT> struct NeighborComparator;
 template <typename BaseTraitsT> struct StrictNeighborComparator;
 template <typename BaseTraitsT> struct NeighborIdComparator;
@@ -169,6 +170,9 @@ public:
 
     /** @brief random sequences generator. */
     using random_seq_t = RandomSeq<base_traits_t>;
+
+    /** @brief random sequences generator without replacement. */
+    using random_seq_nr_t = RandomSeqNR<base_traits_t>;
 
     /** @brief vertex subset type. */
     using vertex_subset_t = VertexSubset<base_traits_t>;
