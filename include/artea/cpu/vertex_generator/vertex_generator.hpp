@@ -25,13 +25,15 @@ namespace cpu {
 template <typename VertexGeneratorTraitsT, typename DerivedClassT>
 class VertexGenerator {
 
+    using vertex_subset_t = typename VertexGeneratorTraitsT::vertex_subset_t;
+
 public:
     /**
      * @brief Generate method that delegates to the derived class's generate_impl.
-     * This enables static polymorphism.
+     * This enables static polymorphism and returns a vertex_subset_t.
      */
     template <typename... Args>
-    auto generate(Args&&... args) {
+    auto generate(Args&&... args) -> vertex_subset_t {
         return static_cast<DerivedClassT*>(this)->generate_impl(std::forward<Args>(args)...);
     }
 

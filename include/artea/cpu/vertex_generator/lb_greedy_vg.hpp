@@ -48,7 +48,7 @@ class LBGreedyVG : public VertexGeneratorTraitsT::template vertex_generator_t<LB
      * @brief Candidate information for batch processing
      */
     struct CandidateInfo {
-        vec_id_t vec_id;                // Vector ID in base_vecs
+        vec_id_t vec_id;                // Vector IDs
         distance_t min_dist_to_rnet;    // Minimum distance to existing approx_rnet
     };
 
@@ -107,7 +107,7 @@ public:
      * This overload automatically computes term_thresh based on the desired
      * coverage ratio and confidence level.
      *
-     * @param base_vecs The dataset to generate vertices from
+     * @param vecs_data The vector array to generate vertices from
      * @param min_radius Minimum distance between vertices
      * @param max_result_size Maximum number of vertices to generate
      * @param coverage_ratio Target coverage ratio (e.g., 0.95 for 95% coverage)
@@ -117,7 +117,7 @@ public:
      * @return Approximate r-net (VertexSubset)
      */
     auto generate_impl(
-        const vector_array_t& base_vecs,
+        const vector_array_t& vecs_data,
         const distance_t min_radius,
         const vertex_num_t max_result_size,
         float coverage_ratio,
@@ -126,7 +126,7 @@ public:
         bool is_shuffle = false
     ) -> approx_rnet_t {
         vertex_num_t term_thresh = compute_term_thresh(coverage_ratio, confidence, batch_size);
-        return generate_impl(base_vecs, min_radius, max_result_size, batch_size, term_thresh, is_shuffle);
+        return generate_impl(vecs_data, min_radius, max_result_size, batch_size, term_thresh, is_shuffle);
     }
 
     /**
@@ -134,7 +134,7 @@ public:
      *
      * Manually specify batch_size and term_thresh.
      *
-     * @param base_vecs The dataset to generate vertices from
+     * @param vecs_data The vector array to generate vertices from
      * @param min_radius Minimum distance between vertices
      * @param max_result_size Maximum number of vertices to generate
      * @param batch_size Batch size for processing
@@ -143,38 +143,38 @@ public:
      * @return Approximate r-net (VertexSubset)
      */
     auto generate_impl(
-        const vector_array_t& base_vecs,
+        const vector_array_t& vecs_data,
         const distance_t min_radius,
         const vertex_num_t max_result_size,
         vertex_num_t batch_size,
         vertex_num_t term_thresh,
         bool is_shuffle = false
     ) -> approx_rnet_t {
-        const vec_num_t total_base_vecs = base_vecs.get_num_vecs();
+        const vec_num_t total_vecs = vecs_data.get_num_vecs();
 
-        approx_rnet_t approx_rnet(base_vecs.get_vec_dim());
+        approx_rnet_t approx_rnet(vecs_data.get_vec_dim());
 
-        if (total_base_vecs == 0) { return approx_rnet; }
+        if (total_vecs == 0) { return approx_rnet; }
 
         approx_rnet.reserve(max_result_size);
 
         // Initialize shuffle generator if needed
         std::unique_ptr<random_seq_nr_t> shuffle_gen;
         if (is_shuffle) {
-            shuffle_gen = std::make_unique<random_seq_nr_t>(total_base_vecs);
+            shuffle_gen = std::make_unique<random_seq_nr_t>(total_vecs);
         }
 
         // Select first vertex (either shuffled or sequential)
         vec_id_t first_id = is_shuffle ? (*shuffle_gen)[0] : 0;
         approx_rnet.vec_ids.push_back(first_id);
-        approx_rnet.vecs_data.append_vec(base_vecs.get(first_id));
+        approx_rnet.vecs_data.append_vec(vecs_data.get(first_id));
 
         vec_num_t batch_start = 0;
 
         while (approx_rnet.get_num_vecs() < max_result_size) {
-            if (batch_start >= total_base_vecs) { break; }
+            if (batch_start >= total_vecs) { break; }
 
-            const vec_num_t batch_end = std::min(batch_start + batch_size, total_base_vecs);
+            const vec_num_t batch_end = std::min(batch_start + batch_size, total_vecs);
             const vec_num_t current_batch_size = batch_end - batch_start;
 
             tbb::enumerable_thread_specific<std::vector<CandidateInfo>> thread_local_candidates;
@@ -193,7 +193,7 @@ public:
                             candidate_idx = batch_start + local_idx;
                         }
 
-                        const vec_ele_t* candidate_vec = base_vecs.get(candidate_idx);
+                        const vec_ele_t* candidate_vec = vecs_data.get(candidate_idx);
 
                         distance_t min_distance = std::numeric_limits<distance_t>::max();
                         bool is_qualifying = true;
@@ -235,7 +235,7 @@ public:
             for (const auto& candidate : qualifying_candidates) {
                 if (approx_rnet.get_num_vecs() >= max_result_size) { break; }
 
-                const vec_ele_t* candidate_vec = base_vecs.get(candidate.vec_id);
+                const vec_ele_t* candidate_vec = vecs_data.get(candidate.vec_id);
 
                 bool conflicts_with_batch = false;
                 for (const vec_ele_t* batch_vec : batch_added_vecs) {
@@ -291,6 +291,9 @@ public:
 
             batch_start += batch_size;
         }
+
+        // Arrange vec_ids in sorted order for better cache locality
+        approx_rnet.arrange_in_order(vecs_data);
 
         return approx_rnet;
     }

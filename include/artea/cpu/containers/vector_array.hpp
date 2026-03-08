@@ -284,10 +284,10 @@ public:
      * @param count The number of vectors to copy.
      * @return A new VectorArray containing the subset of vectors.
      */
-    auto get_subset(vec_num_t start, vec_num_t count) const -> VectorArray {
+    auto extract_subset(vec_num_t start, vec_num_t count) const -> VectorArray {
         if (static_cast<std::size_t>(start) + count > _num_vecs) {
             logger.error(fmt::format(
-                "VectorArray::get_subset: Range out of bounds. Start: {}, Count: {}, Total: {}",
+                "VectorArray::extract_subset: Range out of bounds. Start: {}, Count: {}, Total: {}",
                 start, count, _num_vecs));
         }
         VectorArray subset(count, _vec_dim);
@@ -300,7 +300,8 @@ public:
         return subset;
     }
 
-    auto get_subset(std::vector<vec_id_t> vec_ids) const -> VectorArray {
+    template <typename ContainerT>
+    auto extract_subset(const ContainerT& vec_ids) const -> VectorArray {
         vec_num_t count = static_cast<vec_num_t>(vec_ids.size());
         VectorArray subset(count, _vec_dim);
 

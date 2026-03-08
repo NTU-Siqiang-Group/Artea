@@ -20,6 +20,9 @@
 
 #pragma once
 
+#include <vector>
+#include <algorithm>
+#include <numeric>
 #include <artea/cpu/containers/allocator.hpp>
 
 namespace artea {
@@ -71,6 +74,38 @@ struct VertexSubset {
     void reserve(vec_num_t n) {
         vec_ids.reserve(n);
         vecs_data.reserve(n);
+    }
+
+    /**
+     * @brief Arrange vec_ids in ascending order and reorder vecs_data accordingly
+     *
+     * This function sorts vec_ids and extracts the corresponding vectors from
+     * the original vector array in sorted order, improving cache locality.
+     *
+     * @param original_vecs The original vector array to extract from
+     */
+    template <typename VectorArrayT>
+    void arrange_in_order(const VectorArrayT& original_vecs) {
+        if (vec_ids.empty()) return;
+
+        // Create sorted indices
+        std::vector<size_t> sort_indices(vec_ids.size());
+        std::iota(sort_indices.begin(), sort_indices.end(), 0);
+        std::sort(sort_indices.begin(), sort_indices.end(),
+            [&](size_t a, size_t b) {
+                return vec_ids[a] < vec_ids[b];
+            });
+
+        // Create sorted vec_ids
+        cache_aligned_container_t<vec_id_t> sorted_vec_ids;
+        sorted_vec_ids.reserve(vec_ids.size());
+        for (size_t idx : sort_indices) {
+            sorted_vec_ids.push_back(vec_ids[idx]);
+        }
+
+        // Replace with sorted vec_ids and extract vectors in sorted order
+        vec_ids = std::move(sorted_vec_ids);
+        vecs_data = original_vecs.extract_subset(vec_ids);
     }
 };
 

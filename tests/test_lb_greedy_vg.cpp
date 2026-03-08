@@ -17,6 +17,8 @@
 #include <memory>
 #include <filesystem>
 #include <random>
+#include <unordered_set>
+#include <chrono>
 #include <fmt/format.h>
 #include <argparse/argparse.hpp>
 #include <gtest/gtest.h>
@@ -39,6 +41,7 @@ using vector_array_t = typename vg_traits_t::vector_array_t;
 using vector_dataset_t = typename vg_traits_t::vector_dataset_t;
 using dist_func_t = typename vg_traits_t::dist_func_t;
 using lb_greedy_vg_t = typename vg_traits_t::lb_greedy_vg_t;
+using approx_rnet_t = typename vg_traits_t::approx_rnet_t;
 
 struct TestConfig {
     std::string config_path;
@@ -52,6 +55,20 @@ struct TestConfig {
     bool verbose;
     bool shuffle;
 } g_config;
+
+// Global test results
+struct TestResults {
+    double generation_time_ms = 0.0;
+    uint32_t num_vertices = 0;
+    uint32_t total_base_vecs = 0;
+    float rnet_ratio = 0.0f;
+    float empirical_coverage = 0.0f;
+    float min_pairwise_dist = 0.0f;
+    uint32_t separation_violations = 0;
+    bool ordering_passed = false;
+    bool data_consistency_passed = false;
+    bool uniqueness_passed = false;
+} g_test_results;
 
 class DataProvider {
 public:
@@ -67,51 +84,148 @@ public:
         logger.info(fmt::format("Loading Dataset: {} from {}", g_config.dataset_name, g_config.config_path));
         dataset_ = std::make_unique<vector_dataset_t>(g_config.config_path, g_config.dataset_name);
         dist_func_ = std::make_unique<dist_func_t>(dataset_->get_base_vecs().get_vec_dim());
+
+        // Generate r-net once for all tests
+        const auto& base_vecs = dataset_->get_base_vecs();
+        if (g_config.verbose) {
+            logger.info(fmt::format("Base vectors size: {}", base_vecs.get_num_vecs()));
+            logger.info(fmt::format("Min radius: {}", g_config.min_radius));
+            logger.info(fmt::format("Coverage ratio: {}", g_config.coverage_ratio));
+            logger.info(fmt::format("Confidence: {}", g_config.confidence));
+            logger.info(fmt::format("Batch size: {}", g_config.batch_size));
+            logger.info(fmt::format("Shuffle: {}", g_config.shuffle ? "enabled" : "disabled"));
+        }
+
+        // Time the generation
+        auto start_time = std::chrono::high_resolution_clock::now();
+
+        lb_greedy_vg_t generator(*dist_func_);
+        approx_rnet_ = std::make_unique<approx_rnet_t>(generator.generate(
+            base_vecs,
+            g_config.min_radius,
+            g_config.max_result_size,
+            g_config.coverage_ratio,
+            g_config.confidence,
+            g_config.batch_size,
+            g_config.shuffle
+        ));
+
+        auto end_time = std::chrono::high_resolution_clock::now();
+        auto duration = std::chrono::duration_cast<std::chrono::microseconds>(end_time - start_time);
+        g_test_results.generation_time_ms = duration.count() / 1000.0;
+
+        g_test_results.num_vertices = approx_rnet_->get_num_vecs();
+        g_test_results.total_base_vecs = base_vecs.get_num_vecs();
+        g_test_results.rnet_ratio = 100.0f * approx_rnet_->get_num_vecs() / base_vecs.get_num_vecs();
+
+        logger.info(fmt::format("Generated r-net with {} vertices", approx_rnet_->get_num_vecs()));
+        logger.info(fmt::format("R-net ratio: {:.2f}%", g_test_results.rnet_ratio));
+        logger.info(fmt::format("Generation time: {:.2f} ms", g_test_results.generation_time_ms));
     }
 
     vector_dataset_t& get_dataset() { return *dataset_; }
     dist_func_t& get_dist_func() { return *dist_func_; }
+    approx_rnet_t& get_approx_rnet() { return *approx_rnet_; }
 
 private:
     DataProvider() = default;
     std::unique_ptr<vector_dataset_t> dataset_;
     std::unique_ptr<dist_func_t> dist_func_;
+    std::unique_ptr<approx_rnet_t> approx_rnet_;
 };
 
 class LBGreedyVGTest : public ::testing::Test {};
 
-TEST_F(LBGreedyVGTest, VerifyRNetSeparation) {
+TEST_F(LBGreedyVGTest, VerifyRNetOrdering) {
     auto& provider = DataProvider::instance();
     auto& dataset = provider.get_dataset();
-    auto& dist_func = provider.get_dist_func();
+    auto& approx_rnet = provider.get_approx_rnet();
 
     const auto& base_vecs = dataset.get_base_vecs();
 
-    if (g_config.verbose) {
-        logger.info(fmt::format("Base vectors size: {}", base_vecs.get_num_vecs()));
-        logger.info(fmt::format("Min radius: {}", g_config.min_radius));
-        logger.info(fmt::format("Coverage ratio: {}", g_config.coverage_ratio));
-        logger.info(fmt::format("Confidence: {}", g_config.confidence));
-        logger.info(fmt::format("Batch size: {}", g_config.batch_size));
-        logger.info(fmt::format("Shuffle: {}", g_config.shuffle ? "enabled" : "disabled"));
+    logger.info("Testing arrange_in_order correctness...");
+    logger.info(fmt::format("R-net has {} vertices", approx_rnet.get_num_vecs()));
+
+    // Test 1: Verify vec_ids are sorted in ascending order
+    logger.info("Verifying vec_ids are sorted...");
+    bool is_sorted = std::is_sorted(approx_rnet.vec_ids.begin(), approx_rnet.vec_ids.end());
+    EXPECT_TRUE(is_sorted) << "vec_ids should be sorted in ascending order";
+
+    g_test_results.ordering_passed = is_sorted;
+
+    if (is_sorted) {
+        logger.success("vec_ids are correctly sorted");
+    } else {
+        logger.error("vec_ids are NOT sorted");
+    }
+}
+
+TEST_F(LBGreedyVGTest, VerifyRNetDataConsistency) {
+    auto& provider = DataProvider::instance();
+    auto& dataset = provider.get_dataset();
+    auto& approx_rnet = provider.get_approx_rnet();
+
+    const auto& base_vecs = dataset.get_base_vecs();
+    uint32_t vec_dim = base_vecs.get_vec_dim();
+
+    // Test 2: Verify vecs_data matches original vectors
+    logger.info("Verifying vecs_data matches original vectors...");
+    uint32_t mismatch_count = 0;
+
+    for (size_t i = 0; i < approx_rnet.get_num_vecs(); ++i) {
+        vec_id_t original_id = approx_rnet.vec_ids[i];
+        const vec_ele_t* original_vec = base_vecs.get(original_id);
+        const vec_ele_t* rnet_vec = approx_rnet.vecs_data.get(i);
+
+        // Check all dimensions match
+        for (uint32_t d = 0; d < vec_dim; ++d) {
+            if (std::abs(original_vec[d] - rnet_vec[d]) > 1e-6f) {
+                mismatch_count++;
+                if (g_config.verbose && mismatch_count <= 10) {
+                    logger.warn(fmt::format("Data mismatch at index {}, dim {}: original={:.6f}, rnet={:.6f}",
+                        i, d, original_vec[d], rnet_vec[d]));
+                }
+                break;  // Only count once per vector
+            }
+        }
     }
 
-    // Generate r-net using LBGreedyVG
-    lb_greedy_vg_t generator(dist_func);
-    auto approx_rnet = generator.generate(
-        base_vecs,
-        g_config.min_radius,
-        g_config.max_result_size,
-        g_config.coverage_ratio,
-        g_config.confidence,
-        g_config.batch_size,
-        g_config.shuffle
-    );
+    EXPECT_EQ(mismatch_count, 0) << "All vectors in vecs_data should match original vectors";
 
-    logger.info(fmt::format("Generated r-net with {} vertices", approx_rnet.get_num_vecs()));
-    logger.info(fmt::format("R-net ratio: {:.2f}%", 100.0 * approx_rnet.get_num_vecs() / base_vecs.get_num_vecs()));
+    g_test_results.data_consistency_passed = (mismatch_count == 0);
 
-    // Test 1: Verify separation property (all pairwise distances >= min_radius)
+    if (mismatch_count == 0) {
+        logger.success("All vectors match original data");
+    } else {
+        logger.error(fmt::format("{} vectors have mismatched data", mismatch_count));
+    }
+}
+
+TEST_F(LBGreedyVGTest, VerifyRNetUniqueness) {
+    auto& provider = DataProvider::instance();
+    auto& approx_rnet = provider.get_approx_rnet();
+
+    // Test 3: Verify all vec_ids are unique
+    logger.info("Verifying vec_ids are unique...");
+    std::unordered_set<vec_id_t> unique_ids(approx_rnet.vec_ids.begin(), approx_rnet.vec_ids.end());
+    EXPECT_EQ(unique_ids.size(), approx_rnet.vec_ids.size()) << "All vec_ids should be unique";
+
+    g_test_results.uniqueness_passed = (unique_ids.size() == approx_rnet.vec_ids.size());
+
+    if (unique_ids.size() == approx_rnet.vec_ids.size()) {
+        logger.success("All vec_ids are unique");
+    } else {
+        logger.error(fmt::format("Found {} duplicates in vec_ids",
+            approx_rnet.vec_ids.size() - unique_ids.size()));
+    }
+}
+
+TEST_F(LBGreedyVGTest, VerifyRNetSeparation) {
+    auto& provider = DataProvider::instance();
+    auto& dist_func = provider.get_dist_func();
+    auto& approx_rnet = provider.get_approx_rnet();
+
+    // Test: Verify separation property (all pairwise distances >= min_radius)
     logger.info("Testing r-net separation property...");
     uint32_t violation_count = 0;
     distance_t min_pairwise_dist = std::numeric_limits<distance_t>::max();
@@ -134,6 +248,9 @@ TEST_F(LBGreedyVGTest, VerifyRNetSeparation) {
         violation_count, approx_rnet.get_num_vecs() * (approx_rnet.get_num_vecs() - 1) / 2));
     logger.info(fmt::format("Minimum pairwise distance: {:.4f}", min_pairwise_dist));
 
+    g_test_results.min_pairwise_dist = min_pairwise_dist;
+    g_test_results.separation_violations = violation_count;
+
     // Separation property must hold strictly
     EXPECT_EQ(violation_count, 0) << "R-net separation property violated";
 }
@@ -142,24 +259,11 @@ TEST_F(LBGreedyVGTest, VerifyRNetCoverage) {
     auto& provider = DataProvider::instance();
     auto& dataset = provider.get_dataset();
     auto& dist_func = provider.get_dist_func();
+    auto& approx_rnet = provider.get_approx_rnet();
 
     const auto& base_vecs = dataset.get_base_vecs();
 
-    // Generate r-net using LBGreedyVG
-    lb_greedy_vg_t generator(dist_func);
-    auto approx_rnet = generator.generate(
-        base_vecs,
-        g_config.min_radius,
-        g_config.max_result_size,
-        g_config.coverage_ratio,
-        g_config.confidence,
-        g_config.batch_size,
-        g_config.shuffle
-    );
-
-    logger.info(fmt::format("Generated r-net with {} vertices", approx_rnet.get_num_vecs()));
-
-    // Test 2: Verify coverage property by sampling random points
+    // Test: Verify coverage property by sampling random points
     logger.info(fmt::format("Testing r-net coverage property with {} random samples...", g_config.num_test_samples));
 
     std::random_device rd;
@@ -195,6 +299,8 @@ TEST_F(LBGreedyVGTest, VerifyRNetCoverage) {
     }
 
     float empirical_coverage = 1.0f - (float)uncovered_count / g_config.num_test_samples;
+    g_test_results.empirical_coverage = empirical_coverage;
+
     logger.info(fmt::format("Coverage test: {}/{} samples covered ({:.2f}%)",
         g_config.num_test_samples - uncovered_count, g_config.num_test_samples, empirical_coverage * 100.0f));
     logger.info(fmt::format("Target coverage: {:.2f}%", g_config.coverage_ratio * 100.0f));
@@ -264,5 +370,30 @@ int main(int argc, char** argv) {
 
     DataProvider::instance().init();
 
-    return RUN_ALL_TESTS();
+    int result = RUN_ALL_TESTS();
+
+    // Print summary table
+    std::cout << "\n" << std::string(80, '=') << std::endl;
+    std::cout << "                        TEST RESULTS SUMMARY" << std::endl;
+    std::cout << std::string(80, '=') << std::endl;
+    std::cout << "\n--- R-Net Generation ---" << std::endl;
+    std::cout << fmt::format("  Generation Time:        {:.2f} ms", g_test_results.generation_time_ms) << std::endl;
+    std::cout << fmt::format("  Num Vertices:           {} / {}", g_test_results.num_vertices, g_test_results.total_base_vecs) << std::endl;
+    std::cout << fmt::format("  R-Net Ratio:            {:.2f}%", g_test_results.rnet_ratio) << std::endl;
+    std::cout << "\n--- Coverage Analysis ---" << std::endl;
+    std::cout << fmt::format("  Target Coverage:        {:.2f}%", g_config.coverage_ratio * 100.0f) << std::endl;
+    std::cout << fmt::format("  Empirical Coverage:     {:.2f}%", g_test_results.empirical_coverage * 100.0f) << std::endl;
+    std::cout << fmt::format("  Coverage Difference:    {:.2f}%", (g_test_results.empirical_coverage - g_config.coverage_ratio) * 100.0f) << std::endl;
+    std::cout << "\n--- Separation Analysis ---" << std::endl;
+    std::cout << fmt::format("  Min Radius:             {:.4f}", g_config.min_radius) << std::endl;
+    std::cout << fmt::format("  Min Pairwise Distance:  {:.4f}", g_test_results.min_pairwise_dist) << std::endl;
+    std::cout << fmt::format("  Separation Violations:  {}", g_test_results.separation_violations) << std::endl;
+    std::cout << "\n--- Test Results ---" << std::endl;
+    std::cout << fmt::format("  Ordering Test:          {}", g_test_results.ordering_passed ? "PASS" : "FAIL") << std::endl;
+    std::cout << fmt::format("  Data Consistency Test:  {}", g_test_results.data_consistency_passed ? "PASS" : "FAIL") << std::endl;
+    std::cout << fmt::format("  Uniqueness Test:        {}", g_test_results.uniqueness_passed ? "PASS" : "FAIL") << std::endl;
+    std::cout << fmt::format("  Separation Test:        {}", (g_test_results.separation_violations == 0) ? "PASS" : "FAIL") << std::endl;
+    std::cout << std::string(80, '=') << std::endl;
+
+    return result;
 }
