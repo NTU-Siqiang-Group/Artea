@@ -24,7 +24,6 @@
 #include <cstddef>
 #include <vector>
 #include <memory>
-#include <artea/cpu/index/inter_layer_links.hpp>
 
 namespace artea {
 namespace cpu {
@@ -189,7 +188,7 @@ protected:
     std::vector<std::unique_ptr<flat_search_graph_t>> _upper_layer_graphs;
 
     /** @brief links vertex between two adjacent layers */
-    inter_layer_links_t inter_layer_links;
+    inter_layer_links_t _inter_layer_links;
 
 };  // class HierarchicalSearchGraph
 

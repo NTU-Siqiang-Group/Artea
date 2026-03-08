@@ -227,7 +227,7 @@ protected:
     /** @brief Flat graphs for the upper layers. */
     std::vector<std::unique_ptr<flat_graph_t>> _upper_layer_graphs;
 
-    inter_layer_links_t inter_layer_links;
+    inter_layer_links_t _inter_layer_links;
 
 };  // class HierarchicalGraph
 
