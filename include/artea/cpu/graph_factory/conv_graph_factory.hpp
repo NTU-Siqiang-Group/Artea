@@ -51,13 +51,14 @@ class ConvGraphFactory :
     using propagate_engine_t = typename GraphFactoryTraitsT::template propagate_engine_t<false>;
     using triangle_updater_t = typename GraphFactoryTraitsT::triangle_updater_t;
     using reverse_updater_t = typename GraphFactoryTraitsT::reverse_updater_t;
+    using vector_array_t = typename GraphFactoryTraitsT::vector_array_t;
 
 public:
     ConvGraphFactory() {}
 
-    /** @brief construct a new convergent graph */
+    /** @brief construct a new convergent graph from vector array */
     auto construct_graph_impl(
-        const vector_dataset_t& dataset,
+        const vector_array_t& base_vecs,
         const vertex_num_t max_nbr_size,
         const vertex_num_t reserved_nbr_size,
         const ratio_t scale_coeffs,
@@ -65,14 +66,14 @@ public:
         const iter_t num_outer_iters,   // recommend param: 4
         const iter_t num_inner_iters    // recommend param: 14
     ) -> flat_graph_t {
-        const vertex_num_t num_vertices = static_cast<vertex_num_t>(dataset.get_num_base_vecs());
+        const vertex_num_t num_vertices = static_cast<vertex_num_t>(base_vecs.get_num_vecs());
         flat_graph_t flat_graph(
-            /* vecs_data =          */ dataset.get_base_vecs(),
+            /* vecs_data =          */ base_vecs,
             /* num_vertices =       */ num_vertices,
             /* max_nbr_size =       */ max_nbr_size,
             /* reserved_nbr_size =  */ reserved_nbr_size
         );
-        dist_func_t dist_func(dataset.get_vec_dim());
+        dist_func_t dist_func(base_vecs.get_vec_dim());
 
         // generate random edges first
         random_eg_t random_eg(dist_func);

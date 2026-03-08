@@ -27,14 +27,15 @@ class ArteaGraphFactory :
     using conv_graph_factory_t = typename GraphFactoryTraitsT::conv_graph_factory_t;
     using hierarchical_graph_t = typename GraphFactoryTraitsT::hierarchical_graph_t;
     using vector_dataset_t = typename GraphFactoryTraitsT::vector_dataset_t;
+    using vector_array_t = typename GraphFactoryTraitsT::vector_array_t;
 
     // vertex generators type
     using lb_greedy_vg_t = typename GraphFactoryTraitsT::lb_greedy_vg_t;
     using random_vg_t = typename RandomVG<vertex_generator_traits_t>;
 
-    /** @brief construct a new artea graph */
+    /** @brief construct a new artea graph from vector array */
     static auto construct_graph_impl(
-        const vector_dataset_t& dataset,
+        const vector_array_t& base_vecs,
         const vertex_num_t bl_max_nbr_size,
         const vertex_num_t ul_max_nbr_size,
         const vertex_num_t bl_reserved_nbr_size,
@@ -49,7 +50,7 @@ class ArteaGraphFactory :
 
     }
 
-    auto construct_hierarchical_vertex(
+    // auto construct_hierarchical_vertex(
 
-    ) ->
+    // ) ->
 };
