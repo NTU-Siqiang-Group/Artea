@@ -38,7 +38,7 @@ class InterLayerLinks {
     static constexpr layer_num_t expected_max_layers = 63;  // Arbitrary upper bound on number of layers for pre-allocation
 
 public:
-    InterLayerLinks(const vertex_num_t num_vertices) {
+    explicit InterLayerLinks(const vertex_num_t num_vertices) {
         // expected number of total inter-layer links
         _links_arr.reserve(num_vertices * 2);
         _layer_offsets.reserve(expected_max_layers + 1);

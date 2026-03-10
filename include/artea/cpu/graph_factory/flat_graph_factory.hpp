@@ -64,7 +64,10 @@ public:
         Args&&... args
     ) -> flat_graph_t {
         return static_cast<DerivedClassT*>(this)->construct_graph_impl(
-            base_vecs, max_nbr_size, reserved_nbr_size, std::forward<Args>(args)...
+            base_vecs,
+            max_nbr_size,
+            reserved_nbr_size,
+            std::forward<Args>(args)...
         );
     }
 

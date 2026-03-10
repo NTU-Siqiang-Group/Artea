@@ -16,17 +16,19 @@
 
 namespace artea {
 namespace cpu {
-namespace simple_tests_context {
+namespace default_context {
 
-// Type definitions using SIMPLE_EUCLIDEAN for low-dimensional vectors
+// Type definitions using EUCLIDEAN, LOCKED_BUFFER_WITH_MUTEX
 using vec_num_t = uint32_t;
 using vec_ele_t = float;
+
 using base_traits_t = BaseTraits<vec_num_t, vec_ele_t, false>;
-using computer_traits_t = ComputerTraits<base_traits_t, DistanceMetricsT::SIMPLE_EUCLIDEAN>;
+using computer_traits_t = ComputerTraits<base_traits_t, DistanceMetricsT::EUCLIDEAN>;
 using buffer_traits_t = BufferTraits<base_traits_t, BufferPolicyT::LOCKED_BUFFER_WITH_MUTEX, 32>;
 using index_traits_t = IndexTraits<base_traits_t>;
 using edge_generator_traits_t = EdgeGeneratorTraits<computer_traits_t, buffer_traits_t, index_traits_t>;
 using vertex_generator_traits_t = VertexGeneratorTraits<computer_traits_t>;
+using router_traits_t = RouterTraits<computer_traits_t, index_traits_t, false>;
 using graph_factory_traits_t = GraphFactoryTraits<
     vertex_generator_traits_t,
     edge_generator_traits_t,
@@ -45,9 +47,9 @@ using cluster_num_t = typename base_traits_t::cluster_num_t;
 using cluster_id_t = typename base_traits_t::cluster_id_t;
 using part_num_t = typename base_traits_t::part_num_t;
 using part_id_t = typename base_traits_t::part_id_t;
+using batch_id_t = typename base_traits_t::batch_id_t;
 using layer_num_t = typename base_traits_t::layer_num_t;
 using layer_id_t = typename base_traits_t::layer_id_t;
-using batch_id_t = typename base_traits_t::batch_id_t;
 using hash_num_t = typename base_traits_t::hash_num_t;
 using iter_t = typename base_traits_t::iter_t;
 using nbr_t = typename base_traits_t::nbr_t;
@@ -70,6 +72,7 @@ using ground_truth_t = typename base_traits_t::ground_truth_t;
 using vector_sampler_t = typename base_traits_t::vector_sampler_t;
 using nbr_arr_checker_t = typename base_traits_t::nbr_arr_checker_t;
 using random_seq_t = typename base_traits_t::random_seq_t;
+using random_seq_nr_t = typename base_traits_t::random_seq_nr_t;
 using vertex_subset_t = typename base_traits_t::vertex_subset_t;
 using pruning_condition_t = typename base_traits_t::pruning_condition_t;
 
@@ -99,6 +102,10 @@ using log_table_t = typename buffer_traits_t::log_table_t;
 // Index types from IndexTraits
 using flat_graph_t = typename index_traits_t::flat_graph_t;
 using flat_search_graph_t = typename index_traits_t::flat_search_graph_t;
+using hierarchical_graph_t = typename index_traits_t::hierarchical_graph_t;
+using hierarchical_search_graph_t = typename index_traits_t::hierarchical_search_graph_t;
+using inter_layer_links_t = typename index_traits_t::inter_layer_links_t;
+using hierarchical_vecs_manager_t = typename index_traits_t::hierarchical_vecs_manager_t;
 
 // Edge generator types from EdgeGeneratorTraits
 using triangle_updater_t = typename edge_generator_traits_t::triangle_updater_t;
@@ -116,6 +123,23 @@ using random_vg_t = typename vertex_generator_traits_t::random_vg_t;
 
 // Graph factory types from GraphFactoryTraits
 using conv_graph_factory_t = typename graph_factory_traits_t::conv_graph_factory_t;
+using flat_search_graph_factory_t = typename graph_factory_traits_t::flat_search_graph_factory_t;
+
+// Router types from RouterTraits
+using candidate_entry_t = typename router_traits_t::candidate_entry_t;
+using stateful_candidate_entry_t = typename router_traits_t::stateful_candidate_entry_t;
+using std_candidate_queue_t = typename router_traits_t::std_candidate_queue_t;
+using linear_candidate_queue_t = typename router_traits_t::linear_candidate_queue_t;
+using fh_candidate_queue_t = typename router_traits_t::fh_candidate_queue_t;
+template <VisitedTable VisitedTableImpl = typename router_traits_t::version_tag_table_t>
+using visited_table_pool_t = typename router_traits_t::template visited_table_pool_t<VisitedTableImpl>;
+using vector_router_t = typename router_traits_t::template vector_router_t<BruteforceRouter<router_traits_t>>;
+using bruteforce_router_t = BruteforceRouter<router_traits_t>;
+template <CandidateQueue CandidateQueueImpl = std_candidate_queue_t, VisitedTable VisitedTableImpl = thread_local_bitmap_t>
+using monolayer_graph_router_t = typename router_traits_t::template monolayer_graph_router_t<CandidateQueueImpl, VisitedTableImpl>;
+
+// Utility types
+using index_register_util_t = IndexRegisterUtil;
 
 // Propagate engine from EdgeGeneratorTraits
 using propagate_engine_ss_t = typename edge_generator_traits_t::propagate_engine_t<true>;
@@ -123,6 +147,6 @@ using propagate_engine_noss_t = typename edge_generator_traits_t::propagate_engi
 // Currently, NO SELECTIVE SCHEDULING is faster
 using propagate_engine_t = propagate_engine_noss_t;
 
-}   // namespace simple_tests_context
+}   // namespace default_context
 }   // namespace cpu
 }   // namespace artea

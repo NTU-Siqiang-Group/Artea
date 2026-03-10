@@ -322,9 +322,9 @@ int main(int argc, char** argv) {
     program.add_argument("-d", "--dataset").default_value(std::string("sift-1m"));
     program.add_argument("-r", "--min-radius").default_value(90000.0f).scan<'g', float>();
     program.add_argument("-m", "--max-result-size").default_value(100000u).scan<'u', uint32_t>();
-    program.add_argument("--coverage-ratio").default_value(0.95f).scan<'g', float>();
-    program.add_argument("--confidence").default_value(0.96f).scan<'g', float>();
-    program.add_argument("-b", "--batch-size").default_value(512u).scan<'u', uint32_t>();
+    program.add_argument("--coverage-ratio").default_value(0.96f).scan<'g', float>();
+    program.add_argument("--confidence").default_value(0.95f).scan<'g', float>();
+    program.add_argument("-b", "--batch-size").default_value(2048u).scan<'u', uint32_t>();
     program.add_argument("-n", "--num-test-samples").default_value(10000u).scan<'u', uint32_t>();
     program.add_argument("-v", "--verbose").default_value(false).implicit_value(true);
     program.add_argument("--shuffle").default_value(false).implicit_value(true);

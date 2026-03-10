@@ -18,7 +18,7 @@
 #include <nlohmann/json.hpp>
 #include <artea/cpu/vertex_generator/random_vg.hpp>
 #include <artea/cpu/framework/artea.hpp>
-#include <artea/cpu/framework/default_context.hpp>
+#include <artea/cpu/framework/type_context/default_context.hpp>
 #include <unordered_set>
 #include <algorithm>
 #include <filesystem>

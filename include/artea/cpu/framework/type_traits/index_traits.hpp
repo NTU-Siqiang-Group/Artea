@@ -29,6 +29,7 @@ template <typename IndexTraitsT> class FlatSearchGraph;
 template <typename IndexTraitsT> class HierarchicalGraph;
 template <typename IndexTraitsT> class HierarchicalSearchGraph;
 template <typename IndexTraitsT> class InterLayerLinks;
+template <typename IndexTraitsT> class HierarchicalVecsManager;
 
 template <typename BaseTraitsT>
 struct IndexTraits : virtual public BaseTraitsT {
@@ -53,6 +54,9 @@ struct IndexTraits : virtual public BaseTraitsT {
 
     /** @brief Inter-layer links type. */
     using inter_layer_links_t = InterLayerLinks<index_traits_t>;
+
+    /** @brief Hierarchical vector manager type. */
+    using hierarchical_vecs_manager_t = HierarchicalVecsManager<index_traits_t>;
 
 };  // struct IndexTraits
 

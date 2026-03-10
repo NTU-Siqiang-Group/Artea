@@ -24,6 +24,7 @@
 #include <cstdint>
 #include <vector>
 #include <functional>
+#include <utility>
 
 namespace artea {
 namespace cpu {
@@ -56,9 +57,10 @@ public:
     /**
      * @brief Initialize the router, preparing any necessary data structures or indices (for fast routing).
      */
+    template <typename... Args>
     __attribute__((always_inline))
-    auto initialize() -> void {
-        static_cast<DerivedClassT*>(this)->initialize_impl();
+    auto initialize(Args&&... args) -> void {
+        static_cast<DerivedClassT*>(this)->initialize_impl(std::forward<Args>(args)...);
     }
 
     /**
@@ -73,6 +75,18 @@ public:
     }
 
     /**
+     * @brief Query the top-k nearest vertices for a single vector with an entry point.
+     *
+     * @param query_vec Pointer to the query vector data.
+     * @param entry_point Starting vertex ID for the search.
+     * @return std::vector<vertex_id_t> Vector containing the IDs of the top-k nearest vertices.
+     */
+    __attribute__((always_inline))
+    auto query(const vec_ele_t* query_vec, const vec_id_t entry_point) const -> std::vector<vec_id_t> {
+        return static_cast<const DerivedClassT*>(this)->query_impl(query_vec, entry_point);
+    }
+
+    /**
      * @brief Perform batch queries to find the top-k nearest vertices for multiple vectors.
      *
      * @param query_vecs A VectorArray containing the query vectors.
@@ -81,6 +95,18 @@ public:
     __attribute__((always_inline))
     auto batch_query(const query_vecs_t& query_vecs) const -> idlist_array_t {
         return static_cast<const DerivedClassT*>(this)->batch_query_impl(query_vecs);
+    }
+
+    /**
+     * @brief Perform batch queries with entry points to find the top-k nearest vertices for multiple vectors.
+     *
+     * @param query_vecs A VectorArray containing the query vectors.
+     * @param entry_points Vector of entry point vertex IDs for each query.
+     * @return idlist_array_t Array with num_vecs=num_queries, dim=topk where each vector contains the top-k IDs for one query.
+     */
+    __attribute__((always_inline))
+    auto batch_query(const query_vecs_t& query_vecs, const std::vector<vec_id_t>& entry_points) const -> idlist_array_t {
+        return static_cast<const DerivedClassT*>(this)->batch_query_impl(query_vecs, entry_points);
     }
 
 protected:

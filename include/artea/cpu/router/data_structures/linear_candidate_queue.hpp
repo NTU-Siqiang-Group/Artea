@@ -114,7 +114,7 @@ public:
      * @param dist_func Distance function for computing distances.
      * @param query_vec Pointer to the query vector.
      * @param base_vecs Reference to the base vector array.
-     * @note Generates random IDs, computes distances using dist_func, and calls initialize.
+     * @note Generates random IDs, computes distances using dist_func, and calls seeded_initialize.
      * @complexity O(N) for generation + O(N log N) for sorting.
      */
     void random_initialize(
@@ -123,22 +123,50 @@ public:
         const vec_ele_t* query_vec,
         const vector_array_t& base_vecs
     ) {
-        // Generate random vertex IDs using cache-aligned container
-        cache_aligned_container_t<vertex_id_t> random_ids(_capacity);
-        random_seq.generate(random_ids, _capacity);
+        // Generate random vertex IDs directly into std::vector
+        std::vector<vertex_id_t> init_vids(_capacity);
+        random_seq.generate(init_vids, _capacity);
 
+        // Call seeded_initialize with the generated IDs
+        seeded_initialize(init_vids, dist_func, query_vec, base_vecs);
+    }
+
+    /**
+     * @brief Initialize the queue with a vector of vertex IDs.
+     * @param init_vids Vector of vertex IDs to initialize the queue with.
+     * @param dist_func Distance function for computing distances.
+     * @param query_vec Pointer to the query vector.
+     * @param base_vecs Reference to the base vector array.
+     * @note Computes distances for each vertex ID and calls initialize.
+     * @complexity O(N) for distance computation + O(N log N) for sorting.
+     */
+    void seeded_initialize(
+        const std::vector<vertex_id_t>& init_vids,
+        const dist_func_t& dist_func,
+        const vec_ele_t* query_vec,
+        const vector_array_t& base_vecs
+    ) {
         // Create candidate entries with computed distances
         container_t init_candidates;
-        init_candidates.reserve(_capacity);
-        for (std::size_t i = 0; i < _capacity; ++i) {
-            vertex_id_t vid = random_ids[i];
+        init_candidates.reserve(init_vids.size());
+        for (vertex_id_t vid : init_vids) {
             const vec_ele_t* base_vec = base_vecs.get(vid);
             distance_t dist = dist_func(query_vec, base_vec);
             init_candidates.emplace_back(vid, dist);
         }
 
-        // Call the existing initialize function
-        initialize(init_candidates);
+        // Initialize with computed candidates (bypasses size check for flexibility)
+        #ifndef NDEBUG
+        if (init_candidates.size() > _capacity) {
+            logger.error("seeded_initialize: init_vids size ({}) exceeds capacity ({})",
+                        init_candidates.size(), _capacity);
+        }
+        #endif
+
+        _check_cursor = 0;
+        _data = std::move(init_candidates);
+        std::sort(_data.begin(), _data.end(), entry_comparator);
+        _update_thresh_distance();
     }
 
     /** @brief Check if the queue is empty. */

@@ -25,14 +25,14 @@
 
 #include <artea/common/logger.hpp>
 
-#include <artea/cpu/framework/base_traits.hpp>
-#include <artea/cpu/framework/computer_traits.hpp>
-#include <artea/cpu/framework/buffer_traits.hpp>
-#include <artea/cpu/framework/router_traits.hpp>
-#include <artea/cpu/framework/vertex_generator_traits.hpp>
-#include <artea/cpu/framework/edge_generator_traits.hpp>
-#include <artea/cpu/framework/index_traits.hpp>
-#include <artea/cpu/framework/graph_factory_traits.hpp>
+#include <artea/cpu/framework/type_traits/base_traits.hpp>
+#include <artea/cpu/framework/type_traits/computer_traits.hpp>
+#include <artea/cpu/framework/type_traits/buffer_traits.hpp>
+#include <artea/cpu/framework/type_traits/router_traits.hpp>
+#include <artea/cpu/framework/type_traits/vertex_generator_traits.hpp>
+#include <artea/cpu/framework/type_traits/edge_generator_traits.hpp>
+#include <artea/cpu/framework/type_traits/index_traits.hpp>
+#include <artea/cpu/framework/type_traits/graph_factory_traits.hpp>
 
 #include <artea/cpu/containers/allocator.hpp>
 #include <artea/cpu/containers/vector_array.hpp>
@@ -49,6 +49,7 @@
 #include <artea/cpu/index/inter_layer_links.hpp>
 #include <artea/cpu/index/hierarchical_graph.hpp>
 #include <artea/cpu/index/hierarchical_search_graph.hpp>
+#include <artea/cpu/index/hierarchical_vecs_manager.hpp>
 
 #include <artea/cpu/graph_factory/flat_graph_factory.hpp>
 #include <artea/cpu/graph_factory/conv_graph_factory.hpp>

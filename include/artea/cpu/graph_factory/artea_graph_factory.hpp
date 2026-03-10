@@ -33,10 +33,9 @@ class ArteaGraphFactory :
     using hierarchical_graph_t = typename GraphFactoryTraitsT::hierarchical_graph_t;
     using vector_dataset_t = typename GraphFactoryTraitsT::vector_dataset_t;
     using vector_array_t = typename GraphFactoryTraitsT::vector_array_t;
-
-    // vertex generators type
+    using random_vg_t = typename GraphFactoryTraitsT::random_vg_t;
     using lb_greedy_vg_t = typename GraphFactoryTraitsT::lb_greedy_vg_t;
-    using random_vg_t = typename RandomVG<vertex_generator_traits_t>;
+    using hierarchical_vecs_manager_t = typename GraphFactoryTraitsT::hierarchical_vecs_manager_t;
 
 public:
 
@@ -57,13 +56,29 @@ public:
 
     }
 
+private:
     template <VGPolicyT VGPolicy>
-    auto construct_hier_vertex(
+    auto _construct_hier_vertex(
         const vector_array_t& base_vecs,
-        hierarchical_graph_t& artea_graph,
+        const dist_func_t& dist_func,
+        hierarchical_vecs_manager_t& hier_vecs_manager,
         // optional args
     ) -> void {
+        const vertex_num_t num_vertices = static_cast<vertex_num_t>(base_vecs.get_num_vecs());
+        if constexpr (VGPolicy == VGPolicyT::ramdom_selection) {
 
+        }
+        else if constexpr (VGPolicy == VGPolicyT::rnet_selection) {
+
+        }
     }
 
+    auto _construct_hier_vertex_lb_greedy(
+        const vector_array_t& base_vecs,
+        const dist_func_t& dist_func,
+        hierarchical_vecs_manager_t& hier_vecs_manager
+    ) -> void {
+        lb_greedy_vg_t lb_greedy_vg(dist_func);
+        lb_greedy_vg.generate()
+    }
 };

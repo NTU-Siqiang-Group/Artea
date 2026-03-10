@@ -1092,6 +1092,161 @@ TEST_F(CandidateQueueTest, StressTest_FHQueue) {
 }
 
 // ============================================================================
+// 7. Seeded Initialize with Vertex IDs Tests
+// ============================================================================
+
+TEST_F(CandidateQueueTest, SeededInitialize_StdQueue) {
+    logger.info(" -> [StdQueue] Seeded Initialize with Vertex IDs");
+
+    const std::size_t K = 32 * g_config.scale;
+    const std::size_t num_vecs = 10000;  // Increased to ensure enough vectors
+    const std::size_t dim = 128;
+
+    // Create test data
+    using vector_array_t = typename router_traits_t::vector_array_t;
+    using dist_func_t = typename router_traits_t::dist_func_t;
+
+    vector_array_t base_vecs(num_vecs, dim);
+    std::mt19937 rng(g_config.seed);
+    std::uniform_real_distribution<vec_ele_t> dist(0.0f, 1.0f);
+
+    for (std::size_t i = 0; i < num_vecs; ++i) {
+        vec_ele_t* vec = base_vecs.get(i);
+        for (std::size_t j = 0; j < dim; ++j) {
+            vec[j] = dist(rng);
+        }
+    }
+
+    std::vector<vec_ele_t> query_vec(dim);
+    for (std::size_t j = 0; j < dim; ++j) {
+        query_vec[j] = dist(rng);
+    }
+
+    // Create vertex ID list (smaller than capacity)
+    std::vector<vertex_id_t> init_vids;
+    const std::size_t init_size = K / 2;  // Half of capacity
+    for (std::size_t i = 0; i < init_size; ++i) {
+        init_vids.push_back(static_cast<vertex_id_t>(i));
+    }
+
+    dist_func_t dist_func(dim);
+    std_queue_t q(K);
+    q.seeded_initialize(init_vids, dist_func, query_vec.data(), base_vecs);
+
+    // Verify queue size
+    EXPECT_EQ(q.get_result_size(), init_size);
+    EXPECT_FALSE(q.empty());
+
+    // Verify candidates are sorted
+    auto out = drain_unexplored(q);
+    ASSERT_EQ(out.size(), init_size);
+    for (std::size_t i = 1; i < out.size(); ++i) {
+        EXPECT_LE(out[i - 1], out[i])
+            << "StdQueue seeded_initialize: order violated at position " << i;
+    }
+
+    logger.success(" [StdQueue] Seeded Initialize with Vertex IDs passed.");
+}
+
+TEST_F(CandidateQueueTest, SeededInitialize_LinearQueue) {
+    logger.info(" -> [LinearQueue] Seeded Initialize with Vertex IDs");
+
+    const std::size_t K = 32 * g_config.scale;
+    const std::size_t num_vecs = 10000;  // Increased to ensure enough vectors
+    const std::size_t dim = 128;
+
+    using vector_array_t = typename router_traits_t::vector_array_t;
+    using dist_func_t = typename router_traits_t::dist_func_t;
+
+    vector_array_t base_vecs(num_vecs, dim);
+    std::mt19937 rng(g_config.seed);
+    std::uniform_real_distribution<vec_ele_t> dist(0.0f, 1.0f);
+
+    for (std::size_t i = 0; i < num_vecs; ++i) {
+        vec_ele_t* vec = base_vecs.get(i);
+        for (std::size_t j = 0; j < dim; ++j) {
+            vec[j] = dist(rng);
+        }
+    }
+
+    std::vector<vec_ele_t> query_vec(dim);
+    for (std::size_t j = 0; j < dim; ++j) {
+        query_vec[j] = dist(rng);
+    }
+
+    std::vector<vertex_id_t> init_vids;
+    const std::size_t init_size = K / 2;
+    for (std::size_t i = 0; i < init_size; ++i) {
+        init_vids.push_back(static_cast<vertex_id_t>(i));
+    }
+
+    dist_func_t dist_func(dim);
+    linear_queue_t q(K);
+    q.seeded_initialize(init_vids, dist_func, query_vec.data(), base_vecs);
+
+    EXPECT_EQ(q.get_result_size(), init_size);
+    EXPECT_FALSE(q.empty());
+
+    auto out = drain_unexplored(q);
+    ASSERT_EQ(out.size(), init_size);
+    for (std::size_t i = 1; i < out.size(); ++i) {
+        EXPECT_LE(out[i - 1], out[i])
+            << "LinearQueue seeded_initialize: order violated at position " << i;
+    }
+
+    logger.success(" [LinearQueue] Seeded Initialize with Vertex IDs passed.");
+}
+
+TEST_F(CandidateQueueTest, SeededInitialize_FHQueue) {
+    logger.info(" -> [FHQueue] Seeded Initialize with Vertex IDs");
+
+    const std::size_t K = 32 * g_config.scale;
+    const std::size_t num_vecs = 10000;  // Increased to ensure enough vectors
+    const std::size_t dim = 128;
+
+    using vector_array_t = typename router_traits_t::vector_array_t;
+    using dist_func_t = typename router_traits_t::dist_func_t;
+
+    vector_array_t base_vecs(num_vecs, dim);
+    std::mt19937 rng(g_config.seed);
+    std::uniform_real_distribution<vec_ele_t> dist(0.0f, 1.0f);
+
+    for (std::size_t i = 0; i < num_vecs; ++i) {
+        vec_ele_t* vec = base_vecs.get(i);
+        for (std::size_t j = 0; j < dim; ++j) {
+            vec[j] = dist(rng);
+        }
+    }
+
+    std::vector<vec_ele_t> query_vec(dim);
+    for (std::size_t j = 0; j < dim; ++j) {
+        query_vec[j] = dist(rng);
+    }
+
+    std::vector<vertex_id_t> init_vids;
+    const std::size_t init_size = K / 2;
+    for (std::size_t i = 0; i < init_size; ++i) {
+        init_vids.push_back(static_cast<vertex_id_t>(i));
+    }
+
+    dist_func_t dist_func(dim);
+    fh_queue_t q(K);
+    q.seeded_initialize(init_vids, dist_func, query_vec.data(), base_vecs);
+
+    EXPECT_EQ(q.get_result_size(), init_size);
+    EXPECT_FALSE(q.empty());
+
+    auto out = drain_unexplored(q);
+    ASSERT_EQ(out.size(), init_size);
+    for (std::size_t i = 1; i < out.size(); ++i) {
+        EXPECT_LE(out[i - 1], out[i])
+            << "FHQueue seeded_initialize: order violated at position " << i;
+    }
+
+    logger.success(" [FHQueue] Seeded Initialize with Vertex IDs passed.");
+}
+
+// ============================================================================
 // Main
 // ============================================================================
 

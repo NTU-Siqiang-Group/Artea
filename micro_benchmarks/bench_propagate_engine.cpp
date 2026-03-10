@@ -15,7 +15,7 @@
 #include <benchmark/benchmark.h>
 #include <argparse/argparse.hpp>
 #include <artea/cpu/framework/artea.hpp>
-#include <artea/cpu/framework/default_context.hpp>
+#include <artea/cpu/framework/type_context/default_context.hpp>
 #include <memory>
 #include <vector>
 

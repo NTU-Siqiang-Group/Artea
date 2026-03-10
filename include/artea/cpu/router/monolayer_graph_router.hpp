@@ -53,6 +53,7 @@ class MonolayerGraphRouter :
     using distance_t = typename RouterTraitsT::distance_t;
     using dist_func_t = typename RouterTraitsT::dist_func_t;
     using vector_array_t = typename RouterTraitsT::vector_array_t;
+    using query_vecs_t = typename RouterTraitsT::query_vecs_t;
     using idlist_array_t = typename RouterTraitsT::idlist_array_t;
     using flat_search_graph_t = typename RouterTraitsT::flat_search_graph_t;
     using random_seq_t = typename RouterTraitsT::random_seq_t;
@@ -74,9 +75,9 @@ public:
         _random_seq(vecs_data.get_num_vecs())
     {}
 
-    auto initialize_impl() -> void {
+    auto initialize_impl(bool with_entry_point = false) -> void {
         _visited_table_pool.warmup();
-        _warmup_random_seq();
+        if (!with_entry_point) { _warmup_random_seq(); }
     }
 
     /**
@@ -87,10 +88,27 @@ public:
     __attribute__((always_inline))
     auto query_impl(const vec_ele_t* query_vec) const -> std::vector<vertex_id_t> {
         auto& visited_table = _visited_table_pool.acquire();
-        std::vector<vertex_id_t> result_ids = beam_search(
+        std::vector<vertex_id_t> result_ids = _beam_search(
             query_vec,
             visited_table,
             _random_seq
+        );
+        return result_ids;
+    }
+
+    /**
+     * @brief Query the top-k nearest vertices using proximity graph with an entry point.
+     * @param query_vec Pointer to the query vector data.
+     * @param entry_point Starting vertex ID for the search.
+     * @return std::vector<vertex_id_t> Vector containing the IDs of the top-k nearest vertices.
+     */
+    __attribute__((always_inline))
+    auto query_impl(const vec_ele_t* query_vec, const vertex_id_t entry_point) const -> std::vector<vertex_id_t> {
+        auto& visited_table = _visited_table_pool.acquire();
+        std::vector<vertex_id_t> result_ids = _beam_search(
+            query_vec,
+            visited_table,
+            entry_point
         );
         return result_ids;
     }
@@ -104,7 +122,7 @@ public:
      * @param query_vecs A VectorArray containing the query vectors.
      * @return idlist_array_t Array with num_vecs=num_queries, dim=topk where each vector contains the top-k IDs for one query.
      */
-    auto batch_query_impl(const typename RouterTraitsT::query_vecs_t& query_vecs) const -> idlist_array_t {
+    auto batch_query_impl(const query_vecs_t& query_vecs) const -> idlist_array_t {
         const vertex_num_t num_queries = query_vecs.get_num_vecs();
 
         // Pre-allocate the result container (num_queries vectors, each with dimension = topk)
@@ -132,13 +150,51 @@ public:
     }
 
     /**
+     * @brief Perform batch queries with entry points to find the top-k nearest vertices for multiple vectors.
+     *
+     * This implementation always parallelizes the batch processing (Inter-query parallelism) using TBB.
+     * Results are stored as vectors: each query's k nearest neighbors form a single vector.
+     *
+     * @param query_vecs A VectorArray containing the query vectors.
+     * @param entry_points Vector of entry point vertex IDs for each query.
+     * @return idlist_array_t Array with num_vecs=num_queries, dim=topk where each vector contains the top-k IDs for one query.
+     */
+    auto batch_query_impl(const query_vecs_t& query_vecs, const std::vector<vertex_id_t>& entry_points) const -> idlist_array_t {
+        const vertex_num_t num_queries = query_vecs.get_num_vecs();
+
+        // Pre-allocate the result container (num_queries vectors, each with dimension = topk)
+        idlist_array_t results(num_queries, this->_topk);
+
+        tbb::parallel_for(
+            // Range: Iterate over all query vectors
+            tbb::blocked_range<vertex_num_t>(0, num_queries),
+
+            // Processor for a sub-range of queries
+            [&](const tbb::blocked_range<vertex_num_t>& r) {
+                auto& visited = _visited_table_pool.acquire();
+                for (vertex_num_t i = r.begin(); i != r.end(); ++i) {
+                    const vec_ele_t* q_vec = query_vecs.get(i);
+                    // Call beam_search with entry point
+                    auto topk_results = _beam_search(q_vec, visited, entry_points[i]);
+                    // Store results using VectorArray's set interface
+                    results.set(i, topk_results.data());
+                    visited.clear();
+                }
+            }
+        );
+
+        return results;
+    }
+
+private:
+    /**
      * @brief Perform beam search on the proximity graph to find top-k nearest neighbors.
      * @param query_vec Pointer to the query vector data.
      * @param visited_table Reference to the visited table for tracking explored vertices.
      * @param entry_point Starting vertex ID for the search.
      * @return Vector of vertex IDs representing the top-k nearest neighbors.
      */
-    auto beam_search(
+    auto _beam_search(
         const vec_ele_t* query_vec,
         visited_table_t& visited_table,
         const vertex_id_t entry_point
@@ -195,7 +251,7 @@ public:
      * @note This function uses random_initialize to initialize the candidate queue with random vertices.
      */
     __attribute__((always_inline))
-    auto beam_search(
+    auto _beam_search(
         const vec_ele_t* query_vec,
         visited_table_t& visited_table,
         random_seq_t& random_seq
@@ -255,7 +311,6 @@ public:
         return candidate_queue.extract_result_ids(this->_topk);
     }
 
-private:
     /**
      * @brief Warm up the random sequence generator by triggering thread-local MKL stream creation.
      *

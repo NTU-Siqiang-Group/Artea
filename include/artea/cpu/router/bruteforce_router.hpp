@@ -102,6 +102,20 @@ public:
     }
 
     /**
+     * @brief Query the top-k nearest vertices for a given vector with an entry point.
+     *
+     * For bruteforce router, entry point is ignored and this delegates to the standard query_impl.
+     *
+     * @param query_vec Pointer to the query vector data.
+     * @param entry_point Starting vertex ID (ignored for bruteforce).
+     * @return std::vector<vec_id_t> Vector containing the IDs of the top-k nearest vertices.
+     */
+    auto query_impl(const vec_ele_t* query_vec, const vec_id_t entry_point) const -> std::vector<vec_id_t> {
+        // For bruteforce, entry point doesn't matter - just delegate to standard implementation
+        return query_impl(query_vec);
+    }
+
+    /**
      * @brief Perform batch queries to find the top-k nearest vertices for multiple vectors.
      *
      * This implementation always parallelizes the batch processing (Inter-query parallelism) using TBB.
@@ -134,6 +148,20 @@ public:
         );
 
         return results;
+    }
+
+    /**
+     * @brief Perform batch queries with entry points to find the top-k nearest vertices for multiple vectors.
+     *
+     * For bruteforce router, entry points are ignored and this delegates to the standard batch_query_impl.
+     *
+     * @param query_vecs A VectorArray containing the query vectors.
+     * @param entry_points Vector of entry point vertex IDs (ignored for bruteforce).
+     * @return idlist_array_t Array with num_vecs=num_queries, dim=topk where each vector contains the top-k IDs for one query.
+     */
+    auto batch_query_impl(const typename RouterTraitsT::query_vecs_t& query_vecs, const std::vector<vec_id_t>& entry_points) const -> idlist_array_t {
+        // For bruteforce, entry points don't matter - just delegate to standard implementation
+        return batch_query_impl(query_vecs);
     }
 
 };  // class BruteforceRouter

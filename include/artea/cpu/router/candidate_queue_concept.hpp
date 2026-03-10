@@ -83,6 +83,12 @@ std::constructible_from<CandidateQueueImpl, std::size_t> && requires(
         std::declval<const typename CandidateQueueImpl::vec_ele_t*>(),
         std::declval<const typename CandidateQueueImpl::vector_array_t&>()
     ) } -> std::same_as<void>;
+    { queue.seeded_initialize(
+        std::declval<const std::vector<typename CandidateQueueImpl::vertex_id_t>&>(),
+        std::declval<const typename CandidateQueueImpl::dist_func_t&>(),
+        std::declval<const typename CandidateQueueImpl::vec_ele_t*>(),
+        std::declval<const typename CandidateQueueImpl::vector_array_t&>()
+    ) } -> std::same_as<void>;
 };
 
 }   // namespace cpu

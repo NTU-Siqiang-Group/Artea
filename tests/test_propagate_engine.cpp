@@ -27,7 +27,7 @@
 
 // Artea Headers
 #include <artea/cpu/framework/artea.hpp>
-#include <artea/cpu/framework/simple_tests_context.hpp>
+#include <artea/cpu/framework/type_context/simple_tests_context.hpp>
 
 // Type definitions using SIMPLE_EUCLIDEAN for low-dimensional vectors
 using namespace artea;

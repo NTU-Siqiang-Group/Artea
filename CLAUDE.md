@@ -24,9 +24,15 @@
 
 ## Framework Type System
 
+### Directory Structure
+
+Framework type system is organized in `include/artea/cpu/framework/`:
+- **type_traits/** - Trait definitions that define type hierarchies
+- **type_context/** - Context files that instantiate concrete type configurations
+
 ### Trait Hierarchy
 
-Framework traits in `include/artea/cpu/framework/`:
+Framework traits in `include/artea/cpu/framework/type_traits/`:
 - **BaseTraits** - Fundamental types (vertex_id_t, distance_t, nbr_t, vector_array_t, etc.)
 - **ComputerTraits** - Distance computation (dist_func_t, simd_dist_t, fma_func_t)
 - **BufferTraits** - Buffer management (log_buffer_t, log_table_t)
@@ -58,4 +64,28 @@ class MyClass {
 - Standard library types for internal implementation details
 
 **Use virtual inheritance** when composing multiple traits to prevent type duplication.
+
+### Adding New Types to Framework
+
+When adding a new type to the framework, follow these steps:
+
+1. **Add forward declaration** in the appropriate traits file (e.g., `type_traits/index_traits.hpp`):
+   ```cpp
+   template <typename BaseTraitsT> class MyNewClass;
+   ```
+
+2. **Register type alias** in the traits struct:
+   ```cpp
+   using my_new_class_t = MyNewClass<base_traits_t>;
+   ```
+
+3. **Add to context files** (`type_context/default_context.hpp`, `type_context/simple_tests_context.hpp`):
+   ```cpp
+   using my_new_class_t = typename appropriate_traits_t::my_new_class_t;
+   ```
+
+4. **Include header** in `artea.hpp`:
+   ```cpp
+   #include <artea/cpu/path/to/my_new_class.hpp>
+   ```
 
