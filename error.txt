@@ -1,0 +1,346 @@
+CMake Deprecation Warning at build/_deps/nlohmann_json-src/CMakeLists.txt:1 (cmake_minimum_required):
+  Compatibility with CMake < 3.5 will be removed from a future version of
+  CMake.
+
+  Update the VERSION argument <min> value or use a ...<max> suffix to tell
+  CMake that the project does not need compatibility with older versions.
+
+
+CMake Deprecation Warning at build/_deps/termcolor-src/CMakeLists.txt:1 (cmake_minimum_required):
+  Compatibility with CMake < 3.5 will be removed from a future version of
+  CMake.
+
+  Update the VERSION argument <min> value or use a ...<max> suffix to tell
+  CMake that the project does not need compatibility with older versions.
+
+
+CMake Warning at build/_deps/range-v3-src/cmake/ranges_env.cmake:31 (message):
+  [range-v3 warning]: unknown compiler IntelLLVM !
+Call Stack (most recent call first):
+  build/_deps/range-v3-src/CMakeLists.txt:24 (include)
+
+
+In file included from /home/yeweitang/Artea/tests/test_simd_linear.cpp:24:
+In file included from /home/yeweitang/Artea/include/artea/cpu/framework/artea.hpp:73:
+/home/yeweitang/Artea/include/artea/cpu/router/vector_router.hpp:61:5: error: expected member name or ';' after declaration specifiers
+   61 |     template <typename... Args>
+      |     ^
+/home/yeweitang/Artea/include/artea/cpu/router/vector_router.hpp:51:9: error: member initializer '_num_vecs' does not name a non-static data member or base class
+   51 |         _num_vecs(vecs_data.get_num_vecs()),
+      |         ^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+In file included from /home/yeweitang/Artea/apps/probe_radius.cpp:22:
+In file included from /home/yeweitang/Artea/include/artea/cpu/framework/artea.hpp:73:
+/home/yeweitang/Artea/include/artea/cpu/router/vector_router.hpp:61:5: error: expected member name or ';' after declaration specifiers
+   61 |     template <typename... Args>
+      |     ^
+/home/yeweitang/Artea/include/artea/cpu/router/vector_router.hpp:51:9: error: member initializer '_num_vecs' does not name a non-static data member or base class
+   51 |         _num_vecs(vecs_data.get_num_vecs()),
+      |         ^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+In file included from /home/yeweitang/Artea/apps/build_conv_graph.cpp:22:
+In file included from /home/yeweitang/Artea/include/artea/cpu/framework/artea.hpp:73:
+/home/yeweitang/Artea/include/artea/cpu/router/vector_router.hpp:61:5: error: expected member name or ';' after declaration specifiers
+   61 |     template <typename... Args>
+      |     ^
+/home/yeweitang/Artea/include/artea/cpu/router/vector_router.hpp:51:9: error: member initializer '_num_vecs' does not name a non-static data member or base class
+   51 |         _num_vecs(vecs_data.get_num_vecs()),
+      |         ^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+In file included from /home/yeweitang/Artea/micro_benchmarks/bench_random_vg.cpp:20:
+In file included from /home/yeweitang/Artea/include/artea/cpu/framework/artea.hpp:73:
+/home/yeweitang/Artea/include/artea/cpu/router/vector_router.hpp:61:5: error: expected member name or ';' after declaration specifiers
+   61 |     template <typename... Args>
+      |     ^
+/home/yeweitang/Artea/include/artea/cpu/router/vector_router.hpp:51:9: error: member initializer '_num_vecs' does not name a non-static data member or base class
+   51 |         _num_vecs(vecs_data.get_num_vecs()),
+      |         ^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+In file included from /home/yeweitang/Artea/micro_benchmarks/bench_propagate_engine.cpp:17:
+In file included from /home/yeweitang/Artea/include/artea/cpu/framework/artea.hpp:73:
+/home/yeweitang/Artea/include/artea/cpu/router/vector_router.hpp:61:5: error: expected member name or ';' after declaration specifiers
+   61 |     template <typename... Args>
+      |     ^
+/home/yeweitang/Artea/include/artea/cpu/router/vector_router.hpp:51:9: error: member initializer '_num_vecs' does not name a non-static data member or base class
+   51 |         _num_vecs(vecs_data.get_num_vecs()),
+      |         ^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+In file included from /home/yeweitang/Artea/tests/test_propagate_engine.cpp:29:
+In file included from /home/yeweitang/Artea/include/artea/cpu/framework/artea.hpp:73:
+/home/yeweitang/Artea/include/artea/cpu/router/vector_router.hpp:61:5: error: expected member name or ';' after declaration specifiers
+   61 |     template <typename... Args>
+      |     ^
+/home/yeweitang/Artea/include/artea/cpu/router/vector_router.hpp:51:9: error: member initializer '_num_vecs' does not name a non-static data member or base class
+   51 |         _num_vecs(vecs_data.get_num_vecs()),
+      |         ^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+In file included from /home/yeweitang/Artea/tests/test_random_vg.cpp:20:
+In file included from /home/yeweitang/Artea/include/artea/cpu/framework/artea.hpp:73:
+/home/yeweitang/Artea/include/artea/cpu/router/vector_router.hpp:61:5: error: expected member name or ';' after declaration specifiers
+   61 |     template <typename... Args>
+      |     ^
+/home/yeweitang/Artea/include/artea/cpu/router/vector_router.hpp:51:9: error: member initializer '_num_vecs' does not name a non-static data member or base class
+   51 |         _num_vecs(vecs_data.get_num_vecs()),
+      |         ^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+In file included from /home/yeweitang/Artea/tests/test_simd_distance.cpp:29:
+In file included from /home/yeweitang/Artea/include/artea/cpu/framework/artea.hpp:73:
+/home/yeweitang/Artea/include/artea/cpu/router/vector_router.hpp:61:5: error: expected member name or ';' after declaration specifiers
+   61 |     template <typename... Args>
+      |     ^
+/home/yeweitang/Artea/include/artea/cpu/router/vector_router.hpp:51:9: error: member initializer '_num_vecs' does not name a non-static data member or base class
+   51 |         _num_vecs(vecs_data.get_num_vecs()),
+      |         ^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+In file included from /home/yeweitang/Artea/micro_benchmarks/bench_candidate_queue.cpp:24:
+In file included from /home/yeweitang/Artea/include/artea/cpu/framework/artea.hpp:73:
+/home/yeweitang/Artea/include/artea/cpu/router/vector_router.hpp:61:5: error: expected member name or ';' after declaration specifiers
+   61 |     template <typename... Args>
+      |     ^
+/home/yeweitang/Artea/include/artea/cpu/router/vector_router.hpp:51:9: error: member initializer '_num_vecs' does not name a non-static data member or base class
+   51 |         _num_vecs(vecs_data.get_num_vecs()),
+      |         ^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+In file included from /home/yeweitang/Artea/tests/test_bruteforce_router.cpp:33:
+In file included from /home/yeweitang/Artea/include/artea/cpu/framework/artea.hpp:73:
+/home/yeweitang/Artea/include/artea/cpu/router/vector_router.hpp:61:5: error: expected member name or ';' after declaration specifiers
+   61 |     template <typename... Args>
+      |     ^
+/home/yeweitang/Artea/include/artea/cpu/router/vector_router.hpp:51:9: error: member initializer '_num_vecs' does not name a non-static data member or base class
+   51 |         _num_vecs(vecs_data.get_num_vecs()),
+      |         ^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+In file included from /home/yeweitang/Artea/tests/test_visited_table.cpp:32:
+In file included from /home/yeweitang/Artea/include/artea/cpu/framework/artea.hpp:73:
+/home/yeweitang/Artea/include/artea/cpu/router/vector_router.hpp:61:5: error: expected member name or ';' after declaration specifiers
+   61 |     template <typename... Args>
+      |     ^
+/home/yeweitang/Artea/include/artea/cpu/router/vector_router.hpp:51:9: error: member initializer '_num_vecs' does not name a non-static data member or base class
+   51 |         _num_vecs(vecs_data.get_num_vecs()),
+      |         ^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+In file included from /home/yeweitang/Artea/micro_benchmarks/bench_lb_greedy_vg.cpp:17:
+In file included from /home/yeweitang/Artea/include/artea/cpu/framework/artea.hpp:73:
+/home/yeweitang/Artea/include/artea/cpu/router/vector_router.hpp:61:5: error: expected member name or ';' after declaration specifiers
+   61 |     template <typename... Args>
+      |     ^
+/home/yeweitang/Artea/include/artea/cpu/router/vector_router.hpp:51:9: error: member initializer '_num_vecs' does not name a non-static data member or base class
+   51 |         _num_vecs(vecs_data.get_num_vecs()),
+      |         ^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+In file included from /home/yeweitang/Artea/tests/test_radius_prober.cpp:24:
+In file included from /home/yeweitang/Artea/include/artea/cpu/framework/artea.hpp:73:
+/home/yeweitang/Artea/include/artea/cpu/router/vector_router.hpp:61:5: error: expected member name or ';' after declaration specifiers
+   61 |     template <typename... Args>
+      |     ^
+/home/yeweitang/Artea/include/artea/cpu/router/vector_router.hpp:51:9: error: member initializer '_num_vecs' does not name a non-static data member or base class
+   51 |         _num_vecs(vecs_data.get_num_vecs()),
+      |         ^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+In file included from /home/yeweitang/Artea/tests/test_vector_dataset.cpp:36:
+In file included from /home/yeweitang/Artea/include/artea/cpu/framework/artea.hpp:73:
+/home/yeweitang/Artea/include/artea/cpu/router/vector_router.hpp:61:5: error: expected member name or ';' after declaration specifiers
+   61 |     template <typename... Args>
+      |     ^
+/home/yeweitang/Artea/include/artea/cpu/router/vector_router.hpp:51:9: error: member initializer '_num_vecs' does not name a non-static data member or base class
+   51 |         _num_vecs(vecs_data.get_num_vecs()),
+      |         ^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+In file included from /home/yeweitang/Artea/micro_benchmarks/bench_conv_graph_factory.cpp:18:
+In file included from /home/yeweitang/Artea/include/artea/cpu/framework/artea.hpp:73:
+/home/yeweitang/Artea/include/artea/cpu/router/vector_router.hpp:61:5: error: expected member name or ';' after declaration specifiers
+   61 |     template <typename... Args>
+      |     ^
+/home/yeweitang/Artea/include/artea/cpu/router/vector_router.hpp:51:9: error: member initializer '_num_vecs' does not name a non-static data member or base class
+   51 |         _num_vecs(vecs_data.get_num_vecs()),
+      |         ^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+In file included from /home/yeweitang/Artea/tests/test_lb_greedy_vg.cpp:27:
+In file included from /home/yeweitang/Artea/include/artea/cpu/framework/artea.hpp:73:
+/home/yeweitang/Artea/include/artea/cpu/router/vector_router.hpp:61:5: error: expected member name or ';' after declaration specifiers
+   61 |     template <typename... Args>
+      |     ^
+/home/yeweitang/Artea/include/artea/cpu/router/vector_router.hpp:51:9: error: member initializer '_num_vecs' does not name a non-static data member or base class
+   51 |         _num_vecs(vecs_data.get_num_vecs()),
+      |         ^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+In file included from /home/yeweitang/Artea/tests/test_lsh_table.cpp:32:
+In file included from /home/yeweitang/Artea/include/artea/cpu/framework/artea.hpp:73:
+/home/yeweitang/Artea/include/artea/cpu/router/vector_router.hpp:61:5: error: expected member name or ';' after declaration specifiers
+   61 |     template <typename... Args>
+      |     ^
+/home/yeweitang/Artea/include/artea/cpu/router/vector_router.hpp:51:9: error: member initializer '_num_vecs' does not name a non-static data member or base class
+   51 |         _num_vecs(vecs_data.get_num_vecs()),
+      |         ^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+In file included from /home/yeweitang/Artea/micro_benchmarks/bench_simd_linear.cpp:23:
+In file included from /home/yeweitang/Artea/include/artea/cpu/framework/artea.hpp:73:
+/home/yeweitang/Artea/include/artea/cpu/router/vector_router.hpp:61:5: error: expected member name or ';' after declaration specifiers
+   61 |     template <typename... Args>
+      |     ^
+/home/yeweitang/Artea/include/artea/cpu/router/vector_router.hpp:51:9: error: member initializer '_num_vecs' does not name a non-static data member or base class
+   51 |         _num_vecs(vecs_data.get_num_vecs()),
+      |         ^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+In file included from /home/yeweitang/Artea/micro_benchmarks/bench_radius_prober.cpp:17:
+In file included from /home/yeweitang/Artea/include/artea/cpu/framework/artea.hpp:73:
+/home/yeweitang/Artea/include/artea/cpu/router/vector_router.hpp:61:5: error: expected member name or ';' after declaration specifiers
+   61 |     template <typename... Args>
+      |     ^
+/home/yeweitang/Artea/include/artea/cpu/router/vector_router.hpp:51:9: error: member initializer '_num_vecs' does not name a non-static data member or base class
+   51 |         _num_vecs(vecs_data.get_num_vecs()),
+      |         ^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+In file included from /home/yeweitang/Artea/tests/test_candidate_queue.cpp:32:
+In file included from /home/yeweitang/Artea/include/artea/cpu/framework/artea.hpp:73:
+/home/yeweitang/Artea/include/artea/cpu/router/vector_router.hpp:61:5: error: expected member name or ';' after declaration specifiers
+   61 |     template <typename... Args>
+      |     ^
+/home/yeweitang/Artea/include/artea/cpu/router/vector_router.hpp:51:9: error: member initializer '_num_vecs' does not name a non-static data member or base class
+   51 |         _num_vecs(vecs_data.get_num_vecs()),
+      |         ^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+In file included from /home/yeweitang/Artea/micro_benchmarks/bench_random_eg.cpp:17:
+In file included from /home/yeweitang/Artea/include/artea/cpu/framework/artea.hpp:73:
+/home/yeweitang/Artea/include/artea/cpu/router/vector_router.hpp:61:5: error: expected member name or ';' after declaration specifiers
+   61 |     template <typename... Args>
+      |     ^
+/home/yeweitang/Artea/include/artea/cpu/router/vector_router.hpp:51:9: error: member initializer '_num_vecs' does not name a non-static data member or base class
+   51 |         _num_vecs(vecs_data.get_num_vecs()),
+      |         ^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+/home/yeweitang/Artea/tests/test_bruteforce_router.cpp:132:16: error: no member named 'initialize' in 'artea::cpu::BruteforceRouter<artea::cpu::RouterTraits<artea::cpu::ComputerTraits<artea::cpu::BaseTraits<unsigned int, float>, artea::cpu::DistanceMetricsT::EUCLIDEAN>, artea::cpu::IndexTraits<artea::cpu::BaseTraits<unsigned int, float>>>>'
+  132 |         router.initialize();
+      |         ~~~~~~ ^
+/home/yeweitang/Artea/tests/test_bruteforce_router.cpp:145:37: error: no member named 'batch_query' in 'artea::cpu::BruteforceRouter<artea::cpu::RouterTraits<artea::cpu::ComputerTraits<artea::cpu::BaseTraits<unsigned int, float>, artea::cpu::DistanceMetricsT::EUCLIDEAN>, artea::cpu::IndexTraits<artea::cpu::BaseTraits<unsigned int, float>>>>'
+  145 |         auto batch_results = router.batch_query(query_subset);
+      |                              ~~~~~~ ^
+In file included from /home/yeweitang/Artea/tests/test_flat_search_graph.cpp:30:
+In file included from /home/yeweitang/Artea/include/artea/cpu/framework/artea.hpp:73:
+/home/yeweitang/Artea/include/artea/cpu/router/vector_router.hpp:61:5: error: expected member name or ';' after declaration specifiers
+   61 |     template <typename... Args>
+      |     ^
+/home/yeweitang/Artea/include/artea/cpu/router/vector_router.hpp:51:9: error: member initializer '_num_vecs' does not name a non-static data member or base class
+   51 |         _num_vecs(vecs_data.get_num_vecs()),
+      |         ^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+In file included from /home/yeweitang/Artea/tests/test_four_ary_heap.cpp:32:
+In file included from /home/yeweitang/Artea/include/artea/cpu/framework/artea.hpp:73:
+/home/yeweitang/Artea/include/artea/cpu/router/vector_router.hpp:61:5: error: expected member name or ';' after declaration specifiers
+   61 |     template <typename... Args>
+      |     ^
+/home/yeweitang/Artea/include/artea/cpu/router/vector_router.hpp:51:9: error: member initializer '_num_vecs' does not name a non-static data member or base class
+   51 |         _num_vecs(vecs_data.get_num_vecs()),
+      |         ^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+In file included from /home/yeweitang/Artea/micro_benchmarks/bench_simd_fma.cpp:17:
+In file included from /home/yeweitang/Artea/include/artea/cpu/framework/artea.hpp:73:
+/home/yeweitang/Artea/include/artea/cpu/router/vector_router.hpp:61:5: error: expected member name or ';' after declaration specifiers
+   61 |     template <typename... Args>
+      |     ^
+/home/yeweitang/Artea/include/artea/cpu/router/vector_router.hpp:51:9: error: member initializer '_num_vecs' does not name a non-static data member or base class
+   51 |         _num_vecs(vecs_data.get_num_vecs()),
+      |         ^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+In file included from /home/yeweitang/Artea/tests/test_random_seq.cpp:32:
+In file included from /home/yeweitang/Artea/include/artea/cpu/framework/artea.hpp:73:
+/home/yeweitang/Artea/include/artea/cpu/router/vector_router.hpp:61:5: error: expected member name or ';' after declaration specifiers
+   61 |     template <typename... Args>
+      |     ^
+/home/yeweitang/Artea/include/artea/cpu/router/vector_router.hpp:51:9: error: member initializer '_num_vecs' does not name a non-static data member or base class
+   51 |         _num_vecs(vecs_data.get_num_vecs()),
+      |         ^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+In file included from /home/yeweitang/Artea/micro_benchmarks/bench_simd_distance.cpp:17:
+In file included from /home/yeweitang/Artea/include/artea/cpu/framework/artea.hpp:73:
+/home/yeweitang/Artea/include/artea/cpu/router/vector_router.hpp:61:5: error: expected member name or ';' after declaration specifiers
+   61 |     template <typename... Args>
+      |     ^
+/home/yeweitang/Artea/include/artea/cpu/router/vector_router.hpp:51:9: error: member initializer '_num_vecs' does not name a non-static data member or base class
+   51 |         _num_vecs(vecs_data.get_num_vecs()),
+      |         ^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+In file included from /home/yeweitang/Artea/micro_benchmarks/bench_visited_table.cpp:24:
+In file included from /home/yeweitang/Artea/include/artea/cpu/framework/artea.hpp:73:
+/home/yeweitang/Artea/include/artea/cpu/router/vector_router.hpp:61:5: error: expected member name or ';' after declaration specifiers
+   61 |     template <typename... Args>
+      |     ^
+/home/yeweitang/Artea/include/artea/cpu/router/vector_router.hpp:51:9: error: member initializer '_num_vecs' does not name a non-static data member or base class
+   51 |         _num_vecs(vecs_data.get_num_vecs()),
+      |         ^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+In file included from /home/yeweitang/Artea/tests/test_simd_fma.cpp:24:
+In file included from /home/yeweitang/Artea/include/artea/cpu/framework/artea.hpp:73:
+/home/yeweitang/Artea/include/artea/cpu/router/vector_router.hpp:61:5: error: expected member name or ';' after declaration specifiers
+   61 |     template <typename... Args>
+      |     ^
+/home/yeweitang/Artea/include/artea/cpu/router/vector_router.hpp:51:9: error: member initializer '_num_vecs' does not name a non-static data member or base class
+   51 |         _num_vecs(vecs_data.get_num_vecs()),
+      |         ^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+2 errors generated.
+2 errors generated.
+gmake[2]: *** [apps/CMakeFiles/probe_radius.dir/build.make:76: apps/CMakeFiles/probe_radius.dir/probe_radius.cpp.o] Error 1
+gmake[1]: *** [CMakeFiles/Makefile2:2150: apps/CMakeFiles/probe_radius.dir/all] Error 2
+gmake[1]: *** Waiting for unfinished jobs....
+gmake[2]: *** [tests/CMakeFiles/test_simd_linear.dir/build.make:76: tests/CMakeFiles/test_simd_linear.dir/test_simd_linear.cpp.o] Error 1
+gmake[1]: *** [CMakeFiles/Makefile2:1732: tests/CMakeFiles/test_simd_linear.dir/all] Error 2
+2 errors generated.
+2 errors generated.
+gmake[2]: *** [micro_benchmarks/CMakeFiles/bench_random_vg.dir/build.make:76: micro_benchmarks/CMakeFiles/bench_random_vg.dir/bench_random_vg.cpp.o] Error 1
+gmake[1]: *** [CMakeFiles/Makefile2:1986: micro_benchmarks/CMakeFiles/bench_random_vg.dir/all] Error 2
+gmake[2]: *** [apps/CMakeFiles/build_conv_graph.dir/build.make:76: apps/CMakeFiles/build_conv_graph.dir/build_conv_graph.cpp.o] Error 1
+gmake[1]: *** [CMakeFiles/Makefile2:2124: apps/CMakeFiles/build_conv_graph.dir/all] Error 2
+2 errors generated.
+2 errors generated.
+gmake[2]: *** [tests/CMakeFiles/test_propagate_engine.dir/build.make:76: tests/CMakeFiles/test_propagate_engine.dir/test_propagate_engine.cpp.o] Error 1
+gmake[1]: *** [CMakeFiles/Makefile2:1558: tests/CMakeFiles/test_propagate_engine.dir/all] Error 2
+gmake[2]: *** [micro_benchmarks/CMakeFiles/bench_propagate_engine.dir/build.make:76: micro_benchmarks/CMakeFiles/bench_propagate_engine.dir/bench_propagate_engine.cpp.o] Error 1
+gmake[1]: *** [CMakeFiles/Makefile2:1902: micro_benchmarks/CMakeFiles/bench_propagate_engine.dir/all] Error 2
+2 errors generated.
+gmake[2]: *** [tests/CMakeFiles/test_random_vg.dir/build.make:76: tests/CMakeFiles/test_random_vg.dir/test_random_vg.cpp.o] Error 1
+gmake[1]: *** [CMakeFiles/Makefile2:1645: tests/CMakeFiles/test_random_vg.dir/all] Error 2
+2 errors generated.
+gmake[2]: *** [micro_benchmarks/CMakeFiles/bench_candidate_queue.dir/build.make:76: micro_benchmarks/CMakeFiles/bench_candidate_queue.dir/bench_candidate_queue.cpp.o] Error 1
+gmake[1]: *** [CMakeFiles/Makefile2:1818: micro_benchmarks/CMakeFiles/bench_candidate_queue.dir/all] Error 2
+2 errors generated.
+In file included from /home/yeweitang/Artea/tests/test_bruteforce_router.cpp:33:
+In file included from /home/yeweitang/Artea/include/artea/cpu/framework/artea.hpp:74:
+/home/yeweitang/Artea/include/artea/cpu/router/bruteforce_router.hpp:59:9: error: type 'base_class_t' (aka 'VectorRouter<RouterTraits<artea::cpu::ComputerTraits<artea::cpu::BaseTraits<unsigned int, float, false>, artea::cpu::DistanceMetricsT::EUCLIDEAN>, artea::cpu::IndexTraits<artea::cpu::BaseTraits<unsigned int, float, false>>, false>, BruteforceRouter<artea::cpu::RouterTraits<artea::cpu::ComputerTraits<artea::cpu::BaseTraits<unsigned int, float, false>, artea::cpu::DistanceMetricsT::EUCLIDEAN>, artea::cpu::IndexTraits<artea::cpu::BaseTraits<unsigned int, float, false>>, false>>>') is not a direct or virtual base of 'artea::cpu::BruteforceRouter<artea::cpu::RouterTraits<artea::cpu::ComputerTraits<artea::cpu::BaseTraits<unsigned int, float>, artea::cpu::DistanceMetricsT::EUCLIDEAN>, artea::cpu::IndexTraits<artea::cpu::BaseTraits<unsigned int, float>>>>'
+   59 |     ) : base_class_t(vecs_data, dist_func, topk)
+      |         ^~~~~~~~~~~~
+/home/yeweitang/Artea/tests/test_bruteforce_router.cpp:131:24: note: in instantiation of member function 'artea::cpu::BruteforceRouter<artea::cpu::RouterTraits<artea::cpu::ComputerTraits<artea::cpu::BaseTraits<unsigned int, float>, artea::cpu::DistanceMetricsT::EUCLIDEAN>, artea::cpu::IndexTraits<artea::cpu::BaseTraits<unsigned int, float>>>>::BruteforceRouter' requested here
+  131 |         artea_router_t router(base_vecs, dist_func, k);
+      |                        ^
+gmake[2]: *** [micro_benchmarks/CMakeFiles/bench_simd_linear.dir/build.make:76: micro_benchmarks/CMakeFiles/bench_simd_linear.dir/bench_simd_linear.cpp.o] Error 1
+gmake[1]: *** [CMakeFiles/Makefile2:2070: micro_benchmarks/CMakeFiles/bench_simd_linear.dir/all] Error 2
+2 errors generated.
+5 errors generated.
+gmake[2]: *** [tests/CMakeFiles/test_visited_table.dir/build.make:76: tests/CMakeFiles/test_visited_table.dir/test_visited_table.cpp.o] Error 1
+gmake[1]: *** [CMakeFiles/Makefile2:1790: tests/CMakeFiles/test_visited_table.dir/all] Error 2
+gmake[2]: *** [tests/CMakeFiles/test_bruteforce_router.dir/build.make:76: tests/CMakeFiles/test_bruteforce_router.dir/test_bruteforce_router.cpp.o] Error 1
+gmake[1]: *** [CMakeFiles/Makefile2:1384: tests/CMakeFiles/test_bruteforce_router.dir/all] Error 2
+2 errors generated.
+2 errors generated.
+2 errors generated.
+2 errors generated.
+gmake[2]: *** [tests/CMakeFiles/test_vector_dataset.dir/build.make:76: tests/CMakeFiles/test_vector_dataset.dir/test_vector_dataset.cpp.o] Error 1
+gmake[1]: *** [CMakeFiles/Makefile2:1761: tests/CMakeFiles/test_vector_dataset.dir/all] Error 2
+gmake[2]: *** [micro_benchmarks/CMakeFiles/bench_radius_prober.dir/build.make:76: micro_benchmarks/CMakeFiles/bench_radius_prober.dir/bench_radius_prober.cpp.o] Error 1
+gmake[1]: *** [CMakeFiles/Makefile2:1930: micro_benchmarks/CMakeFiles/bench_radius_prober.dir/all] Error 2
+gmake[2]: *** [tests/CMakeFiles/test_radius_prober.dir/build.make:76: tests/CMakeFiles/test_radius_prober.dir/test_radius_prober.cpp.o] Error 1
+gmake[1]: *** [CMakeFiles/Makefile2:1587: tests/CMakeFiles/test_radius_prober.dir/all] Error 2
+gmake[2]: *** [micro_benchmarks/CMakeFiles/bench_random_eg.dir/build.make:76: micro_benchmarks/CMakeFiles/bench_random_eg.dir/bench_random_eg.cpp.o] Error 1
+gmake[1]: *** [CMakeFiles/Makefile2:1958: micro_benchmarks/CMakeFiles/bench_random_eg.dir/all] Error 2
+2 errors generated.
+2 errors generated.
+2 errors generated.
+2 errors generated.
+gmake[2]: *** [tests/CMakeFiles/test_four_ary_heap.dir/build.make:76: tests/CMakeFiles/test_four_ary_heap.dir/test_four_ary_heap.cpp.o] Error 1
+gmake[1]: *** [CMakeFiles/Makefile2:1471: tests/CMakeFiles/test_four_ary_heap.dir/all] Error 2
+gmake[2]: *** [micro_benchmarks/CMakeFiles/bench_simd_fma.dir/build.make:76: micro_benchmarks/CMakeFiles/bench_simd_fma.dir/bench_simd_fma.cpp.o] Error 1
+gmake[1]: *** [CMakeFiles/Makefile2:2042: micro_benchmarks/CMakeFiles/bench_simd_fma.dir/all] Error 2
+2 errors generated.
+2 errors generated.
+gmake[2]: *** [tests/CMakeFiles/test_simd_distance.dir/build.make:76: tests/CMakeFiles/test_simd_distance.dir/test_simd_distance.cpp.o] Error 1
+gmake[1]: *** [CMakeFiles/Makefile2:1674: tests/CMakeFiles/test_simd_distance.dir/all] Error 2
+gmake[2]: *** [tests/CMakeFiles/test_lb_greedy_vg.dir/build.make:76: tests/CMakeFiles/test_lb_greedy_vg.dir/test_lb_greedy_vg.cpp.o] Error 1
+gmake[1]: *** [CMakeFiles/Makefile2:1500: tests/CMakeFiles/test_lb_greedy_vg.dir/all] Error 2
+2 errors generated.
+gmake[2]: *** [tests/CMakeFiles/test_candidate_queue.dir/build.make:76: tests/CMakeFiles/test_candidate_queue.dir/test_candidate_queue.cpp.o] Error 1
+gmake[1]: *** [CMakeFiles/Makefile2:1413: tests/CMakeFiles/test_candidate_queue.dir/all] Error 2
+gmake[2]: *** [tests/CMakeFiles/test_flat_search_graph.dir/build.make:76: tests/CMakeFiles/test_flat_search_graph.dir/test_flat_search_graph.cpp.o] Error 1
+gmake[1]: *** [CMakeFiles/Makefile2:1442: tests/CMakeFiles/test_flat_search_graph.dir/all] Error 2
+gmake[2]: *** [micro_benchmarks/CMakeFiles/bench_conv_graph_factory.dir/build.make:76: micro_benchmarks/CMakeFiles/bench_conv_graph_factory.dir/bench_conv_graph_factory.cpp.o] Error 1
+gmake[1]: *** [CMakeFiles/Makefile2:1846: micro_benchmarks/CMakeFiles/bench_conv_graph_factory.dir/all] Error 2
+2 errors generated.
+gmake[2]: *** [tests/CMakeFiles/test_random_seq.dir/build.make:76: tests/CMakeFiles/test_random_seq.dir/test_random_seq.cpp.o] Error 1
+gmake[1]: *** [CMakeFiles/Makefile2:1616: tests/CMakeFiles/test_random_seq.dir/all] Error 2
+2 errors generated.
+2 errors generated.
+gmake[2]: *** [micro_benchmarks/CMakeFiles/bench_simd_distance.dir/build.make:76: micro_benchmarks/CMakeFiles/bench_simd_distance.dir/bench_simd_distance.cpp.o] Error 1
+gmake[1]: *** [CMakeFiles/Makefile2:2014: micro_benchmarks/CMakeFiles/bench_simd_distance.dir/all] Error 2
+2 errors generated.
+gmake[2]: *** [micro_benchmarks/CMakeFiles/bench_lb_greedy_vg.dir/build.make:76: micro_benchmarks/CMakeFiles/bench_lb_greedy_vg.dir/bench_lb_greedy_vg.cpp.o] Error 1
+gmake[1]: *** [CMakeFiles/Makefile2:1874: micro_benchmarks/CMakeFiles/bench_lb_greedy_vg.dir/all] Error 2
+gmake[2]: *** [micro_benchmarks/CMakeFiles/bench_visited_table.dir/build.make:76: micro_benchmarks/CMakeFiles/bench_visited_table.dir/bench_visited_table.cpp.o] Error 1
+gmake[1]: *** [CMakeFiles/Makefile2:2098: micro_benchmarks/CMakeFiles/bench_visited_table.dir/all] Error 2
+2 errors generated.
+gmake[2]: *** [tests/CMakeFiles/test_simd_fma.dir/build.make:76: tests/CMakeFiles/test_simd_fma.dir/test_simd_fma.cpp.o] Error 1
+gmake[1]: *** [CMakeFiles/Makefile2:1703: tests/CMakeFiles/test_simd_fma.dir/all] Error 2
+2 errors generated.
+gmake[2]: *** [tests/CMakeFiles/test_lsh_table.dir/build.make:76: tests/CMakeFiles/test_lsh_table.dir/test_lsh_table.cpp.o] Error 1
+gmake[1]: *** [CMakeFiles/Makefile2:1529: tests/CMakeFiles/test_lsh_table.dir/all] Error 2
+gmake: *** [Makefile:156: all] Error 2
