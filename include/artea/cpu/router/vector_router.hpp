@@ -98,15 +98,15 @@ public:
     }
 
     /**
-     * @brief Perform batch queries with entry points to find the top-k nearest vertices for multiple vectors.
+     * @brief Perform batch queries with a shared entry point to find the top-k nearest vertices for multiple vectors.
      *
      * @param query_vecs A VectorArray containing the query vectors.
-     * @param entry_points Vector of entry point vertex IDs for each query.
+     * @param entry_point Shared entry point vertex ID for all queries.
      * @return idlist_array_t Array with num_vecs=num_queries, dim=topk where each vector contains the top-k IDs for one query.
      */
     __attribute__((always_inline))
-    auto batch_query(const query_vecs_t& query_vecs, const std::vector<vec_id_t>& entry_points) const -> idlist_array_t {
-        return static_cast<const DerivedClassT*>(this)->batch_query_impl(query_vecs, entry_points);
+    auto batch_query(const query_vecs_t& query_vecs, const vec_id_t entry_point) const -> idlist_array_t {
+        return static_cast<const DerivedClassT*>(this)->batch_query_impl(query_vecs, entry_point);
     }
 
 protected:
