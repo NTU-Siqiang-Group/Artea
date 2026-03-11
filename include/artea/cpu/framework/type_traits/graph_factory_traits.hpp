@@ -24,6 +24,7 @@ namespace artea {
 namespace cpu {
 
 /** ------ Forward Declaration  ------ **/
+template <typename GraphFactoryTraitsT> struct DescentConfig;
 template <typename GraphFactoryTraitsT, typename DerivedClassT> class FlatGraphFactory;
 template <typename GraphFactoryTraitsT> class ConvGraphFactory;
 template <typename IndexTraitsT> class FlatSearchGraphFactory;
@@ -38,6 +39,9 @@ struct GraphFactoryTraits :
     public EdgeGeneratorTraitsT
 {
     using graph_factory_traits_t = GraphFactoryTraits<VertexGeneratorTraitsT, EdgeGeneratorTraitsT, IndexTraitsT>;
+
+    /** @brief Descent configuration type. */
+    using descent_config_t = DescentConfig<graph_factory_traits_t>;
 
     /** @brief Type for graph factory. */
     template <typename DerivedClassT>

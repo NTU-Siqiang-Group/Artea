@@ -43,6 +43,7 @@
 #include <artea/cpu/containers/vertex_subset.hpp>
 #include <artea/cpu/containers/four_ary_heap.hpp>
 
+#include <artea/cpu/index/layer_config.hpp>
 #include <artea/cpu/index/neighbor.hpp>
 #include <artea/cpu/index/flat_graph.hpp>
 #include <artea/cpu/index/flat_search_graph.hpp>
@@ -51,6 +52,7 @@
 #include <artea/cpu/index/hierarchical_search_graph.hpp>
 #include <artea/cpu/index/hierarchical_vecs_manager.hpp>
 
+#include <artea/cpu/graph_factory/descent_config.hpp>
 #include <artea/cpu/graph_factory/flat_graph_factory.hpp>
 #include <artea/cpu/graph_factory/conv_graph_factory.hpp>
 #include <artea/cpu/graph_factory/flat_search_graph_factory.hpp>

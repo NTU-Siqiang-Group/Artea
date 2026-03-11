@@ -32,29 +32,27 @@ class FlatGraph {
     using nbr_t = typename IndexTraitsT::nbr_t;
     using nbr_arr_t = typename IndexTraitsT::nbr_arr_t;
     using vector_array_t = typename IndexTraitsT::vector_array_t;
+    using layer_config_t = typename IndexTraitsT::layer_config_t;
 
 public:
     /**
      * @brief Construct a new Flat Graph object.
      * @param vecs_data Reference to the vector data for this layer.
      * @param num_vertices The total number of vertices in the graph.
-     * @param max_nbr_size Maximum number of neighbors (for overflow control).
-     * @param reserved_nbr_size The maximum number of neighbors per vertex (default: 2 * max_nbr_size = 32).
+     * @param layer_config Layer configuration (max_nbr_size and reserved_nbr_size).
      */
     FlatGraph(
         const vector_array_t& vecs_data,
         const vertex_num_t num_vertices,
-        const vertex_num_t max_nbr_size = 16,
-        const vertex_num_t reserved_nbr_size = 32
+        const layer_config_t& layer_config
     ) :
         _num_vertices(num_vertices),
-        _reserved_nbr_size(reserved_nbr_size),
-        _max_nbr_size(max_nbr_size),
+        _layer_config(layer_config),
         _vecs_data(vecs_data)
     {
         _nbrs_arr.resize(num_vertices);
         for (vertex_num_t i = 0; i < num_vertices; ++i) {
-            _nbrs_arr[i].reserve(reserved_nbr_size);
+            _nbrs_arr[i].reserve(layer_config.reserved_nbr_size());
         }
     }
 
@@ -74,18 +72,13 @@ public:
     }
 
     __attribute__((always_inline))
-    auto get_reserved_nbr_size() const -> vertex_num_t {
-        return _reserved_nbr_size;
+    auto layer_config() const -> const layer_config_t& {
+        return _layer_config;
     }
 
     __attribute__((always_inline))
-    auto get_max_nbr_size() const -> vertex_num_t {
-        return _max_nbr_size;
-    }
-
-    __attribute__((always_inline))
-    auto set_max_nbr_size(const vertex_num_t max_nbr_size) -> void {
-        _max_nbr_size = max_nbr_size;
+    auto layer_config() -> layer_config_t& {
+        return _layer_config;
     }
 
     __attribute__((always_inline))
@@ -131,8 +124,8 @@ public:
         const uint32_t magic = k_file_magic;
         const uint32_t version = k_file_version;
         const vertex_num_t num_vertices = _num_vertices;
-        const vertex_num_t reserved_nbr_size = _reserved_nbr_size;
-        const vertex_num_t max_nbr_size = _max_nbr_size;
+        const vertex_num_t reserved_nbr_size = _layer_config.reserved_nbr_size();
+        const vertex_num_t max_nbr_size = _layer_config.max_nbr_size();
 
         ofs.write(reinterpret_cast<const char*>(&magic), sizeof(magic));
         ofs.write(reinterpret_cast<const char*>(&version), sizeof(version));
@@ -203,7 +196,8 @@ public:
             logger.error(fmt::format("Unsupported flat graph file version: {}", file_path));
         }
 
-        FlatGraph<IndexTraitsT> flat_graph(vecs_data, num_vertices, max_nbr_size, reserved_nbr_size);
+        layer_config_t layer_config(max_nbr_size, reserved_nbr_size);
+        FlatGraph<IndexTraitsT> flat_graph(vecs_data, num_vertices, layer_config);
 
         // Read neighbor arrays
         for (vertex_num_t i = 0; i < num_vertices; ++i) {
@@ -233,11 +227,8 @@ protected:
     /** @brief Number of vertices in the graph. */
     vertex_num_t _num_vertices;
 
-    /** @brief Number of (expected) neighbors per vertex. */
-    vertex_num_t _reserved_nbr_size;
-
-    /** @brief Maximum number of neighbors (for overflow control). */
-    vertex_num_t _max_nbr_size;
+    /** @brief Layer configuration (max_nbr_size and reserved_nbr_size). */
+    layer_config_t _layer_config;
 
     /** @brief Array of neighbors for each vertex. */
     std::vector<nbr_arr_t> _nbrs_arr;

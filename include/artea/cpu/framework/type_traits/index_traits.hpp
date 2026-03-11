@@ -24,6 +24,7 @@ namespace artea {
 namespace cpu {
 
 /** ------ Forward Declaration  ------ **/
+template <typename IndexTraitsT> struct LayerConfig;
 template <typename IndexTraitsT> class FlatGraph;
 template <typename IndexTraitsT> class FlatSearchGraph;
 template <typename IndexTraitsT> class HierarchicalGraph;
@@ -39,6 +40,9 @@ struct IndexTraits : virtual public BaseTraitsT {
 
     /** @brief Base traits type. */
     using base_traits_t = BaseTraitsT;
+
+    /** @brief Layer configuration type. */
+    using layer_config_t = LayerConfig<index_traits_t>;
 
     /** @brief Flat graph type. */
     using flat_graph_t = FlatGraph<index_traits_t>;

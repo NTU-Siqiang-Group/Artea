@@ -97,6 +97,7 @@ using log_container_t = typename buffer_traits_t::log_container_t;
 using log_table_t = typename buffer_traits_t::log_table_t;
 
 // Index types from IndexTraits
+using layer_config_t = typename index_traits_t::layer_config_t;
 using flat_graph_t = typename index_traits_t::flat_graph_t;
 using flat_search_graph_t = typename index_traits_t::flat_search_graph_t;
 using hierarchical_vecs_manager_t = typename index_traits_t::hierarchical_vecs_manager_t;
@@ -116,6 +117,7 @@ using lb_greedy_vg_t = typename vertex_generator_traits_t::lb_greedy_vg_t;
 using random_vg_t = typename vertex_generator_traits_t::random_vg_t;
 
 // Graph factory types from GraphFactoryTraits
+using descent_config_t = typename graph_factory_traits_t::descent_config_t;
 using conv_graph_factory_t = typename graph_factory_traits_t::conv_graph_factory_t;
 
 // Propagate engine from EdgeGeneratorTraits

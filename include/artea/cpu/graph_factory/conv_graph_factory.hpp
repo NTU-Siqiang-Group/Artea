@@ -46,6 +46,8 @@ class ConvGraphFactory :
     using flat_graph_t = typename GraphFactoryTraitsT::flat_graph_t;
     using vector_dataset_t = typename GraphFactoryTraitsT::vector_dataset_t;
     using dist_func_t = typename GraphFactoryTraitsT::dist_func_t;
+    using layer_config_t = typename GraphFactoryTraitsT::layer_config_t;
+    using descent_config_t = typename GraphFactoryTraitsT::descent_config_t;
     // Using propagate_engine_t with no selective scheduling currently.
     using random_eg_t = typename GraphFactoryTraitsT::random_eg_t;
     using propagate_engine_t = typename GraphFactoryTraitsT::template propagate_engine_t<false>;
@@ -59,33 +61,31 @@ public:
     /** @brief construct a new convergent graph from vector array */
     auto construct_graph_impl(
         const vector_array_t& base_vecs,
-        const vertex_num_t max_nbr_size,
-        const vertex_num_t reserved_nbr_size,
-        const ratio_t scale_coeffs,
-        const ratio_t shifted_coeffs,
-        const iter_t num_outer_iters,   // recommend param: 4
-        const iter_t num_inner_iters    // recommend param: 14
+        const layer_config_t& layer_config,
+        const descent_config_t& descent_config
     ) -> flat_graph_t {
         const vertex_num_t num_vertices = static_cast<vertex_num_t>(base_vecs.get_num_vecs());
         flat_graph_t flat_graph(
             /* vecs_data =          */ base_vecs,
             /* num_vertices =       */ num_vertices,
-            /* max_nbr_size =       */ max_nbr_size,
-            /* reserved_nbr_size =  */ reserved_nbr_size
+            /* layer_config =       */ layer_config
         );
         dist_func_t dist_func(base_vecs.get_vec_dim());
 
         // generate random edges first
         random_eg_t random_eg(dist_func);
-        random_eg.generate(flat_graph, /* init_nbr_size = */ max_nbr_size);
+        random_eg.generate(flat_graph, /* init_nbr_size = */ layer_config.max_nbr_size());
         propagate_engine_t propagate_engine(num_vertices, dist_func);
         propagate_engine.set_graph(flat_graph);
         // Create triangle updater and reverse updater
-        auto triangle_updater = propagate_engine.template make_updater<triangle_updater_t>(scale_coeffs, shifted_coeffs);
+        auto triangle_updater = propagate_engine.template make_updater<triangle_updater_t>(
+            descent_config.scale_coeffs(),
+            descent_config.shifted_coeffs()
+        );
         auto reverse_updater = propagate_engine.template make_updater<reverse_updater_t>();
         // run propagation engine to refine the graph
-        for (iter_t outer_iter = 0; outer_iter < num_outer_iters; ++outer_iter) {
-            propagate_engine.run(num_inner_iters, triangle_updater);
+        for (iter_t outer_iter = 0; outer_iter < descent_config.num_outer_iters(); ++outer_iter) {
+            propagate_engine.run(descent_config.num_inner_iters(), triangle_updater);
             propagate_engine.run(1, reverse_updater);
         }
 

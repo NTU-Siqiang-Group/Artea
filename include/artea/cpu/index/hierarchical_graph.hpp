@@ -52,29 +52,24 @@ class HierarchicalGraph {
     using flat_graph_t = typename IndexTraitsT::flat_graph_t;
     using inter_layer_links_t = typename IndexTraitsT::inter_layer_links_t;
     using hierarchical_vecs_manager_t = typename IndexTraitsT::hierarchical_vecs_manager_t;
+    using layer_config_t = typename IndexTraitsT::layer_config_t;
 
 public:
     /**
      * @brief Construct a new Hierarchical Graph object.
      * @param hier_vecs_manager Reference to the hierarchical vector manager.
      * @param num_vertices The total number of vertices in the graph.
-     * @param bl_max_nbr_size Maximum number of neighbors for bottom layer (default: 16).
-     * @param bl_reserved_nbr_size Reserved neighbor size for bottom layer (default: 32).
-     * @param ul_max_nbr_size Maximum number of neighbors for upper layers (default: 24).
-     * @param ul_reserved_nbr_size Reserved neighbor size for upper layers (default: 48).
+     * @param bottom_layer_config Configuration for bottom layer.
+     * @param upper_layer_config Configuration for upper layers.
      */
     HierarchicalGraph(
         const hierarchical_vecs_manager_t& hier_vecs_manager,
         const vertex_num_t num_vertices,
-        const vertex_num_t bl_max_nbr_size = 16,
-        const vertex_num_t ul_max_nbr_size = 24,
-        const vertex_num_t bl_reserved_nbr_size = 32,
-        const vertex_num_t ul_reserved_nbr_size = 48
+        const layer_config_t& bottom_layer_config,
+        const layer_config_t& upper_layer_config
     ) : _num_vertices(num_vertices),
-        _bl_max_nbr_size(bl_max_nbr_size),
-        _ul_max_nbr_size(ul_max_nbr_size),
-        _bl_reserved_nbr_size(bl_reserved_nbr_size),
-        _ul_reserved_nbr_size(ul_reserved_nbr_size),
+        _bottom_layer_config(bottom_layer_config),
+        _upper_layer_config(upper_layer_config),
         _hier_vecs_manager(hier_vecs_manager),
         _inter_layer_links(inter_layer_links_t(num_vertices))
     {}
@@ -118,41 +113,23 @@ public:
     }
 
     __attribute__((always_inline))
-    auto get_bl_max_nbr_size() const -> vertex_num_t {
-        return _bl_max_nbr_size;
+    auto bottom_layer_config() const -> const layer_config_t& {
+        return _bottom_layer_config;
     }
 
     __attribute__((always_inline))
-    auto get_bl_reserved_nbr_size() const -> vertex_num_t {
-        return _bl_reserved_nbr_size;
+    auto bottom_layer_config() -> layer_config_t& {
+        return _bottom_layer_config;
     }
 
     __attribute__((always_inline))
-    auto get_ul_max_nbr_size() const -> vertex_num_t {
-        return _ul_max_nbr_size;
+    auto upper_layer_config() const -> const layer_config_t& {
+        return _upper_layer_config;
     }
 
     __attribute__((always_inline))
-    auto get_ul_reserved_nbr_size() const -> vertex_num_t {
-        return _ul_reserved_nbr_size;
-    }
-
-    __attribute__((always_inline))
-    auto set_bl_max_nbr_size(const vertex_num_t max_nbr_size) -> void {
-        _bl_max_nbr_size = max_nbr_size;
-        if (!_layer_graphs.empty() && _layer_graphs[0]) {
-            _layer_graphs[0]->set_max_nbr_size(max_nbr_size);
-        }
-    }
-
-    __attribute__((always_inline))
-    auto set_ul_max_nbr_size(const vertex_num_t max_nbr_size) -> void {
-        _ul_max_nbr_size = max_nbr_size;
-        for (size_t i = 1; i < _layer_graphs.size(); ++i) {
-            if (_layer_graphs[i]) {
-                _layer_graphs[i]->set_max_nbr_size(max_nbr_size);
-            }
-        }
+    auto upper_layer_config() -> layer_config_t& {
+        return _upper_layer_config;
     }
 
     __attribute__((always_inline))
@@ -215,17 +192,11 @@ protected:
     /** @brief Number of vertices in the graph. */
     vertex_num_t _num_vertices;
 
-    /** @brief Maximum number of neighbors for bottom layer. */
-    vertex_num_t _bl_max_nbr_size;
+    /** @brief Configuration for bottom layer. */
+    layer_config_t _bottom_layer_config;
 
-    /** @brief Reserved neighbor size for bottom layer. */
-    vertex_num_t _bl_reserved_nbr_size;
-
-    /** @brief Maximum number of neighbors for upper layers. */
-    vertex_num_t _ul_max_nbr_size;
-
-    /** @brief Reserved neighbor size for upper layers. */
-    vertex_num_t _ul_reserved_nbr_size;
+    /** @brief Configuration for upper layers. */
+    layer_config_t _upper_layer_config;
 
     /** @brief Hierarchical vector manager. */
     const hierarchical_vecs_manager_t& _hier_vecs_manager;
