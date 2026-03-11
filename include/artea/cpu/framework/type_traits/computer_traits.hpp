@@ -89,7 +89,7 @@ public:
     using dist_func_t = std::conditional_t<
         DistanceMetrics == DistanceMetricsT::SIMPLE_EUCLIDEAN,
         SimpleEuclideanDistance<computer_traits_t, 0>,
-        SIMDDistance<computer_traits_t, 1>
+        SIMDDistance<computer_traits_t, 4>  // TODO: test different unroll size
     >;
 
     template <std::size_t UnrollSize = 1>

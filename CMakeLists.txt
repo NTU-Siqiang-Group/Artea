@@ -118,7 +118,7 @@ add_subdirectory(third_party/arena-benchmark)
 set(FAISS_ENABLE_GPU OFF CACHE BOOL "Disable Faiss GPU support")
 set(FAISS_ENABLE_PYTHON OFF CACHE BOOL "Disable Faiss Python wrappers")
 set(BUILD_TESTING OFF CACHE BOOL "Disable building Faiss's own tests")
-set(FAISS_OPT_LEVEL "native" CACHE STRING "Optimize Faiss for the host CPU")
+set(FAISS_OPT_LEVEL "avx512" CACHE STRING "Optimize Faiss with AVX-512 instructions")
 add_subdirectory(third_party/faiss)
 
 # --- Aigen Configuration ---
