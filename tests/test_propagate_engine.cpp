@@ -46,7 +46,7 @@ protected:
 
         num_vertices_ = 12;
         vec_dim_ = 2;
-        max_nbr_size_ = 8;
+        layer_config_ = layer_config_t(8, 16);
 
         // Create VectorArray and populate with vectors
         vecs_ = std::make_unique<vector_array_t>(vec_dim_);
@@ -68,9 +68,7 @@ protected:
         // Initialize flat graph
         flat_graph_ = std::make_unique<flat_graph_t>(
             *vecs_,
-            num_vertices_,
-            max_nbr_size_,
-            max_nbr_size_ * 2
+            layer_config_
         );
     }
 
@@ -130,7 +128,7 @@ protected:
 
     vec_num_t num_vertices_;
     vec_num_t vec_dim_;
-    vec_num_t max_nbr_size_;
+    layer_config_t layer_config_{8, 16};
     std::unique_ptr<vector_array_t> vecs_;
     std::unique_ptr<dist_func_t> dist_func_;
     std::unique_ptr<flat_graph_t> flat_graph_;
@@ -177,7 +175,7 @@ TEST_F(PropagateEngineCorrectnessTest, TrianglePruningWithPropagateEngine) {
     const ratio_t shifted_coeffs = 0.0;
     const vec_num_t max_nbr_size = 6;
 
-    flat_graph_->set_max_nbr_size(max_nbr_size);
+    flat_graph_->layer_config().max_nbr_size(max_nbr_size);
 
     propagate_engine_ss_t propagate_engine(num_vertices_, *dist_func_);
     propagate_engine.set_graph(*flat_graph_);
@@ -344,7 +342,7 @@ TEST_F(PropagateEngineCorrectnessTest, ScaledTrianglePruning) {
     const ratio_t shifted_coeffs = 0.0;
     const vec_num_t max_nbr_size = 6;
 
-    flat_graph_->set_max_nbr_size(max_nbr_size);
+    flat_graph_->layer_config().max_nbr_size(max_nbr_size);
 
     propagate_engine_ss_t propagate_engine(num_vertices_, *dist_func_);
     propagate_engine.set_graph(*flat_graph_);
@@ -402,7 +400,7 @@ TEST_F(PropagateEngineCorrectnessTest, NeighborsSortedAfterPruning) {
     }
 
     const vec_num_t max_nbr_size = 6;
-    flat_graph_->set_max_nbr_size(max_nbr_size);
+    flat_graph_->layer_config().max_nbr_size(max_nbr_size);
 
     propagate_engine_ss_t propagate_engine(num_vertices_, *dist_func_);
     propagate_engine.set_graph(*flat_graph_);
@@ -545,7 +543,7 @@ TEST_F(PropagateEngineCorrectnessTest, TrianglePruningWithoutSelectiveScheduling
     const ratio_t shifted_coeffs = 0.0;
     const vec_num_t max_nbr_size = 6;
 
-    flat_graph_->set_max_nbr_size(max_nbr_size);
+    flat_graph_->layer_config().max_nbr_size(max_nbr_size);
 
     propagate_engine_noss_t propagate_engine(num_vertices_, *dist_func_);
     propagate_engine.set_graph(*flat_graph_);

@@ -244,7 +244,7 @@ public:
 
         const auto& vecs_arr = _flat_graph->get_vecs_data();
         auto& log_table = _log_table;
-        const auto max_nbr_size = _flat_graph->get_max_nbr_size();
+        const auto max_nbr_size = _flat_graph->layer_config().max_nbr_size();
         const auto num_vertices = _flat_graph->get_num_vertices();
 
         if constexpr (std::is_same_v<UpdaterT, triangle_updater_t>) {

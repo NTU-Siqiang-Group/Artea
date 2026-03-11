@@ -43,7 +43,7 @@ public:
         const flat_graph_t& flat_graph,
         const vertex_num_t extracted_nbr_size
     ) -> flat_search_graph_t {
-        const vertex_num_t max_nbr_size = flat_graph.get_max_nbr_size();
+        const vertex_num_t max_nbr_size = flat_graph.layer_config().max_nbr_size();
 
         // Validate extracted_nbr_size does not exceed max_nbr_size
         if (extracted_nbr_size > max_nbr_size) {
@@ -58,7 +58,7 @@ public:
         const auto& nbrs_arr = flat_graph.get_nbrs_arr();
 
         // Create the flat search graph
-        flat_search_graph_t flat_search_graph(num_vertices, extracted_nbr_size, vecs_data);
+        flat_search_graph_t flat_search_graph(vecs_data, extracted_nbr_size);
 
         // Copy neighbors from FlatGraph to FlatSearchGraph in parallel
         auto& csr_nbrs = flat_search_graph.get_csr_nbrs();

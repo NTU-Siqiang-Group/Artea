@@ -31,13 +31,9 @@ using namespace artea::cpu::default_context;
 struct TestConfig {
     std::string config_path;
     std::string dataset_name;
-    uint32_t max_nbr_size;
-    uint32_t reserved_nbr_size;
+    layer_config_t layer_config{16, 32};
+    descent_config_t descent_config{1.0f, 0.0f, 4, 14};
     uint32_t extracted_nbr_size;
-    float scale_coeffs;
-    float shifted_coeffs;
-    uint32_t num_outer_iters;
-    uint32_t num_inner_iters;
     uint32_t topk;
     uint32_t candidate_queue_size;
     bool verbose;
@@ -72,13 +68,13 @@ public:
         const auto& base_vecs = dataset_->get_base_vecs();
         if (g_config.verbose) {
             logger.info(fmt::format("Base vectors size: {}", base_vecs.get_num_vecs()));
-            logger.info(fmt::format("Max nbr size: {}", g_config.max_nbr_size));
-            logger.info(fmt::format("Reserved nbr size: {}", g_config.reserved_nbr_size));
+            logger.info(fmt::format("Max nbr size: {}", g_config.layer_config.max_nbr_size()));
+            logger.info(fmt::format("Reserved nbr size: {}", g_config.layer_config.reserved_nbr_size()));
             logger.info(fmt::format("Extracted nbr size: {}", g_config.extracted_nbr_size));
-            logger.info(fmt::format("Scale coeffs: {}", g_config.scale_coeffs));
-            logger.info(fmt::format("Shifted coeffs: {}", g_config.shifted_coeffs));
-            logger.info(fmt::format("Num outer iters: {}", g_config.num_outer_iters));
-            logger.info(fmt::format("Num inner iters: {}", g_config.num_inner_iters));
+            logger.info(fmt::format("Scale coeffs: {}", g_config.descent_config.scale_coeffs()));
+            logger.info(fmt::format("Shifted coeffs: {}", g_config.descent_config.shifted_coeffs()));
+            logger.info(fmt::format("Num outer iters: {}", g_config.descent_config.num_outer_iters()));
+            logger.info(fmt::format("Num inner iters: {}", g_config.descent_config.num_inner_iters()));
             logger.info(fmt::format("Top-k: {}", g_config.topk));
             logger.info(fmt::format("Candidate queue size: {}", g_config.candidate_queue_size));
         }
@@ -90,12 +86,8 @@ public:
         conv_graph_factory_t factory;
         flat_graph_ = std::make_unique<flat_graph_t>(factory.construct_graph(
             base_vecs,
-            g_config.max_nbr_size,
-            g_config.reserved_nbr_size,
-            g_config.scale_coeffs,
-            g_config.shifted_coeffs,
-            g_config.num_outer_iters,
-            g_config.num_inner_iters
+            g_config.layer_config,
+            g_config.descent_config
         ));
 
         auto end_time = std::chrono::high_resolution_clock::now();
@@ -211,7 +203,7 @@ int main(int argc, char** argv) {
     program.add_argument("--num-outer-iters").default_value(4u).scan<'u', uint32_t>();
     program.add_argument("--num-inner-iters").default_value(14u).scan<'u', uint32_t>();
     program.add_argument("-k", "--topk").default_value(20u).scan<'u', uint32_t>();
-    program.add_argument("--candidate-queue-size").default_value(100u).scan<'u', uint32_t>();
+    program.add_argument("--candidate-queue-size").default_value(80u).scan<'u', uint32_t>();
     program.add_argument("-v", "--verbose").default_value(false).implicit_value(true);
 
     try {
@@ -224,13 +216,17 @@ int main(int argc, char** argv) {
 
     g_config.config_path = program.get<std::string>("--config");
     g_config.dataset_name = program.get<std::string>("--dataset");
-    g_config.max_nbr_size = program.get<uint32_t>("--max-nbr-size");
-    g_config.reserved_nbr_size = program.get<uint32_t>("--reserved-nbr-size");
+    g_config.layer_config = layer_config_t(
+        program.get<uint32_t>("--max-nbr-size"),
+        program.get<uint32_t>("--reserved-nbr-size")
+    );
+    g_config.descent_config = descent_config_t(
+        program.get<float>("--scale-coeffs"),
+        program.get<float>("--shifted-coeffs"),
+        program.get<uint32_t>("--num-outer-iters"),
+        program.get<uint32_t>("--num-inner-iters")
+    );
     g_config.extracted_nbr_size = program.get<uint32_t>("--extracted-nbr-size");
-    g_config.scale_coeffs = program.get<float>("--scale-coeffs");
-    g_config.shifted_coeffs = program.get<float>("--shifted-coeffs");
-    g_config.num_outer_iters = program.get<uint32_t>("--num-outer-iters");
-    g_config.num_inner_iters = program.get<uint32_t>("--num-inner-iters");
     g_config.topk = program.get<uint32_t>("--topk");
     g_config.candidate_queue_size = program.get<uint32_t>("--candidate-queue-size");
     g_config.verbose = program.get<bool>("--verbose");
@@ -239,13 +235,13 @@ int main(int argc, char** argv) {
     std::cout << "\n=== Test Configuration ===" << std::endl;
     std::cout << "Dataset: " << g_config.dataset_name << std::endl;
     std::cout << "Config path: " << g_config.config_path << std::endl;
-    std::cout << "Max nbr size: " << g_config.max_nbr_size << std::endl;
-    std::cout << "Reserved nbr size: " << g_config.reserved_nbr_size << std::endl;
+    std::cout << "Max nbr size: " << g_config.layer_config.max_nbr_size() << std::endl;
+    std::cout << "Reserved nbr size: " << g_config.layer_config.reserved_nbr_size() << std::endl;
     std::cout << "Extracted nbr size: " << g_config.extracted_nbr_size << std::endl;
-    std::cout << "Scale coeffs: " << g_config.scale_coeffs << std::endl;
-    std::cout << "Shifted coeffs: " << g_config.shifted_coeffs << std::endl;
-    std::cout << "Num outer iters: " << g_config.num_outer_iters << std::endl;
-    std::cout << "Num inner iters: " << g_config.num_inner_iters << std::endl;
+    std::cout << "Scale coeffs: " << g_config.descent_config.scale_coeffs() << std::endl;
+    std::cout << "Shifted coeffs: " << g_config.descent_config.shifted_coeffs() << std::endl;
+    std::cout << "Num outer iters: " << g_config.descent_config.num_outer_iters() << std::endl;
+    std::cout << "Num inner iters: " << g_config.descent_config.num_inner_iters() << std::endl;
     std::cout << "Top-k: " << g_config.topk << std::endl;
     std::cout << "Candidate queue size: " << g_config.candidate_queue_size << std::endl;
     std::cout << "Verbose: " << (g_config.verbose ? "true" : "false") << std::endl;
@@ -259,6 +255,17 @@ int main(int argc, char** argv) {
     std::cout << "\n" << std::string(80, '=') << std::endl;
     std::cout << "                        TEST RESULTS SUMMARY" << std::endl;
     std::cout << std::string(80, '=') << std::endl;
+    std::cout << "\n--- Configuration ---" << std::endl;
+    std::cout << fmt::format("  Dataset:                {}", g_config.dataset_name) << std::endl;
+    std::cout << fmt::format("  Max Nbr Size:           {}", g_config.layer_config.max_nbr_size()) << std::endl;
+    std::cout << fmt::format("  Reserved Nbr Size:      {}", g_config.layer_config.reserved_nbr_size()) << std::endl;
+    std::cout << fmt::format("  Extracted Nbr Size:     {}", g_config.extracted_nbr_size) << std::endl;
+    std::cout << fmt::format("  Scale Coeffs:           {}", g_config.descent_config.scale_coeffs()) << std::endl;
+    std::cout << fmt::format("  Shifted Coeffs:         {}", g_config.descent_config.shifted_coeffs()) << std::endl;
+    std::cout << fmt::format("  Num Outer Iters:        {}", g_config.descent_config.num_outer_iters()) << std::endl;
+    std::cout << fmt::format("  Num Inner Iters:        {}", g_config.descent_config.num_inner_iters()) << std::endl;
+    std::cout << fmt::format("  Top-k:                  {}", g_config.topk) << std::endl;
+    std::cout << fmt::format("  Candidate Queue Size:   {}", g_config.candidate_queue_size) << std::endl;
     std::cout << "\n--- Graph Construction ---" << std::endl;
     std::cout << fmt::format("  Build Time:             {:.2f} s", g_test_results.build_time_s) << std::endl;
     std::cout << fmt::format("  Num Vertices:           {}", g_test_results.num_vertices) << std::endl;

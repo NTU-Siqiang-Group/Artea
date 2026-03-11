@@ -67,7 +67,6 @@ public:
         const vertex_num_t num_vertices = static_cast<vertex_num_t>(base_vecs.get_num_vecs());
         flat_graph_t flat_graph(
             /* vecs_data =          */ base_vecs,
-            /* num_vertices =       */ num_vertices,
             /* layer_config =       */ layer_config
         );
         dist_func_t dist_func(base_vecs.get_vec_dim());

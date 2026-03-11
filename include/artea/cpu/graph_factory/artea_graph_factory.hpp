@@ -26,6 +26,7 @@ class ArteaGraphFactory :
     using vec_ele_t = typename GraphFactoryTraitsT::vec_ele_t;
     using iter_t = typename GraphFactoryTraitsT::iter_t;
     using ratio_t = typename GraphFactoryTraitsT::ratio_t;
+    using distance_t = typename GraphFactoryTraitsT::distance_t;
     using dist_func_t = typename GraphFactoryTraitsT::dist_func_t;
     using flat_graph_t = typename GraphFactoryTraitsT::flat_graph_t;
     using conv_graph_t = typename GraphFactoryTraitsT::conv_graph_t;
@@ -36,22 +37,19 @@ class ArteaGraphFactory :
     using random_vg_t = typename GraphFactoryTraitsT::random_vg_t;
     using lb_greedy_vg_t = typename GraphFactoryTraitsT::lb_greedy_vg_t;
     using hierarchical_vecs_manager_t = typename GraphFactoryTraitsT::hierarchical_vecs_manager_t;
+    using layer_config_t = typename GraphFactoryTraitsT::layer_config_t;
+    using descent_config_t = typename GraphFactoryTraitsT::descent_config_t;
 
 public:
 
     /** @brief construct a new artea graph from vector array */
     static auto construct_graph_impl(
         const vector_array_t& base_vecs,
-        const vertex_num_t bl_max_nbr_size,
-        const vertex_num_t ul_max_nbr_size,
-        const vertex_num_t bl_reserved_nbr_size,
-        const vertex_num_t ul_reserved_nbr_size,
-        const distance_t min_radius,
+        const layer_config_t& bottom_layer_config,
+        const layer_config_t& upper_layer_config,
+        const descent_config_t& descent_config,
         const ratio_t beta_factor,
-        const ratio_t scale_coeffs,
-        const ratio_t shifted_coeffs,
-        const iter_t num_outer_iters,   // recommend param: 4
-        const iter_t num_inner_iters    // recommend param: 14
+        const distance_t min_radius
     ) -> hierarchical_graph_t {
 
     }

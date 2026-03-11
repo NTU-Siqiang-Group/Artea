@@ -40,7 +40,7 @@ protected:
         // Create synthetic large-scale graph
         num_vertices_ = 10000;
         vec_dim_ = 128;
-        reserved_nbr_size_ = 64;
+        layer_config_ = layer_config_t(64, 128);
 
         // Create VectorArray and populate with random vectors
         vecs_ = std::make_unique<vector_array_t>(vec_dim_);
@@ -62,9 +62,7 @@ protected:
         // Initialize flat graph
         flat_graph_ = std::make_unique<flat_graph_t>(
             *vecs_,
-            num_vertices_,
-            reserved_nbr_size_,
-            reserved_nbr_size_ * 2
+            layer_config_
         );
     }
 
@@ -107,7 +105,7 @@ protected:
 
     vertex_num_t num_vertices_;
     vec_dim_t vec_dim_;
-    vertex_num_t reserved_nbr_size_;
+    layer_config_t layer_config_{64, 128};
     std::unique_ptr<vector_array_t> vecs_;
     std::unique_ptr<dist_func_t> dist_func_;
     std::unique_ptr<flat_graph_t> flat_graph_;

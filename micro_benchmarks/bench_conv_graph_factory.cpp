@@ -26,12 +26,8 @@ using namespace artea::cpu::default_context;
 using namespace arena_benchmark;
 
 struct GraphParams {
-    vertex_num_t max_nbr_size;
-    vertex_num_t reserved_nbr_size;
-    ratio_t scale_coeffs;
-    ratio_t shifted_coeffs;
-    iter_t num_outer_iters;
-    iter_t num_inner_iters;
+    layer_config_t layer_config;
+    descent_config_t descent_config;
 };
 
 struct BenchConfig {
@@ -88,12 +84,8 @@ auto make_benchmark_func(const GraphParams& params) {
             // Construct the graph
             flat_graph_t flat_graph = conv_graph_factory.construct_graph(
                 dataset,
-                params.max_nbr_size,
-                params.reserved_nbr_size,
-                params.scale_coeffs,
-                params.shifted_coeffs,
-                params.num_outer_iters,
-                params.num_inner_iters
+                params.layer_config,
+                params.descent_config
             );
 
             // Prevent optimization from removing the work
@@ -159,10 +151,10 @@ int main(int argc, char** argv) {
 
     // Initialize parameter sets
     g_config.param_sets = {
-        // Set 1: max_nbrs=32, outer_iters=4, inner_iters=14, scale=1.10, shift=0.00
-        {32, 64, 1.10, 0.00, 4, 14},
-        // Set 2: max_nbrs=64, outer_iters=4, inner_iters=14, scale=1.00, shift=0.00
-        {64, 128, 1.00, 0.00, 4, 14}
+        // Set 1: max_nbrs=32, reserved=64, outer_iters=4, inner_iters=14, scale=1.10, shift=0.00
+        {layer_config_t(32, 64), descent_config_t(1.10, 0.00, 4, 14)},
+        // Set 2: max_nbrs=64, reserved=128, outer_iters=4, inner_iters=14, scale=1.00, shift=0.00
+        {layer_config_t(64, 128), descent_config_t(1.00, 0.00, 4, 14)}
     };
 
     logger.info(fmt::format("Benchmark Configuration:"));
@@ -194,12 +186,12 @@ int main(int argc, char** argv) {
             .extra_info(fmt::format(
                 "vertices={}, max_nbrs={}, reserved_nbrs={}, outer_iters={}, inner_iters={}, scale={:.2f}, shift={:.2f}",
                 num_vertices,
-                params.max_nbr_size,
-                params.reserved_nbr_size,
-                params.num_outer_iters,
-                params.num_inner_iters,
-                params.scale_coeffs,
-                params.shifted_coeffs
+                params.layer_config.max_nbr_size(),
+                params.layer_config.reserved_nbr_size(),
+                params.descent_config.num_outer_iters(),
+                params.descent_config.num_inner_iters(),
+                params.descent_config.scale_coeffs(),
+                params.descent_config.shifted_coeffs()
             ));
     }
 

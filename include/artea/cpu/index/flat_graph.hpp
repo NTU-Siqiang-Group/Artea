@@ -38,20 +38,18 @@ public:
     /**
      * @brief Construct a new Flat Graph object.
      * @param vecs_data Reference to the vector data for this layer.
-     * @param num_vertices The total number of vertices in the graph.
      * @param layer_config Layer configuration (max_nbr_size and reserved_nbr_size).
      */
     FlatGraph(
         const vector_array_t& vecs_data,
-        const vertex_num_t num_vertices,
         const layer_config_t& layer_config
     ) :
-        _num_vertices(num_vertices),
+        _num_vertices(vecs_data.get_num_vecs()),
         _layer_config(layer_config),
         _vecs_data(vecs_data)
     {
-        _nbrs_arr.resize(num_vertices);
-        for (vertex_num_t i = 0; i < num_vertices; ++i) {
+        _nbrs_arr.resize(_num_vertices);
+        for (vertex_num_t i = 0; i < _num_vertices; ++i) {
             _nbrs_arr[i].reserve(layer_config.reserved_nbr_size());
         }
     }
@@ -197,7 +195,15 @@ public:
         }
 
         layer_config_t layer_config(max_nbr_size, reserved_nbr_size);
-        FlatGraph<IndexTraitsT> flat_graph(vecs_data, num_vertices, layer_config);
+        FlatGraph<IndexTraitsT> flat_graph(vecs_data, layer_config);
+
+        // Check if the number of vertices matches
+        if (flat_graph._num_vertices != num_vertices) {
+            logger.error(fmt::format(
+                "Vertex count mismatch: vecs_data has {} vertices but file has {} vertices",
+                flat_graph._num_vertices, num_vertices
+            ));
+        }
 
         // Read neighbor arrays
         for (vertex_num_t i = 0; i < num_vertices; ++i) {

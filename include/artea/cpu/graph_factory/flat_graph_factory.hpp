@@ -34,6 +34,7 @@ class FlatGraphFactory {
     using vector_dataset_t = typename GraphFactoryTraitsT::vector_dataset_t;
     using vector_array_t = typename GraphFactoryTraitsT::vector_array_t;
     using dist_func_t = typename GraphFactoryTraitsT::dist_func_t;
+    using layer_config_t = typename GraphFactoryTraitsT::layer_config_t;
     // Using propagate_engine_t with no selective scheduling currently.
     using propagate_engine_t = typename GraphFactoryTraitsT::template propagate_engine_t<false>;
     using triangle_updater_t = typename GraphFactoryTraitsT::triangle_updater_t;
@@ -44,14 +45,12 @@ public:
     template <typename... Args>
     auto construct_graph(
         const vector_dataset_t& dataset,
-        const vertex_num_t max_nbr_size,
-        const vertex_num_t reserved_nbr_size,
+        const layer_config_t& layer_config,
         Args&&... args
     ) -> flat_graph_t {
         return construct_graph(
             dataset.get_base_vecs(),
-            max_nbr_size,
-            reserved_nbr_size,
+            layer_config,
             std::forward<Args>(args)...
         );
     }
@@ -59,14 +58,12 @@ public:
     template <typename... Args>
     auto construct_graph(
         const vector_array_t& base_vecs,
-        const vertex_num_t max_nbr_size,
-        const vertex_num_t reserved_nbr_size,
+        const layer_config_t& layer_config,
         Args&&... args
     ) -> flat_graph_t {
         return static_cast<DerivedClassT*>(this)->construct_graph_impl(
             base_vecs,
-            max_nbr_size,
-            reserved_nbr_size,
+            layer_config,
             std::forward<Args>(args)...
         );
     }

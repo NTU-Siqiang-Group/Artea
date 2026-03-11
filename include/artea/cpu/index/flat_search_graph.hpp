@@ -31,21 +31,19 @@ class FlatSearchGraph {
 public:
     /**
      * @brief Construct a new Flat Search Graph object.
-     * @param num_vertices The total number of vertices in the graph.
-     * @param extracted_nbr_size Fixed number of neighbors per vertex.
      * @param vecs_data Reference to the vector data for this graph.
+     * @param extracted_nbr_size Fixed number of neighbors per vertex.
      */
     FlatSearchGraph(
-        const vertex_num_t num_vertices,
-        const vertex_num_t extracted_nbr_size,
-        const vector_array_t& vecs_data
+        const vector_array_t& vecs_data,
+        const vertex_num_t extracted_nbr_size
     ) :
-        _num_vertices(num_vertices),
+        _num_vertices(vecs_data.get_num_vecs()),
         _extracted_nbr_size(extracted_nbr_size),
         _vecs_data(vecs_data)
     {
         // Allocate CSR storage: num_vertices * extracted_nbr_size
-        _csr_nbrs.resize(static_cast<size_t>(num_vertices) * extracted_nbr_size);
+        _csr_nbrs.resize(static_cast<size_t>(_num_vertices) * extracted_nbr_size);
     }
 
     // Copying is deleted

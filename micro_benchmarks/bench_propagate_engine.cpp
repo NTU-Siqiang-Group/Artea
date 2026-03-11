@@ -26,8 +26,7 @@ struct BenchConfig {
     std::string config_path;
     std::string dataset_name;
     vec_num_t init_nbr_size;
-    vec_num_t reserved_nbr_size;
-    vec_num_t max_nbr_size;
+    layer_config_t layer_config{16, 32};
     vec_num_t rand_gen_size;
     iter_t num_iters;
     ratio_t scale_coeffs;
@@ -63,9 +62,7 @@ public:
         logger.info("Initializing flat graph with random edges...");
         flat_graph_ = std::make_unique<flat_graph_t>(
             base_vecs_,
-            num_base_vecs_,
-            g_config.max_nbr_size,
-            g_config.reserved_nbr_size
+            g_config.layer_config
         );
 
         random_eg_t random_eg(*dist_func_);
@@ -115,7 +112,7 @@ static void BM_TriangleUpdater(benchmark::State& state) {
     const vec_num_t num_vertices = provider.get_num_base_vecs();
 
     // Set max_nbr_size on the flat graph
-    flat_graph.set_max_nbr_size(g_config.max_nbr_size);
+    flat_graph.layer_config().max_nbr_size(g_config.layer_config.max_nbr_size());
 
     // Create PropagateEngine instance
     propagate_engine_ss_t propagate_engine(num_vertices, dist_func);
@@ -146,7 +143,7 @@ static void BM_TriangleUpdater(benchmark::State& state) {
         "vertices={}, iters={}, max_nbrs={}, selective_schedule=true",
         num_vertices,
         g_config.num_iters,
-        g_config.max_nbr_size
+        g_config.layer_config.max_nbr_size()
     ));
 }
 
@@ -158,7 +155,7 @@ static void BM_TriangleUpdater_NoSS(benchmark::State& state) {
     const vec_num_t num_vertices = provider.get_num_base_vecs();
 
     // Set max_nbr_size on the flat graph
-    flat_graph.set_max_nbr_size(g_config.max_nbr_size);
+    flat_graph.layer_config().max_nbr_size(g_config.layer_config.max_nbr_size());
 
     // Create PropagateEngine instance without selective scheduling
     propagate_engine_noss_t propagate_engine(num_vertices, dist_func);
@@ -189,7 +186,7 @@ static void BM_TriangleUpdater_NoSS(benchmark::State& state) {
         "vertices={}, iters={}, max_nbrs={}, selective_schedule=false",
         num_vertices,
         g_config.num_iters,
-        g_config.max_nbr_size
+        g_config.layer_config.max_nbr_size()
     ));
 }
 
@@ -422,8 +419,10 @@ int main(int argc, char** argv) {
     g_config.config_path = program.get<std::string>("--config");
     g_config.dataset_name = program.get<std::string>("--dataset");
     g_config.init_nbr_size = static_cast<vec_num_t>(program.get<int>("--init-nbrs"));
-    g_config.reserved_nbr_size = static_cast<vec_num_t>(program.get<int>("--reserved-nbrs"));
-    g_config.max_nbr_size = static_cast<vec_num_t>(program.get<int>("--max-nbrs"));
+    g_config.layer_config = layer_config_t(
+        static_cast<vec_num_t>(program.get<int>("--max-nbrs")),
+        static_cast<vec_num_t>(program.get<int>("--reserved-nbrs"))
+    );
     g_config.rand_gen_size = static_cast<vec_num_t>(program.get<int>("--rand-gen-size"));
     g_config.num_iters = static_cast<iter_t>(program.get<int>("--num-iters"));
     g_config.scale_coeffs = static_cast<ratio_t>(program.get<double>("--scale-coeffs"));
@@ -434,8 +433,8 @@ int main(int argc, char** argv) {
     logger.info(fmt::format("  Dataset: {}", g_config.dataset_name));
     logger.info(fmt::format("  Config path: {}", g_config.config_path));
     logger.info(fmt::format("  Init neighbors: {}", g_config.init_nbr_size));
-    logger.info(fmt::format("  Reserved neighbors: {}", g_config.reserved_nbr_size));
-    logger.info(fmt::format("  Max neighbors: {}", g_config.max_nbr_size));
+    logger.info(fmt::format("  Reserved neighbors: {}", g_config.layer_config.reserved_nbr_size()));
+    logger.info(fmt::format("  Max neighbors: {}", g_config.layer_config.max_nbr_size()));
     logger.info(fmt::format("  Random gen size: {}", g_config.rand_gen_size));
     logger.info(fmt::format("  Propagation iterations: {}", g_config.num_iters));
     logger.info(fmt::format("  Scale coeffs: {}", g_config.scale_coeffs));

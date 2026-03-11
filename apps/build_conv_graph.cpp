@@ -143,15 +143,19 @@ int main(int argc, char** argv) {
     logger.info("Constructing convergent graph...");
     auto start_time = std::chrono::high_resolution_clock::now();
 
-    conv_graph_factory_t conv_graph_factory;
-    flat_graph_t flat_graph = conv_graph_factory.construct_graph(
-        dataset,
-        params.max_nbr_size,
-        params.reserved_nbr_size,
+    layer_config_t layer_config(params.max_nbr_size, params.reserved_nbr_size);
+    descent_config_t descent_config(
         params.scale_coeffs,
         params.shifted_coeffs,
         params.num_outer_iters,
         params.num_inner_iters
+    );
+
+    conv_graph_factory_t conv_graph_factory;
+    flat_graph_t flat_graph = conv_graph_factory.construct_graph(
+        dataset,
+        layer_config,
+        descent_config
     );
 
     auto end_time = std::chrono::high_resolution_clock::now();

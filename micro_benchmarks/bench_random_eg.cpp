@@ -32,13 +32,13 @@ using dist_func_t = typename computer_traits_t::dist_func_t;
 using vector_array_t = typename computer_traits_t::vector_array_t;
 using vector_dataset_t = typename computer_traits_t::vector_dataset_t;
 using flat_graph_t = typename index_traits_t::flat_graph_t;
+using layer_config_t = typename index_traits_t::layer_config_t;
 using random_eg_t = typename edge_generator_traits_t::random_eg_t;
 
 struct BenchConfig {
     std::string config_path;
     std::string dataset_name;
-    vec_num_t init_nbr_size;
-    vec_num_t max_nbr_size;
+    layer_config_t layer_config{32, 32};
     int64_t iterations;
 };
 
@@ -93,13 +93,11 @@ static void BM_RandomEG(benchmark::State& state) {
         // Create a new flat_graph (included in timing)
         flat_graph_t flat_graph(
             base_vecs,
-            num_vertices,
-            g_config.max_nbr_size,
-            /* reserved_nbr_size = */ g_config.max_nbr_size
+            g_config.layer_config
         );
 
         // Perform the random edge generation
-        random_eg.generate(flat_graph, g_config.init_nbr_size);
+        random_eg.generate(flat_graph, g_config.layer_config.max_nbr_size());
 
         // Prevent optimization from removing the work
         benchmark::DoNotOptimize(flat_graph);
@@ -107,7 +105,7 @@ static void BM_RandomEG(benchmark::State& state) {
     }
 
     state.SetItemsProcessed(state.iterations() * num_vertices);
-    state.SetLabel(fmt::format("vertices={}, init_nbrs={}", num_vertices, g_config.init_nbr_size));
+    state.SetLabel(fmt::format("vertices={}, max_nbrs={}", num_vertices, g_config.layer_config.max_nbr_size()));
 }
 
 BENCHMARK(BM_RandomEG)
@@ -128,11 +126,6 @@ int main(int argc, char** argv) {
         .help("Dataset name");
 
     // Algorithm parameters
-    program.add_argument("--init-nbrs")
-        .default_value(32)
-        .scan<'i', int>()
-        .help("Number of random neighbors to generate for each vertex");
-
     program.add_argument("--max-nbrs")
         .default_value(32)
         .scan<'i', int>()
@@ -164,15 +157,14 @@ int main(int argc, char** argv) {
 
     g_config.config_path = program.get<std::string>("--config");
     g_config.dataset_name = program.get<std::string>("--dataset");
-    g_config.init_nbr_size = static_cast<vec_num_t>(program.get<int>("--init-nbrs"));
-    g_config.max_nbr_size = static_cast<vec_num_t>(program.get<int>("--max-nbrs"));
+    vec_num_t max_nbr_size = static_cast<vec_num_t>(program.get<int>("--max-nbrs"));
+    g_config.layer_config = layer_config_t(max_nbr_size, max_nbr_size);
     g_config.iterations = program.get<int64_t>("--iterations");
 
     logger.info(fmt::format("Benchmark Configuration:"));
     logger.info(fmt::format("  Dataset: {}", g_config.dataset_name));
     logger.info(fmt::format("  Config path: {}", g_config.config_path));
-    logger.info(fmt::format("  Init neighbors: {}", g_config.init_nbr_size));
-    logger.info(fmt::format("  Max neighbors: {}", g_config.max_nbr_size));
+    logger.info(fmt::format("  Max neighbors: {}", g_config.layer_config.max_nbr_size()));
     logger.info(fmt::format("  Iterations: {}", g_config.iterations));
 
     DataProvider::instance().init();
