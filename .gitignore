@@ -6,3 +6,4 @@ graph_index_repo/**/*.index
 graph_index_repo/**/
 /bin/*
 !/bin/README.md
+debug-output.txt

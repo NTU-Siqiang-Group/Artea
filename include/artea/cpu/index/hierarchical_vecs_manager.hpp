@@ -74,6 +74,15 @@ public:
     }
 
     /**
+     * @brief Get the number of base vectors.
+     * @return vertex_num_t Number of base vectors.
+     */
+    __attribute__((always_inline))
+    auto get_num_base_vecs() const -> vertex_num_t {
+        return static_cast<vertex_num_t>(_bottom_layer_vecs.get_num_vecs());
+    }
+
+    /**
      * @brief Get the number of layers (including base layer).
      * @return layer_num_t Number of layers.
      */

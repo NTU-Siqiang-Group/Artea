@@ -87,10 +87,8 @@ public:
             // Update layer_id for the new layer
             current_layer_id++;
 
-            // Add inter-layer links first (move vec_ids)
-            inter_layer_links.add_layer_links(current_layer_id, std::move(next_layer_subset.vec_ids));
-
-            // Add the new layer to hier_vecs_manager (move vecs_data)
+            // Add inter-layer links and vector data (move semantics)
+            inter_layer_links.bottom_up_append(std::move(next_layer_subset.vec_ids));
             hier_vecs_manager.bottom_up_append(std::move(next_layer_subset.vecs_data));
 
             // Update for next iteration
@@ -140,10 +138,8 @@ public:
             // Update layer_id for the new layer
             current_layer_id++;
 
-            // Add inter-layer links first (move vec_ids)
-            inter_layer_links.add_layer_links(current_layer_id, std::move(next_layer_subset.vec_ids));
-
-            // Add the new layer to hier_vecs_manager (move vecs_data)
+            // Add inter-layer links and vector data (move semantics)
+            inter_layer_links.bottom_up_append(std::move(next_layer_subset.vec_ids));
             hier_vecs_manager.bottom_up_append(std::move(next_layer_subset.vecs_data));
 
             // Update for next iteration

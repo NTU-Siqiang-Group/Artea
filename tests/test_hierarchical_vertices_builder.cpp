@@ -104,7 +104,12 @@ public:
 
     vector_dataset_t& get_dataset() { return *dataset_; }
     dist_func_t& get_dist_func() { return *dist_func_; }
+    hierarchical_graph_t& get_hierarchical_graph() { return *hierarchical_graph_; }
     hierarchical_vecs_manager_t& get_hier_vecs_manager() { return *hier_vecs_manager_; }
+
+    void set_hierarchical_graph(std::unique_ptr<hierarchical_graph_t> graph) {
+        hierarchical_graph_ = std::move(graph);
+    }
 
     void set_hier_vecs_manager(std::unique_ptr<hierarchical_vecs_manager_t> manager) {
         hier_vecs_manager_ = std::move(manager);
@@ -115,6 +120,7 @@ private:
     std::unique_ptr<vector_dataset_t> dataset_;
     std::unique_ptr<dist_func_t> dist_func_;
     std::unique_ptr<hierarchical_vecs_manager_t> hier_vecs_manager_;
+    std::unique_ptr<hierarchical_graph_t> hierarchical_graph_;
 };
 
 template <VGPolicyT VGPolicy>
@@ -126,8 +132,20 @@ protected:
         auto& dist_func = provider.get_dist_func();
         const auto& base_vecs = dataset.get_base_vecs();
 
-        // Create hierarchical vecs manager
+        // Create dummy layer configs (not used in vertex generation, only for graph construction)
+        layer_config_t dummy_config(32, 32);
+
+        // Create hierarchical vecs manager and store it in provider
         auto hier_vecs_manager = std::make_unique<hierarchical_vecs_manager_t>(base_vecs);
+        provider.set_hier_vecs_manager(std::move(hier_vecs_manager));
+
+        // Create hierarchical graph with reference to the stored manager
+        auto hierarchical_graph = std::make_unique<hierarchical_graph_t>(
+            provider.get_hier_vecs_manager(),
+            base_vecs.get_num_vecs(),
+            dummy_config,
+            dummy_config
+        );
 
         logger.info(fmt::format("Testing VGPolicy: {}",
             VGPolicy == VGPolicyT::rnet_selection ? "rnet_selection" : "random_selection"));
@@ -138,7 +156,7 @@ protected:
             hierarchical_vertices_builder_t::template construct<VGPolicy>(
                 base_vecs,
                 dist_func,
-                *hier_vecs_manager,
+                *hierarchical_graph,
                 g_config.rnet_config.min_radius,
                 g_config.rnet_config.beta_sq,
                 g_config.rnet_config.coverage_ratio,
@@ -151,7 +169,7 @@ protected:
             hierarchical_vertices_builder_t::template construct<VGPolicy>(
                 base_vecs,
                 dist_func,
-                *hier_vecs_manager,
+                *hierarchical_graph,
                 g_config.random_config.result_ratio
             );
         }
@@ -161,12 +179,12 @@ protected:
 
         auto& results = (VGPolicy == VGPolicyT::rnet_selection) ? g_rnet_results : g_random_results;
         results.generation_time_ms = duration.count() / 1000.0;
-        results.num_layers = hier_vecs_manager->get_num_layers();
+        results.num_layers = hierarchical_graph->get_hier_vecs_manager().get_num_layers();
 
         logger.info(fmt::format("Generated {} layers", results.num_layers));
         logger.info(fmt::format("Generation time: {:.2f} ms", results.generation_time_ms));
 
-        provider.set_hier_vecs_manager(std::move(hier_vecs_manager));
+        provider.set_hierarchical_graph(std::move(hierarchical_graph));
     }
 };
 
@@ -176,7 +194,8 @@ using HierVertexRandomTest = HierVertexTest<VGPolicyT::random_selection>;
 template <typename TestFixture>
 void TestLayerOrdering(uint32_t layer_id) {
     auto& provider = DataProvider::instance();
-    auto& hier_vecs_manager = provider.get_hier_vecs_manager();
+    auto& hierarchical_graph = provider.get_hierarchical_graph();
+    auto& hier_vecs_manager = hierarchical_graph.get_hier_vecs_manager();
 
     if (layer_id == 0) {
         // Bottom layer is the full dataset, no vec_ids to check
@@ -198,7 +217,8 @@ template <typename TestFixture>
 void TestLayerSeparation(uint32_t layer_id, float min_radius, TestResults& results) {
     auto& provider = DataProvider::instance();
     auto& dist_func = provider.get_dist_func();
-    auto& hier_vecs_manager = provider.get_hier_vecs_manager();
+    auto& hierarchical_graph = provider.get_hierarchical_graph();
+    auto& hier_vecs_manager = hierarchical_graph.get_hier_vecs_manager();
 
     const auto& layer_vecs = hier_vecs_manager.get_layer_vecs(layer_id);
 
@@ -240,7 +260,8 @@ void TestLayerCoverage(uint32_t layer_id, float coverage_radius, TestResults& re
     auto& provider = DataProvider::instance();
     auto& dataset = provider.get_dataset();
     auto& dist_func = provider.get_dist_func();
-    auto& hier_vecs_manager = provider.get_hier_vecs_manager();
+    auto& hierarchical_graph = provider.get_hierarchical_graph();
+    auto& hier_vecs_manager = hierarchical_graph.get_hier_vecs_manager();
 
     const auto& base_vecs = dataset.get_base_vecs();
     const auto& layer_vecs = hier_vecs_manager.get_layer_vecs(layer_id);
@@ -283,9 +304,103 @@ void TestLayerCoverage(uint32_t layer_id, float coverage_radius, TestResults& re
         g_config.num_test_samples - uncovered_count, g_config.num_test_samples));
 }
 
+template <typename TestFixture>
+void TestInterLayerLinks(TestResults& results) {
+    auto& provider = DataProvider::instance();
+    auto& dataset = provider.get_dataset();
+    auto& dist_func = provider.get_dist_func();
+    auto& hierarchical_graph = provider.get_hierarchical_graph();
+    auto& hier_vecs_manager = hierarchical_graph.get_hier_vecs_manager();
+    auto& inter_layer_links = hierarchical_graph.get_inter_layer_links();
+
+    const auto& base_vecs = dataset.get_base_vecs();
+
+    logger.info("Testing inter-layer links...");
+
+    // Test each layer (starting from Layer 1)
+    for (uint32_t layer_id = 1; layer_id < results.num_layers; ++layer_id) {
+        const auto& current_layer_vecs = hier_vecs_manager.get_layer_vecs(layer_id);
+        const auto& prev_layer_vecs = hier_vecs_manager.get_layer_vecs(layer_id - 1);
+
+        auto layer_links = inter_layer_links.get_layer_links(layer_id);
+
+        // Test 1: Link count should equal current layer vertex count
+        EXPECT_EQ(layer_links.size(), current_layer_vecs.get_num_vecs())
+            << fmt::format("Layer {} link count mismatch", layer_id);
+
+        // Test 2: Each link index should be within valid range of previous layer
+        for (uint32_t i = 0; i < layer_links.size(); ++i) {
+            vertex_id_t prev_layer_idx = layer_links[i];
+            EXPECT_LT(prev_layer_idx, prev_layer_vecs.get_num_vecs())
+                << fmt::format("Layer {} vertex {} has invalid link {} (prev layer size: {})",
+                    layer_id, i, prev_layer_idx, prev_layer_vecs.get_num_vecs());
+        }
+
+        // Test 3: Vector data consistency - vectors should match through links
+        uint32_t mismatch_count = 0;
+        for (uint32_t i = 0; i < std::min(layer_links.size(), static_cast<size_t>(100)); ++i) {
+            vertex_id_t prev_layer_idx = layer_links[i];
+            const vec_ele_t* current_vec = current_layer_vecs.get(i);
+            const vec_ele_t* prev_vec = prev_layer_vecs.get(prev_layer_idx);
+
+            distance_t dist = dist_func(current_vec, prev_vec);
+            if (dist > 1e-6) {  // Should be exactly the same vector
+                mismatch_count++;
+                if (g_config.verbose && mismatch_count <= 3) {
+                    logger.warn(fmt::format(
+                        "Layer {} vertex {} vector mismatch with prev layer vertex {} (distance: {})",
+                        layer_id, i, prev_layer_idx, dist));
+                }
+            }
+        }
+
+        EXPECT_EQ(mismatch_count, 0)
+            << fmt::format("Layer {} has {} vector mismatches", layer_id, mismatch_count);
+
+        logger.info(fmt::format("Layer {} inter-layer links: {} links, all valid",
+            layer_id, layer_links.size()));
+    }
+
+    // Test 4: Full chain traceability - trace from top layer to base_vecs
+    if (results.num_layers > 1) {
+        logger.info("Testing full chain traceability from top to bottom...");
+
+        uint32_t top_layer_id = results.num_layers - 1;
+        const auto& top_layer_vecs = hier_vecs_manager.get_layer_vecs(top_layer_id);
+
+        // Test a few vertices from top layer
+        uint32_t num_test_vertices = std::min(static_cast<uint32_t>(10),
+                                               static_cast<uint32_t>(top_layer_vecs.get_num_vecs()));
+
+        for (uint32_t top_idx = 0; top_idx < num_test_vertices; ++top_idx) {
+            const vec_ele_t* top_vec = top_layer_vecs.get(top_idx);
+
+            // Trace down to base layer
+            vertex_id_t current_idx = top_idx;
+            for (layer_id_t layer_id = top_layer_id; layer_id > 0; --layer_id) {
+                auto layer_links = inter_layer_links.get_layer_links(layer_id);
+                current_idx = layer_links[current_idx];
+            }
+
+            // current_idx now points to base_vecs
+            const vec_ele_t* base_vec = base_vecs.get(current_idx);
+
+            // Verify vectors match
+            distance_t dist = dist_func(top_vec, base_vec);
+            EXPECT_LT(dist, 1e-6)
+                << fmt::format("Top layer vertex {} traced to base_vecs[{}] but vectors don't match (distance: {})",
+                    top_idx, current_idx, dist);
+        }
+
+        logger.info(fmt::format("Full chain traceability test passed for {} vertices", num_test_vertices));
+    }
+}
+
+
 TEST_F(HierVertexRNetTest, VerifyHierarchicalStructure) {
     auto& provider = DataProvider::instance();
-    auto& hier_vecs_manager = provider.get_hier_vecs_manager();
+    auto& hierarchical_graph = provider.get_hierarchical_graph();
+    auto& hier_vecs_manager = hierarchical_graph.get_hier_vecs_manager();
 
     logger.info("Verifying hierarchical structure for rnet_selection...");
 
@@ -298,11 +413,15 @@ TEST_F(HierVertexRNetTest, VerifyHierarchicalStructure) {
         TestLayerCoverage<HierVertexRNetTest>(layer_id, current_radius, g_rnet_results);
         current_radius *= g_config.rnet_config.beta_sq;
     }
+
+    // Test inter-layer links
+    TestInterLayerLinks<HierVertexRNetTest>(g_rnet_results);
 }
 
 TEST_F(HierVertexRandomTest, VerifyHierarchicalStructure) {
     auto& provider = DataProvider::instance();
-    auto& hier_vecs_manager = provider.get_hier_vecs_manager();
+    auto& hierarchical_graph = provider.get_hierarchical_graph();
+    auto& hier_vecs_manager = hierarchical_graph.get_hier_vecs_manager();
 
     logger.info("Verifying hierarchical structure for random_selection...");
 
@@ -325,12 +444,15 @@ TEST_F(HierVertexRandomTest, VerifyHierarchicalStructure) {
         logger.info(fmt::format("Layer {}: {} vertices ({:.2f}%)",
             layer_id, metrics.num_vertices, metrics.layer_ratio));
     }
+
+    // Test inter-layer links
+    TestInterLayerLinks<HierVertexRandomTest>(g_random_results);
 }
 
 int main(int argc, char** argv) {
     ::testing::InitGoogleTest(&argc, argv);
 
-    argparse::ArgumentParser program("test_construct_hier_vertex");
+    argparse::ArgumentParser program("test_hierarchical_vertices_builder");
     program.add_argument("-c", "--config").default_value(std::string("./configs/datasets.json"));
     program.add_argument("-d", "--dataset").default_value(std::string("sift-1m"));
 

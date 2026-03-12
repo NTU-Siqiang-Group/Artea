@@ -63,7 +63,7 @@ public:
      * @param upper_layer_config Configuration for upper layers.
      */
     HierarchicalGraph(
-        const hierarchical_vecs_manager_t& hier_vecs_manager,
+        hierarchical_vecs_manager_t& hier_vecs_manager,
         const vertex_num_t num_vertices,
         const layer_config_t& bottom_layer_config,
         const layer_config_t& upper_layer_config
@@ -224,7 +224,7 @@ protected:
     layer_config_t _upper_layer_config;
 
     /** @brief Hierarchical vector manager. */
-    const hierarchical_vecs_manager_t& _hier_vecs_manager;
+    hierarchical_vecs_manager_t& _hier_vecs_manager;
 
     /** @brief Flat graphs for all layers. layer_id 0 is the bottom layer at _layer_graphs[0]. */
     std::vector<std::unique_ptr<flat_graph_t>> _layer_graphs;
