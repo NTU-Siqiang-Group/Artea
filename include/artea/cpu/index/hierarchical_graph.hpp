@@ -189,6 +189,21 @@ public:
     }
 
     __attribute__((always_inline))
+    auto get_hier_vecs_manager() -> hierarchical_vecs_manager_t& {
+        return _hier_vecs_manager;
+    }
+
+    __attribute__((always_inline))
+    auto get_inter_layer_links() -> inter_layer_links_t& {
+        return _inter_layer_links;
+    }
+
+    __attribute__((always_inline))
+    auto get_inter_layer_links() const -> const inter_layer_links_t& {
+        return _inter_layer_links;
+    }
+
+    __attribute__((always_inline))
     auto get_entry_point() const -> vertex_id_t {
         return _entry_point;
     }

@@ -12,6 +12,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#pragma once
+
+namespace artea {
+namespace cpu {
+
 enum class VGPolicyT {
     random_selection,
     rnet_selection
@@ -54,11 +59,14 @@ public:
         const layer_config_t& bottom_layer_config,
         const layer_config_t& upper_layer_config,
         const descent_config_t& descent_config,
-        const ratio_t beta_sq,
         Args&&... args
     ) -> hierarchical_graph_t {
         hierarchical_vecs_manager_t hier_vecs_manager(base_vecs);
         dist_func_t dist_func(base_vecs.get_vec_dim());
-        hierarchical_vertices_builder_t::template construct<VGPolicy>(base_vecs, dist_func, hier_vecs_manager, std::forward<Args>(args)...);
+        hierarchical_vertices_builder_t::template construct<VGPolicy>(
+            base_vecs, dist_func, hier_vecs_manager, std::forward<Args>(args)...);
     }
 };
+
+}   // namespace cpu
+}   // namespace artea

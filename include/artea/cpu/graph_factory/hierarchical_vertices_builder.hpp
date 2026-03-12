@@ -32,6 +32,7 @@ class HierarchicalVerticesBuilder {
     using random_vg_t = typename GraphFactoryTraitsT::random_vg_t;
     using lb_greedy_vg_t = typename GraphFactoryTraitsT::lb_greedy_vg_t;
     using hierarchical_vecs_manager_t = typename GraphFactoryTraitsT::hierarchical_vecs_manager_t;
+    using hierarchical_graph_t = typename GraphFactoryTraitsT::hierarchical_graph_t;
 
     static constexpr vertex_num_t min_num_vertex = 128;
 
@@ -41,7 +42,7 @@ public:
     static auto construct(
         const vector_array_t& base_vecs,
         const dist_func_t& dist_func,
-        hierarchical_vecs_manager_t& hier_vecs_manager,
+        hierarchical_graph_t& hierarchical_graph,
         const distance_t rnet_radius,
         const ratio_t beta_sq,
         const ratio_t coverage_ratio,
@@ -51,6 +52,10 @@ public:
         const bool is_shuffle
     ) -> void requires (VGPolicy == VGPolicyT::rnet_selection) {
         const vertex_num_t num_vertices = static_cast<vertex_num_t>(base_vecs.get_num_vecs());
+
+        // Get references to hier_vecs_manager and inter_layer_links
+        auto& hier_vecs_manager = hierarchical_graph.get_hier_vecs_manager();
+        auto& inter_layer_links = hierarchical_graph.get_inter_layer_links();
 
         // Layer 0 is the base_vecs (full dataset), already in hier_vecs_manager by construction
         // Start building from Layer 1 with radius = rnet_radius * beta_sq
@@ -79,11 +84,16 @@ public:
                 break;
             }
 
-            // Add the new layer to hier_vecs_manager
-            hier_vecs_manager.bottom_up_append(std::move(next_layer_subset));
+            // Update layer_id for the new layer
+            current_layer_id++;
+
+            // Add inter-layer links first (move vec_ids)
+            inter_layer_links.add_layer_links(current_layer_id, std::move(next_layer_subset.vec_ids));
+
+            // Add the new layer to hier_vecs_manager (move vecs_data)
+            hier_vecs_manager.bottom_up_append(std::move(next_layer_subset.vecs_data));
 
             // Update for next iteration
-            current_layer_id++;
             current_layer_vecs = &hier_vecs_manager.get_layer_vecs(current_layer_id);
             current_radius *= beta_sq;  // Scale radius for next layer
         }
@@ -94,10 +104,14 @@ public:
     static auto construct(
         const vector_array_t& base_vecs,
         const dist_func_t& dist_func,
-        hierarchical_vecs_manager_t& hier_vecs_manager,
+        hierarchical_graph_t& hierarchical_graph,
         const ratio_t result_ratio
     ) -> void requires (VGPolicy == VGPolicyT::random_selection) {
         const vertex_num_t num_vertices = static_cast<vertex_num_t>(base_vecs.get_num_vecs());
+
+        // Get references to hier_vecs_manager and inter_layer_links
+        auto& hier_vecs_manager = hierarchical_graph.get_hier_vecs_manager();
+        auto& inter_layer_links = hierarchical_graph.get_inter_layer_links();
 
         // Layer 0 is the base_vecs (full dataset), already in hier_vecs_manager by construction
 
@@ -123,11 +137,16 @@ public:
                 break;
             }
 
-            // Add the new layer to hier_vecs_manager
-            hier_vecs_manager.bottom_up_append(std::move(next_layer_subset));
+            // Update layer_id for the new layer
+            current_layer_id++;
+
+            // Add inter-layer links first (move vec_ids)
+            inter_layer_links.add_layer_links(current_layer_id, std::move(next_layer_subset.vec_ids));
+
+            // Add the new layer to hier_vecs_manager (move vecs_data)
+            hier_vecs_manager.bottom_up_append(std::move(next_layer_subset.vecs_data));
 
             // Update for next iteration
-            current_layer_id++;
             current_layer_vecs = &hier_vecs_manager.get_layer_vecs(current_layer_id);
         }
     }
