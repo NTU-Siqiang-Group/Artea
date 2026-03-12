@@ -23,6 +23,7 @@
 
 #include <vector>
 #include <utility>
+#include <artea/common/logger.hpp>
 
 namespace artea {
 namespace cpu {
@@ -48,10 +49,10 @@ class HierarchicalVecsManager {
 public:
     /**
      * @brief Construct a new Hierarchical Vecs Manager object.
-     * @param base_vecs Reference to the base layer vector data.
+     * @param bottom_layer_vecs Reference to the base layer vector data.
      */
-    explicit HierarchicalVecsManager(const vector_array_t& base_vecs)
-        : _base_vecs(base_vecs) {}
+    explicit HierarchicalVecsManager(const vector_array_t& bottom_layer_vecs)
+        : _bottom_layer_vecs(bottom_layer_vecs) {}
 
     // Copying is deleted
     HierarchicalVecsManager(const HierarchicalVecsManager&) = delete;
@@ -69,7 +70,7 @@ public:
      */
     __attribute__((always_inline))
     auto get_base_vecs() const -> const vector_array_t& {
-        return _base_vecs;
+        return _bottom_layer_vecs;
     }
 
     /**
@@ -107,7 +108,7 @@ public:
     __attribute__((always_inline))
     auto get_layer_vecs(const layer_id_t layer_id) const -> const vector_array_t& {
         if (layer_id == 0) {
-            return _base_vecs;
+            return _bottom_layer_vecs;
         }
         return _upper_layer_vecs[layer_id - 1];
     }
@@ -118,6 +119,11 @@ public:
      * @param vertex_subset The vertex subset to set (move semantics).
      */
     auto set_layer_vecs(const layer_id_t layer_id, vertex_subset_t&& vertex_subset) -> void {
+        #ifndef NDEBUG
+        if (layer_id < 1) {
+            logger.error("layer_id must be >= 1 for set_layer_vecs");
+        }
+        #endif
         _upper_layer_vecs[layer_id - 1] = std::move(vertex_subset.vecs_data);
     }
 
@@ -127,12 +133,33 @@ public:
      * @param vecs_data The vector array to set (move semantics).
      */
     auto set_layer_vecs(const layer_id_t layer_id, vector_array_t&& vecs_data) -> void {
+        #ifndef NDEBUG
+        if (layer_id < 1) {
+            logger.error("layer_id must be >= 1 for set_layer_vecs");
+        }
+        #endif
         _upper_layer_vecs[layer_id - 1] = std::move(vecs_data);
+    }
+
+    /**
+     * @brief Append a new upper layer from bottom to top.
+     * @param vertex_subset The vertex subset to append (move semantics).
+     */
+    auto bottom_up_append(vertex_subset_t&& vertex_subset) -> void {
+        _upper_layer_vecs.push_back(std::move(vertex_subset.vecs_data));
+    }
+
+    /**
+     * @brief Append a new upper layer from bottom to top.
+     * @param vecs_data The vector array to append (move semantics).
+     */
+    auto bottom_up_append(vector_array_t&& vecs_data) -> void {
+        _upper_layer_vecs.push_back(std::move(vecs_data));
     }
 
 protected:
     /** @brief Const reference to base layer vector data. */
-    const vector_array_t& _base_vecs;
+    const vector_array_t& _bottom_layer_vecs;
 
     /** @brief Upper layer vector arrays. */
     std::vector<vector_array_t> _upper_layer_vecs;

@@ -188,6 +188,16 @@ public:
         return _hier_vecs_manager;
     }
 
+    __attribute__((always_inline))
+    auto get_entry_point() const -> vertex_id_t {
+        return _entry_point;
+    }
+
+    __attribute__((always_inline))
+    auto set_entry_point(const vertex_id_t entry_point) -> void {
+        _entry_point = entry_point;
+    }
+
 protected:
     /** @brief Number of vertices in the graph. */
     vertex_num_t _num_vertices;
@@ -205,6 +215,9 @@ protected:
     std::vector<std::unique_ptr<flat_graph_t>> _layer_graphs;
 
     inter_layer_links_t _inter_layer_links;
+
+    /** @brief Entry point vertex ID for hierarchical search. */
+    vertex_id_t _entry_point;
 
 };  // class HierarchicalGraph
 

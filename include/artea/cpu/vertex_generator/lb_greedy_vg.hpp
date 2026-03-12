@@ -56,21 +56,21 @@ public:
     LBGreedyVG(const dist_func_t& dist_func) : _dist_func(dist_func) {}
 
     /**
-     * @brief Compute batch_size and term_thresh from coverage_ratio and confidence
+     * @brief Compute sampling_batch_size and term_thresh from coverage_ratio and confidence
      *
      * Uses the formula: term_thresh = np - z·√(np(1-p))
-     * where n is batch_size, p is uncovered_rate = 1 - coverage_ratio,
+     * where n is sampling_batch_size, p is uncovered_rate = 1 - coverage_ratio,
      * and z is the confidence z-value from standard normal distribution.
      *
      * @param coverage_ratio Target coverage ratio (e.g., 0.95 for 95% coverage)
      * @param confidence Confidence level (e.g., 0.96 for 96% confidence)
-     * @param batch_size Desired batch size (e.g., 512, 1024, 2048)
+     * @param sampling_batch_size Desired batch size (e.g., 512, 1024, 2048)
      * @return Computed term_thresh value
      */
     static auto compute_term_thresh(
-        float coverage_ratio,
-        float confidence,
-        vertex_num_t batch_size
+        const ratio_t coverage_ratio,
+        const ratio_t confidence,
+        const vertex_num_t sampling_batch_size
     ) -> vertex_num_t {
         if (coverage_ratio <= 0.0f || coverage_ratio >= 1.0f) {
             throw std::invalid_argument("coverage_ratio must be in (0, 1)");
@@ -78,8 +78,8 @@ public:
         if (confidence <= 0.0f || confidence >= 1.0f) {
             throw std::invalid_argument("confidence must be in (0, 1)");
         }
-        if (batch_size < 1) {
-            throw std::invalid_argument("batch_size must be at least 1");
+        if (sampling_batch_size < 1) {
+            throw std::invalid_argument("sampling_batch_size must be at least 1");
         }
 
         // Calculate uncovered rate
@@ -90,7 +90,7 @@ public:
         double z_value = boost::math::quantile(normal, static_cast<double>(confidence));
 
         // Calculate term_thresh: μ - z·σ = np - z·√(np(1-p))
-        double n = static_cast<double>(batch_size);
+        double n = static_cast<double>(sampling_batch_size);
         double mean = n * p;
         double std_dev = std::sqrt(n * p * (1.0 - p));
         double term_thresh_double = mean - z_value * std_dev;
@@ -108,47 +108,47 @@ public:
      * coverage ratio and confidence level.
      *
      * @param vecs_data The vector array to generate vertices from
-     * @param min_radius Minimum distance between vertices
+     * @param rnet_radius Minimum distance between vertices
      * @param max_result_size Maximum number of vertices to generate
      * @param coverage_ratio Target coverage ratio (e.g., 0.95 for 95% coverage)
      * @param confidence Confidence level (e.g., 0.96 for 96% confidence)
-     * @param batch_size Batch size for processing
+     * @param sampling_batch_size Batch size for processing
      * @param is_shuffle Whether to shuffle the dataset to eliminate spatial correlation
      * @return Approximate r-net (VertexSubset)
      */
     auto generate_impl(
         const vector_array_t& vecs_data,
-        const distance_t min_radius,
+        const distance_t rnet_radius,
         const vertex_num_t max_result_size,
-        float coverage_ratio,
-        float confidence,
-        vertex_num_t batch_size,
-        bool is_shuffle = false
+        const float coverage_ratio,
+        const float confidence,
+        const vertex_num_t sampling_batch_size,
+        const bool is_shuffle = false
     ) -> approx_rnet_t {
-        vertex_num_t term_thresh = compute_term_thresh(coverage_ratio, confidence, batch_size);
-        return generate_impl(vecs_data, min_radius, max_result_size, batch_size, term_thresh, is_shuffle);
+        vertex_num_t term_thresh = compute_term_thresh(coverage_ratio, confidence, sampling_batch_size);
+        return generate_impl(vecs_data, rnet_radius, max_result_size, sampling_batch_size, term_thresh, is_shuffle);
     }
 
     /**
      * @brief Generate approximate r-net (manual mode)
      *
-     * Manually specify batch_size and term_thresh.
+     * Manually specify sampling_batch_size and term_thresh.
      *
      * @param vecs_data The vector array to generate vertices from
-     * @param min_radius Minimum distance between vertices
+     * @param rnet_radius Minimum distance between vertices
      * @param max_result_size Maximum number of vertices to generate
-     * @param batch_size Batch size for processing
+     * @param sampling_batch_size Batch size for processing
      * @param term_thresh Termination threshold
      * @param is_shuffle Whether to shuffle the dataset to eliminate spatial correlation
      * @return Approximate r-net (VertexSubset)
      */
     auto generate_impl(
         const vector_array_t& vecs_data,
-        const distance_t min_radius,
+        const distance_t rnet_radius,
         const vertex_num_t max_result_size,
-        vertex_num_t batch_size,
-        vertex_num_t term_thresh,
-        bool is_shuffle = false
+        const vertex_num_t sampling_batch_size,
+        const vertex_num_t term_thresh,
+        const bool is_shuffle = false
     ) -> approx_rnet_t {
         const vec_num_t total_vecs = vecs_data.get_num_vecs();
 
@@ -174,7 +174,7 @@ public:
         while (approx_rnet.get_num_vecs() < max_result_size) {
             if (batch_start >= total_vecs) { break; }
 
-            const vec_num_t batch_end = std::min(batch_start + batch_size, total_vecs);
+            const vec_num_t batch_end = std::min(batch_start + sampling_batch_size, total_vecs);
             const vec_num_t current_batch_size = batch_end - batch_start;
 
             tbb::enumerable_thread_specific<std::vector<CandidateInfo>> thread_local_candidates;
@@ -200,7 +200,7 @@ public:
 
                         for (vec_num_t ret_idx = 0; ret_idx < approx_rnet.vecs_data.get_num_vecs(); ++ret_idx) {
                             distance_t dist = _dist_func(candidate_vec, approx_rnet.vecs_data.get(ret_idx));
-                            if (dist < min_radius) {
+                            if (dist < rnet_radius) {
                                 is_qualifying = false;
                                 break;
                             }
@@ -239,7 +239,7 @@ public:
 
                 bool conflicts_with_batch = false;
                 for (const vec_ele_t* batch_vec : batch_added_vecs) {
-                    if (_dist_func(candidate_vec, batch_vec) < min_radius) {
+                    if (_dist_func(candidate_vec, batch_vec) < rnet_radius) {
                         conflicts_with_batch = true;
                         break;
                     }
@@ -258,15 +258,15 @@ public:
              * Let X be the number of qualifying candidates (uncovered points) in a batch.
              * X follows a binomial distribution X ~ B(n, p), where n is the batch size
              * and p is the uncovered rate (probability that a candidate is not yet covered
-             * by the current r-net, i.e., distance to r-net ≥ min_radius).
+             * by the current r-net, i.e., distance to r-net ≥ rnet_radius).
              *
              * Using normal approximation: X ~ N(np, np(1-p)) for large n.
              *
-             * Example with batch_size=512 and term_thresh=17:
+             * Example with sampling_batch_size=512 and term_thresh=17:
              * - If p=5% (5% uncovered, 95% covered): μ=25.6, σ=4.93
              *   P(X ≥ 17) ≈ Φ(1.75) ≈ 96% confidence to continue sampling
              *
-             * Interpretation: With term_thresh=17 and batch_size=512, the algorithm
+             * Interpretation: With term_thresh=17 and sampling_batch_size=512, the algorithm
              * continues with ~96% confidence when uncovered rate ≥5% (coverage ≤95%),
              * and terminates when coverage reaches ~95-96%, ensuring a dense r-net.
              *
@@ -289,7 +289,7 @@ public:
              */
             if (qualifying_candidates.size() < term_thresh) { break; }
 
-            batch_start += batch_size;
+            batch_start += sampling_batch_size;
         }
 
         // Arrange vec_ids in sorted order for better cache locality
