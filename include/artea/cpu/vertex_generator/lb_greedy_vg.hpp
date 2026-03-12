@@ -38,6 +38,7 @@ class LBGreedyVG : public VertexGeneratorTraitsT::template vertex_generator_t<LB
     using vec_ele_t = typename VertexGeneratorTraitsT::vec_ele_t;
     using vertex_num_t = typename VertexGeneratorTraitsT::vertex_num_t;
     using distance_t = typename VertexGeneratorTraitsT::distance_t;
+    using ratio_t = typename VertexGeneratorTraitsT::ratio_t;
     using vec_dim_t = typename VertexGeneratorTraitsT::vec_dim_t;
     using vector_array_t = typename VertexGeneratorTraitsT::vector_array_t;
     using dist_func_t = typename VertexGeneratorTraitsT::dist_func_t;

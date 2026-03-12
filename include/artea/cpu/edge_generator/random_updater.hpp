@@ -51,18 +51,18 @@ public:
     /**
      * @brief Constructor for RandomUpdater.
      * @param dist_func Distance function reference.
-     * @param vecs_arr Vector array containing all vertex data.
+     * @param vecs_data Vector array containing all vertex data.
      * @param log_table Log table for recording edge operations.
      * @param num_vertices Total number of vertices in the graph (used as upper bound for random ID generation).
      * @param rand_gen_size Number of random neighbors to generate for each vertex.
      */
     RandomUpdater(
         const dist_func_t& dist_func,
-        const vector_array_t& vecs_arr,
+        const vector_array_t& vecs_data,
         log_table_t& log_table,
         const vertex_num_t num_vertices,
         const vertex_num_t rand_gen_size
-    ) : base_class_t(dist_func, vecs_arr, log_table),
+    ) : base_class_t(dist_func, vecs_data, log_table),
         _rand_gen_size(rand_gen_size),
         _random_seq(num_vertices) {}
 
@@ -91,7 +91,7 @@ public:
         _random_seq.generate(rand_ids_buffer, _rand_gen_size);
 
         // Get the pivot vertex vector
-        const vec_ele_t* pivot_vec = this->_vecs_arr.get(pivot_vid);
+        const vec_ele_t* pivot_vec = this->_vecs_data.get(pivot_vid);
 
         // For each random neighbor, compute distance and write to log table
         for (vertex_num_t i = 0; i < _rand_gen_size; ++i) {
@@ -101,7 +101,7 @@ public:
             if (rand_nbr_id == pivot_vid) { continue; }
 
             // Get the random neighbor vector and compute distance
-            const vec_ele_t* rand_nbr_vec = this->_vecs_arr.get(rand_nbr_id);
+            const vec_ele_t* rand_nbr_vec = this->_vecs_data.get(rand_nbr_id);
             distance_t rand_nbr_dist = this->_dist_func(pivot_vec, rand_nbr_vec);
 
             // Write the random edge to the log table

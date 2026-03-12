@@ -45,9 +45,9 @@ public:
 
     NeighborUpdater(
         const dist_func_t& dist_func,
-        const vector_array_t& vecs_arr,
+        const vector_array_t& vecs_data,
         log_table_t& log_table
-    ) : _dist_func(dist_func), _vecs_arr(vecs_arr), _log_table(log_table) {}
+    ) : _dist_func(dist_func), _vecs_data(vecs_data), _log_table(log_table) {}
 
     /**
      * @brief Operator that delegates to the derived class's update_impl.
@@ -69,7 +69,7 @@ protected:
     const dist_func_t& _dist_func;
 
     /** @brief Reference to the vector array. */
-    const vector_array_t& _vecs_arr;
+    const vector_array_t& _vecs_data;
 
     /** @brief Reference to the operation log table. */
     log_table_t& _log_table;

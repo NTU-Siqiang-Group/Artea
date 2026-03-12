@@ -28,6 +28,7 @@ template <typename GraphFactoryTraitsT> struct DescentConfig;
 template <typename GraphFactoryTraitsT, typename DerivedClassT> class FlatGraphFactory;
 template <typename GraphFactoryTraitsT> class ConvGraphFactory;
 template <typename IndexTraitsT> class FlatSearchGraphFactory;
+template <typename GraphFactoryTraitsT> class HierarchicalVerticesBuilder;
 
 template <
     typename VertexGeneratorTraitsT,
@@ -50,6 +51,8 @@ struct GraphFactoryTraits :
     using conv_graph_factory_t = ConvGraphFactory<graph_factory_traits_t>;
 
     using flat_search_graph_factory_t = FlatSearchGraphFactory<typename IndexTraitsT::index_traits_t>;
+
+    using hierarchical_vertices_builder_t = HierarchicalVerticesBuilder<graph_factory_traits_t>;
 
 };  // struct GraphFactoryTraits
 

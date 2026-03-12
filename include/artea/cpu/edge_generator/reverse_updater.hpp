@@ -46,14 +46,14 @@ public:
     /**
      * @brief Constructor for ReverseUpdater.
      * @param dist_func Distance function reference.
-     * @param vecs_arr Vector array containing all vertex data.
+     * @param vecs_data Vector array containing all vertex data.
      * @param log_table Log table for recording edge operations.
      */
     ReverseUpdater(
         const dist_func_t& dist_func,
-        const vector_array_t& vecs_arr,
+        const vector_array_t& vecs_data,
         log_table_t& log_table
-    ) : base_class_t(dist_func, vecs_arr, log_table) {}
+    ) : base_class_t(dist_func, vecs_data, log_table) {}
 
     /**
      * @brief Add reverse edges for all neighbors in origin_nbrs.

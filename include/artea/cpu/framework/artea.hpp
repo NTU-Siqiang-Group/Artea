@@ -56,6 +56,7 @@
 #include <artea/cpu/graph_factory/flat_graph_factory.hpp>
 #include <artea/cpu/graph_factory/conv_graph_factory.hpp>
 #include <artea/cpu/graph_factory/flat_search_graph_factory.hpp>
+#include <artea/cpu/graph_factory/hierarchical_vertices_builder.hpp>
 
 #include <artea/cpu/vertex_generator/vertex_generator.hpp>
 #include <artea/cpu/vertex_generator/lsh_table.hpp>

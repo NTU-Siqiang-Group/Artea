@@ -62,12 +62,12 @@ class TriangleUpdater :
 public:
     TriangleUpdater(
         const dist_func_t& dist_func,
-        const vector_array_t& vecs_arr,
+        const vector_array_t& vecs_data,
         log_table_t& log_table,
         const vertex_num_t max_nbr_size,
         const ratio_t scale_coeffs,
         const ratio_t shifted_coeffs = 0.0
-    ) : base_class_t(dist_func, vecs_arr, log_table),
+    ) : base_class_t(dist_func, vecs_data, log_table),
         _inv_scale_coeffs(static_cast<ratio_t>(1.0) / scale_coeffs),
         _shifted_coeffs(shifted_coeffs),
         _max_nbr_size(max_nbr_size) {}
@@ -207,7 +207,7 @@ private:
         const nbr_t& ori_nbr,
         const nbr_arr_t& retained_nbrs
     ) -> std::tuple<bool, vertex_id_t, distance_t> {
-        const vec_ele_t* ori_vec = this->_vecs_arr.get(ori_nbr.get_id());
+        const vec_ele_t* ori_vec = this->_vecs_data.get(ori_nbr.get_id());
         const distance_t threshold = _compute_threshold<ConditionType>(ori_nbr.get_distance());
 
         // Check conflict with all retained neighbors
@@ -218,7 +218,7 @@ private:
             }
 
             const nbr_t& retained_nbr = retained_nbrs[i];
-            const vec_ele_t* retained_vec = this->_vecs_arr.get(retained_nbr.get_id());
+            const vec_ele_t* retained_vec = this->_vecs_data.get(retained_nbr.get_id());
             distance_t dist_to_retained = this->_dist_func(ori_vec, retained_vec);
 
             if (dist_to_retained < threshold) {
