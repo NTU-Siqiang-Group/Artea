@@ -17,16 +17,6 @@
 namespace artea {
 namespace cpu {
 
-enum class VGPolicyT {
-    random_selection,
-    rnet_selection
-};
-
-enum class EGPolicyT {
-    conv_graph_descent,
-    local_conv_graph_descent
-};
-
 template <typename GraphFactoryTraitsT>
 class ArteaGraphFactory :
     public GraphFactoryTraitsT::template hierarchical_graph_factory_t<ArteaGraphFactory<GraphFactoryTraitsT>>
@@ -52,13 +42,15 @@ class ArteaGraphFactory :
     using hierarchical_vertices_builder_t = typename GraphFactoryTraitsT::hierarchical_vertices_builder_t;
     using layer_config_t = typename GraphFactoryTraitsT::layer_config_t;
     using descent_config_t = typename GraphFactoryTraitsT::descent_config_t;
+    using vg_policy_t = typename GraphFactoryTraitsT::vg_policy_t;
+    using eg_policy_t = typename GraphFactoryTraitsT::eg_policy_t;
 
     static constexpr vertex_num_t min_num_vertex = 128;
 
 public:
 
     /** @brief construct a new artea graph from vector array */
-    template <VGPolicyT VGPolicy, EGPolicyT EGPolicy, typename... Args>
+    template <vg_policy_t VGPolicy, eg_policy_t EGPolicy, typename... Args>
     static auto construct_graph_impl(
         const vector_array_t& base_vecs,
         const layer_config_t& bottom_layer_config,
@@ -68,11 +60,11 @@ public:
     ) -> hierarchical_graph_t {
         hierarchical_vecs_manager_t hier_vecs_manager(base_vecs);
         dist_func_t dist_func(base_vecs.get_vec_dim());
-        if constexpr (EGPolicy == EGPolicyT::conv_graph_descent) {
+        if constexpr (EGPolicy == eg_policy_t::conv_graph_descent) {
             hierarchical_vertices_builder_t::template construct<VGPolicy>(
                 base_vecs, dist_func, hier_vecs_manager, std::forward<Args>(args)...);
         }
-     }
+    }
 };
 
 }   // namespace cpu

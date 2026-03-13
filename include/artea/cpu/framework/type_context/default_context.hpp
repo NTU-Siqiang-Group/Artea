@@ -128,6 +128,8 @@ using descent_config_t = typename graph_factory_traits_t::descent_config_t;
 using conv_graph_factory_t = typename graph_factory_traits_t::conv_graph_factory_t;
 using flat_search_graph_factory_t = typename graph_factory_traits_t::flat_search_graph_factory_t;
 using hierarchical_vertices_builder_t = typename graph_factory_traits_t::hierarchical_vertices_builder_t;
+using vg_policy_t = typename graph_factory_traits_t::vg_policy_t;
+using eg_policy_t = typename graph_factory_traits_t::eg_policy_t;
 
 // Router types from RouterTraits
 using candidate_entry_t = typename router_traits_t::candidate_entry_t;

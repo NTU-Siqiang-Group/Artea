@@ -23,6 +23,22 @@
 namespace artea {
 namespace cpu {
 
+/**
+ * @brief Policy for vertex generation strategy.
+ */
+enum class VGPolicyT {
+    random_selection,  ///< Random vertex selection
+    rnet_selection     ///< R-net based greedy selection
+};
+
+/**
+ * @brief Policy for edge generation strategy.
+ */
+enum class EGPolicyT {
+    conv_graph_descent,        ///< Convergent graph descent
+    local_conv_graph_descent   ///< Local convergent graph descent
+};
+
 /** ------ Forward Declaration  ------ **/
 template <typename GraphFactoryTraitsT> struct DescentConfig;
 template <typename GraphFactoryTraitsT, typename DerivedClassT> class FlatGraphFactory;
@@ -40,6 +56,12 @@ struct GraphFactoryTraits :
     public EdgeGeneratorTraitsT
 {
     using graph_factory_traits_t = GraphFactoryTraits<VertexGeneratorTraitsT, EdgeGeneratorTraitsT, IndexTraitsT>;
+
+    /** @brief Vertex generation policy type. */
+    using vg_policy_t = VGPolicyT;
+
+    /** @brief Edge generation policy type. */
+    using eg_policy_t = EGPolicyT;
 
     /** @brief Descent configuration type. */
     using descent_config_t = DescentConfig<graph_factory_traits_t>;
