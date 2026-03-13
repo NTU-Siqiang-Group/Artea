@@ -58,7 +58,6 @@ class MonolayerGraphRouter :
     using flat_search_graph_t = typename RouterTraitsT::flat_search_graph_t;
     using random_seq_t = typename RouterTraitsT::random_seq_t;
     using base_class_t = typename RouterTraitsT::template vector_router_t<MonolayerGraphRouter<RouterTraitsT, CandidateQueueImpl, VisitedTableImpl>>;
-    static constexpr bool intra_query_parallel = RouterTraitsT::intra_query_parallel;
 
 public:
 
@@ -73,7 +72,14 @@ public:
         _candidate_queue_size(candidate_queue_size),
         _visited_table_pool(vecs_data.get_num_vecs()),
         _random_seq(vecs_data.get_num_vecs())
-    {}
+    {
+        if (candidate_queue_size < topk) {
+            logger.error(fmt::format(
+                "candidate_queue_size ({}) must be >= topk ({})",
+                candidate_queue_size, topk
+            ));
+        }
+    }
 
     auto initialize_impl(bool with_entry_point = false) -> void {
         _visited_table_pool.warmup();

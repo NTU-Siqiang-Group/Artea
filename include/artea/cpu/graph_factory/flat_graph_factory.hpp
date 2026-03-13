@@ -45,7 +45,7 @@ public:
     template <typename... Args>
     auto construct_graph(
         const vector_dataset_t& dataset,
-        const layer_config_t& layer_config,
+        layer_config_t layer_config,
         Args&&... args
     ) -> flat_graph_t {
         return construct_graph(
@@ -58,7 +58,7 @@ public:
     template <typename... Args>
     auto construct_graph(
         const vector_array_t& base_vecs,
-        const layer_config_t& layer_config,
+        layer_config_t layer_config,
         Args&&... args
     ) -> flat_graph_t {
         return static_cast<DerivedClassT*>(this)->construct_graph_impl(

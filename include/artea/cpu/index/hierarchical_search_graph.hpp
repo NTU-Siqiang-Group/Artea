@@ -91,6 +91,7 @@ public:
      * @brief Resize the layer graphs vector to accommodate a specific number of layers.
      * @param num_layers The total number of layers (including bottom layer).
      */
+    __attribute__((always_inline))
     auto resize(const layer_id_t num_layers) -> void {
         _layer_graphs.resize(num_layers);
     }
@@ -148,6 +149,7 @@ public:
      * @param layer_id The layer ID (0 for bottom layer, higher values for upper layers).
      * @param layer_graph Unique pointer to the flat search graph to set.
      */
+    __attribute__((always_inline))
     auto set_layer_graph(const layer_id_t layer_id, std::unique_ptr<flat_search_graph_t> layer_graph) -> void {
         _layer_graphs[layer_id] = std::move(layer_graph);
     }
@@ -157,12 +159,18 @@ public:
      * @param layer_id The layer ID (0 for bottom layer, higher values for upper layers).
      * @param layer_graph Reference to the flat search graph to set (will be moved).
      */
+    __attribute__((always_inline))
     auto set_layer_graph(const layer_id_t layer_id, flat_search_graph_t&& layer_graph) -> void {
         _layer_graphs[layer_id] = std::make_unique<flat_search_graph_t>(std::move(layer_graph));
     }
 
     __attribute__((always_inline))
     auto get_vecs_data() const -> const vector_array_t& {
+        return _hier_vecs_manager.get_base_vecs();
+    }
+
+    __attribute__((always_inline))
+    auto get_base_vecs() const -> const vector_array_t& {
         return _hier_vecs_manager.get_base_vecs();
     }
 

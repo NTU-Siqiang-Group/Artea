@@ -63,8 +63,8 @@ public:
      */
     HierarchicalGraph(
         hierarchical_vecs_manager_t& hier_vecs_manager,
-        const layer_config_t& bottom_layer_config,
-        const layer_config_t& upper_layer_config
+        layer_config_t bottom_layer_config,
+        layer_config_t upper_layer_config
     ) : _num_vertices(hier_vecs_manager.get_num_base_vecs()),
         _bottom_layer_config(bottom_layer_config),
         _upper_layer_config(upper_layer_config),
@@ -96,6 +96,7 @@ public:
      * @brief Resize the layer graphs vector to accommodate a specific number of layers.
      * @param num_layers The total number of layers (including bottom layer).
      */
+    __attribute__((always_inline))
     auto resize(const layer_id_t num_layers) -> void {
         _layer_graphs.resize(num_layers);
     }
@@ -163,6 +164,7 @@ public:
      * @param layer_id The layer ID (0 for bottom layer, higher values for upper layers).
      * @param layer_graph Unique pointer to the flat graph to set.
      */
+    __attribute__((always_inline))
     auto set_layer_graph(const layer_id_t layer_id, std::unique_ptr<flat_graph_t> layer_graph) -> void {
         _layer_graphs[layer_id] = std::move(layer_graph);
     }
@@ -172,6 +174,7 @@ public:
      * @param layer_id The layer ID (0 for bottom layer, higher values for upper layers).
      * @param layer_graph Reference to the flat graph to set (will be moved).
      */
+    __attribute__((always_inline))
     auto set_layer_graph(const layer_id_t layer_id, flat_graph_t&& layer_graph) -> void {
         _layer_graphs[layer_id] = std::make_unique<flat_graph_t>(std::move(layer_graph));
     }
@@ -215,6 +218,8 @@ public:
     auto set_entry_point(const vertex_id_t entry_point) -> void {
         _entry_point = entry_point;
     }
+
+    // TODO: design a binary storage schema to snapshot and restore HierarchicalGraph
 
 protected:
     /** @brief Number of vertices in the graph. */

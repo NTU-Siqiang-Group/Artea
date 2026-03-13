@@ -62,6 +62,9 @@ struct IndexTraits : virtual public BaseTraitsT {
     /** @brief Hierarchical vector manager type. */
     using hierarchical_vecs_manager_t = HierarchicalVecsManager<index_traits_t>;
 
+    /** @brief Minimum number of vertices required for a layer to continue building upper layers. */
+    static constexpr uint32_t min_num_layer_vertex = 96;
+
 };  // struct IndexTraits
 
 }   // namespace cpu

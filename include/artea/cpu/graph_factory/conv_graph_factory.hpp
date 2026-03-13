@@ -61,8 +61,8 @@ public:
     /** @brief construct a new convergent graph from vector array */
     auto construct_graph_impl(
         const vector_array_t& base_vecs,
-        const layer_config_t& layer_config,
-        const descent_config_t& descent_config
+        layer_config_t layer_config,
+        descent_config_t descent_config
     ) -> flat_graph_t {
         const vertex_num_t num_vertices = static_cast<vertex_num_t>(base_vecs.get_num_vecs());
         flat_graph_t flat_graph(

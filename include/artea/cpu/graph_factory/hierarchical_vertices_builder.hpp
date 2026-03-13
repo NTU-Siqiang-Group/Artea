@@ -25,6 +25,7 @@ class HierarchicalVerticesBuilder {
     using vertex_num_t = typename GraphFactoryTraitsT::vertex_num_t;
     using vertex_id_t = typename GraphFactoryTraitsT::vertex_id_t;
     using layer_id_t = typename GraphFactoryTraitsT::layer_id_t;
+    using layer_num_t = typename GraphFactoryTraitsT::layer_num_t;
     using ratio_t = typename GraphFactoryTraitsT::ratio_t;
     using distance_t = typename GraphFactoryTraitsT::distance_t;
     using dist_func_t = typename GraphFactoryTraitsT::dist_func_t;
@@ -35,8 +36,10 @@ class HierarchicalVerticesBuilder {
     using hierarchical_vecs_manager_t = typename GraphFactoryTraitsT::hierarchical_vecs_manager_t;
     using hierarchical_graph_t = typename GraphFactoryTraitsT::hierarchical_graph_t;
     using vg_policy_t = typename GraphFactoryTraitsT::vg_policy_t;
+    using centroid_computer_t = typename GraphFactoryTraitsT::centroid_computer_t;
+    using bruteforce_router_t = typename GraphFactoryTraitsT::bruteforce_router_t;
 
-    static constexpr vertex_num_t min_num_vertex = 128;
+    static constexpr vertex_num_t min_num_layer_vertex = GraphFactoryTraitsT::min_num_layer_vertex;
 
 public:
     // Specialization for rnet_selection
@@ -44,17 +47,16 @@ public:
     static auto construct(
         const dist_func_t& dist_func,
         hierarchical_graph_t& hierarchical_graph,
-        const distance_t rnet_radius,
-        const ratio_t beta_sq,
-        const ratio_t coverage_ratio,
-        const ratio_t confidence,
-        const vertex_num_t max_result_size,
-        const vertex_num_t sampling_batch_size,
-        const bool is_shuffle
+        distance_t rnet_radius,
+        ratio_t beta_sq,
+        ratio_t coverage_ratio,
+        ratio_t confidence,
+        vertex_num_t max_result_size,
+        vertex_num_t sampling_batch_size,
+        bool is_shuffle
     ) -> void requires (VGPolicy == vg_policy_t::rnet_selection) {
         // Get base_vecs from hierarchical_graph
         const auto& base_vecs = hierarchical_graph.get_base_vecs();
-        const vertex_num_t num_vertices = static_cast<vertex_num_t>(base_vecs.get_num_vecs());
 
         // Get references to hier_vecs_manager and inter_layer_links
         auto& hier_vecs_manager = hierarchical_graph.get_hier_vecs_manager();
@@ -82,11 +84,6 @@ public:
                 is_shuffle
             );
 
-            // Check termination condition
-            if (next_layer_subset.get_num_vecs() < min_num_vertex) {
-                break;
-            }
-
             // Update layer_id for the new layer
             current_layer_id++;
 
@@ -94,10 +91,19 @@ public:
             inter_layer_links.bottom_up_append(std::move(next_layer_subset.vec_ids));
             hier_vecs_manager.bottom_up_append(std::move(next_layer_subset.vecs_data));
 
+            // Check termination condition: if this layer is too small, stop building further layers
+            if (next_layer_subset.get_num_vecs() < min_num_layer_vertex) {
+                break;
+            }
+
             // Update for next iteration
             current_layer_vecs = &hier_vecs_manager.get_layer_vecs(current_layer_id);
             current_radius *= beta_sq;  // Scale radius for next layer
         }
+
+        // Set entry point: find the vertex closest to the centroid in the top layer
+        vertex_id_t entry_point = _find_entry_point(hierarchical_graph, dist_func);
+        hierarchical_graph.set_entry_point(entry_point);
     }
 
     // Specialization for random_selection
@@ -105,11 +111,10 @@ public:
     static auto construct(
         const dist_func_t& dist_func,
         hierarchical_graph_t& hierarchical_graph,
-        const ratio_t result_ratio
+        ratio_t result_ratio
     ) -> void requires (VGPolicy == vg_policy_t::random_selection) {
         // Get base_vecs from hierarchical_graph
         const auto& base_vecs = hierarchical_graph.get_base_vecs();
-        const vertex_num_t num_vertices = static_cast<vertex_num_t>(base_vecs.get_num_vecs());
 
         // Get references to hier_vecs_manager and inter_layer_links
         auto& hier_vecs_manager = hierarchical_graph.get_hier_vecs_manager();
@@ -134,11 +139,6 @@ public:
                 current_result_size
             );
 
-            // Check termination condition
-            if (next_layer_subset.get_num_vecs() < min_num_vertex) {
-                break;
-            }
-
             // Update layer_id for the new layer
             current_layer_id++;
 
@@ -146,9 +146,18 @@ public:
             inter_layer_links.bottom_up_append(std::move(next_layer_subset.vec_ids));
             hier_vecs_manager.bottom_up_append(std::move(next_layer_subset.vecs_data));
 
+            // Check termination condition: if this layer is too small, stop building further layers
+            if (next_layer_subset.get_num_vecs() < min_num_layer_vertex) {
+                break;
+            }
+
             // Update for next iteration
             current_layer_vecs = &hier_vecs_manager.get_layer_vecs(current_layer_id);
         }
+
+        // Set entry point: find the vertex closest to the centroid in the top layer
+        vertex_id_t entry_point = _find_entry_point(hierarchical_graph, dist_func);
+        hierarchical_graph.set_entry_point(entry_point);
     }
 
 private:
@@ -184,6 +193,50 @@ private:
     ) -> vertex_subset_t {
         random_vg_t random_vg;
         return random_vg.generate(layer_vecs, result_size);
+    }
+
+    /**
+     * @brief Find the entry point as the vertex closest to the centroid in the top layer.
+     * @param hierarchical_graph Reference to the hierarchical graph.
+     * @param dist_func Distance function.
+     * @return vertex_id_t The entry point vertex ID.
+     */
+    static auto _find_entry_point(
+        const hierarchical_graph_t& hierarchical_graph,
+        const dist_func_t& dist_func
+    ) -> vertex_id_t {
+        const auto& hier_vecs_manager = hierarchical_graph.get_hier_vecs_manager();
+        const layer_num_t num_layers = hier_vecs_manager.get_num_layers();
+
+        if (num_layers == 0) {
+            logger.error("Cannot find entry point: no layers in hierarchical graph");
+            return 0;
+        }
+
+        // Get the top layer
+        const layer_id_t top_layer_id = num_layers - 1;
+        const auto& top_layer_vecs = hier_vecs_manager.get_layer_vecs(top_layer_id);
+        const vertex_num_t top_layer_num_vecs = top_layer_vecs.get_num_vecs();
+
+        if (top_layer_num_vecs == 0) {
+            logger.error("Cannot find entry point: top layer is empty");
+            return 0;
+        }
+
+        // Compute centroid of the top layer using CentroidComputer
+        auto centroid = centroid_computer_t::compute(top_layer_vecs);
+
+        // Find the vertex closest to the centroid using BruteforceRouter
+        bruteforce_router_t bf_router(top_layer_vecs, dist_func, 1);
+        bf_router.initialize();
+        auto nearest_vertices = bf_router.query(centroid.data());
+
+        if (nearest_vertices.empty()) {
+            logger.error("Cannot find entry point: bruteforce router returned empty result");
+            return 0;
+        }
+
+        return nearest_vertices[0];
     }
 };
 

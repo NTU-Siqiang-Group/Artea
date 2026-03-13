@@ -184,8 +184,8 @@ public:
      * @param dist_func Distance function for computing distances.
      * @param query_vec Pointer to the query vector.
      * @param base_vecs Reference to the base vector array.
-     * @note Computes distances for each vertex ID and calls initialize.
-     * @complexity O(N) for distance computation + O(N log N) for heap operations.
+     * @note If init_vids.size() > capacity, only the best capacity candidates are kept.
+     * @complexity O(N) for distance computation + O(N log N) for sorting + O(L log L) for heap operations.
      */
     void seeded_initialize(
         const std::vector<vertex_id_t>& init_vids,
@@ -202,13 +202,18 @@ public:
             init_candidates.emplace_back(vid, dist);
         }
 
-        // Initialize with computed candidates (bypasses size check for flexibility)
-        #ifndef NDEBUG
+        // If we have more candidates than capacity, keep only the best capacity candidates
         if (init_candidates.size() > _capacity) {
-            logger.error("seeded_initialize: init_vids size ({}) exceeds capacity ({})",
-                        init_candidates.size(), _capacity);
+            std::partial_sort(
+                init_candidates.begin(),
+                init_candidates.begin() + _capacity,
+                init_candidates.end(),
+                [](const candidate_entry_t& a, const candidate_entry_t& b) {
+                    return a.distance < b.distance;
+                }
+            );
+            init_candidates.resize(_capacity);
         }
-        #endif
 
         _unexplored_set = min_heap_t();
         _top_candidates = max_heap_t();

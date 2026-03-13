@@ -32,7 +32,7 @@ using router_traits_t = RouterTraits<computer_traits_t, index_traits_t, false>;
 using graph_factory_traits_t = GraphFactoryTraits<
     vertex_generator_traits_t,
     edge_generator_traits_t,
-    index_traits_t
+    router_traits_t
 >;
 
 // Base types from BaseTraits
@@ -75,6 +75,7 @@ using random_seq_t = typename base_traits_t::random_seq_t;
 using random_seq_nr_t = typename base_traits_t::random_seq_nr_t;
 using vertex_subset_t = typename base_traits_t::vertex_subset_t;
 using pruning_condition_t = typename base_traits_t::pruning_condition_t;
+using centroid_computer_t = typename base_traits_t::centroid_computer_t;
 
 // Computer types from ComputerTraits
 using distance_metrics_t = typename computer_traits_t::distance_metrics_t;

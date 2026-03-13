@@ -40,12 +40,11 @@ class ArteaGraphFactory :
     using lb_greedy_vg_t = typename GraphFactoryTraitsT::lb_greedy_vg_t;
     using hierarchical_vecs_manager_t = typename GraphFactoryTraitsT::hierarchical_vecs_manager_t;
     using hierarchical_vertices_builder_t = typename GraphFactoryTraitsT::hierarchical_vertices_builder_t;
+    using hierarchical_edges_builder_t = typename GraphFactoryTraitsT::hierarchical_edges_builder_t;
     using layer_config_t = typename GraphFactoryTraitsT::layer_config_t;
     using descent_config_t = typename GraphFactoryTraitsT::descent_config_t;
     using vg_policy_t = typename GraphFactoryTraitsT::vg_policy_t;
     using eg_policy_t = typename GraphFactoryTraitsT::eg_policy_t;
-
-    static constexpr vertex_num_t min_num_vertex = 128;
 
 public:
 
@@ -53,10 +52,10 @@ public:
     template <vg_policy_t VGPolicy, eg_policy_t EGPolicy, typename... Args>
     static auto construct_graph_impl(
         const vector_array_t& base_vecs,
-        const layer_config_t& bottom_layer_config,
-        const layer_config_t& upper_layer_config,
-        const descent_config_t& bottom_descent_config,
-        const descent_config_t& upper_descent_config,
+        layer_config_t bottom_layer_config,
+        layer_config_t upper_layer_config,
+        descent_config_t bottom_descent_config,
+        descent_config_t upper_descent_config,
         Args&&... args
     ) -> hierarchical_graph_t {
         hierarchical_vecs_manager_t hier_vecs_manager(base_vecs);
@@ -73,6 +72,13 @@ public:
             dist_func,
             hierarchical_graph,
             std::forward<Args>(args)...
+        );
+
+        hierarchical_edges_builder_t::template construct<EGPolicy>(
+            dist_func,
+            hierarchical_graph,
+            bottom_descent_config,
+            upper_descent_config
         );
 
         return hierarchical_graph;

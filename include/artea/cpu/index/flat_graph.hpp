@@ -42,7 +42,7 @@ public:
      */
     FlatGraph(
         const vector_array_t& vecs_data,
-        const layer_config_t& layer_config
+        layer_config_t layer_config
     ) :
         _num_vertices(vecs_data.get_num_vecs()),
         _layer_config(layer_config),

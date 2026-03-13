@@ -195,8 +195,8 @@ int main(int argc, char** argv) {
     argparse::ArgumentParser program("test_conv_graph");
     program.add_argument("-c", "--config").default_value(std::string("./configs/datasets.json"));
     program.add_argument("-d", "--dataset").default_value(std::string("sift-1m"));
-    program.add_argument("--max-nbr-size").default_value(64u).scan<'u', uint32_t>();
-    program.add_argument("--reserved-nbr-size").default_value(96u).scan<'u', uint32_t>();
+    program.add_argument("--max-nbr-size").default_value(32u).scan<'u', uint32_t>();
+    program.add_argument("--reserved-nbr-size").default_value(48u).scan<'u', uint32_t>();
     program.add_argument("--extracted-nbr-size").default_value(32u).scan<'u', uint32_t>();
     program.add_argument("--scale-coeffs").default_value(1.0f).scan<'g', float>();
     program.add_argument("--shifted-coeffs").default_value(0.0f).scan<'g', float>();

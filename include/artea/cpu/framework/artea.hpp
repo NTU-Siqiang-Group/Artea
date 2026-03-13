@@ -87,6 +87,7 @@
 #include <artea/cpu/router/data_structures/linear_candidate_queue.hpp>
 
 #include <artea/cpu/utils/bit_ops.hpp>
+#include <artea/cpu/utils/centroid_computer.hpp>
 #include <artea/cpu/utils/clear_cache.hpp>
 #include <artea/cpu/utils/nbr_arr_checker.hpp>
 #include <artea/cpu/utils/parallel.hpp>

@@ -42,6 +42,7 @@ template <typename BaseTraitsT> class VectorSampler;
 template <typename BaseTraitsT> class NbrArrChecker;
 template <typename BaseTraitsT> class RandomSeq;
 template <typename BaseTraitsT> class RandomSeqNR;
+template <typename BaseTraitsT> class CentroidComputer;
 template <typename BaseTraitsT> struct NeighborComparator;
 template <typename BaseTraitsT> struct StrictNeighborComparator;
 template <typename BaseTraitsT> struct NeighborIdComparator;
@@ -173,6 +174,9 @@ public:
 
     /** @brief random sequences generator without replacement. */
     using random_seq_nr_t = RandomSeqNR<base_traits_t>;
+
+    /** @brief Centroid computer for vector arrays. */
+    using centroid_computer_t = CentroidComputer<base_traits_t>;
 
     /** @brief vertex subset type. */
     using vertex_subset_t = VertexSubset<base_traits_t>;

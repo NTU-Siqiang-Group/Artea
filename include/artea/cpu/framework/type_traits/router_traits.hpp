@@ -43,7 +43,7 @@ template <typename RouterTraitsT, VisitedTable VisitedTableT> class VisitedTable
 
 /** @brief Traits for routing to queried vectors */
 template <typename ComputerTraitsT, typename IndexTraitsT, bool IntraQueryParallel = false>
-struct RouterTraits : public ComputerTraitsT, public IndexTraitsT
+struct RouterTraits : virtual public ComputerTraitsT, virtual public IndexTraitsT
 {
     /** ------ Self Traits ------ **/
     using router_traits_t = RouterTraits<ComputerTraitsT, IndexTraitsT, IntraQueryParallel>;

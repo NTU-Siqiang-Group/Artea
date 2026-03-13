@@ -33,6 +33,41 @@ namespace cpu {
  * work directly with vertex_id_t and distance_t pairs, making the interface
  * simpler and more flexible.
  *
+ * Semantic Requirements:
+ *
+ * 1. Construction:
+ *    - Must be constructible with a capacity (std::size_t) parameter
+ *    - Capacity defines the maximum number of top candidates to maintain
+ *
+ * 2. Initialization:
+ *    - random_initialize: Initialize with random vertex IDs from random_seq
+ *    - seeded_initialize: Initialize with provided vertex IDs
+ *    - Both compute distances and populate the queue with initial candidates
+ *    - If init_vids.size() > capacity, only the best capacity candidates are kept
+ *
+ * 3. Query Operations (const):
+ *    - empty(): Returns true if no unexplored candidates remain
+ *    - size(): Returns approximate memory footprint in bytes
+ *    - get_result_size(): Returns number of result candidates currently maintained
+ *    - get_unexplored_size(): Returns number of unexplored candidates remaining
+ *    - capacity(): Returns maximum capacity of the queue
+ *
+ * 4. Mutating Operations:
+ *    - clear(): Removes all candidates and resets internal state
+ *    - try_push(vertex_id, distance): Attempts to insert a new candidate
+ *      * Returns true if inserted, false if rejected (e.g., distance too large)
+ *      * Maintains capacity constraint by removing worst candidate if needed
+ *    - pop_best_unexplored(): Retrieves and marks the closest unexplored candidate
+ *      * Returns (vertex_id, distance) pair
+ *      * Returns (invalid_vertex_id, max_distance) if no unexplored candidates
+ *    - should_terminate(): Checks if search should terminate early
+ *      * Returns true if closest unexplored > worst in top candidates (and queue is full)
+ *
+ * 5. Result Extraction:
+ *    - extract_results(k): Returns top-k (vertex_id, distance) pairs sorted by distance
+ *    - extract_result_ids(k): Returns top-k vertex IDs sorted by distance
+ *    - Both methods may empty internal state (implementation-dependent)
+ *
  * @tparam CandidateQueueImpl The candidate queue type to check.
  */
 template <typename CandidateQueueImpl>

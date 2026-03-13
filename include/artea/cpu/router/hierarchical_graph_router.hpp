@@ -12,17 +12,24 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+/*
+ * @FilePath: /Artea/include/artea/cpu/router/hierarchical_graph_router.hpp
+ * @Author: Chandler (Weitang Ye) <weitang.ye@ntu.edu.sg>
+ * @Description: Hierarchical graph router for HNSW-like search.
+ */
+
+#pragma once
+
 #include <cstddef>
 #include <cstdint>
 #include <vector>
-#include <functional>
-#include <algorithm>
+#include <memory>
 #include <tbb/parallel_for.h>
 #include <tbb/blocked_range.h>
 
-#include <artea/cpu/utils/parallel.hpp>
 #include <artea/cpu/router/candidate_queue_concept.hpp>
 #include <artea/cpu/router/visited_table_concept.hpp>
+#include <artea/cpu/router/monolayer_graph_router.hpp>
 
 namespace artea {
 namespace cpu {
@@ -33,8 +40,7 @@ template <
     VisitedTable VisitedTableImpl = typename RouterTraitsT::thread_local_bitmap_t
 >   requires CandidateQueue<CandidateQueueImpl> && VisitedTable<VisitedTableImpl>
 class HierarchicalGraphRouter :
-    public RouterTraitsT::template vector_router_t<
-        HierarchicalGraphRouterImpl<RouterTraitsT, CandidateQueueImpl, VisitedTableImpl>>
+    public RouterTraitsT::template vector_router_t<HierarchicalGraphRouter<RouterTraitsT, CandidateQueueImpl, VisitedTableImpl>>
 {
 
     using candidate_queue_t = CandidateQueueImpl;
@@ -42,14 +48,225 @@ class HierarchicalGraphRouter :
     using visited_table_pool_t = typename RouterTraitsT::template visited_table_pool_t<VisitedTableImpl>;
     using vertex_num_t = typename RouterTraitsT::vertex_num_t;
     using vertex_id_t = typename RouterTraitsT::vertex_id_t;
+    using layer_id_t = typename RouterTraitsT::layer_id_t;
+    using layer_num_t = typename RouterTraitsT::layer_num_t;
     using vec_ele_t = typename RouterTraitsT::vec_ele_t;
     using distance_t = typename RouterTraitsT::distance_t;
     using dist_func_t = typename RouterTraitsT::dist_func_t;
     using vector_array_t = typename RouterTraitsT::vector_array_t;
+    using query_vecs_t = typename RouterTraitsT::query_vecs_t;
     using idlist_array_t = typename RouterTraitsT::idlist_array_t;
     using flat_search_graph_t = typename RouterTraitsT::flat_search_graph_t;
     using hierarchical_search_graph_t = typename RouterTraitsT::hierarchical_search_graph_t;
+    using inter_layer_links_t = typename RouterTraitsT::inter_layer_links_t;
+    using random_seq_nr_t = typename RouterTraitsT::random_seq_nr_t;
+    using monolayer_router_t = MonolayerGraphRouter<RouterTraitsT, CandidateQueueImpl, VisitedTableImpl>;
+    using base_class_t = typename RouterTraitsT::template vector_router_t<HierarchicalGraphRouter<RouterTraitsT, CandidateQueueImpl, VisitedTableImpl>>;
 
+    static constexpr vertex_num_t min_num_layer_vertex = RouterTraitsT::min_num_layer_vertex;
+
+public:
+    HierarchicalGraphRouter(
+        const vector_array_t& vecs_data,
+        const dist_func_t& dist_func,
+        const hierarchical_search_graph_t& hierarchical_search_graph,
+        const uint32_t topk,
+        const vertex_num_t ul_candidate_queue_size,
+        const vertex_num_t bl_candidate_queue_size
+    ) : base_class_t(vecs_data, dist_func, topk),
+        _hierarchical_search_graph(hierarchical_search_graph),
+        _ul_candidate_queue_size(ul_candidate_queue_size),
+        _bl_candidate_queue_size(bl_candidate_queue_size),
+        _visited_table_pool(vecs_data.get_num_vecs())
+    {
+        if (bl_candidate_queue_size < topk) {
+            logger.error(fmt::format(
+                "bl_candidate_queue_size ({}) must be >= topk ({})",
+                bl_candidate_queue_size, topk
+            ));
+        }
+
+        // Create monolayer routers for each layer
+        const layer_num_t num_layers = hierarchical_search_graph.get_num_layers();
+        _layer_routers.reserve(num_layers);
+
+        for (layer_id_t layer_id = 0; layer_id < num_layers; ++layer_id) {
+            const auto& layer_graph = hierarchical_search_graph.get_layer_graph(layer_id);
+            const vertex_num_t queue_size = (layer_id == 0) ? bl_candidate_queue_size : ul_candidate_queue_size;
+
+            _layer_routers.emplace_back(std::make_unique<monolayer_router_t>(
+                vecs_data,
+                dist_func,
+                layer_graph,
+                topk,
+                queue_size
+            ));
+        }
+    }
+
+    auto initialize_impl() -> void {
+        _visited_table_pool.warmup();
+        // Initialize all layer routers
+        for (auto& router : _layer_routers) {
+            router->initialize_impl(true);  // with_entry_point = true
+        }
+    }
+
+    /**
+     * @brief Query the top-k nearest vertices using hierarchical graph.
+     * @param query_vec Pointer to the query vector data.
+     * @return std::vector<vertex_id_t> Vector containing the IDs of the top-k nearest vertices.
+     */
+    __attribute__((always_inline))
+    auto query_impl(const vec_ele_t* query_vec) const -> std::vector<vertex_id_t> {
+        auto& visited_table = _visited_table_pool.acquire();
+        std::vector<vertex_id_t> result_ids = _hierarchical_search(query_vec, visited_table);
+        return result_ids;
+    }
+
+    /**
+     * @brief Perform batch queries to find the top-k nearest vertices for multiple vectors.
+     * @param query_vecs A VectorArray containing the query vectors.
+     * @return idlist_array_t Array with num_vecs=num_queries, dim=topk where each vector contains the top-k IDs for one query.
+     */
+    auto batch_query_impl(const query_vecs_t& query_vecs) const -> idlist_array_t {
+        const vertex_num_t num_queries = query_vecs.get_num_vecs();
+        idlist_array_t results(num_queries, this->_topk);
+
+        tbb::parallel_for(
+            tbb::blocked_range<vertex_num_t>(0, num_queries),
+            [&](const tbb::blocked_range<vertex_num_t>& r) {
+                auto& visited = _visited_table_pool.acquire();
+                for (vertex_num_t i = r.begin(); i != r.end(); ++i) {
+                    const vec_ele_t* q_vec = query_vecs.get(i);
+                    auto topk_results = _hierarchical_search(q_vec, visited);
+                    results.set(i, topk_results.data());
+                    visited.clear();
+                }
+            }
+        );
+
+        return results;
+    }
+
+private:
+    /**
+     * @brief Perform hierarchical search from top layer to bottom layer.
+     * @param query_vec Pointer to the query vector data.
+     * @param visited_table Reference to the visited table for tracking explored vertices.
+     * @return Vector of vertex IDs representing the top-k nearest neighbors.
+     */
+    auto _hierarchical_search(
+        const vec_ele_t* query_vec,
+        visited_table_t& visited_table
+    ) const -> std::vector<vertex_id_t> {
+        const layer_num_t num_layers = _hierarchical_search_graph.get_num_layers();
+        const layer_id_t top_layer_id = num_layers - 1;
+
+        // Initialize candidate queue with entry point
+        vertex_id_t entry_point = _hierarchical_search_graph.get_entry_point();
+        candidate_queue_t candidate_queue(_ul_candidate_queue_size);
+        const distance_t entry_dist = this->_dist_func(query_vec, this->_vecs_data.get(entry_point));
+        candidate_queue.try_push(entry_point, entry_dist);
+
+        // Search from top layer down to layer 1 (not including bottom layer 0)
+        for (layer_id_t layer_id = top_layer_id; layer_id > 0; --layer_id) {
+            // Use monolayer router to search current layer with seeded candidates
+            auto layer_results = _search_layer_with_seeds(
+                query_vec,
+                visited_table,
+                candidate_queue,
+                layer_id
+            );
+
+            // Convert results to next layer using inter-layer links
+            _convert_to_next_layer(candidate_queue, layer_results, layer_id);
+            visited_table.clear();
+        }
+
+        // Bottom layer search: use seeded initialization from upper layer results
+        auto final_results = _search_layer_with_seeds(
+            query_vec,
+            visited_table,
+            candidate_queue,
+            0
+        );
+
+        return final_results;
+    }
+
+    /**
+     * @brief Search a single layer using seeded candidate queue.
+     * @param query_vec Pointer to the query vector data.
+     * @param visited_table Reference to the visited table.
+     * @param seed_queue Candidate queue with seed entries.
+     * @param layer_id Current layer ID.
+     * @return Vector of top-k vertex IDs.
+     */
+    auto _search_layer_with_seeds(
+        const vec_ele_t* query_vec,
+        visited_table_t& visited_table,
+        candidate_queue_t& seed_queue,
+        const layer_id_t layer_id
+    ) const -> std::vector<vertex_id_t> {
+        const auto& layer_router = _layer_routers[layer_id];
+
+        // Extract seed entries from queue
+        auto seed_results = seed_queue.extract_results(seed_queue.get_result_size());
+
+        // Use first seed as entry point for monolayer search
+        if (seed_results.empty()) {
+            logger.error("Empty seed queue for layer search");
+            return std::vector<vertex_id_t>();
+        }
+
+        vertex_id_t entry_point = seed_results[0].first;
+        return layer_router->query_impl(query_vec, entry_point);
+    }
+
+    /**
+     * @brief Convert candidate queue from current layer to next layer using inter-layer links.
+     * @param candidate_queue Reference to the candidate queue (modified in-place).
+     * @param current_results Current layer search results.
+     * @param current_layer_id Current layer ID.
+     */
+    auto _convert_to_next_layer(
+        candidate_queue_t& candidate_queue,
+        const std::vector<vertex_id_t>& current_results,
+        const layer_id_t current_layer_id
+    ) const -> void {
+        const auto& inter_layer_links = _hierarchical_search_graph.get_inter_layer_links();
+
+        // Convert current layer vertex IDs to next layer vertex IDs
+        std::vector<typename RouterTraitsT::candidate_entry_t> next_layer_entries;
+        next_layer_entries.reserve(current_results.size());
+
+        for (const vertex_id_t vid : current_results) {
+            vertex_id_t next_layer_vid = inter_layer_links.get_linked_vertex(current_layer_id, vid);
+            // Distance will be recomputed in next layer, use placeholder
+            next_layer_entries.push_back(
+                RouterTraitsT::candidate_entry_t::make_entry(next_layer_vid, 0.0f)
+            );
+        }
+
+        // Reinitialize candidate queue with next layer vertices
+        candidate_queue.initialize(next_layer_entries);
+    }
+
+    /** @brief Reference to the hierarchical search graph. */
+    const hierarchical_search_graph_t& _hierarchical_search_graph;
+
+    /** @brief Candidate queue size for upper layers. */
+    vertex_num_t _ul_candidate_queue_size;
+
+    /** @brief Candidate queue size for bottom layer. */
+    vertex_num_t _bl_candidate_queue_size;
+
+    /** @brief Pool of thread-local visited bitmaps. */
+    mutable visited_table_pool_t _visited_table_pool;
+
+    /** @brief Monolayer routers for each layer. */
+    std::vector<std::unique_ptr<monolayer_router_t>> _layer_routers;
 
 };  // class HierarchicalGraphRouter
 

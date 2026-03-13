@@ -35,10 +35,8 @@ class HierarchicalGraphFactory {
     using vector_dataset_t = typename GraphFactoryTraitsT::vector_dataset_t;
     using vector_array_t = typename GraphFactoryTraitsT::vector_array_t;
     using dist_func_t = typename GraphFactoryTraitsT::dist_func_t;
-    // Using propagate_engine_t with no selective scheduling currently.
-    using propagate_engine_t = typename GraphFactoryTraitsT::template propagate_engine_t<false>;
-    using triangle_updater_t = typename GraphFactoryTraitsT::triangle_updater_t;
-    //
+    using layer_config_t = typename GraphFactoryTraitsT::layer_config_t;
+    using descent_config_t = typename GraphFactoryTraitsT::descent_config_t;
 
 public:
     HierarchicalGraphFactory() = default;
@@ -46,18 +44,18 @@ public:
     template <typename... Args>
     auto construct_graph(
         const vector_dataset_t& dataset,
-        const vertex_num_t bl_max_nbr_size,
-        const vertex_num_t ul_max_nbr_size,
-        const vertex_num_t bl_reserved_nbr_size,
-        const vertex_num_t ul_reserved_nbr_size,
+        layer_config_t bottom_layer_config,
+        layer_config_t upper_layer_config,
+        descent_config_t bottom_descent_config,
+        descent_config_t upper_descent_config,
         Args&&... args
     ) -> hierarchical_graph_t {
         return construct_graph(
             dataset.get_base_vecs(),
-            bl_max_nbr_size,
-            ul_max_nbr_size,
-            bl_reserved_nbr_size,
-            ul_reserved_nbr_size,
+            bottom_layer_config,
+            upper_layer_config,
+            bottom_descent_config,
+            upper_descent_config,
             std::forward<Args>(args)...
         );
     }
@@ -65,18 +63,18 @@ public:
     template <typename... Args>
     auto construct_graph(
         const vector_array_t& base_vecs,
-        const vertex_num_t bl_max_nbr_size,
-        const vertex_num_t ul_max_nbr_size,
-        const vertex_num_t bl_reserved_nbr_size,
-        const vertex_num_t ul_reserved_nbr_size,
+        layer_config_t bottom_layer_config,
+        layer_config_t upper_layer_config,
+        descent_config_t bottom_descent_config,
+        descent_config_t upper_descent_config,
         Args&&... args
     ) -> hierarchical_graph_t {
         return static_cast<DerivedClassT*>(this)->construct_graph_impl(
             base_vecs,
-            bl_max_nbr_size,
-            ul_max_nbr_size,
-            bl_reserved_nbr_size,
-            ul_reserved_nbr_size,
+            bottom_layer_config,
+            upper_layer_config,
+            bottom_descent_config,
+            upper_descent_config,
             std::forward<Args>(args)...
         );
     }

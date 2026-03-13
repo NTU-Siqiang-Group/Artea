@@ -41,9 +41,32 @@ public:
     static auto construct(
         const dist_func_t& dist_func,
         hierarchical_graph_t& hierarchical_graph,
-        const descent_config_t& descent_config
+        descent_config_t bottom_descent_config,
+        descent_config_t upper_descent_config
     ) -> void requires (EGPolicy == eg_policy_t::conv_graph_descent) {
+        const auto& base_vecs = hierarchical_graph.get_base_vecs();
+        const auto num_layers = hierarchical_graph.get_num_layers();
 
+        conv_graph_factory_t conv_factory;
+
+        // Construct bottom layer (layer_id = 0)
+        auto bottom_graph = conv_factory.construct_graph_impl(
+            base_vecs,
+            hierarchical_graph.bottom_layer_config(),
+            bottom_descent_config
+        );
+        hierarchical_graph.set_layer_graph(0, std::move(bottom_graph));
+
+        // Construct upper layers (layer_id > 0)
+        for (layer_id_t layer_id = 1; layer_id < num_layers; ++layer_id) {
+            const auto& layer_vecs = hierarchical_graph.get_hier_vecs_manager().get_layer_vecs(layer_id);
+            auto upper_graph = conv_factory.construct_graph_impl(
+                layer_vecs,
+                hierarchical_graph.upper_layer_config(),
+                upper_descent_config
+            );
+            hierarchical_graph.set_layer_graph(layer_id, std::move(upper_graph));
+        }
     }
 
     // Specialization for speculative_conv_graph_descent
@@ -51,7 +74,8 @@ public:
     static auto construct(
         const dist_func_t& dist_func,
         hierarchical_graph_t& hierarchical_graph,
-        const descent_config_t& descent_config
+        descent_config_t bottom_descent_config,
+        descent_config_t upper_descent_config
     ) -> void requires (EGPolicy == eg_policy_t::speculative_conv_graph_descent) {
         logger.error("HierarchicalEdgesBuilder::construct<speculative_conv_graph_descent> not implemented yet");
     }
