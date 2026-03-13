@@ -142,7 +142,6 @@ protected:
         // Create hierarchical graph with reference to the stored manager
         auto hierarchical_graph = std::make_unique<hierarchical_graph_t>(
             provider.get_hier_vecs_manager(),
-            base_vecs.get_num_vecs(),
             dummy_config,
             dummy_config
         );
@@ -325,12 +324,12 @@ void TestInterLayerLinks(TestResults& results) {
         auto layer_links = inter_layer_links.get_layer_links(layer_id);
 
         // Test 1: Link count should equal current layer vertex count
-        EXPECT_EQ(layer_links.size(), current_layer_vecs.get_num_vecs())
+        EXPECT_EQ(inter_layer_links.get_num_layer_links(layer_id), current_layer_vecs.get_num_vecs())
             << fmt::format("Layer {} link count mismatch", layer_id);
 
         // Test 2: Each link index should be within valid range of previous layer
-        for (uint32_t i = 0; i < layer_links.size(); ++i) {
-            vertex_id_t prev_layer_idx = layer_links[i];
+        for (uint32_t i = 0; i < inter_layer_links.get_num_layer_links(layer_id); ++i) {
+            vertex_id_t prev_layer_idx = inter_layer_links.get_linked_vertex(layer_id, i);
             EXPECT_LT(prev_layer_idx, prev_layer_vecs.get_num_vecs())
                 << fmt::format("Layer {} vertex {} has invalid link {} (prev layer size: {})",
                     layer_id, i, prev_layer_idx, prev_layer_vecs.get_num_vecs());
@@ -338,8 +337,8 @@ void TestInterLayerLinks(TestResults& results) {
 
         // Test 3: Vector data consistency - vectors should match through links
         uint32_t mismatch_count = 0;
-        for (uint32_t i = 0; i < std::min(layer_links.size(), static_cast<size_t>(100)); ++i) {
-            vertex_id_t prev_layer_idx = layer_links[i];
+        for (uint32_t i = 0; i < std::min(inter_layer_links.get_num_layer_links(layer_id), static_cast<vertex_num_t>(100)); ++i) {
+            vertex_id_t prev_layer_idx = inter_layer_links.get_linked_vertex(layer_id, i);
             const vec_ele_t* current_vec = current_layer_vecs.get(i);
             const vec_ele_t* prev_vec = prev_layer_vecs.get(prev_layer_idx);
 
@@ -358,7 +357,7 @@ void TestInterLayerLinks(TestResults& results) {
             << fmt::format("Layer {} has {} vector mismatches", layer_id, mismatch_count);
 
         logger.info(fmt::format("Layer {} inter-layer links: {} links, all valid",
-            layer_id, layer_links.size()));
+            layer_id, inter_layer_links.get_num_layer_links(layer_id)));
     }
 
     // Test 4: Full chain traceability - trace from top layer to base_vecs
@@ -378,8 +377,7 @@ void TestInterLayerLinks(TestResults& results) {
             // Trace down to base layer
             vertex_id_t current_idx = top_idx;
             for (layer_id_t layer_id = top_layer_id; layer_id > 0; --layer_id) {
-                auto layer_links = inter_layer_links.get_layer_links(layer_id);
-                current_idx = layer_links[current_idx];
+                current_idx = inter_layer_links.get_linked_vertex(layer_id, current_idx);
             }
 
             // current_idx now points to base_vecs

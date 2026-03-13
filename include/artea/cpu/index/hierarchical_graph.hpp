@@ -58,20 +58,18 @@ public:
     /**
      * @brief Construct a new Hierarchical Graph object.
      * @param hier_vecs_manager Reference to the hierarchical vector manager.
-     * @param num_vertices The total number of vertices in the graph.
      * @param bottom_layer_config Configuration for bottom layer.
      * @param upper_layer_config Configuration for upper layers.
      */
     HierarchicalGraph(
         hierarchical_vecs_manager_t& hier_vecs_manager,
-        const vertex_num_t num_vertices,
         const layer_config_t& bottom_layer_config,
         const layer_config_t& upper_layer_config
-    ) : _num_vertices(num_vertices),
+    ) : _num_vertices(hier_vecs_manager.get_num_base_vecs()),
         _bottom_layer_config(bottom_layer_config),
         _upper_layer_config(upper_layer_config),
         _hier_vecs_manager(hier_vecs_manager),
-        _inter_layer_links(inter_layer_links_t(num_vertices))
+        _inter_layer_links(inter_layer_links_t(_num_vertices))
     {}
 
     // Copying is deleted

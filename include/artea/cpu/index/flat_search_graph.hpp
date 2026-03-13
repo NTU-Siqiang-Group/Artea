@@ -25,7 +25,7 @@ class FlatSearchGraph {
     using vertex_id_t = typename IndexTraitsT::vertex_id_t;
     using distance_t = typename IndexTraitsT::distance_t;
     using vector_array_t = typename IndexTraitsT::vector_array_t;
-    using csr_graph_t = typename IndexTraitsT::csr_graph_t;
+    using csr_vids_t = typename IndexTraitsT::csr_vids_t;
     using flat_graph_t = typename IndexTraitsT::flat_graph_t;
 
 public:
@@ -113,12 +113,12 @@ public:
     }
 
     __attribute__((always_inline))
-    auto get_csr_nbrs() -> csr_graph_t& {
+    auto get_csr_nbrs() -> csr_vids_t& {
         return _csr_nbrs;
     }
 
     __attribute__((always_inline))
-    auto get_csr_nbrs() const -> const csr_graph_t& {
+    auto get_csr_nbrs() const -> const csr_vids_t& {
         return _csr_nbrs;
     }
 
@@ -135,7 +135,7 @@ private:
     vertex_num_t _extracted_nbr_size;
 
     /** @brief CSR format neighbor storage: dense, cache-aligned array. */
-    csr_graph_t _csr_nbrs;
+    csr_vids_t _csr_nbrs;
 
     /** @brief Const reference to vector data for this graph. */
     const vector_array_t& _vecs_data;

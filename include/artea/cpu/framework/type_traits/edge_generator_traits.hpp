@@ -30,6 +30,7 @@ template <typename EdgeGeneratorTraitsT> class ReverseUpdater;
 template <typename EdgeGeneratorTraitsT> class RandomUpdater;
 template <typename EdgeGeneratorTraitsT> class RandomEG;
 template <typename EdgeGeneratorTraitsT, bool SelectiveSchedule> class PropagateEngine;
+template <typename EdgeGeneratorTraitsT> class IVFPartitions;
 
 template <typename ComputerTraitsT, typename BufferTraitsT, typename IndexTraitsT>
 struct EdgeGeneratorTraits :
@@ -59,6 +60,9 @@ struct EdgeGeneratorTraits :
     /** @brief Type for propagation engine. */
     template <bool SelectiveSchedule>
     using propagate_engine_t = PropagateEngine<edge_generator_traits_t, SelectiveSchedule>;
+
+    /** @brief IVF partitions for partition-based operations. */
+    using ivf_partitions_t = IVFPartitions<edge_generator_traits_t>;
 
 };  // struct EdgeGeneratorTraits
 

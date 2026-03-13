@@ -53,20 +53,18 @@ public:
     /**
      * @brief Construct a new Hierarchical Search Graph object.
      * @param hier_vecs_manager Reference to the hierarchical vector manager.
-     * @param num_vertices The total number of vertices in the graph.
      * @param bl_extracted_nbr_size Fixed number of neighbors for bottom layer.
      * @param ul_extracted_nbr_size Fixed number of neighbors for upper layers.
      */
     HierarchicalSearchGraph(
         const hierarchical_vecs_manager_t& hier_vecs_manager,
-        const vertex_num_t num_vertices,
         const vertex_num_t bl_extracted_nbr_size,
         const vertex_num_t ul_extracted_nbr_size
-    ) : _num_vertices(num_vertices),
+    ) : _num_vertices(hier_vecs_manager.get_num_base_vecs()),
         _bl_extracted_nbr_size(bl_extracted_nbr_size),
         _ul_extracted_nbr_size(ul_extracted_nbr_size),
         _hier_vecs_manager(hier_vecs_manager),
-        _inter_layer_links(inter_layer_links_t(num_vertices))
+        _inter_layer_links(inter_layer_links_t(_num_vertices))
     {}
 
     // Copying is deleted

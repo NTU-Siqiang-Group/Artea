@@ -293,9 +293,6 @@ public:
             batch_start += sampling_batch_size;
         }
 
-        // Arrange vec_ids in sorted order for better cache locality
-        approx_rnet.arrange_in_order(vecs_data);
-
         return approx_rnet;
     }
 

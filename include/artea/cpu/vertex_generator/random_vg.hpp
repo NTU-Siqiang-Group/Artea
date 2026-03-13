@@ -62,11 +62,10 @@ public:
         random_seq_nr_t random_seq_nr(total_vecs);
         auto random_ids = random_seq_nr.generate(actual_result_size);
 
-        // Copy to vec_ids and sort for better cache locality
+        // Copy to vec_ids (keep original random order)
         vertex_subset.vec_ids.insert(vertex_subset.vec_ids.end(), random_ids.begin(), random_ids.end());
-        std::sort(vertex_subset.vec_ids.begin(), vertex_subset.vec_ids.end());
 
-        // Extract vectors using extract_subset
+        // Extract vectors (extract_subset preserves the order of vec_ids)
         vertex_subset.vecs_data = vecs_data.extract_subset(vertex_subset.vec_ids);
 
         return vertex_subset;

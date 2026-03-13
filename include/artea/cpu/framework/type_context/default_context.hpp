@@ -61,7 +61,7 @@ using nbr_dist_comp_t = typename base_traits_t::nbr_dist_comp_t;
 using word_aligned_bitmap_t = typename base_traits_t::word_aligned_bitmap_t;
 using thread_local_bitmap_t = typename base_traits_t::thread_local_bitmap_t;
 using version_tag_table_t = typename base_traits_t::version_tag_table_t;
-using csr_graph_t = typename base_traits_t::csr_graph_t;
+using csr_vids_t = typename base_traits_t::csr_vids_t;
 using vector_t = typename base_traits_t::vector_t;
 using vector_array_t = typename base_traits_t::vector_array_t;
 using idlist_array_t = typename base_traits_t::idlist_array_t;
@@ -113,6 +113,7 @@ using triangle_updater_t = typename edge_generator_traits_t::triangle_updater_t;
 using reverse_updater_t = typename edge_generator_traits_t::reverse_updater_t;
 using random_updater_t = typename edge_generator_traits_t::random_updater_t;
 using random_eg_t = typename edge_generator_traits_t::random_eg_t;
+using ivf_partitions_t = typename edge_generator_traits_t::ivf_partitions_t;
 
 // Vertex generator types from VertexGeneratorTraits
 using approx_rnet_t = typename vertex_generator_traits_t::approx_rnet_t;

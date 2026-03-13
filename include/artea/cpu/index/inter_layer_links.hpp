@@ -86,6 +86,16 @@ public:
     }
 
     /**
+     * @brief Get the number of inter-layer links for a specific layer.
+     * @param layer_id The layer ID (must be >= 1, since Layer 0 has no links)
+     * @return The number of links for this layer
+     */
+    __attribute__((always_inline))
+    auto get_num_layer_links(const layer_id_t layer_id) const -> vertex_num_t {
+        return _layer_offsets[layer_id] - _layer_offsets[layer_id - 1];
+    }
+
+    /**
      * @brief Add inter-layer links for a new layer.
      * @param layer_id The layer ID (must be >= 1)
      * @param links Container of vertex IDs pointing to the parent layer

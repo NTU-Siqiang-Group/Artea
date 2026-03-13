@@ -140,7 +140,7 @@ public:
     using nbr_arr_t = std::vector<nbr_t>;
 
     /** @brief CSR graph format. */
-    using csr_graph_t = cache_aligned_container_t<vertex_id_t>;
+    using csr_vids_t = cache_aligned_container_t<vertex_id_t>;
 
     using vector_t = avx512_container_t<vec_ele_t>;
 

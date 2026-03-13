@@ -72,6 +72,7 @@
 #include <artea/cpu/edge_generator/random_updater.hpp>
 #include <artea/cpu/edge_generator/random_eg.hpp>
 #include <artea/cpu/edge_generator/propagate_engine.hpp>
+#include <artea/cpu/edge_generator/ivf_partitions.hpp>
 
 #include <artea/cpu/router/vector_router.hpp>
 #include <artea/cpu/router/bruteforce_router.hpp>
