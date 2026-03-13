@@ -21,6 +21,7 @@ namespace cpu {
 
 template <typename GraphFactoryTraitsT>
 class HierarchicalVerticesBuilder {
+
     using vertex_num_t = typename GraphFactoryTraitsT::vertex_num_t;
     using vertex_id_t = typename GraphFactoryTraitsT::vertex_id_t;
     using layer_id_t = typename GraphFactoryTraitsT::layer_id_t;

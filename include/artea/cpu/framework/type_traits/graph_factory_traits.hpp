@@ -35,8 +35,8 @@ enum class VGPolicyT {
  * @brief Policy for edge generation strategy.
  */
 enum class EGPolicyT {
-    conv_graph_descent,        ///< Convergent graph descent
-    local_conv_graph_descent   ///< Local convergent graph descent
+    conv_graph_descent,                 ///< Convergent graph descent
+    speculative_conv_graph_descent      ///< Speculative convergent graph descent
 };
 
 /** ------ Forward Declaration  ------ **/

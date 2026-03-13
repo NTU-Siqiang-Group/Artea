@@ -55,7 +55,8 @@ public:
         const vector_array_t& base_vecs,
         const layer_config_t& bottom_layer_config,
         const layer_config_t& upper_layer_config,
-        const descent_config_t& descent_config,
+        const descent_config_t& bottom_descent_config,
+        const descent_config_t& upper_descent_config,
         Args&&... args
     ) -> hierarchical_graph_t {
         hierarchical_vecs_manager_t hier_vecs_manager(base_vecs);
@@ -68,10 +69,11 @@ public:
             upper_layer_config
         );
 
-        if constexpr (EGPolicy == eg_policy_t::conv_graph_descent) {
-            hierarchical_vertices_builder_t::template construct<VGPolicy>(
-                dist_func, hierarchical_graph, std::forward<Args>(args)...);
-        }
+        hierarchical_vertices_builder_t::template construct<VGPolicy>(
+            dist_func,
+            hierarchical_graph,
+            std::forward<Args>(args)...
+        );
 
         return hierarchical_graph;
     }
