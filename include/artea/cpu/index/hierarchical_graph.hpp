@@ -182,6 +182,11 @@ public:
     }
 
     __attribute__((always_inline))
+    auto get_base_vecs() const -> const vector_array_t& {
+        return _hier_vecs_manager.get_base_vecs();
+    }
+
+    __attribute__((always_inline))
     auto get_hier_vecs_manager() const -> const hierarchical_vecs_manager_t& {
         return _hier_vecs_manager;
     }

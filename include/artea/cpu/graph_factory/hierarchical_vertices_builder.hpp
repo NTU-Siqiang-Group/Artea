@@ -33,14 +33,14 @@ class HierarchicalVerticesBuilder {
     using lb_greedy_vg_t = typename GraphFactoryTraitsT::lb_greedy_vg_t;
     using hierarchical_vecs_manager_t = typename GraphFactoryTraitsT::hierarchical_vecs_manager_t;
     using hierarchical_graph_t = typename GraphFactoryTraitsT::hierarchical_graph_t;
+    using vg_policy_t = typename GraphFactoryTraitsT::vg_policy_t;
 
     static constexpr vertex_num_t min_num_vertex = 128;
 
 public:
     // Specialization for rnet_selection
-    template <VGPolicyT VGPolicy>
+    template <vg_policy_t VGPolicy>
     static auto construct(
-        const vector_array_t& base_vecs,
         const dist_func_t& dist_func,
         hierarchical_graph_t& hierarchical_graph,
         const distance_t rnet_radius,
@@ -50,7 +50,9 @@ public:
         const vertex_num_t max_result_size,
         const vertex_num_t sampling_batch_size,
         const bool is_shuffle
-    ) -> void requires (VGPolicy == VGPolicyT::rnet_selection) {
+    ) -> void requires (VGPolicy == vg_policy_t::rnet_selection) {
+        // Get base_vecs from hierarchical_graph
+        const auto& base_vecs = hierarchical_graph.get_base_vecs();
         const vertex_num_t num_vertices = static_cast<vertex_num_t>(base_vecs.get_num_vecs());
 
         // Get references to hier_vecs_manager and inter_layer_links
@@ -98,13 +100,14 @@ public:
     }
 
     // Specialization for random_selection
-    template <VGPolicyT VGPolicy>
+    template <vg_policy_t VGPolicy>
     static auto construct(
-        const vector_array_t& base_vecs,
         const dist_func_t& dist_func,
         hierarchical_graph_t& hierarchical_graph,
         const ratio_t result_ratio
-    ) -> void requires (VGPolicy == VGPolicyT::random_selection) {
+    ) -> void requires (VGPolicy == vg_policy_t::random_selection) {
+        // Get base_vecs from hierarchical_graph
+        const auto& base_vecs = hierarchical_graph.get_base_vecs();
         const vertex_num_t num_vertices = static_cast<vertex_num_t>(base_vecs.get_num_vecs());
 
         // Get references to hier_vecs_manager and inter_layer_links

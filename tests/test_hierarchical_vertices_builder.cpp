@@ -153,7 +153,6 @@ protected:
 
         if constexpr (VGPolicy == VGPolicyT::rnet_selection) {
             hierarchical_vertices_builder_t::template construct<VGPolicy>(
-                base_vecs,
                 dist_func,
                 *hierarchical_graph,
                 g_config.rnet_config.min_radius,
@@ -166,7 +165,6 @@ protected:
             );
         } else {
             hierarchical_vertices_builder_t::template construct<VGPolicy>(
-                base_vecs,
                 dist_func,
                 *hierarchical_graph,
                 g_config.random_config.result_ratio

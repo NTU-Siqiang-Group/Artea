@@ -60,10 +60,20 @@ public:
     ) -> hierarchical_graph_t {
         hierarchical_vecs_manager_t hier_vecs_manager(base_vecs);
         dist_func_t dist_func(base_vecs.get_vec_dim());
+
+        // Create hierarchical graph
+        hierarchical_graph_t hierarchical_graph(
+            hier_vecs_manager,
+            bottom_layer_config,
+            upper_layer_config
+        );
+
         if constexpr (EGPolicy == eg_policy_t::conv_graph_descent) {
             hierarchical_vertices_builder_t::template construct<VGPolicy>(
-                base_vecs, dist_func, hier_vecs_manager, std::forward<Args>(args)...);
+                dist_func, hierarchical_graph, std::forward<Args>(args)...);
         }
+
+        return hierarchical_graph;
     }
 };
 
