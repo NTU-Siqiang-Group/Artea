@@ -23,6 +23,14 @@
 namespace artea {
 namespace cpu {
 
+/**
+ * @brief Policy for IVF partitions construction strategy.
+ */
+enum class IVFConstructPolicyT {
+    serial,      ///< Serial construction (single-threaded)
+    parallel     ///< Parallel construction (multi-threaded with TBB)
+};
+
 // ----- Forward Declaration  ------ //
 template <typename EdgeGeneratorTraitsT, typename DerivedClassT> class NeighborUpdater;
 template <typename EdgeGeneratorTraitsT> class TriangleUpdater;
@@ -41,6 +49,9 @@ struct EdgeGeneratorTraits :
 
     /** ------ Self Traits ------ **/
     using edge_generator_traits_t = EdgeGeneratorTraits<ComputerTraitsT, BufferTraitsT, IndexTraitsT>;
+
+    /** @brief IVF construction policy type. */
+    using ivf_construct_policy_t = IVFConstructPolicyT;
 
     template <typename DerivedClassT>
     using neighbor_updater_t = NeighborUpdater<edge_generator_traits_t, DerivedClassT>;

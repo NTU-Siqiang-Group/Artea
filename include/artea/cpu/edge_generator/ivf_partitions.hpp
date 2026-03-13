@@ -31,14 +31,6 @@ namespace artea {
 namespace cpu {
 
 /**
- * @brief Policy for IVF partitions construction strategy.
- */
-enum class IVFConstructPolicyT {
-    serial,      ///< Serial construction (single-threaded)
-    parallel     ///< Parallel construction (multi-threaded with TBB)
-};
-
-/**
  * @brief IVF partitions using CSR (Compressed Sparse Row) format.
  * @tparam EdgeGeneratorTraitsT The edge generator traits type.
  *
@@ -65,6 +57,7 @@ class IVFPartitions {
     using part_num_t = typename EdgeGeneratorTraitsT::part_num_t;
     using csr_vids_t = typename EdgeGeneratorTraitsT::csr_vids_t;
     using cache_aligned_offset_t = cache_aligned_container_t<vertex_num_t>;
+    using ivf_construct_policy_t = typename EdgeGeneratorTraitsT::ivf_construct_policy_t;
 
 public:
     IVFPartitions() = default;
@@ -76,9 +69,9 @@ public:
      * @param part_ids Container where part_ids[i] is the partition ID for vertex i
      * @param num_partitions Total number of partitions
      */
-    template <IVFConstructPolicyT IVFPolicy = IVFConstructPolicyT::parallel, typename ContainerT>
+    template <ivf_construct_policy_t IVFPolicy = ivf_construct_policy_t::parallel, typename ContainerT>
     auto from_partition_ids(const ContainerT& part_ids, const part_num_t num_partitions) -> void {
-        if constexpr (IVFPolicy == IVFConstructPolicyT::serial) {
+        if constexpr (IVFPolicy == ivf_construct_policy_t::serial) {
             _from_partition_ids_serial(part_ids, num_partitions);
         } else {
             _from_partition_ids_parallel(part_ids, num_partitions);

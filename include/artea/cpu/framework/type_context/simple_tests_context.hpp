@@ -108,6 +108,7 @@ using reverse_updater_t = typename edge_generator_traits_t::reverse_updater_t;
 using random_updater_t = typename edge_generator_traits_t::random_updater_t;
 using random_eg_t = typename edge_generator_traits_t::random_eg_t;
 using ivf_partitions_t = typename edge_generator_traits_t::ivf_partitions_t;
+using ivf_construct_policy_t = typename edge_generator_traits_t::ivf_construct_policy_t;
 
 // Vertex generator types from VertexGeneratorTraits
 using approx_rnet_t = typename vertex_generator_traits_t::approx_rnet_t;

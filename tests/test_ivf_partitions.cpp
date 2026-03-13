@@ -184,14 +184,14 @@ TEST_F(IVFPartitionsTest, PerformanceComparison) {
     // Measure serial time
     ivf_partitions_t ivf_partitions_serial;
     auto serial_start = std::chrono::high_resolution_clock::now();
-    ivf_partitions_serial.from_partition_ids<IVFConstructPolicyT::serial>(part_ids, num_partitions);
+    ivf_partitions_serial.from_partition_ids<ivf_construct_policy_t::serial>(part_ids, num_partitions);
     auto serial_end = std::chrono::high_resolution_clock::now();
     auto serial_duration = std::chrono::duration_cast<std::chrono::milliseconds>(serial_end - serial_start);
 
     // Measure parallel time
     ivf_partitions_t ivf_partitions;
     auto parallel_start = std::chrono::high_resolution_clock::now();
-    ivf_partitions.from_partition_ids<IVFConstructPolicyT::parallel>(part_ids, num_partitions);
+    ivf_partitions.from_partition_ids<ivf_construct_policy_t::parallel>(part_ids, num_partitions);
     auto parallel_end = std::chrono::high_resolution_clock::now();
     auto parallel_duration = std::chrono::duration_cast<std::chrono::milliseconds>(parallel_end - parallel_start);
 
