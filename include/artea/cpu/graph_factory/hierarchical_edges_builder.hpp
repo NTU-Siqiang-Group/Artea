@@ -47,7 +47,7 @@ public:
         conv_graph_factory_t conv_factory;
 
         // Construct bottom layer (layer_id = 0)
-        auto bottom_graph = conv_factory.construct_graph_impl(
+        auto bottom_graph = conv_factory.construct_graph(
             base_vecs,
             hierarchical_graph.bottom_layer_config(),
             hierarchical_graph.bottom_edges_builder_config()
@@ -57,7 +57,7 @@ public:
         // Construct upper layers (layer_id > 0)
         for (layer_id_t layer_id = 1; layer_id < num_layers; ++layer_id) {
             const auto& layer_vecs = hierarchical_graph.get_hier_vecs_manager().get_layer_vecs(layer_id);
-            auto upper_graph = conv_factory.construct_graph_impl(
+            auto upper_graph = conv_factory.construct_graph(
                 layer_vecs,
                 hierarchical_graph.upper_layer_config(),
                 hierarchical_graph.upper_edges_builder_config()

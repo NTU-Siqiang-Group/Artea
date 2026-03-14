@@ -319,7 +319,7 @@ int main(int argc, char** argv) {
     argparse::ArgumentParser program("test_index_persistence");
     program.add_argument("-c", "--config").default_value(std::string("./configs/datasets.json"));
     program.add_argument("-d", "--dataset").default_value(std::string("sift-1m"));
-    program.add_argument("--temp-dir").default_value(std::string("./temp_persistence_test"));
+    program.add_argument("--temp-dir").default_value(std::string("./graph_index_repo/artea"));
     program.add_argument("-v", "--verbose").default_value(false).implicit_value(true);
 
     try {

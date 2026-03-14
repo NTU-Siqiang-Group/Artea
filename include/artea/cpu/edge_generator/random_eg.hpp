@@ -87,7 +87,7 @@ public:
 
                     // Create neighbors with distances
                     nbrs.clear();
-                    nbrs.reserve(init_nbr_size);
+                    // Note: nbrs already has reserved capacity from FlatGraph constructor
 
                     for (vertex_num_t i = 0; i < init_nbr_size; ++i) {
                         const vertex_id_t nbr_id = random_nbr_ids[i];

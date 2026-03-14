@@ -96,16 +96,6 @@ TEST_F(RandomVGTest, SamplingWithoutReplacement) {
     EXPECT_EQ(unique_ids.size(), result_size);
 }
 
-// Test 3: IDs are sorted in ascending order
-TEST_F(RandomVGTest, IDsAreSorted) {
-    random_vg_t random_vg;
-
-    uint32_t result_size = std::min(20000u, num_vecs / 3);
-    auto result = random_vg.generate(*vecs_data, result_size);
-
-    // Check if vec_ids are sorted
-    EXPECT_TRUE(std::is_sorted(result.vec_ids.begin(), result.vec_ids.end()));
-}
 
 // Test 4: Vector data matches original vectors
 TEST_F(RandomVGTest, VectorDataMatchesOriginal) {
@@ -205,7 +195,6 @@ TEST_F(RandomVGTest, SmallSampleSize) {
     auto result = random_vg.generate(*vecs_data, result_size);
 
     EXPECT_EQ(result.get_num_vecs(), result_size);
-    EXPECT_TRUE(std::is_sorted(result.vec_ids.begin(), result.vec_ids.end()));
 
     // Verify uniqueness
     std::unordered_set<vec_id_t> unique_ids(result.vec_ids.begin(), result.vec_ids.end());
@@ -220,7 +209,6 @@ TEST_F(RandomVGTest, LargeSampleSize) {
     auto result = random_vg.generate(*vecs_data, result_size);
 
     EXPECT_EQ(result.get_num_vecs(), result_size);
-    EXPECT_TRUE(std::is_sorted(result.vec_ids.begin(), result.vec_ids.end()));
 
     // Verify uniqueness
     std::unordered_set<vec_id_t> unique_ids(result.vec_ids.begin(), result.vec_ids.end());

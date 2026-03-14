@@ -85,7 +85,13 @@ public:
         _vertices_builder_config(vertices_builder_config),
         _hier_vecs_manager(hier_vecs_manager),
         _inter_layer_links(inter_layer_links_t(_num_vertices))
-    {}
+    {
+        // Resize layer graphs based on the number of layers in hier_vecs_manager
+        const auto num_layers = _hier_vecs_manager.get_num_layers();
+        if (num_layers > 0) {
+            _layer_graphs.resize(num_layers);
+        }
+    }
 
     // Copying is deleted
     HierarchicalGraph(const HierarchicalGraph&) = delete;
@@ -104,7 +110,7 @@ public:
 
     __attribute__((always_inline))
     auto get_num_layers() const -> layer_num_t {
-        return static_cast<layer_num_t>(_layer_graphs.size());
+        return _hier_vecs_manager.get_num_layers();
     }
 
     /**
