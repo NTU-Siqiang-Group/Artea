@@ -14,7 +14,7 @@
 
 #pragma once
 
-#include <artea/cpu/utils/logger.hpp>
+#include <artea/common/logger.hpp>
 
 namespace artea {
 namespace cpu {
@@ -31,7 +31,6 @@ class HierarchicalEdgesBuilder {
     using dist_func_t = typename GraphFactoryTraitsT::dist_func_t;
     using vector_array_t = typename GraphFactoryTraitsT::vector_array_t;
     using hierarchical_graph_t = typename GraphFactoryTraitsT::hierarchical_graph_t;
-    using descent_config_t = typename GraphFactoryTraitsT::descent_config_t;
     using conv_graph_factory_t = typename GraphFactoryTraitsT::conv_graph_factory_t;
     using eg_policy_t = typename GraphFactoryTraitsT::eg_policy_t;
 
@@ -40,9 +39,7 @@ public:
     template <eg_policy_t EGPolicy>
     static auto construct(
         const dist_func_t& dist_func,
-        hierarchical_graph_t& hierarchical_graph,
-        descent_config_t bottom_descent_config,
-        descent_config_t upper_descent_config
+        hierarchical_graph_t& hierarchical_graph
     ) -> void requires (EGPolicy == eg_policy_t::conv_graph_descent) {
         const auto& base_vecs = hierarchical_graph.get_base_vecs();
         const auto num_layers = hierarchical_graph.get_num_layers();
@@ -53,7 +50,7 @@ public:
         auto bottom_graph = conv_factory.construct_graph_impl(
             base_vecs,
             hierarchical_graph.bottom_layer_config(),
-            bottom_descent_config
+            hierarchical_graph.bottom_edges_builder_config()
         );
         hierarchical_graph.set_layer_graph(0, std::move(bottom_graph));
 
@@ -63,7 +60,7 @@ public:
             auto upper_graph = conv_factory.construct_graph_impl(
                 layer_vecs,
                 hierarchical_graph.upper_layer_config(),
-                upper_descent_config
+                hierarchical_graph.upper_edges_builder_config()
             );
             hierarchical_graph.set_layer_graph(layer_id, std::move(upper_graph));
         }
@@ -73,9 +70,7 @@ public:
     template <eg_policy_t EGPolicy>
     static auto construct(
         const dist_func_t& dist_func,
-        hierarchical_graph_t& hierarchical_graph,
-        descent_config_t bottom_descent_config,
-        descent_config_t upper_descent_config
+        hierarchical_graph_t& hierarchical_graph
     ) -> void requires (EGPolicy == eg_policy_t::speculative_conv_graph_descent) {
         logger.error("HierarchicalEdgesBuilder::construct<speculative_conv_graph_descent> not implemented yet");
     }

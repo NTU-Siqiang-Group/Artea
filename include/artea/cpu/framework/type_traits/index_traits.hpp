@@ -20,17 +20,25 @@
 
 #pragma once
 
+#include <variant>
+
 namespace artea {
 namespace cpu {
 
 /** ------ Forward Declaration  ------ **/
 template <typename IndexTraitsT> struct LayerConfig;
+template <typename IndexTraitsT> struct EdgesBuilderConfig;
+template <typename IndexTraitsT> struct GreedyVerticesBuilderConfig;
+template <typename IndexTraitsT> struct RandomVerticesBuilderConfig;
 template <typename IndexTraitsT> class FlatGraph;
 template <typename IndexTraitsT> class FlatSearchGraph;
 template <typename IndexTraitsT> class HierarchicalGraph;
 template <typename IndexTraitsT> class HierarchicalSearchGraph;
 template <typename IndexTraitsT> class InterLayerLinks;
 template <typename IndexTraitsT> class HierarchicalVecsManager;
+template <typename IndexTraitsT> class SearchGraphConverter;
+template <typename IndexTraitsT> class FlatGraphFileManager;
+template <typename IndexTraitsT> class HierarchicalGraphFileManager;
 
 template <typename BaseTraitsT>
 struct IndexTraits : virtual public BaseTraitsT {
@@ -43,6 +51,18 @@ struct IndexTraits : virtual public BaseTraitsT {
 
     /** @brief Layer configuration type. */
     using layer_config_t = LayerConfig<index_traits_t>;
+
+    /** @brief Edges builder configuration type. */
+    using edges_builder_config_t = EdgesBuilderConfig<index_traits_t>;
+
+    /** @brief Greedy vertices builder configuration type. */
+    using greedy_vertices_builder_config_t = GreedyVerticesBuilderConfig<index_traits_t>;
+
+    /** @brief Random vertices builder configuration type. */
+    using random_vertices_builder_config_t = RandomVerticesBuilderConfig<index_traits_t>;
+
+    /** @brief Vertices builder configuration variant type (greedy or random). */
+    using vertices_builder_config_t = std::variant<greedy_vertices_builder_config_t, random_vertices_builder_config_t>;
 
     /** @brief Flat graph type. */
     using flat_graph_t = FlatGraph<index_traits_t>;
@@ -61,6 +81,15 @@ struct IndexTraits : virtual public BaseTraitsT {
 
     /** @brief Hierarchical vector manager type. */
     using hierarchical_vecs_manager_t = HierarchicalVecsManager<index_traits_t>;
+
+    /** @brief Search graph converter type. */
+    using search_graph_converter_t = SearchGraphConverter<index_traits_t>;
+
+    /** @brief Flat graph file manager type. */
+    using flat_graph_file_manager_t = FlatGraphFileManager<index_traits_t>;
+
+    /** @brief Hierarchical graph file manager type. */
+    using hierarchical_graph_file_manager_t = HierarchicalGraphFileManager<index_traits_t>;
 
     /** @brief Minimum number of vertices required for a layer to continue building upper layers. */
     static constexpr uint32_t min_num_layer_vertex = 96;

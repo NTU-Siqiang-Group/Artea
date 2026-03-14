@@ -25,8 +25,8 @@ using namespace artea;
 struct BenchConfig {
     std::string config_path;
     std::string dataset_name;
-    vec_num_t init_nbr_size;
     layer_config_t layer_config{16, 32};
+    edges_builder_config_t edges_builder_config{1.0, 0.0, 4, 14};
     vec_num_t rand_gen_size;
     iter_t num_iters;
     ratio_t scale_coeffs;
@@ -62,11 +62,12 @@ public:
         logger.info("Initializing flat graph with random edges...");
         flat_graph_ = std::make_unique<flat_graph_t>(
             base_vecs_,
-            g_config.layer_config
+            g_config.layer_config,
+            g_config.edges_builder_config
         );
 
         random_eg_t random_eg(*dist_func_);
-        random_eg.generate(*flat_graph_, g_config.init_nbr_size);
+        random_eg.generate(*flat_graph_, g_config.layer_config.max_nbr_size());
         logger.info("Flat graph initialization complete.");
 
         // Save initial graph state for benchmark reset
@@ -223,7 +224,7 @@ static void BM_ReverseUpdater(benchmark::State& state) {
         "vertices={}, iters={}, init_nbrs={}, selective_schedule=true",
         num_vertices,
         g_config.num_iters,
-        g_config.init_nbr_size
+        g_config.layer_config.max_nbr_size()
     ));
 }
 
@@ -260,7 +261,7 @@ static void BM_ReverseUpdater_NoSS(benchmark::State& state) {
         "vertices={}, iters={}, init_nbrs={}, selective_schedule=false",
         num_vertices,
         g_config.num_iters,
-        g_config.init_nbr_size
+        g_config.layer_config.max_nbr_size()
     ));
 }
 
@@ -418,7 +419,6 @@ int main(int argc, char** argv) {
 
     g_config.config_path = program.get<std::string>("--config");
     g_config.dataset_name = program.get<std::string>("--dataset");
-    g_config.init_nbr_size = static_cast<vec_num_t>(program.get<int>("--init-nbrs"));
     g_config.layer_config = layer_config_t(
         static_cast<vec_num_t>(program.get<int>("--max-nbrs")),
         static_cast<vec_num_t>(program.get<int>("--reserved-nbrs"))
@@ -432,7 +432,6 @@ int main(int argc, char** argv) {
     logger.info(fmt::format("Benchmark Configuration:"));
     logger.info(fmt::format("  Dataset: {}", g_config.dataset_name));
     logger.info(fmt::format("  Config path: {}", g_config.config_path));
-    logger.info(fmt::format("  Init neighbors: {}", g_config.init_nbr_size));
     logger.info(fmt::format("  Reserved neighbors: {}", g_config.layer_config.reserved_nbr_size()));
     logger.info(fmt::format("  Max neighbors: {}", g_config.layer_config.max_nbr_size()));
     logger.info(fmt::format("  Random gen size: {}", g_config.rand_gen_size));

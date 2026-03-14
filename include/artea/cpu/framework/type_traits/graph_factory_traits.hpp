@@ -40,11 +40,10 @@ enum class EGPolicyT {
 };
 
 /** ------ Forward Declaration  ------ **/
-template <typename GraphFactoryTraitsT> struct DescentConfig;
 template <typename GraphFactoryTraitsT, typename DerivedClassT> class FlatGraphFactory;
 template <typename GraphFactoryTraitsT> class ConvGraphFactory;
-template <typename GraphFactoryTraitsT> class FlatSearchGraphFactory;
 template <typename GraphFactoryTraitsT> class HierarchicalVerticesBuilder;
+template <typename GraphFactoryTraitsT> class HierarchicalEdgesBuilder;
 
 template <
     typename VertexGeneratorTraitsT,
@@ -64,18 +63,15 @@ struct GraphFactoryTraits :
     /** @brief Edge generation policy type. */
     using eg_policy_t = EGPolicyT;
 
-    /** @brief Descent configuration type. */
-    using descent_config_t = DescentConfig<graph_factory_traits_t>;
-
     /** @brief Type for graph factory. */
     template <typename DerivedClassT>
     using flat_graph_factory_t = FlatGraphFactory<graph_factory_traits_t, DerivedClassT>;
 
     using conv_graph_factory_t = ConvGraphFactory<graph_factory_traits_t>;
 
-    using flat_search_graph_factory_t = FlatSearchGraphFactory<graph_factory_traits_t>;
-
     using hierarchical_vertices_builder_t = HierarchicalVerticesBuilder<graph_factory_traits_t>;
+
+    using hierarchical_edges_builder_t = HierarchicalEdgesBuilder<graph_factory_traits_t>;
 
 };  // struct GraphFactoryTraits
 

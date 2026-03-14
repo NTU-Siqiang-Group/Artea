@@ -27,7 +27,7 @@ using namespace arena_benchmark;
 
 struct GraphParams {
     layer_config_t layer_config;
-    descent_config_t descent_config;
+    edges_builder_config_t edges_builder_config;
 };
 
 struct BenchConfig {
@@ -85,7 +85,7 @@ auto make_benchmark_func(const GraphParams& params) {
             flat_graph_t flat_graph = conv_graph_factory.construct_graph(
                 dataset,
                 params.layer_config,
-                params.descent_config
+                params.edges_builder_config
             );
 
             // Prevent optimization from removing the work
@@ -152,9 +152,9 @@ int main(int argc, char** argv) {
     // Initialize parameter sets
     g_config.param_sets = {
         // Set 1: max_nbrs=32, reserved=64, outer_iters=4, inner_iters=14, scale=1.10, shift=0.00
-        {layer_config_t(32, 64), descent_config_t(1.10, 0.00, 4, 14)},
+        {layer_config_t(32, 64), edges_builder_config_t(1.10, 0.00, 4, 14)},
         // Set 2: max_nbrs=64, reserved=128, outer_iters=4, inner_iters=14, scale=1.00, shift=0.00
-        {layer_config_t(64, 128), descent_config_t(1.00, 0.00, 4, 14)}
+        {layer_config_t(64, 128), edges_builder_config_t(1.00, 0.00, 4, 14)}
     };
 
     logger.info(fmt::format("Benchmark Configuration:"));
@@ -188,10 +188,10 @@ int main(int argc, char** argv) {
                 num_vertices,
                 params.layer_config.max_nbr_size(),
                 params.layer_config.reserved_nbr_size(),
-                params.descent_config.num_outer_iters(),
-                params.descent_config.num_inner_iters(),
-                params.descent_config.scale_coeffs(),
-                params.descent_config.shifted_coeffs()
+                params.edges_builder_config.num_outer_iters(),
+                params.edges_builder_config.num_inner_iters(),
+                params.edges_builder_config.scale_coeffs(),
+                params.edges_builder_config.shifted_coeffs()
             ));
     }
 

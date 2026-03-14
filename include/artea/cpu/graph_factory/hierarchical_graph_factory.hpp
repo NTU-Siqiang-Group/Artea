@@ -36,45 +36,47 @@ class HierarchicalGraphFactory {
     using vector_array_t = typename GraphFactoryTraitsT::vector_array_t;
     using dist_func_t = typename GraphFactoryTraitsT::dist_func_t;
     using layer_config_t = typename GraphFactoryTraitsT::layer_config_t;
-    using descent_config_t = typename GraphFactoryTraitsT::descent_config_t;
+    using edges_builder_config_t = typename GraphFactoryTraitsT::edges_builder_config_t;
+    using vg_policy_t = typename GraphFactoryTraitsT::vg_policy_t;
+    using eg_policy_t = typename GraphFactoryTraitsT::eg_policy_t;
 
 public:
     HierarchicalGraphFactory() = default;
 
-    template <typename... Args>
+    template <vg_policy_t VGPolicy, eg_policy_t EGPolicy, typename... Args>
     auto construct_graph(
         const vector_dataset_t& dataset,
         layer_config_t bottom_layer_config,
         layer_config_t upper_layer_config,
-        descent_config_t bottom_descent_config,
-        descent_config_t upper_descent_config,
+        edges_builder_config_t bottom_edges_builder_config,
+        edges_builder_config_t upper_edges_builder_config,
         Args&&... args
     ) -> hierarchical_graph_t {
-        return construct_graph(
+        return construct_graph<VGPolicy, EGPolicy>(
             dataset.get_base_vecs(),
             bottom_layer_config,
             upper_layer_config,
-            bottom_descent_config,
-            upper_descent_config,
+            bottom_edges_builder_config,
+            upper_edges_builder_config,
             std::forward<Args>(args)...
         );
     }
 
-    template <typename... Args>
+    template <vg_policy_t VGPolicy, eg_policy_t EGPolicy, typename... Args>
     auto construct_graph(
         const vector_array_t& base_vecs,
         layer_config_t bottom_layer_config,
         layer_config_t upper_layer_config,
-        descent_config_t bottom_descent_config,
-        descent_config_t upper_descent_config,
+        edges_builder_config_t bottom_edges_builder_config,
+        edges_builder_config_t upper_edges_builder_config,
         Args&&... args
     ) -> hierarchical_graph_t {
-        return static_cast<DerivedClassT*>(this)->construct_graph_impl(
+        return static_cast<DerivedClassT*>(this)->template construct_graph_impl<VGPolicy, EGPolicy>(
             base_vecs,
             bottom_layer_config,
             upper_layer_config,
-            bottom_descent_config,
-            upper_descent_config,
+            bottom_edges_builder_config,
+            upper_edges_builder_config,
             std::forward<Args>(args)...
         );
     }

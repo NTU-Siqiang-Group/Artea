@@ -13,9 +13,9 @@
 // limitations under the License.
 
 /*
- * @FilePath: /Artea/include/artea/cpu/graph_factory/descent_config.hpp
+ * @FilePath: /Artea/include/artea/cpu/index/edges_builder_config.hpp
  * @Author: Chandler (Weitang Ye) <weitang.ye@ntu.edu.sg>
- * @Description: Configuration for convergent graph descent algorithm.
+ * @Description: Configuration for edges builder algorithm.
  */
 
 #pragma once
@@ -24,23 +24,23 @@ namespace artea {
 namespace cpu {
 
 /**
- * @brief Configuration for convergent graph descent algorithm.
+ * @brief Configuration for edges builder algorithm.
  * Supports builder pattern for flexible configuration.
- * @tparam GraphFactoryTraitsT The graph factory traits type.
+ * @tparam IndexTraitsT The index traits type.
  */
-template <typename GraphFactoryTraitsT>
-struct DescentConfig {
-    using ratio_t = typename GraphFactoryTraitsT::ratio_t;
-    using iter_t = typename GraphFactoryTraitsT::iter_t;
+template <typename IndexTraitsT>
+struct EdgesBuilderConfig {
+    using ratio_t = typename IndexTraitsT::ratio_t;
+    using iter_t = typename IndexTraitsT::iter_t;
 
     /**
-     * @brief Constructor for descent configuration.
+     * @brief Constructor for edges builder configuration.
      * @param scale_coeffs Scale coefficient for RNG pruning.
      * @param shifted_coeffs Shift coefficient for RNG pruning.
      * @param num_outer_iters Number of outer iterations (recommend: 4).
      * @param num_inner_iters Number of inner iterations (recommend: 14).
      */
-    DescentConfig(
+    EdgesBuilderConfig(
         ratio_t scale_coeffs,
         ratio_t shifted_coeffs,
         iter_t num_outer_iters,
@@ -53,10 +53,10 @@ struct DescentConfig {
     {}
 
     // Builder pattern setters (chainable)
-    auto scale_coeffs(ratio_t value) -> DescentConfig& { _scale_coeffs = value; return *this; }
-    auto shifted_coeffs(ratio_t value) -> DescentConfig& { _shifted_coeffs = value; return *this; }
-    auto num_outer_iters(iter_t value) -> DescentConfig& { _num_outer_iters = value; return *this; }
-    auto num_inner_iters(iter_t value) -> DescentConfig& { _num_inner_iters = value; return *this; }
+    auto scale_coeffs(ratio_t value) -> EdgesBuilderConfig& { _scale_coeffs = value; return *this; }
+    auto shifted_coeffs(ratio_t value) -> EdgesBuilderConfig& { _shifted_coeffs = value; return *this; }
+    auto num_outer_iters(iter_t value) -> EdgesBuilderConfig& { _num_outer_iters = value; return *this; }
+    auto num_inner_iters(iter_t value) -> EdgesBuilderConfig& { _num_inner_iters = value; return *this; }
 
     // Const getters
     auto scale_coeffs() const -> ratio_t { return _scale_coeffs; }

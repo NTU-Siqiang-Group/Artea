@@ -171,7 +171,7 @@ target_link_libraries(artea INTERFACE
 include(CTest)
 
 # --- 5. Include subdirectories ---
-add_subdirectory(tests)
+add_subdirectory(unit_tests)
 add_subdirectory(benchmarks)
 add_subdirectory(micro_benchmarks)
 add_subdirectory(apps)

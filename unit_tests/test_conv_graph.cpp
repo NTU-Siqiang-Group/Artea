@@ -32,7 +32,7 @@ struct TestConfig {
     std::string config_path;
     std::string dataset_name;
     layer_config_t layer_config{16, 32};
-    descent_config_t descent_config{1.0f, 0.0f, 4, 14};
+    edges_builder_config_t edges_builder_config{1.0f, 0.0f, 4, 14};
     uint32_t extracted_nbr_size;
     uint32_t topk;
     uint32_t candidate_queue_size;
@@ -71,10 +71,10 @@ public:
             logger.info(fmt::format("Max nbr size: {}", g_config.layer_config.max_nbr_size()));
             logger.info(fmt::format("Reserved nbr size: {}", g_config.layer_config.reserved_nbr_size()));
             logger.info(fmt::format("Extracted nbr size: {}", g_config.extracted_nbr_size));
-            logger.info(fmt::format("Scale coeffs: {}", g_config.descent_config.scale_coeffs()));
-            logger.info(fmt::format("Shifted coeffs: {}", g_config.descent_config.shifted_coeffs()));
-            logger.info(fmt::format("Num outer iters: {}", g_config.descent_config.num_outer_iters()));
-            logger.info(fmt::format("Num inner iters: {}", g_config.descent_config.num_inner_iters()));
+            logger.info(fmt::format("Scale coeffs: {}", g_config.edges_builder_config.scale_coeffs()));
+            logger.info(fmt::format("Shifted coeffs: {}", g_config.edges_builder_config.shifted_coeffs()));
+            logger.info(fmt::format("Num outer iters: {}", g_config.edges_builder_config.num_outer_iters()));
+            logger.info(fmt::format("Num inner iters: {}", g_config.edges_builder_config.num_inner_iters()));
             logger.info(fmt::format("Top-k: {}", g_config.topk));
             logger.info(fmt::format("Candidate queue size: {}", g_config.candidate_queue_size));
         }
@@ -87,7 +87,7 @@ public:
         flat_graph_ = std::make_unique<flat_graph_t>(factory.construct_graph(
             base_vecs,
             g_config.layer_config,
-            g_config.descent_config
+            g_config.edges_builder_config
         ));
 
         auto end_time = std::chrono::high_resolution_clock::now();
@@ -103,7 +103,7 @@ public:
         start_time = std::chrono::high_resolution_clock::now();
 
         flat_search_graph_ = std::make_unique<flat_search_graph_t>(
-            flat_search_graph_factory_t::from_flat_graph(*flat_graph_, g_config.extracted_nbr_size)
+            search_graph_converter_t::from_flat_graph(*flat_graph_, g_config.extracted_nbr_size)
         );
 
         end_time = std::chrono::high_resolution_clock::now();
@@ -220,7 +220,7 @@ int main(int argc, char** argv) {
         program.get<uint32_t>("--max-nbr-size"),
         program.get<uint32_t>("--reserved-nbr-size")
     );
-    g_config.descent_config = descent_config_t(
+    g_config.edges_builder_config = edges_builder_config_t(
         program.get<float>("--scale-coeffs"),
         program.get<float>("--shifted-coeffs"),
         program.get<uint32_t>("--num-outer-iters"),
@@ -238,10 +238,10 @@ int main(int argc, char** argv) {
     std::cout << "Max nbr size: " << g_config.layer_config.max_nbr_size() << std::endl;
     std::cout << "Reserved nbr size: " << g_config.layer_config.reserved_nbr_size() << std::endl;
     std::cout << "Extracted nbr size: " << g_config.extracted_nbr_size << std::endl;
-    std::cout << "Scale coeffs: " << g_config.descent_config.scale_coeffs() << std::endl;
-    std::cout << "Shifted coeffs: " << g_config.descent_config.shifted_coeffs() << std::endl;
-    std::cout << "Num outer iters: " << g_config.descent_config.num_outer_iters() << std::endl;
-    std::cout << "Num inner iters: " << g_config.descent_config.num_inner_iters() << std::endl;
+    std::cout << "Scale coeffs: " << g_config.edges_builder_config.scale_coeffs() << std::endl;
+    std::cout << "Shifted coeffs: " << g_config.edges_builder_config.shifted_coeffs() << std::endl;
+    std::cout << "Num outer iters: " << g_config.edges_builder_config.num_outer_iters() << std::endl;
+    std::cout << "Num inner iters: " << g_config.edges_builder_config.num_inner_iters() << std::endl;
     std::cout << "Top-k: " << g_config.topk << std::endl;
     std::cout << "Candidate queue size: " << g_config.candidate_queue_size << std::endl;
     std::cout << "Verbose: " << (g_config.verbose ? "true" : "false") << std::endl;
@@ -260,10 +260,10 @@ int main(int argc, char** argv) {
     std::cout << fmt::format("  Max Nbr Size:           {}", g_config.layer_config.max_nbr_size()) << std::endl;
     std::cout << fmt::format("  Reserved Nbr Size:      {}", g_config.layer_config.reserved_nbr_size()) << std::endl;
     std::cout << fmt::format("  Extracted Nbr Size:     {}", g_config.extracted_nbr_size) << std::endl;
-    std::cout << fmt::format("  Scale Coeffs:           {}", g_config.descent_config.scale_coeffs()) << std::endl;
-    std::cout << fmt::format("  Shifted Coeffs:         {}", g_config.descent_config.shifted_coeffs()) << std::endl;
-    std::cout << fmt::format("  Num Outer Iters:        {}", g_config.descent_config.num_outer_iters()) << std::endl;
-    std::cout << fmt::format("  Num Inner Iters:        {}", g_config.descent_config.num_inner_iters()) << std::endl;
+    std::cout << fmt::format("  Scale Coeffs:           {}", g_config.edges_builder_config.scale_coeffs()) << std::endl;
+    std::cout << fmt::format("  Shifted Coeffs:         {}", g_config.edges_builder_config.shifted_coeffs()) << std::endl;
+    std::cout << fmt::format("  Num Outer Iters:        {}", g_config.edges_builder_config.num_outer_iters()) << std::endl;
+    std::cout << fmt::format("  Num Inner Iters:        {}", g_config.edges_builder_config.num_inner_iters()) << std::endl;
     std::cout << fmt::format("  Top-k:                  {}", g_config.topk) << std::endl;
     std::cout << fmt::format("  Candidate Queue Size:   {}", g_config.candidate_queue_size) << std::endl;
     std::cout << "\n--- Graph Construction ---" << std::endl;

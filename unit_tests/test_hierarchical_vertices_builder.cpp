@@ -35,7 +35,7 @@ struct RNetSelectionConfig {
     float beta_sq;
     float coverage_ratio;
     float confidence;
-    uint32_t max_result_size;
+    float max_result_ratio;
     uint32_t sampling_batch_size;
     bool is_shuffle;
 };
@@ -140,48 +140,80 @@ protected:
         provider.set_hier_vecs_manager(std::move(hier_vecs_manager));
 
         // Create hierarchical graph with reference to the stored manager
-        auto hierarchical_graph = std::make_unique<hierarchical_graph_t>(
-            provider.get_hier_vecs_manager(),
-            dummy_config,
-            dummy_config
-        );
+        edges_builder_config_t dummy_edges_config(1.0, 0.0, 4, 14);
 
-        logger.info(fmt::format("Testing VGPolicy: {}",
-            VGPolicy == VGPolicyT::rnet_selection ? "rnet_selection" : "random_selection"));
-
-        auto start_time = std::chrono::high_resolution_clock::now();
-
+        // Create vertices_builder_config based on VGPolicy
         if constexpr (VGPolicy == VGPolicyT::rnet_selection) {
-            hierarchical_vertices_builder_t::template construct<VGPolicy>(
-                dist_func,
-                *hierarchical_graph,
+            greedy_vertices_builder_config_t vertices_builder_config(
                 g_config.rnet_config.min_radius,
                 g_config.rnet_config.beta_sq,
                 g_config.rnet_config.coverage_ratio,
                 g_config.rnet_config.confidence,
-                g_config.rnet_config.max_result_size,
+                g_config.rnet_config.max_result_ratio,
                 g_config.rnet_config.sampling_batch_size,
                 g_config.rnet_config.is_shuffle
             );
-        } else {
+            auto hierarchical_graph = std::make_unique<hierarchical_graph_t>(
+                provider.get_hier_vecs_manager(),
+                dummy_config,
+                dummy_config,
+                dummy_edges_config,
+                dummy_edges_config,
+                vertices_builder_config
+            );
+
+            logger.info(fmt::format("Testing VGPolicy: rnet_selection"));
+
+            auto start_time = std::chrono::high_resolution_clock::now();
+
             hierarchical_vertices_builder_t::template construct<VGPolicy>(
                 dist_func,
                 *hierarchical_graph,
-                g_config.random_config.result_ratio
+                vertices_builder_config
             );
+
+            auto end_time = std::chrono::high_resolution_clock::now();
+            auto duration = std::chrono::duration_cast<std::chrono::microseconds>(end_time - start_time);
+
+            g_rnet_results.generation_time_ms = duration.count() / 1000.0;
+            g_rnet_results.num_layers = hierarchical_graph->get_hier_vecs_manager().get_num_layers();
+
+            logger.info(fmt::format("Generated {} layers", g_rnet_results.num_layers));
+            logger.info(fmt::format("Generation time: {:.2f} ms", g_rnet_results.generation_time_ms));
+
+            provider.set_hierarchical_graph(std::move(hierarchical_graph));
+        } else {
+            random_vertices_builder_config_t vertices_builder_config(g_config.random_config.result_ratio);
+            auto hierarchical_graph = std::make_unique<hierarchical_graph_t>(
+                provider.get_hier_vecs_manager(),
+                dummy_config,
+                dummy_config,
+                dummy_edges_config,
+                dummy_edges_config,
+                vertices_builder_config
+            );
+
+            logger.info(fmt::format("Testing VGPolicy: random_selection"));
+
+            auto start_time = std::chrono::high_resolution_clock::now();
+
+            hierarchical_vertices_builder_t::template construct<VGPolicy>(
+                dist_func,
+                *hierarchical_graph,
+                vertices_builder_config
+            );
+
+            auto end_time = std::chrono::high_resolution_clock::now();
+            auto duration = std::chrono::duration_cast<std::chrono::microseconds>(end_time - start_time);
+
+            g_random_results.generation_time_ms = duration.count() / 1000.0;
+            g_random_results.num_layers = hierarchical_graph->get_hier_vecs_manager().get_num_layers();
+
+            logger.info(fmt::format("Generated {} layers", g_random_results.num_layers));
+            logger.info(fmt::format("Generation time: {:.2f} ms", g_random_results.generation_time_ms));
+
+            provider.set_hierarchical_graph(std::move(hierarchical_graph));
         }
-
-        auto end_time = std::chrono::high_resolution_clock::now();
-        auto duration = std::chrono::duration_cast<std::chrono::microseconds>(end_time - start_time);
-
-        auto& results = (VGPolicy == VGPolicyT::rnet_selection) ? g_rnet_results : g_random_results;
-        results.generation_time_ms = duration.count() / 1000.0;
-        results.num_layers = hierarchical_graph->get_hier_vecs_manager().get_num_layers();
-
-        logger.info(fmt::format("Generated {} layers", results.num_layers));
-        logger.info(fmt::format("Generation time: {:.2f} ms", results.generation_time_ms));
-
-        provider.set_hierarchical_graph(std::move(hierarchical_graph));
     }
 };
 
@@ -457,7 +489,7 @@ int main(int argc, char** argv) {
     program.add_argument("--beta-sq").default_value(2.56f).scan<'g', float>();
     program.add_argument("--coverage-ratio").default_value(0.96f).scan<'g', float>();
     program.add_argument("--confidence").default_value(0.99f).scan<'g', float>();
-    program.add_argument("--max-result-size").default_value(100000u).scan<'u', uint32_t>();
+    program.add_argument("--max-result-ratio").default_value(0.2f).scan<'g', float>();
     program.add_argument("--sampling-batch-size").default_value(2048u).scan<'u', uint32_t>();
     program.add_argument("--shuffle").default_value(false).implicit_value(true);
 
@@ -482,7 +514,7 @@ int main(int argc, char** argv) {
     g_config.rnet_config.beta_sq = program.get<float>("--beta-sq");
     g_config.rnet_config.coverage_ratio = program.get<float>("--coverage-ratio");
     g_config.rnet_config.confidence = program.get<float>("--confidence");
-    g_config.rnet_config.max_result_size = program.get<uint32_t>("--max-result-size");
+    g_config.rnet_config.max_result_ratio = program.get<float>("--max-result-ratio");
     g_config.rnet_config.sampling_batch_size = program.get<uint32_t>("--sampling-batch-size");
     g_config.rnet_config.is_shuffle = program.get<bool>("--shuffle");
 
@@ -499,7 +531,7 @@ int main(int argc, char** argv) {
     std::cout << "Beta squared: " << g_config.rnet_config.beta_sq << std::endl;
     std::cout << "Coverage ratio: " << g_config.rnet_config.coverage_ratio << std::endl;
     std::cout << "Confidence: " << g_config.rnet_config.confidence << std::endl;
-    std::cout << "Max result size: " << g_config.rnet_config.max_result_size << std::endl;
+    std::cout << "Max result ratio: " << g_config.rnet_config.max_result_ratio << std::endl;
     std::cout << "Sampling batch size: " << g_config.rnet_config.sampling_batch_size << std::endl;
     std::cout << "Shuffle: " << (g_config.rnet_config.is_shuffle ? "true" : "false") << std::endl;
     std::cout << "\n--- Random Selection Parameters ---" << std::endl;

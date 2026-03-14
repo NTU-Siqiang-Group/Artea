@@ -144,7 +144,7 @@ int main(int argc, char** argv) {
     auto start_time = std::chrono::high_resolution_clock::now();
 
     layer_config_t layer_config(params.max_nbr_size, params.reserved_nbr_size);
-    descent_config_t descent_config(
+    edges_builder_config_t edges_builder_config(
         params.scale_coeffs,
         params.shifted_coeffs,
         params.num_outer_iters,
@@ -155,7 +155,7 @@ int main(int argc, char** argv) {
     flat_graph_t flat_graph = conv_graph_factory.construct_graph(
         dataset,
         layer_config,
-        descent_config
+        edges_builder_config
     );
 
     auto end_time = std::chrono::high_resolution_clock::now();
@@ -166,24 +166,37 @@ int main(int argc, char** argv) {
     // Save flat graph
     std::string subdir = "conv_graph." + dataset_name;
 
-    // Format coefficients with 2 decimal places
-    std::ostringstream sc_stream, sh_stream;
-    sc_stream << std::fixed << std::setprecision(2) << params.scale_coeffs;
-    sh_stream << std::fixed << std::setprecision(2) << params.shifted_coeffs;
+    // Generate directory name with timestamp
+    auto now = std::chrono::system_clock::now();
+    auto time_t_now = std::chrono::system_clock::to_time_t(now);
+    std::ostringstream dirname_stream;
+    dirname_stream << "conv_graph_" << std::put_time(std::localtime(&time_t_now), "%Y%m%d_%H%M%S");
+    std::string dirname = dirname_stream.str();
 
-    std::string filename = "mns" + std::to_string(params.max_nbr_size) +
-                          "_ens" + std::to_string(extracted_nbr_size) +
-                          "_sc" + sc_stream.str() +
-                          "_sh" + sh_stream.str() +
-                          "_noi" + std::to_string(params.num_outer_iters) +
-                          "_nii" + std::to_string(params.num_inner_iters) + ".index";
-    std::filesystem::path output_path = std::filesystem::path(output_dir) / subdir / filename;
+    std::filesystem::path output_path = std::filesystem::path(output_dir) / subdir / dirname;
     logger.info(fmt::format("Saving flat graph to {}...", output_path.string()));
 
     // Create output directory if it doesn't exist
-    std::filesystem::create_directories(output_path.parent_path());
+    std::filesystem::create_directories(output_path);
 
-    flat_graph.snapshot(output_path.string());
+    // Prepare metadata for snapshot
+    nlohmann::json metadata;
+    metadata["dataset"] = dataset_name;
+    metadata["vec_dim"] = dataset.get_base_vecs().get_vec_dim();
+    metadata["build_params"] = {
+        {"scale_coeffs", params.scale_coeffs},
+        {"shifted_coeffs", params.shifted_coeffs},
+        {"num_outer_iters", params.num_outer_iters},
+        {"num_inner_iters", params.num_inner_iters}
+    };
+    metadata["extracted_nbr_size"] = extracted_nbr_size;
+
+    // Get current timestamp in ISO format
+    std::ostringstream timestamp_stream;
+    timestamp_stream << std::put_time(std::gmtime(&time_t_now), "%Y-%m-%dT%H:%M:%SZ");
+    metadata["timestamp"] = timestamp_stream.str();
+
+    flat_graph_file_manager_t::snapshot(flat_graph, output_path.string(), metadata);
 
     logger.info("Graph saved successfully");
 
@@ -195,19 +208,13 @@ int main(int argc, char** argv) {
     index_params["dataset"] = dataset_name;
     index_params["max_nbr_size"] = params.max_nbr_size;
     index_params["extracted_nbr_size"] = extracted_nbr_size;
-
-    // Format coefficients with 2 decimal places for JSON
-    std::ostringstream scale_stream, shifted_stream;
-    scale_stream << std::fixed << std::setprecision(2) << params.scale_coeffs;
-    shifted_stream << std::fixed << std::setprecision(2) << params.shifted_coeffs;
-    index_params["scale_coeffs"] = std::stod(scale_stream.str());
-    index_params["shifted_coeffs"] = std::stod(shifted_stream.str());
-
+    index_params["scale_coeffs"] = params.scale_coeffs;
+    index_params["shifted_coeffs"] = params.shifted_coeffs;
     index_params["num_outer_iters"] = params.num_outer_iters;
     index_params["num_inner_iters"] = params.num_inner_iters;
 
-    // Use relative path from project root: output_dir/subdir/filename
-    std::filesystem::path relative_index_path = std::filesystem::path(output_dir) / subdir / filename;
+    // Use relative path from project root: output_dir/subdir/dirname
+    std::filesystem::path relative_index_path = std::filesystem::path(output_dir) / subdir / dirname;
 
     // Register the index
     index_register_util_t::register_index(

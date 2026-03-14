@@ -9,11 +9,6 @@
 
 #include <cstddef>
 #include <vector>
-#include <string>
-#include <fstream>
-#include <limits>
-#include <cstdint>
-#include <type_traits>
 #include <artea/common/logger.hpp>
 
 namespace artea {
@@ -33,19 +28,23 @@ class FlatGraph {
     using nbr_arr_t = typename IndexTraitsT::nbr_arr_t;
     using vector_array_t = typename IndexTraitsT::vector_array_t;
     using layer_config_t = typename IndexTraitsT::layer_config_t;
+    using edges_builder_config_t = typename IndexTraitsT::edges_builder_config_t;
 
 public:
     /**
      * @brief Construct a new Flat Graph object.
      * @param vecs_data Reference to the vector data for this layer.
      * @param layer_config Layer configuration (max_nbr_size and reserved_nbr_size).
+     * @param edges_builder_config Edge builder configuration.
      */
     FlatGraph(
         const vector_array_t& vecs_data,
-        layer_config_t layer_config
+        layer_config_t layer_config,
+        edges_builder_config_t edges_builder_config
     ) :
         _num_vertices(vecs_data.get_num_vecs()),
         _layer_config(layer_config),
+        _edges_builder_config(edges_builder_config),
         _vecs_data(vecs_data)
     {
         _nbrs_arr.resize(_num_vertices);
@@ -80,6 +79,16 @@ public:
     }
 
     __attribute__((always_inline))
+    auto edges_builder_config() const -> const edges_builder_config_t& {
+        return _edges_builder_config;
+    }
+
+    __attribute__((always_inline))
+    auto edges_builder_config() -> edges_builder_config_t& {
+        return _edges_builder_config;
+    }
+
+    __attribute__((always_inline))
     auto get_nbrs_arr() -> std::vector<nbr_arr_t>& {
         return _nbrs_arr;
     }
@@ -104,137 +113,15 @@ public:
         return _vecs_data;
     }
 
-    /**
-     * @brief Snapshot flat graph to a binary file.
-     * @param file_path Target file path.
-     */
-    auto snapshot(const std::string& file_path) const -> void {
-        static_assert(
-            std::is_trivially_copyable_v<vertex_id_t> && std::is_trivially_copyable_v<distance_t>,
-            "vertex_id_t and distance_t must be trivially copyable for binary snapshot."
-        );
-
-        std::ofstream ofs(file_path, std::ios::binary | std::ios::trunc);
-        if (!ofs.is_open()) {
-            logger.error(fmt::format("Failed to open file for snapshotting flat graph: {}", file_path));
-        }
-
-        const uint32_t magic = k_file_magic;
-        const uint32_t version = k_file_version;
-        const vertex_num_t num_vertices = _num_vertices;
-        const vertex_num_t reserved_nbr_size = _layer_config.reserved_nbr_size();
-        const vertex_num_t max_nbr_size = _layer_config.max_nbr_size();
-
-        ofs.write(reinterpret_cast<const char*>(&magic), sizeof(magic));
-        ofs.write(reinterpret_cast<const char*>(&version), sizeof(version));
-        ofs.write(reinterpret_cast<const char*>(&num_vertices), sizeof(num_vertices));
-        ofs.write(reinterpret_cast<const char*>(&reserved_nbr_size), sizeof(reserved_nbr_size));
-        ofs.write(reinterpret_cast<const char*>(&max_nbr_size), sizeof(max_nbr_size));
-
-        // Write neighbor arrays
-        for (vertex_num_t i = 0; i < num_vertices; ++i) {
-            const auto& nbrs = _nbrs_arr[i];
-            const vertex_num_t nbr_count = static_cast<vertex_num_t>(nbrs.size());
-            ofs.write(reinterpret_cast<const char*>(&nbr_count), sizeof(nbr_count));
-
-            if (nbr_count > 0) {
-                ofs.write(
-                    reinterpret_cast<const char*>(nbrs.data()),
-                    static_cast<std::streamsize>(nbr_count * sizeof(nbr_t))
-                );
-            }
-        }
-
-        if (!ofs.good()) {
-            logger.error(fmt::format("Failed while writing flat graph to file: {}", file_path));
-        }
-    }
-
-    /**
-     * @brief Restore flat graph from a snapshot binary file.
-     * @param file_path Source file path.
-     * @param vecs_data Reference to the vector data that this graph should bind to.
-     * @return Loaded FlatGraph instance.
-     */
-    static auto restore(
-        const std::string& file_path,
-        const vector_array_t& vecs_data
-    ) -> FlatGraph<IndexTraitsT> {
-        static_assert(
-            std::is_trivially_copyable_v<vertex_id_t> && std::is_trivially_copyable_v<distance_t>,
-            "vertex_id_t and distance_t must be trivially copyable for binary loading."
-        );
-
-        std::ifstream ifs(file_path, std::ios::binary);
-        if (!ifs.is_open()) {
-            logger.error(fmt::format("Failed to open file for loading flat graph: {}", file_path));
-        }
-
-        uint32_t magic = 0;
-        uint32_t version = 0;
-        vertex_num_t num_vertices = 0;
-        vertex_num_t reserved_nbr_size = 0;
-        vertex_num_t max_nbr_size = 0;
-
-        ifs.read(reinterpret_cast<char*>(&magic), sizeof(magic));
-        ifs.read(reinterpret_cast<char*>(&version), sizeof(version));
-        ifs.read(reinterpret_cast<char*>(&num_vertices), sizeof(num_vertices));
-        ifs.read(reinterpret_cast<char*>(&reserved_nbr_size), sizeof(reserved_nbr_size));
-        ifs.read(reinterpret_cast<char*>(&max_nbr_size), sizeof(max_nbr_size));
-
-        if (!ifs.good()) {
-            logger.error(fmt::format("Failed to read flat graph header from file: {}", file_path));
-        }
-
-        if (magic != k_file_magic) {
-            logger.error(fmt::format("Invalid flat graph file magic: {}", file_path));
-        }
-
-        if (version != k_file_version) {
-            logger.error(fmt::format("Unsupported flat graph file version: {}", file_path));
-        }
-
-        layer_config_t layer_config(max_nbr_size, reserved_nbr_size);
-        FlatGraph<IndexTraitsT> flat_graph(vecs_data, layer_config);
-
-        // Check if the number of vertices matches
-        if (flat_graph._num_vertices != num_vertices) {
-            logger.error(fmt::format(
-                "Vertex count mismatch: vecs_data has {} vertices but file has {} vertices",
-                flat_graph._num_vertices, num_vertices
-            ));
-        }
-
-        // Read neighbor arrays
-        for (vertex_num_t i = 0; i < num_vertices; ++i) {
-            vertex_num_t nbr_count = 0;
-            ifs.read(reinterpret_cast<char*>(&nbr_count), sizeof(nbr_count));
-
-            if (nbr_count > 0) {
-                flat_graph._nbrs_arr[i].resize(nbr_count);
-                ifs.read(
-                    reinterpret_cast<char*>(flat_graph._nbrs_arr[i].data()),
-                    static_cast<std::streamsize>(nbr_count * sizeof(nbr_t))
-                );
-            }
-        }
-
-        if (!ifs.good()) {
-            logger.error(fmt::format("Failed to read flat graph data from file: {}", file_path));
-        }
-
-        return flat_graph;
-    }
-
 protected:
-    static constexpr uint32_t k_file_magic = 0x46474152;   // "FGRA"
-    static constexpr uint32_t k_file_version = 1;
-
     /** @brief Number of vertices in the graph. */
     vertex_num_t _num_vertices;
 
     /** @brief Layer configuration (max_nbr_size and reserved_nbr_size). */
     layer_config_t _layer_config;
+
+    /** @brief Edge builder configuration. */
+    edges_builder_config_t _edges_builder_config;
 
     /** @brief Array of neighbors for each vertex. */
     std::vector<nbr_arr_t> _nbrs_arr;

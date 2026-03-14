@@ -43,7 +43,9 @@
 #include <artea/cpu/containers/vertex_subset.hpp>
 #include <artea/cpu/containers/four_ary_heap.hpp>
 
-#include <artea/cpu/index/layer_config.hpp>
+#include <artea/cpu/index/configs/layer_config.hpp>
+#include <artea/cpu/index/configs/edges_builder_config.hpp>
+#include <artea/cpu/index/configs/vertices_builder_config.hpp>
 #include <artea/cpu/index/neighbor.hpp>
 #include <artea/cpu/index/flat_graph.hpp>
 #include <artea/cpu/index/flat_search_graph.hpp>
@@ -51,12 +53,14 @@
 #include <artea/cpu/index/hierarchical_graph.hpp>
 #include <artea/cpu/index/hierarchical_search_graph.hpp>
 #include <artea/cpu/index/hierarchical_vecs_manager.hpp>
+#include <artea/cpu/index/search_graph_converter.hpp>
+#include <artea/cpu/index/persistence/flat_graph_file_manager.hpp>
+#include <artea/cpu/index/persistence/hierarchical_graph_file_manager.hpp>
 
-#include <artea/cpu/graph_factory/descent_config.hpp>
 #include <artea/cpu/graph_factory/flat_graph_factory.hpp>
 #include <artea/cpu/graph_factory/conv_graph_factory.hpp>
-#include <artea/cpu/graph_factory/flat_search_graph_factory.hpp>
 #include <artea/cpu/graph_factory/hierarchical_vertices_builder.hpp>
+#include <artea/cpu/graph_factory/hierarchical_edges_builder.hpp>
 
 #include <artea/cpu/vertex_generator/vertex_generator.hpp>
 #include <artea/cpu/vertex_generator/lsh_table.hpp>

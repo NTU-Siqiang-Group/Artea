@@ -38,6 +38,8 @@ class HierarchicalVerticesBuilder {
     using vg_policy_t = typename GraphFactoryTraitsT::vg_policy_t;
     using centroid_computer_t = typename GraphFactoryTraitsT::centroid_computer_t;
     using bruteforce_router_t = typename GraphFactoryTraitsT::bruteforce_router_t;
+    using greedy_vertices_builder_config_t = typename GraphFactoryTraitsT::greedy_vertices_builder_config_t;
+    using random_vertices_builder_config_t = typename GraphFactoryTraitsT::random_vertices_builder_config_t;
 
     static constexpr vertex_num_t min_num_layer_vertex = GraphFactoryTraitsT::min_num_layer_vertex;
 
@@ -47,13 +49,7 @@ public:
     static auto construct(
         const dist_func_t& dist_func,
         hierarchical_graph_t& hierarchical_graph,
-        distance_t rnet_radius,
-        ratio_t beta_sq,
-        ratio_t coverage_ratio,
-        ratio_t confidence,
-        vertex_num_t max_result_size,
-        vertex_num_t sampling_batch_size,
-        bool is_shuffle
+        greedy_vertices_builder_config_t vertices_builder_config
     ) -> void requires (VGPolicy == vg_policy_t::rnet_selection) {
         // Get base_vecs from hierarchical_graph
         const auto& base_vecs = hierarchical_graph.get_base_vecs();
@@ -63,25 +59,29 @@ public:
         auto& inter_layer_links = hierarchical_graph.get_inter_layer_links();
 
         // Layer 0 is the base_vecs (full dataset), already in hier_vecs_manager by construction
-        // Start building from Layer 1 with radius = rnet_radius * beta_sq
+        // Start building from Layer 1 with radius = min_radius * beta_sq
 
         // Build upper layers iteratively
         layer_id_t current_layer_id = 0;
         const vector_array_t* current_layer_vecs = &base_vecs;
-        distance_t current_radius = rnet_radius * beta_sq;  // Layer 1 starts with min_radius * beta_sq
+        distance_t current_radius = vertices_builder_config.min_radius() * vertices_builder_config.beta_sq();  // Layer 1 starts with min_radius * beta_sq
 
         while (true) {
+            // Calculate max_result_size based on current layer size and ratio
+            vertex_num_t max_result_size = static_cast<vertex_num_t>(
+                current_layer_vecs->get_num_vecs() * vertices_builder_config.max_result_ratio()
+            );
+
             // Generate next layer from current layer with scaled radius
             vertex_subset_t next_layer_subset = _construct_hier_vertex_lb_greedy(
                 *current_layer_vecs,
                 dist_func,
                 current_radius,
-                beta_sq,
-                coverage_ratio,
-                confidence,
+                vertices_builder_config.coverage_ratio(),
+                vertices_builder_config.confidence(),
                 max_result_size,
-                sampling_batch_size,
-                is_shuffle
+                vertices_builder_config.sampling_batch_size(),
+                vertices_builder_config.is_shuffle()
             );
 
             // Update layer_id for the new layer
@@ -98,7 +98,7 @@ public:
 
             // Update for next iteration
             current_layer_vecs = &hier_vecs_manager.get_layer_vecs(current_layer_id);
-            current_radius *= beta_sq;  // Scale radius for next layer
+            current_radius *= vertices_builder_config.beta_sq();  // Scale radius for next layer
         }
 
         // Set entry point: find the vertex closest to the centroid in the top layer
@@ -111,7 +111,7 @@ public:
     static auto construct(
         const dist_func_t& dist_func,
         hierarchical_graph_t& hierarchical_graph,
-        ratio_t result_ratio
+        random_vertices_builder_config_t vertices_builder_config
     ) -> void requires (VGPolicy == vg_policy_t::random_selection) {
         // Get base_vecs from hierarchical_graph
         const auto& base_vecs = hierarchical_graph.get_base_vecs();
@@ -129,7 +129,7 @@ public:
         while (true) {
             // Calculate result size based on current layer size and ratio
             vertex_num_t current_result_size = static_cast<vertex_num_t>(
-                current_layer_vecs->get_num_vecs() * result_ratio
+                current_layer_vecs->get_num_vecs() * vertices_builder_config.random_result_ratio()
             );
 
             // Generate next layer from current layer
@@ -165,7 +165,6 @@ private:
         const vector_array_t& layer_vecs,
         const dist_func_t& dist_func,
         const distance_t rnet_radius,
-        const ratio_t beta_sq,
         const ratio_t coverage_ratio,
         const ratio_t confidence,
         const vertex_num_t max_result_size,

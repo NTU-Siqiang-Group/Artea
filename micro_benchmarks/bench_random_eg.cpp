@@ -33,12 +33,14 @@ using vector_array_t = typename computer_traits_t::vector_array_t;
 using vector_dataset_t = typename computer_traits_t::vector_dataset_t;
 using flat_graph_t = typename index_traits_t::flat_graph_t;
 using layer_config_t = typename index_traits_t::layer_config_t;
+using edges_builder_config_t = typename index_traits_t::edges_builder_config_t;
 using random_eg_t = typename edge_generator_traits_t::random_eg_t;
 
 struct BenchConfig {
     std::string config_path;
     std::string dataset_name;
     layer_config_t layer_config{32, 32};
+    edges_builder_config_t edges_builder_config{1.0, 0.0, 4, 14};
     int64_t iterations;
 };
 
@@ -93,7 +95,8 @@ static void BM_RandomEG(benchmark::State& state) {
         // Create a new flat_graph (included in timing)
         flat_graph_t flat_graph(
             base_vecs,
-            g_config.layer_config
+            g_config.layer_config,
+            g_config.edges_builder_config
         );
 
         // Perform the random edge generation
