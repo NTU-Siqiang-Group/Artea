@@ -29,7 +29,6 @@
 
 #include <artea/cpu/router/candidate_queue_concept.hpp>
 #include <artea/cpu/router/visited_table_concept.hpp>
-#include <artea/cpu/router/monolayer_graph_router.hpp>
 
 namespace artea {
 namespace cpu {
@@ -59,8 +58,6 @@ class HierarchicalGraphRouter :
     using flat_search_graph_t = typename RouterTraitsT::flat_search_graph_t;
     using hierarchical_search_graph_t = typename RouterTraitsT::hierarchical_search_graph_t;
     using inter_layer_links_t = typename RouterTraitsT::inter_layer_links_t;
-    using random_seq_nr_t = typename RouterTraitsT::random_seq_nr_t;
-    using monolayer_router_t = MonolayerGraphRouter<RouterTraitsT, CandidateQueueImpl, VisitedTableImpl>;
     using base_class_t = typename RouterTraitsT::template vector_router_t<HierarchicalGraphRouter<RouterTraitsT, CandidateQueueImpl, VisitedTableImpl>>;
 
     static constexpr vertex_num_t min_num_layer_vertex = RouterTraitsT::min_num_layer_vertex;
@@ -85,31 +82,10 @@ public:
                 bl_candidate_queue_size, topk
             ));
         }
-
-        // Create monolayer routers for each layer
-        const layer_num_t num_layers = hierarchical_search_graph.get_num_layers();
-        _layer_routers.reserve(num_layers);
-
-        for (layer_id_t layer_id = 0; layer_id < num_layers; ++layer_id) {
-            const auto& layer_graph = hierarchical_search_graph.get_layer_graph(layer_id);
-            const vertex_num_t queue_size = (layer_id == 0) ? bl_candidate_queue_size : ul_candidate_queue_size;
-
-            _layer_routers.emplace_back(std::make_unique<monolayer_router_t>(
-                vecs_data,
-                dist_func,
-                layer_graph,
-                topk,
-                queue_size
-            ));
-        }
     }
 
     auto initialize_impl() -> void {
         _visited_table_pool.warmup();
-        // Initialize all layer routers
-        for (auto& router : _layer_routers) {
-            router->initialize_impl(true);  // with_entry_point = true
-        }
     }
 
     /**
@@ -166,13 +142,17 @@ private:
         // Initialize candidate queue with entry point
         vertex_id_t entry_point = _hierarchical_search_graph.get_entry_point();
         candidate_queue_t candidate_queue(_ul_candidate_queue_size);
-        const distance_t entry_dist = this->_dist_func(query_vec, this->_vecs_data.get(entry_point));
+
+        // Get the top layer vectors for distance computation
+        const auto& top_layer_vecs = _hierarchical_search_graph.get_hier_vecs_manager().get_layer_vecs(top_layer_id);
+        const distance_t entry_dist = this->_dist_func(query_vec, top_layer_vecs.get(entry_point));
         candidate_queue.try_push(entry_point, entry_dist);
+        visited_table.set(entry_point);
 
         // Search from top layer down to layer 1 (not including bottom layer 0)
         for (layer_id_t layer_id = top_layer_id; layer_id > 0; --layer_id) {
-            // Use monolayer router to search current layer with seeded candidates
-            auto layer_results = _search_layer_with_seeds(
+            // Search current layer
+            _beam_search_layer(
                 query_vec,
                 visited_table,
                 candidate_queue,
@@ -180,77 +160,103 @@ private:
             );
 
             // Convert results to next layer using inter-layer links
-            _convert_to_next_layer(candidate_queue, layer_results, layer_id);
+            _convert_to_next_layer(candidate_queue, layer_id);
             visited_table.clear();
         }
 
-        // Bottom layer search: use seeded initialization from upper layer results
-        auto final_results = _search_layer_with_seeds(
+        // Bottom layer search with larger queue size
+        candidate_queue_t bottom_queue(_bl_candidate_queue_size);
+
+        // Transfer candidates from upper layer queue to bottom queue
+        auto upper_results = candidate_queue.extract_results(candidate_queue.get_result_size());
+        for (const auto& [vid, dist] : upper_results) {
+            bottom_queue.try_push(vid, dist);
+            visited_table.set(vid);
+        }
+
+        // Search bottom layer
+        _beam_search_layer(
             query_vec,
             visited_table,
-            candidate_queue,
+            bottom_queue,
             0
         );
 
-        return final_results;
+        // Extract top-k results
+        return bottom_queue.extract_result_ids(this->_topk);
     }
 
     /**
-     * @brief Search a single layer using seeded candidate queue.
+     * @brief Perform beam search on a single layer.
      * @param query_vec Pointer to the query vector data.
      * @param visited_table Reference to the visited table.
-     * @param seed_queue Candidate queue with seed entries.
+     * @param candidate_queue Reference to the candidate queue (modified in-place).
      * @param layer_id Current layer ID.
-     * @return Vector of top-k vertex IDs.
      */
-    auto _search_layer_with_seeds(
+    auto _beam_search_layer(
         const vec_ele_t* query_vec,
         visited_table_t& visited_table,
-        candidate_queue_t& seed_queue,
+        candidate_queue_t& candidate_queue,
         const layer_id_t layer_id
-    ) const -> std::vector<vertex_id_t> {
-        const auto& layer_router = _layer_routers[layer_id];
+    ) const -> void {
+        const auto& layer_graph = _hierarchical_search_graph.get_layer_graph(layer_id);
+        // Get the layer-specific vectors for distance computation
+        const auto& layer_vecs = _hierarchical_search_graph.get_hier_vecs_manager().get_layer_vecs(layer_id);
 
-        // Extract seed entries from queue
-        auto seed_results = seed_queue.extract_results(seed_queue.get_result_size());
+        // Beam search loop
+        while (!candidate_queue.empty()) {
+            // Termination check
+            if (candidate_queue.should_terminate()) { break; }
 
-        // Use first seed as entry point for monolayer search
-        if (seed_results.empty()) {
-            logger.error("Empty seed queue for layer search");
-            return std::vector<vertex_id_t>();
+            // Get the best unexplored candidate
+            auto [current_id, current_dist] = candidate_queue.pop_best_unexplored();
+
+            // Check for invalid entry
+            if (current_id == RouterTraitsT::invalid_vertex_id) { break; }
+
+            // Explore neighbors of current vertex
+            const auto& neighbors = layer_graph.fetch_nbrs(current_id);
+
+            for (const auto& nbr_id : neighbors) {
+                // Skip invalid neighbors
+                if (nbr_id == RouterTraitsT::invalid_vertex_id) { continue; }
+
+                // Skip already visited neighbors
+                if (visited_table.test(nbr_id)) { continue; }
+
+                // Mark as visited
+                visited_table.set(nbr_id);
+
+                // Compute distance to neighbor using layer-specific vectors
+                const distance_t nbr_dist = this->_dist_func(query_vec, layer_vecs.get(nbr_id));
+
+                // Try to add neighbor to candidate queue
+                candidate_queue.try_push(nbr_id, nbr_dist);
+            }
         }
-
-        vertex_id_t entry_point = seed_results[0].first;
-        return layer_router->query_impl(query_vec, entry_point);
     }
 
     /**
      * @brief Convert candidate queue from current layer to next layer using inter-layer links.
      * @param candidate_queue Reference to the candidate queue (modified in-place).
-     * @param current_results Current layer search results.
      * @param current_layer_id Current layer ID.
      */
     auto _convert_to_next_layer(
         candidate_queue_t& candidate_queue,
-        const std::vector<vertex_id_t>& current_results,
         const layer_id_t current_layer_id
     ) const -> void {
         const auto& inter_layer_links = _hierarchical_search_graph.get_inter_layer_links();
 
-        // Convert current layer vertex IDs to next layer vertex IDs
-        std::vector<typename RouterTraitsT::candidate_entry_t> next_layer_entries;
-        next_layer_entries.reserve(current_results.size());
+        // Extract current results with distances
+        auto current_results = candidate_queue.extract_results(candidate_queue.get_result_size());
 
-        for (const vertex_id_t vid : current_results) {
-            vertex_id_t next_layer_vid = inter_layer_links.get_linked_vertex(current_layer_id, vid);
-            // Distance will be recomputed in next layer, use placeholder
-            next_layer_entries.push_back(
-                RouterTraitsT::candidate_entry_t::make_entry(next_layer_vid, 0.0f)
-            );
+        // Clear and rebuild with next layer vertex IDs
+        candidate_queue.clear();
+
+        for (const auto& [current_vid, dist] : current_results) {
+            const vertex_id_t next_vid = inter_layer_links.get_linked_vertex(current_layer_id, current_vid);
+            candidate_queue.try_push(next_vid, dist);
         }
-
-        // Reinitialize candidate queue with next layer vertices
-        candidate_queue.initialize(next_layer_entries);
     }
 
     /** @brief Reference to the hierarchical search graph. */
@@ -264,9 +270,6 @@ private:
 
     /** @brief Pool of thread-local visited bitmaps. */
     mutable visited_table_pool_t _visited_table_pool;
-
-    /** @brief Monolayer routers for each layer. */
-    std::vector<std::unique_ptr<monolayer_router_t>> _layer_routers;
 
 };  // class HierarchicalGraphRouter
 

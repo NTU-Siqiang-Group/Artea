@@ -116,7 +116,7 @@ public:
 
     /**
      * @brief Construct a StdCandidateQueue with a fixed capacity.
-     * @param capacity Maximum number of top candidates to maintain (similar to ef_construction in hnswlib).
+     * @param capacity Maximum number of top candidates to maintain (similar to ef_search in hnswlib).
      */
     explicit StdCandidateQueue(std::size_t capacity)
         : _capacity(capacity), _lower_bound(max_distance) {

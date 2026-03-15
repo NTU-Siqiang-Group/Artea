@@ -32,6 +32,9 @@ template <typename RouterTraitsT> class BruteforceRouter;
 template <typename RouterTraitsT, CandidateQueue CandidateQueueImpl, VisitedTable VisitedTableImpl>
     requires CandidateQueue<CandidateQueueImpl> && VisitedTable<VisitedTableImpl>
 class MonolayerGraphRouter;
+template <typename RouterTraitsT, CandidateQueue CandidateQueueImpl, VisitedTable VisitedTableImpl>
+    requires CandidateQueue<CandidateQueueImpl> && VisitedTable<VisitedTableImpl>
+class HierarchicalGraphRouter;
 template <typename RouterTraitsT> struct CandidateEntry;
 template <typename RouterTraitsT> struct CandidateEntryComparator;
 template <typename RouterTraitsT> struct StatefulCandidateEntry;
@@ -97,6 +100,10 @@ struct RouterTraits : virtual public ComputerTraitsT, virtual public IndexTraits
     /** @brief Type for monolayer graph router. */
     template <CandidateQueue CandidateQueueImpl = std_candidate_queue_t, VisitedTable VisitedTableImpl = typename router_traits_t::thread_local_bitmap_t>
     using monolayer_graph_router_t = MonolayerGraphRouter<router_traits_t, CandidateQueueImpl, VisitedTableImpl>;
+
+    /** @brief Type for hierarchical graph router. */
+    template <CandidateQueue CandidateQueueImpl = std_candidate_queue_t, VisitedTable VisitedTableImpl = typename router_traits_t::thread_local_bitmap_t>
+    using hierarchical_graph_router_t = HierarchicalGraphRouter<router_traits_t, CandidateQueueImpl, VisitedTableImpl>;
 
     /** @brief Indicates whether to enable intra-query parallelism. */
     static constexpr bool intra_query_parallel = IntraQueryParallel;

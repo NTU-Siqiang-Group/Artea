@@ -60,6 +60,10 @@ struct TestConfig {
     EdgesBuilderConfigParams bottom_edges_config;
     EdgesBuilderConfigParams upper_edges_config;
 
+    uint32_t topk;
+    uint32_t ul_candidate_queue_size;
+    uint32_t bl_candidate_queue_size;
+
     bool verbose;
 } g_config;
 
@@ -75,8 +79,13 @@ struct TestResults {
     double vertices_construction_time_ms = 0.0;
     double edges_construction_time_ms = 0.0;
     double total_construction_time_ms = 0.0;
+    double query_time_ms = 0.0;
+    double avg_query_time_us = 0.0;
+    double throughput_qps = 0.0;
+    float recall = 0.0f;
     uint32_t num_layers = 0;
     uint32_t total_base_vecs = 0;
+    uint32_t num_queries = 0;
     std::vector<LayerMetrics> layer_metrics;
 };
 
@@ -355,10 +364,82 @@ TEST_F(ArteaGraphConstructTest, VerifyGraphConnectivity) {
     logger.info("Graph connectivity verification passed");
 }
 
+TEST_F(ArteaGraphConstructTest, QueryRecall) {
+    auto& provider = DataProvider::instance();
+    auto& dataset = provider.get_dataset();
+    auto& dist_func = provider.get_dist_func();
+    auto& hierarchical_graph = provider.get_hierarchical_graph();
+    const auto& groundtruth = dataset.get_gt_vecs();
+
+    const auto& base_vecs = dataset.get_base_vecs();
+    const auto& query_vecs = dataset.get_query_vecs();
+    g_results.num_queries = query_vecs.get_num_vecs();
+
+    logger.info("Testing hierarchical graph router query recall...");
+
+    // Convert hierarchical_graph to hierarchical_search_graph
+    logger.info("Converting to hierarchical search graph...");
+    auto start_time = std::chrono::high_resolution_clock::now();
+
+    auto hierarchical_search_graph = search_graph_converter_t::from_hierarchical_graph(
+        hierarchical_graph,
+        g_config.bottom_layer_config.max_nbr_size,
+        g_config.upper_layer_config.max_nbr_size
+    );
+
+    auto end_time = std::chrono::high_resolution_clock::now();
+    auto duration = std::chrono::duration_cast<std::chrono::microseconds>(end_time - start_time);
+    double conversion_time_ms = duration.count() / 1000.0;
+    logger.info(fmt::format("Conversion time: {:.2f} ms", conversion_time_ms));
+
+    // Create hierarchical router
+    hierarchical_graph_router_t router(
+        base_vecs,
+        dist_func,
+        hierarchical_search_graph,
+        g_config.topk,
+        g_config.ul_candidate_queue_size,
+        g_config.bl_candidate_queue_size
+    );
+    router.initialize();
+
+    // Query all vectors
+    logger.info(fmt::format("Querying {} vectors...", query_vecs.get_num_vecs()));
+    start_time = std::chrono::high_resolution_clock::now();
+
+    idlist_array_t results = router.batch_query(query_vecs);
+
+    end_time = std::chrono::high_resolution_clock::now();
+    duration = std::chrono::duration_cast<std::chrono::microseconds>(end_time - start_time);
+    g_results.query_time_ms = duration.count() / 1000.0;
+    g_results.avg_query_time_us = static_cast<double>(duration.count()) / query_vecs.get_num_vecs();
+    g_results.throughput_qps = query_vecs.get_num_vecs() * 1000000.0 / duration.count();
+
+    logger.info(fmt::format("Query time: {:.2f} ms", g_results.query_time_ms));
+    logger.info(fmt::format("Avg query time: {:.2f} us", g_results.avg_query_time_us));
+    logger.info(fmt::format("Throughput: {:.2f} QPS", g_results.throughput_qps));
+
+    // Compute recall
+    recall_estimator_t recall_estimator(dist_func);
+    auto recall_metrics = recall_estimator.calculate_recall_at_k(
+        results,
+        groundtruth,
+        query_vecs,
+        base_vecs
+    );
+    g_results.recall = recall_metrics.soft_recall;
+
+    logger.info(fmt::format("Recall@{}: {:.4f} (soft: {:.4f})",
+        g_config.topk, recall_metrics.strict_recall, recall_metrics.soft_recall));
+
+    // Expect reasonable recall (at least 50%)
+    EXPECT_GE(g_results.recall, 0.5f) << "Recall should be at least 50%";
+}
+
 int main(int argc, char** argv) {
     ::testing::InitGoogleTest(&argc, argv);
 
-    argparse::ArgumentParser program("test_artea_graph_factory");
+    argparse::ArgumentParser program("test_artea_graph");
     program.add_argument("-c", "--config").default_value(std::string("./configs/datasets.json"));
     program.add_argument("-d", "--dataset").default_value(std::string("sift-1m"));
 
@@ -390,6 +471,11 @@ int main(int argc, char** argv) {
     program.add_argument("--ul-shifted-coeffs").default_value(0.0f).scan<'g', float>();
     program.add_argument("--ul-num-outer-iters").default_value(4u).scan<'u', uint32_t>();
     program.add_argument("--ul-num-inner-iters").default_value(14u).scan<'u', uint32_t>();
+
+    // Router parameters
+    program.add_argument("-k", "--topk").default_value(20u).scan<'u', uint32_t>();
+    program.add_argument("--ul-candidate-queue-size").default_value(8u).scan<'u', uint32_t>();
+    program.add_argument("--bl-candidate-queue-size").default_value(50u).scan<'u', uint32_t>();
 
     program.add_argument("-v", "--verbose").default_value(false).implicit_value(true);
 
@@ -428,6 +514,10 @@ int main(int argc, char** argv) {
     g_config.upper_edges_config.num_outer_iters = program.get<uint32_t>("--ul-num-outer-iters");
     g_config.upper_edges_config.num_inner_iters = program.get<uint32_t>("--ul-num-inner-iters");
 
+    g_config.topk = program.get<uint32_t>("--topk");
+    g_config.ul_candidate_queue_size = program.get<uint32_t>("--ul-candidate-queue-size");
+    g_config.bl_candidate_queue_size = program.get<uint32_t>("--bl-candidate-queue-size");
+
     g_config.verbose = program.get<bool>("--verbose");
 
     std::cout << "\n=== Test Configuration ===" << std::endl;
@@ -455,6 +545,10 @@ int main(int argc, char** argv) {
     std::cout << "Upper edges shifted coeffs: " << g_config.upper_edges_config.shifted_coeffs << std::endl;
     std::cout << "Upper edges num outer iters: " << g_config.upper_edges_config.num_outer_iters << std::endl;
     std::cout << "Upper edges num inner iters: " << g_config.upper_edges_config.num_inner_iters << std::endl;
+    std::cout << "\n--- Router Configuration ---" << std::endl;
+    std::cout << "Top-k: " << g_config.topk << std::endl;
+    std::cout << "Upper layer candidate queue size: " << g_config.ul_candidate_queue_size << std::endl;
+    std::cout << "Bottom layer candidate queue size: " << g_config.bl_candidate_queue_size << std::endl;
     std::cout << "Verbose: " << (g_config.verbose ? "true" : "false") << std::endl;
     std::cout << "==========================\n" << std::endl;
 
@@ -464,7 +558,7 @@ int main(int argc, char** argv) {
 
     // Print summary
     std::cout << "\n" << std::string(100, '=') << std::endl;
-    std::cout << "                        ARTEA GRAPH CONSTRUCTION SUMMARY" << std::endl;
+    std::cout << "                        ARTEA HIERARCHICAL GRAPH TEST SUMMARY" << std::endl;
     std::cout << std::string(100, '=') << std::endl;
 
     std::cout << "\n=== Construction Timing ===" << std::endl;
@@ -490,6 +584,13 @@ int main(int argc, char** argv) {
                 metrics.layer_ratio) << std::endl;
         }
     }
+
+    std::cout << "\n=== Query Performance ===" << std::endl;
+    std::cout << fmt::format("  Num Queries:            {}", g_results.num_queries) << std::endl;
+    std::cout << fmt::format("  Total Query Time:       {:.2f} ms", g_results.query_time_ms) << std::endl;
+    std::cout << fmt::format("  Avg Query Time:         {:.2f} us", g_results.avg_query_time_us) << std::endl;
+    std::cout << fmt::format("  Throughput:             {:.2f} QPS", g_results.throughput_qps) << std::endl;
+    std::cout << fmt::format("  Recall@{}:              {:.4f}", g_config.topk, g_results.recall) << std::endl;
 
     std::cout << std::string(100, '=') << std::endl;
 

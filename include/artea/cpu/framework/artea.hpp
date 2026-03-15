@@ -81,6 +81,7 @@
 #include <artea/cpu/router/vector_router.hpp>
 #include <artea/cpu/router/bruteforce_router.hpp>
 #include <artea/cpu/router/monolayer_graph_router.hpp>
+#include <artea/cpu/router/hierarchical_graph_router.hpp>
 #include <artea/cpu/router/data_structures/candidate_entry.hpp>
 #include <artea/cpu/router/data_structures/stateful_candidate_entry.hpp>
 #include <artea/cpu/router/candidate_queue_concept.hpp>

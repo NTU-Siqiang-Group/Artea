@@ -43,6 +43,8 @@ template <
 class MonolayerGraphRouter :
     public RouterTraitsT::template vector_router_t<MonolayerGraphRouter<RouterTraitsT, CandidateQueueImpl, VisitedTableImpl>>
 {
+    // Friend declaration for HierarchicalGraphRouter to access internal methods
+    friend typename RouterTraitsT::template hierarchical_graph_router_t<CandidateQueueImpl, VisitedTableImpl>;
 
     using candidate_queue_t = CandidateQueueImpl;
     using visited_table_t = VisitedTableImpl;

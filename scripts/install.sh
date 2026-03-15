@@ -42,9 +42,13 @@ while [[ $# -gt 0 ]]; do
             BUILD_TYPE="Release"
             shift
             ;;
+        --profile)
+            BUILD_TYPE="RelWithDebInfo"
+            shift
+            ;;
         *)
             log_error "Unknown option: $1"
-            echo "Usage: $0 [--debug|--release]"
+            echo "Usage: $0 [--debug|--release|--profile]"
             exit 1
             ;;
     esac

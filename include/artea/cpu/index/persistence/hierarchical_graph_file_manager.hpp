@@ -249,7 +249,9 @@ public:
                     meta["vertices_builder_config"]["random_result_ratio"].get<typename random_vertices_builder_config_t::ratio_t>()
                 );
             }
+            // This will throw and never return
             logger.error(fmt::format("Unknown vertices_builder_config type: {}", vertices_builder_config_type));
+            throw std::runtime_error("Unreachable");  // Suppress compiler warning
         }();
 
         // Create hierarchical graph

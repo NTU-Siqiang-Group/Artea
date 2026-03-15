@@ -89,6 +89,12 @@ struct alignas(8) CandidateEntry {   // 8 bytes
         return entry_id;
     }
 
+    /** @brief Set the entry ID. */
+    __attribute__((always_inline))
+    auto set_id(const vertex_id_t vid) -> void {
+        entry_id = vid;
+    }
+
     /** @brief Get the distance to the candidate entry. */
     __attribute__((always_inline))
     auto get_distance() const -> distance_t {

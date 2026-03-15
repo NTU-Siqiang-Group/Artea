@@ -149,8 +149,16 @@ template <VisitedTable VisitedTableImpl = typename router_traits_t::version_tag_
 using visited_table_pool_t = typename router_traits_t::template visited_table_pool_t<VisitedTableImpl>;
 using vector_router_t = typename router_traits_t::template vector_router_t<BruteforceRouter<router_traits_t>>;
 using bruteforce_router_t = BruteforceRouter<router_traits_t>;
+
+// Template alias for routers with customizable queue and visited table
 template <CandidateQueue CandidateQueueImpl = std_candidate_queue_t, VisitedTable VisitedTableImpl = thread_local_bitmap_t>
-using monolayer_graph_router_t = typename router_traits_t::template monolayer_graph_router_t<CandidateQueueImpl, VisitedTableImpl>;
+using monolayer_graph_router_template_t = typename router_traits_t::template monolayer_graph_router_t<CandidateQueueImpl, VisitedTableImpl>;
+template <CandidateQueue CandidateQueueImpl = std_candidate_queue_t, VisitedTable VisitedTableImpl = thread_local_bitmap_t>
+using hierarchical_graph_router_template_t = typename router_traits_t::template hierarchical_graph_router_t<CandidateQueueImpl, VisitedTableImpl>;
+
+// Concrete router types with default template parameters (for convenience)
+using monolayer_graph_router_t = monolayer_graph_router_template_t<>;
+using hierarchical_graph_router_t = hierarchical_graph_router_template_t<>;
 
 // Utility types
 using index_register_util_t = IndexRegisterUtil;
