@@ -61,8 +61,7 @@ struct TestConfig {
     EdgesBuilderConfigParams upper_edges_config;
 
     uint32_t topk;
-    uint32_t ul_candidate_queue_size;
-    uint32_t bl_candidate_queue_size;
+    uint32_t candidate_queue_size;
     uint32_t bl_extracted_nbr_size;
     uint32_t ul_extracted_nbr_size;
 
@@ -392,8 +391,7 @@ TEST_F(ArteaGraphConstructTest, QueryRecall) {
         dist_func,
         hierarchical_search_graph,
         g_config.topk,
-        g_config.ul_candidate_queue_size,
-        g_config.bl_candidate_queue_size
+        g_config.candidate_queue_size
     );
     router.initialize();
 
@@ -468,8 +466,8 @@ int main(int argc, char** argv) {
 
     // Router parameters
     program.add_argument("-k", "--topk").default_value(20u).scan<'u', uint32_t>();
-    program.add_argument("--ul-candidate-queue-size").default_value(8u).scan<'u', uint32_t>();
-    program.add_argument("--bl-candidate-queue-size").default_value(50u).scan<'u', uint32_t>();
+    program.add_argument("--candidate-queue-size").default_value(50u).scan<'u', uint32_t>()
+        .help("Bottom layer candidate queue size");
     program.add_argument("--bl-extracted-nbr-size").scan<'u', uint32_t>()
         .help("Bottom layer extracted neighbor size (defaults to bl-max-nbr-size)");
     program.add_argument("--ul-extracted-nbr-size").scan<'u', uint32_t>()
@@ -513,8 +511,7 @@ int main(int argc, char** argv) {
     g_config.upper_edges_config.num_inner_iters = program.get<uint32_t>("--ul-num-inner-iters");
 
     g_config.topk = program.get<uint32_t>("--topk");
-    g_config.ul_candidate_queue_size = program.get<uint32_t>("--ul-candidate-queue-size");
-    g_config.bl_candidate_queue_size = program.get<uint32_t>("--bl-candidate-queue-size");
+    g_config.candidate_queue_size = program.get<uint32_t>("--candidate-queue-size");
 
     g_config.bl_extracted_nbr_size = program.is_used("--bl-extracted-nbr-size")
         ? program.get<uint32_t>("--bl-extracted-nbr-size")
@@ -553,8 +550,7 @@ int main(int argc, char** argv) {
     std::cout << "Upper edges num inner iters: " << g_config.upper_edges_config.num_inner_iters << std::endl;
     std::cout << "\n--- Router Configuration ---" << std::endl;
     std::cout << "Top-k: " << g_config.topk << std::endl;
-    std::cout << "Upper layer candidate queue size: " << g_config.ul_candidate_queue_size << std::endl;
-    std::cout << "Bottom layer candidate queue size: " << g_config.bl_candidate_queue_size << std::endl;
+    std::cout << "Candidate queue size: " << g_config.candidate_queue_size << std::endl;
     std::cout << "Bottom layer extracted nbr size: " << g_config.bl_extracted_nbr_size << std::endl;
     std::cout << "Upper layer extracted nbr size: " << g_config.ul_extracted_nbr_size << std::endl;
     std::cout << "Verbose: " << (g_config.verbose ? "true" : "false") << std::endl;

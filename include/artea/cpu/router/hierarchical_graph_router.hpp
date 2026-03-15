@@ -68,18 +68,16 @@ public:
         const dist_func_t& dist_func,
         const hierarchical_search_graph_t& hierarchical_search_graph,
         const uint32_t topk,
-        const vertex_num_t ul_candidate_queue_size,
-        const vertex_num_t bl_candidate_queue_size
+        const vertex_num_t candidate_queue_size
     ) : base_class_t(vecs_data, dist_func, topk),
         _hierarchical_search_graph(hierarchical_search_graph),
-        _ul_candidate_queue_size(ul_candidate_queue_size),
-        _bl_candidate_queue_size(bl_candidate_queue_size),
+        _candidate_queue_size(candidate_queue_size),
         _visited_table_pool(vecs_data.get_num_vecs())
     {
-        if (bl_candidate_queue_size < topk) {
+        if (candidate_queue_size < topk) {
             logger.error(fmt::format(
-                "bl_candidate_queue_size ({}) must be >= topk ({})",
-                bl_candidate_queue_size, topk
+                "candidate_queue_size ({}) must be >= topk ({})",
+                candidate_queue_size, topk
             ));
         }
     }
@@ -139,51 +137,76 @@ private:
         const layer_num_t num_layers = _hierarchical_search_graph.get_num_layers();
         const layer_id_t top_layer_id = num_layers - 1;
 
-        // Initialize candidate queue with entry point
-        vertex_id_t entry_point = _hierarchical_search_graph.get_entry_point();
-        candidate_queue_t candidate_queue(_ul_candidate_queue_size);
-
-        // Get the top layer vectors for distance computation
+        // Initialize with entry point
+        vertex_id_t current_nearest = _hierarchical_search_graph.get_entry_point();
         const auto& top_layer_vecs = _hierarchical_search_graph.get_hier_vecs_manager().get_layer_vecs(top_layer_id);
-        const distance_t entry_dist = this->_dist_func(query_vec, top_layer_vecs.get(entry_point));
-        candidate_queue.try_push(entry_point, entry_dist);
-        visited_table.set(entry_point);
+        distance_t current_dist = this->_dist_func(query_vec, top_layer_vecs.get(current_nearest));
 
-        // Search from top layer down to layer 1 (not including bottom layer 0)
+        // Greedy search from top layer down to layer 1 (not including bottom layer 0)
         for (layer_id_t layer_id = top_layer_id; layer_id > 0; --layer_id) {
-            // Search current layer
-            _beam_search_layer(
+            // Greedy search on current layer
+            _greedy_search_layer(
                 query_vec,
-                visited_table,
-                candidate_queue,
+                current_nearest,
+                current_dist,
                 layer_id
             );
 
-            // Convert results to next layer using inter-layer links
-            _convert_to_next_layer(candidate_queue, layer_id);
-            visited_table.clear();
+            // Convert to next layer using inter-layer links
+            const auto& inter_layer_links = _hierarchical_search_graph.get_inter_layer_links();
+            current_nearest = inter_layer_links.get_linked_vertex(layer_id, current_nearest);
         }
 
-        // Bottom layer search with larger queue size
-        candidate_queue_t bottom_queue(_bl_candidate_queue_size);
-
-        // Transfer candidates from upper layer queue to bottom queue
-        auto upper_results = candidate_queue.extract_results(candidate_queue.get_result_size());
-        for (const auto& [vid, dist] : upper_results) {
-            bottom_queue.try_push(vid, dist);
-            visited_table.set(vid);
-        }
+        // Bottom layer search with candidate queue
+        candidate_queue_t candidate_queue(_candidate_queue_size);
+        candidate_queue.try_push(current_nearest, current_dist);
+        visited_table.set(current_nearest);
 
         // Search bottom layer
         _beam_search_layer(
             query_vec,
             visited_table,
-            bottom_queue,
+            candidate_queue,
             0
         );
 
         // Extract top-k results
-        return bottom_queue.extract_result_ids(this->_topk);
+        return candidate_queue.extract_result_ids(this->_topk);
+    }
+
+    /**
+     * @brief Perform greedy search on a single upper layer.
+     * @param query_vec Pointer to the query vector data.
+     * @param current_nearest Reference to current nearest vertex (modified in-place).
+     * @param current_dist Reference to current nearest distance (modified in-place).
+     * @param layer_id Current layer ID.
+     */
+    auto _greedy_search_layer(
+        const vec_ele_t* query_vec,
+        vertex_id_t& current_nearest,
+        distance_t& current_dist,
+        const layer_id_t layer_id
+    ) const -> void {
+        const auto& layer_graph = _hierarchical_search_graph.get_layer_graph(layer_id);
+        const auto& layer_vecs = _hierarchical_search_graph.get_hier_vecs_manager().get_layer_vecs(layer_id);
+
+        bool improved = true;
+        while (improved) {
+            improved = false;
+            const auto& neighbors = layer_graph.fetch_nbrs(current_nearest);
+
+            for (const auto& nbr_id : neighbors) {
+                if (nbr_id == RouterTraitsT::invalid_vertex_id) { continue; }
+
+                const distance_t nbr_dist = this->_dist_func(query_vec, layer_vecs.get(nbr_id));
+
+                if (nbr_dist < current_dist) {
+                    current_nearest = nbr_id;
+                    current_dist = nbr_dist;
+                    improved = true;
+                }
+            }
+        }
     }
 
     /**
@@ -262,11 +285,8 @@ private:
     /** @brief Reference to the hierarchical search graph. */
     const hierarchical_search_graph_t& _hierarchical_search_graph;
 
-    /** @brief Candidate queue size for upper layers. */
-    vertex_num_t _ul_candidate_queue_size;
-
     /** @brief Candidate queue size for bottom layer. */
-    vertex_num_t _bl_candidate_queue_size;
+    vertex_num_t _candidate_queue_size;
 
     /** @brief Pool of thread-local visited bitmaps. */
     mutable visited_table_pool_t _visited_table_pool;

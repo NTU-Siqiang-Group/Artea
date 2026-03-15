@@ -122,12 +122,7 @@ int main(int argc, char** argv) {
         .scan<'u', uint32_t>()
         .help("Top-k results to return");
 
-    program.add_argument("--ul-candidate-queue-size")
-        .default_value(8u)
-        .scan<'u', uint32_t>()
-        .help("Upper layer candidate queue size");
-
-    program.add_argument("--bl-candidate-queue-size")
+    program.add_argument("--candidate-queue-size")
         .default_value(50u)
         .scan<'u', uint32_t>()
         .help("Bottom layer candidate queue size");
@@ -151,8 +146,7 @@ int main(int argc, char** argv) {
     std::string config_path = program.get<std::string>("--config");
     std::string dataset_name = program.get<std::string>("--dataset");
     uint32_t topk = program.get<uint32_t>("--topk");
-    uint32_t ul_candidate_queue_size = program.get<uint32_t>("--ul-candidate-queue-size");
-    uint32_t bl_candidate_queue_size = program.get<uint32_t>("--bl-candidate-queue-size");
+    uint32_t candidate_queue_size = program.get<uint32_t>("--candidate-queue-size");
 
     // Determine index path
     std::string index_path;
@@ -212,13 +206,12 @@ int main(int argc, char** argv) {
         dist_func,
         hierarchical_search_graph,
         topk,
-        ul_candidate_queue_size,
-        bl_candidate_queue_size
+        candidate_queue_size
     );
     router.initialize();
 
-    logger.info(fmt::format("Router initialized: topk={}, ul_queue={}, bl_queue={}",
-        topk, ul_candidate_queue_size, bl_candidate_queue_size));
+    logger.info(fmt::format("Router initialized: topk={}, candidate_queue_size={}",
+        topk, candidate_queue_size));
 
     // Warm-up run
     logger.info("Running warm-up...");
@@ -256,8 +249,7 @@ int main(int argc, char** argv) {
     std::cout << fmt::format("Dataset: {}", dataset_name) << std::endl;
     std::cout << fmt::format("Index: {}", index_path) << std::endl;
     std::cout << fmt::format("Top-k: {}", topk) << std::endl;
-    std::cout << fmt::format("Upper layer candidate queue size: {}", ul_candidate_queue_size) << std::endl;
-    std::cout << fmt::format("Bottom layer candidate queue size: {}", bl_candidate_queue_size) << std::endl;
+    std::cout << fmt::format("Candidate queue size: {}", candidate_queue_size) << std::endl;
     std::cout << "\n--- Individual Runs ---" << std::endl;
     for (size_t i = 0; i < results.size(); ++i) {
         std::cout << fmt::format("Run {}: Throughput = {:.2f} QPS, Recall@{} = {:.4f}",
