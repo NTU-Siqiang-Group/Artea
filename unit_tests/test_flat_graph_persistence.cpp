@@ -34,11 +34,6 @@ struct TestConfig {
     std::string temp_dir;
     layer_config_t flat_layer_config{16, 32};
     edges_builder_config_t flat_edges_builder_config{1.0f, 0.0f, 4, 14};
-    layer_config_t hier_bottom_layer_config{16, 32};
-    layer_config_t hier_upper_layer_config{8, 16};
-    edges_builder_config_t hier_bottom_edges_builder_config{1.0f, 0.0f, 4, 14};
-    edges_builder_config_t hier_upper_edges_builder_config{1.0f, 0.0f, 4, 14};
-    greedy_vertices_builder_config_t greedy_vb_config{0.1f, 4.0f, 0.95f, 0.95f, 0.2f, 1024, false};
     bool verbose;
 } g_config;
 
@@ -82,7 +77,7 @@ private:
     std::unique_ptr<dist_func_t> dist_func_;
 };
 
-class IndexPersistenceTest : public ::testing::Test {
+class FlatGraphPersistenceTest : public ::testing::Test {
 protected:
     void SetUp() override {
         auto& provider = DataProvider::instance();
@@ -94,7 +89,7 @@ protected:
     dist_func_t* dist_func_;
 };
 
-TEST_F(IndexPersistenceTest, FlatGraphSnapshotRestore) {
+TEST_F(FlatGraphPersistenceTest, FlatGraphSnapshotRestore) {
     const auto& base_vecs = dataset_->get_base_vecs();
 
     logger.info("Building flat graph for persistence test...");
@@ -178,143 +173,10 @@ TEST_F(IndexPersistenceTest, FlatGraphSnapshotRestore) {
     logger.info("Flat graph snapshot/restore test passed!");
 }
 
-TEST_F(IndexPersistenceTest, HierarchicalGraphSnapshotRestore) {
-    const auto& base_vecs = dataset_->get_base_vecs();
-
-    logger.info("Building hierarchical graph for persistence test...");
-
-    // Build original hierarchical graph
-    hierarchical_graph_t original_graph(
-        base_vecs,
-        g_config.hier_bottom_layer_config,
-        g_config.hier_upper_layer_config,
-        g_config.hier_bottom_edges_builder_config,
-        g_config.hier_upper_edges_builder_config,
-        g_config.greedy_vb_config
-    );
-
-    // Build vertices
-    hierarchical_vertices_builder_t::construct<VGPolicyT::rnet_selection>(
-        *dist_func_,
-        original_graph,
-        g_config.greedy_vb_config
-    );
-
-    // Build edges
-    hierarchical_edges_builder_t::construct<EGPolicyT::conv_graph_descent>(
-        *dist_func_,
-        original_graph
-    );
-
-    logger.info(fmt::format("Original hierarchical graph built with {} layers",
-        original_graph.get_num_layers()));
-
-    // Snapshot the graph
-    std::string snapshot_dir = g_config.temp_dir + "/hierarchical_graph_snapshot";
-    nlohmann::json metadata;
-    metadata["test_name"] = "HierarchicalGraphSnapshotRestore";
-    metadata["dataset"] = g_config.dataset_name;
-
-    logger.info(fmt::format("Snapshotting hierarchical graph to {}", snapshot_dir));
-    hierarchical_graph_file_manager_t::snapshot(original_graph, snapshot_dir, metadata);
-
-    // Restore the graph
-    logger.info("Restoring hierarchical graph from snapshot...");
-
-    hierarchical_graph_t restored_graph = hierarchical_graph_file_manager_t::restore(
-        snapshot_dir,
-        base_vecs
-    );
-
-    // Verify consistency
-    logger.info("Verifying hierarchical graph consistency...");
-
-    // Check basic properties
-    EXPECT_EQ(original_graph.get_num_vertices(), restored_graph.get_num_vertices())
-        << "Number of vertices should match";
-
-    EXPECT_EQ(original_graph.get_num_layers(), restored_graph.get_num_layers())
-        << "Number of layers should match";
-
-    EXPECT_EQ(original_graph.get_entry_point(), restored_graph.get_entry_point())
-        << "Entry point should match";
-
-    // Check layer configs
-    EXPECT_EQ(original_graph.bottom_layer_config().max_nbr_size(),
-              restored_graph.bottom_layer_config().max_nbr_size())
-        << "Bottom layer max neighbor size should match";
-
-    EXPECT_EQ(original_graph.upper_layer_config().max_nbr_size(),
-              restored_graph.upper_layer_config().max_nbr_size())
-        << "Upper layer max neighbor size should match";
-
-    // Check vertices builder config
-    const auto& original_vb_config = original_graph.vertices_builder_config();
-    const auto& restored_vb_config = restored_graph.vertices_builder_config();
-
-    EXPECT_TRUE(std::holds_alternative<greedy_vertices_builder_config_t>(original_vb_config))
-        << "Original should have greedy config";
-    EXPECT_TRUE(std::holds_alternative<greedy_vertices_builder_config_t>(restored_vb_config))
-        << "Restored should have greedy config";
-
-    if (std::holds_alternative<greedy_vertices_builder_config_t>(original_vb_config) &&
-        std::holds_alternative<greedy_vertices_builder_config_t>(restored_vb_config)) {
-        const auto& orig_greedy = std::get<greedy_vertices_builder_config_t>(original_vb_config);
-        const auto& rest_greedy = std::get<greedy_vertices_builder_config_t>(restored_vb_config);
-
-        EXPECT_FLOAT_EQ(orig_greedy.min_radius(), rest_greedy.min_radius())
-            << "Min radius should match";
-        EXPECT_FLOAT_EQ(orig_greedy.beta_sq(), rest_greedy.beta_sq())
-            << "Beta squared should match";
-        EXPECT_FLOAT_EQ(orig_greedy.coverage_ratio(), rest_greedy.coverage_ratio())
-            << "Coverage ratio should match";
-        EXPECT_FLOAT_EQ(orig_greedy.confidence(), rest_greedy.confidence())
-            << "Confidence should match";
-        EXPECT_FLOAT_EQ(orig_greedy.max_result_ratio(), rest_greedy.max_result_ratio())
-            << "Max result ratio should match";
-        EXPECT_EQ(orig_greedy.sampling_batch_size(), rest_greedy.sampling_batch_size())
-            << "Sampling batch size should match";
-        EXPECT_EQ(orig_greedy.is_shuffle(), rest_greedy.is_shuffle())
-            << "Shuffle flag should match";
-    }
-
-    // Check each layer
-    const auto& original_layers = original_graph.get_layer_graphs();
-    const auto& restored_layers = restored_graph.get_layer_graphs();
-
-    for (uint32_t layer_id = 0; layer_id < original_graph.get_num_layers(); ++layer_id) {
-        logger.info(fmt::format("Checking layer {}...", layer_id));
-
-        const auto& orig_layer = *original_layers[layer_id];
-        const auto& rest_layer = *restored_layers[layer_id];
-
-        EXPECT_EQ(orig_layer.get_num_vertices(), rest_layer.get_num_vertices())
-            << fmt::format("Layer {} vertex count should match", layer_id);
-
-        // Check neighbor arrays for this layer
-        const auto& orig_nbrs = orig_layer.get_nbrs_arr();
-        const auto& rest_nbrs = rest_layer.get_nbrs_arr();
-
-        for (uint32_t i = 0; i < orig_nbrs.size(); ++i) {
-            EXPECT_EQ(orig_nbrs[i].size(), rest_nbrs[i].size())
-                << fmt::format("Layer {} vertex {} neighbor count should match", layer_id, i);
-
-            for (uint32_t j = 0; j < orig_nbrs[i].size(); ++j) {
-                EXPECT_EQ(orig_nbrs[i][j].get_id(), rest_nbrs[i][j].get_id())
-                    << fmt::format("Layer {} vertex {} neighbor {} ID should match", layer_id, i, j);
-                EXPECT_FLOAT_EQ(orig_nbrs[i][j].get_distance(), rest_nbrs[i][j].get_distance())
-                    << fmt::format("Layer {} vertex {} neighbor {} distance should match", layer_id, i, j);
-            }
-        }
-    }
-
-    logger.info("Hierarchical graph snapshot/restore test passed!");
-}
-
 int main(int argc, char** argv) {
     ::testing::InitGoogleTest(&argc, argv);
 
-    argparse::ArgumentParser program("test_index_persistence");
+    argparse::ArgumentParser program("test_flat_graph_persistence");
     program.add_argument("-c", "--config").default_value(std::string("./configs/datasets.json"));
     program.add_argument("-d", "--dataset").default_value(std::string("sift-1m"));
     program.add_argument("--temp-dir").default_value(std::string("./graph_index_repo/artea"));
