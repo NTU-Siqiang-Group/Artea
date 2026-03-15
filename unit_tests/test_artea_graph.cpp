@@ -63,6 +63,8 @@ struct TestConfig {
     uint32_t topk;
     uint32_t ul_candidate_queue_size;
     uint32_t bl_candidate_queue_size;
+    uint32_t bl_extracted_nbr_size;
+    uint32_t ul_extracted_nbr_size;
 
     bool verbose;
 } g_config;
@@ -375,8 +377,8 @@ TEST_F(ArteaGraphConstructTest, QueryRecall) {
 
     auto hierarchical_search_graph = search_graph_converter_t::from_hierarchical_graph(
         hierarchical_graph,
-        g_config.bottom_layer_config.max_nbr_size,
-        g_config.upper_layer_config.max_nbr_size
+        g_config.bl_extracted_nbr_size,
+        g_config.ul_extracted_nbr_size
     );
 
     auto end_time = std::chrono::high_resolution_clock::now();
@@ -468,6 +470,10 @@ int main(int argc, char** argv) {
     program.add_argument("-k", "--topk").default_value(20u).scan<'u', uint32_t>();
     program.add_argument("--ul-candidate-queue-size").default_value(8u).scan<'u', uint32_t>();
     program.add_argument("--bl-candidate-queue-size").default_value(50u).scan<'u', uint32_t>();
+    program.add_argument("--bl-extracted-nbr-size").scan<'u', uint32_t>()
+        .help("Bottom layer extracted neighbor size (defaults to bl-max-nbr-size)");
+    program.add_argument("--ul-extracted-nbr-size").scan<'u', uint32_t>()
+        .help("Upper layer extracted neighbor size (defaults to ul-max-nbr-size)");
 
     program.add_argument("-v", "--verbose").default_value(false).implicit_value(true);
 
@@ -510,6 +516,14 @@ int main(int argc, char** argv) {
     g_config.ul_candidate_queue_size = program.get<uint32_t>("--ul-candidate-queue-size");
     g_config.bl_candidate_queue_size = program.get<uint32_t>("--bl-candidate-queue-size");
 
+    g_config.bl_extracted_nbr_size = program.is_used("--bl-extracted-nbr-size")
+        ? program.get<uint32_t>("--bl-extracted-nbr-size")
+        : g_config.bottom_layer_config.max_nbr_size;
+
+    g_config.ul_extracted_nbr_size = program.is_used("--ul-extracted-nbr-size")
+        ? program.get<uint32_t>("--ul-extracted-nbr-size")
+        : g_config.upper_layer_config.max_nbr_size;
+
     g_config.verbose = program.get<bool>("--verbose");
 
     std::cout << "\n=== Test Configuration ===" << std::endl;
@@ -541,6 +555,8 @@ int main(int argc, char** argv) {
     std::cout << "Top-k: " << g_config.topk << std::endl;
     std::cout << "Upper layer candidate queue size: " << g_config.ul_candidate_queue_size << std::endl;
     std::cout << "Bottom layer candidate queue size: " << g_config.bl_candidate_queue_size << std::endl;
+    std::cout << "Bottom layer extracted nbr size: " << g_config.bl_extracted_nbr_size << std::endl;
+    std::cout << "Upper layer extracted nbr size: " << g_config.ul_extracted_nbr_size << std::endl;
     std::cout << "Verbose: " << (g_config.verbose ? "true" : "false") << std::endl;
     std::cout << "==========================\n" << std::endl;
 

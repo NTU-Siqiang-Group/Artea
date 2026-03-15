@@ -132,6 +132,14 @@ int main(int argc, char** argv) {
         .scan<'u', uint32_t>()
         .help("Bottom layer candidate queue size");
 
+    program.add_argument("--bl-extracted-nbr-size")
+        .scan<'u', uint32_t>()
+        .help("Bottom layer extracted neighbor size (defaults to graph's max_nbr_size)");
+
+    program.add_argument("--ul-extracted-nbr-size")
+        .scan<'u', uint32_t>()
+        .help("Upper layer extracted neighbor size (defaults to graph's max_nbr_size)");
+
     try {
         program.parse_args(argc, argv);
     } catch (const std::exception& err) {
@@ -178,12 +186,24 @@ int main(int argc, char** argv) {
 
     logger.info(fmt::format("Loaded hierarchical graph with {} layers", hierarchical_graph.get_num_layers()));
 
+    // Determine extracted neighbor sizes
+    vertex_num_t bl_extracted_nbr_size = program.is_used("--bl-extracted-nbr-size")
+        ? program.get<uint32_t>("--bl-extracted-nbr-size")
+        : hierarchical_graph.bottom_layer_config().max_nbr_size();
+
+    vertex_num_t ul_extracted_nbr_size = program.is_used("--ul-extracted-nbr-size")
+        ? program.get<uint32_t>("--ul-extracted-nbr-size")
+        : hierarchical_graph.upper_layer_config().max_nbr_size();
+
+    logger.info(fmt::format("Using extracted neighbor sizes: bottom={}, upper={}",
+        bl_extracted_nbr_size, ul_extracted_nbr_size));
+
     // Convert to hierarchical search graph
     logger.info("Converting to hierarchical search graph...");
     auto hierarchical_search_graph = search_graph_converter_t::from_hierarchical_graph(
         hierarchical_graph,
-        hierarchical_graph.bottom_layer_config().max_nbr_size(),
-        hierarchical_graph.upper_layer_config().max_nbr_size()
+        bl_extracted_nbr_size,
+        ul_extracted_nbr_size
     );
 
     // Create router

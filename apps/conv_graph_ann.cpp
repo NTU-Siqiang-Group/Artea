@@ -127,6 +127,10 @@ int main(int argc, char** argv) {
         .scan<'u', uint32_t>()
         .help("Candidate queue size for search");
 
+    program.add_argument("--extracted-nbr-size")
+        .scan<'u', uint32_t>()
+        .help("Extracted neighbor size (defaults to graph's max_nbr_size)");
+
     try {
         program.parse_args(argc, argv);
     } catch (const std::exception& err) {
@@ -166,9 +170,15 @@ int main(int argc, char** argv) {
     logger.info(fmt::format("Loading flat graph from {}...", index_path));
     flat_graph_t flat_graph = flat_graph_file_manager_t::restore(index_path, base_vecs);
 
+    // Determine extracted neighbor size
+    vertex_num_t extracted_nbr_size = program.is_used("--extracted-nbr-size")
+        ? program.get<uint32_t>("--extracted-nbr-size")
+        : flat_graph.layer_config().max_nbr_size();
+
+    logger.info(fmt::format("Using extracted neighbor size: {}", extracted_nbr_size));
+
     // Convert to flat search graph
     logger.info("Converting to flat search graph...");
-    uint32_t extracted_nbr_size = flat_graph.layer_config().max_nbr_size();
     flat_search_graph_t flat_search_graph = search_graph_converter_t::from_flat_graph(
         flat_graph,
         extracted_nbr_size

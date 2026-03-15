@@ -58,11 +58,6 @@ int main(int argc, char** argv) {
         .default_value(std::string("graph_index_repo/artea/"))
         .help("Output directory for the graph file");
 
-    program.add_argument("--extracted-nbr-size")
-        .default_value(uint32_t(32))
-        .scan<'u', uint32_t>()
-        .help("Fixed number of neighbors for flat search graph (extracted from flat graph)");
-
     // Graph construction parameters
     program.add_argument("--max-nbr-size")
         .default_value(uint32_t(64))
@@ -106,7 +101,6 @@ int main(int argc, char** argv) {
     std::string config_path = program.get<std::string>("--config");
     std::string dataset_name = program.get<std::string>("--dataset");
     std::string output_dir = program.get<std::string>("--output");
-    vertex_num_t extracted_nbr_size = program.get<uint32_t>("--extracted-nbr-size");
 
     GraphParams params;
     params.max_nbr_size = program.get<uint32_t>("--max-nbr-size");
@@ -120,7 +114,6 @@ int main(int argc, char** argv) {
     logger.info(fmt::format("  Dataset: {}", dataset_name));
     logger.info(fmt::format("  Config path: {}", config_path));
     logger.info(fmt::format("  Output directory: {}", output_dir));
-    logger.info(fmt::format("  Extracted neighbors: {}", extracted_nbr_size));
     logger.info(fmt::format("  Max neighbors: {}", params.max_nbr_size));
     logger.info(fmt::format("  Reserved neighbors: {}", params.reserved_nbr_size));
     logger.info(fmt::format("  Scale coefficient: {:.2f}", params.scale_coeffs));
@@ -189,7 +182,6 @@ int main(int argc, char** argv) {
         {"num_outer_iters", params.num_outer_iters},
         {"num_inner_iters", params.num_inner_iters}
     };
-    metadata["extracted_nbr_size"] = extracted_nbr_size;
 
     // Get current timestamp in ISO format
     std::ostringstream timestamp_stream;
@@ -207,7 +199,6 @@ int main(int argc, char** argv) {
     nlohmann::json index_params;
     index_params["dataset"] = dataset_name;
     index_params["max_nbr_size"] = params.max_nbr_size;
-    index_params["extracted_nbr_size"] = extracted_nbr_size;
     index_params["scale_coeffs"] = params.scale_coeffs;
     index_params["shifted_coeffs"] = params.shifted_coeffs;
     index_params["num_outer_iters"] = params.num_outer_iters;
