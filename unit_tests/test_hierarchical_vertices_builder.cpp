@@ -105,21 +105,15 @@ public:
     vector_dataset_t& get_dataset() { return *dataset_; }
     dist_func_t& get_dist_func() { return *dist_func_; }
     hierarchical_graph_t& get_hierarchical_graph() { return *hierarchical_graph_; }
-    hierarchical_vecs_manager_t& get_hier_vecs_manager() { return *hier_vecs_manager_; }
 
     void set_hierarchical_graph(std::unique_ptr<hierarchical_graph_t> graph) {
         hierarchical_graph_ = std::move(graph);
-    }
-
-    void set_hier_vecs_manager(std::unique_ptr<hierarchical_vecs_manager_t> manager) {
-        hier_vecs_manager_ = std::move(manager);
     }
 
 private:
     DataProvider() = default;
     std::unique_ptr<vector_dataset_t> dataset_;
     std::unique_ptr<dist_func_t> dist_func_;
-    std::unique_ptr<hierarchical_vecs_manager_t> hier_vecs_manager_;
     std::unique_ptr<hierarchical_graph_t> hierarchical_graph_;
 };
 
@@ -134,10 +128,6 @@ protected:
 
         // Create dummy layer configs (not used in vertex generation, only for graph construction)
         layer_config_t dummy_config(32, 32);
-
-        // Create hierarchical vecs manager and store it in provider
-        auto hier_vecs_manager = std::make_unique<hierarchical_vecs_manager_t>(base_vecs);
-        provider.set_hier_vecs_manager(std::move(hier_vecs_manager));
 
         // Create hierarchical graph with reference to the stored manager
         edges_builder_config_t dummy_edges_config(1.0, 0.0, 4, 14);
@@ -154,7 +144,7 @@ protected:
                 g_config.rnet_config.is_shuffle
             );
             auto hierarchical_graph = std::make_unique<hierarchical_graph_t>(
-                provider.get_hier_vecs_manager(),
+                base_vecs,
                 dummy_config,
                 dummy_config,
                 dummy_edges_config,
@@ -185,7 +175,7 @@ protected:
         } else {
             random_vertices_builder_config_t vertices_builder_config(g_config.random_config.result_ratio);
             auto hierarchical_graph = std::make_unique<hierarchical_graph_t>(
-                provider.get_hier_vecs_manager(),
+                base_vecs,
                 dummy_config,
                 dummy_config,
                 dummy_edges_config,

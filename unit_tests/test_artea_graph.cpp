@@ -117,13 +117,11 @@ public:
     vector_dataset_t& get_dataset() { return *dataset_; }
     dist_func_t& get_dist_func() { return *dist_func_; }
     hierarchical_graph_t& get_hierarchical_graph() { return *hierarchical_graph_; }
-    hierarchical_vecs_manager_t& get_hier_vecs_manager() { return *hier_vecs_manager_; }
+    hierarchical_vecs_manager_t& get_hier_vecs_manager() { return hierarchical_graph_->get_hier_vecs_manager(); }
 
     void set_hierarchical_graph(
-        std::unique_ptr<hierarchical_vecs_manager_t> vecs_manager,
         std::unique_ptr<hierarchical_graph_t> graph
     ) {
-        hier_vecs_manager_ = std::move(vecs_manager);
         hierarchical_graph_ = std::move(graph);
     }
 
@@ -135,7 +133,6 @@ private:
     DataProvider() = default;
     std::unique_ptr<vector_dataset_t> dataset_;
     std::unique_ptr<dist_func_t> dist_func_;
-    std::unique_ptr<hierarchical_vecs_manager_t> hier_vecs_manager_;
     std::unique_ptr<hierarchical_graph_t> hierarchical_graph_;
 };
 
@@ -190,20 +187,15 @@ protected:
             g_config.vertices_config.is_shuffle
         );
 
-        // Create hierarchical vecs manager
-        auto hier_vecs_manager = std::make_unique<hierarchical_vecs_manager_t>(base_vecs);
-
         // Create hierarchical graph
         auto hierarchical_graph = std::make_unique<hierarchical_graph_t>(
-            *hier_vecs_manager,
+            base_vecs,
             bottom_layer_config,
             upper_layer_config,
             bottom_edges_config,
             upper_edges_config,
             vertices_builder_config
         );
-
-        // hier_vecs_manager is already referenced by hierarchical_graph, no need to transfer ownership
 
         // Step 1: Construct vertices
         logger.info("Step 1: Constructing hierarchical vertices...");
@@ -280,7 +272,7 @@ protected:
             }
         }
 
-        provider.set_hierarchical_graph(std::move(hier_vecs_manager), std::move(hierarchical_graph));
+        provider.set_hierarchical_graph(std::move(hierarchical_graph));
     }
 };
 

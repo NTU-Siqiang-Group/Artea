@@ -184,9 +184,8 @@ TEST_F(IndexPersistenceTest, HierarchicalGraphSnapshotRestore) {
     logger.info("Building hierarchical graph for persistence test...");
 
     // Build original hierarchical graph
-    hierarchical_vecs_manager_t original_hier_vecs_manager(base_vecs);
     hierarchical_graph_t original_graph(
-        original_hier_vecs_manager,
+        base_vecs,
         g_config.hier_bottom_layer_config,
         g_config.hier_upper_layer_config,
         g_config.hier_bottom_edges_builder_config,
@@ -221,11 +220,10 @@ TEST_F(IndexPersistenceTest, HierarchicalGraphSnapshotRestore) {
 
     // Restore the graph
     logger.info("Restoring hierarchical graph from snapshot...");
-    hierarchical_vecs_manager_t restored_hier_vecs_manager(base_vecs);
 
     hierarchical_graph_t restored_graph = hierarchical_graph_file_manager_t::restore(
         snapshot_dir,
-        restored_hier_vecs_manager
+        base_vecs
     );
 
     // Verify consistency

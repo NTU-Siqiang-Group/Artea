@@ -60,12 +60,11 @@ public:
         edges_builder_config_t upper_edges_builder_config,
         greedy_vertices_builder_config_t vertices_builder_config
     ) -> hierarchical_graph_t requires (VGPolicy == vg_policy_t::rnet_selection) {
-        hierarchical_vecs_manager_t hier_vecs_manager(base_vecs);
         dist_func_t dist_func(base_vecs.get_vec_dim());
 
         // Create hierarchical graph
         hierarchical_graph_t hierarchical_graph(
-            hier_vecs_manager,
+            base_vecs,
             bottom_layer_config,
             upper_layer_config,
             bottom_edges_builder_config,
@@ -97,12 +96,11 @@ public:
         edges_builder_config_t upper_edges_builder_config,
         random_vertices_builder_config_t vertices_builder_config
     ) -> hierarchical_graph_t requires (VGPolicy == vg_policy_t::random_selection) {
-        hierarchical_vecs_manager_t hier_vecs_manager(base_vecs);
         dist_func_t dist_func(base_vecs.get_vec_dim());
 
         // Create hierarchical graph
         hierarchical_graph_t hierarchical_graph(
-            hier_vecs_manager,
+            base_vecs,
             bottom_layer_config,
             upper_layer_config,
             bottom_edges_builder_config,

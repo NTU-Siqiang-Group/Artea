@@ -96,7 +96,7 @@ public:
     }
 
     /**
-     * @brief Add inter-layer links for a new layer.
+     * @brief Set inter-layer links for a specific layer.
      * @param layer_id The layer ID (must be >= 1)
      * @param links Container of vertex IDs pointing to the parent layer
      *
@@ -106,7 +106,7 @@ public:
      */
     template <typename ContainerT>
     __attribute__((always_inline))
-    auto add_layer_links(const layer_id_t layer_id, ContainerT&& links) -> void {
+    auto set_layer_links(const layer_id_t layer_id, ContainerT&& links) -> void {
         static_assert(std::is_same_v<typename std::decay_t<ContainerT>::value_type, vertex_id_t>,
                      "Container element type must match vertex_id_t");
         _links_arr.insert(_links_arr.end(),

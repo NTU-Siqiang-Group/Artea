@@ -52,6 +52,7 @@ class HierarchicalGraphFileManager {
     using greedy_vertices_builder_config_t = typename IndexTraitsT::greedy_vertices_builder_config_t;
     using random_vertices_builder_config_t = typename IndexTraitsT::random_vertices_builder_config_t;
     using vertices_builder_config_t = typename IndexTraitsT::vertices_builder_config_t;
+    using vector_array_t = typename IndexTraitsT::vector_array_t;
 
 public:
     /**
@@ -184,12 +185,12 @@ public:
     /**
      * @brief Restore hierarchical graph from a snapshot directory.
      * @param index_dir Source directory path.
-     * @param hier_vecs_manager Reference to the hierarchical vector manager.
+     * @param base_vecs Reference to the base layer vector data.
      * @return Loaded HierarchicalGraph instance.
      */
     static auto restore(
         const std::string& index_dir,
-        hierarchical_vecs_manager_t& hier_vecs_manager
+        const vector_array_t& base_vecs
     ) -> hierarchical_graph_t {
         // Read root metadata.json
         std::string metadata_path = index_dir + "/metadata.json";
@@ -254,9 +255,9 @@ public:
             throw std::runtime_error("Unreachable");  // Suppress compiler warning
         }();
 
-        // Create hierarchical graph
+        // Create hierarchical graph with base_vecs
         hierarchical_graph_t hier_graph(
-            hier_vecs_manager,
+            base_vecs,
             bottom_layer_config,
             upper_layer_config,
             bottom_edges_builder_config,
@@ -265,7 +266,6 @@ public:
         );
 
         const layer_num_t num_layers = meta["num_layers"].get<layer_num_t>();
-        hier_graph.resize(num_layers);
 
         // Read inter_layer_links.bin
         std::string inter_layer_links_path = index_dir + "/inter_layer_links.bin";
@@ -274,7 +274,11 @@ public:
             logger.error(fmt::format("Failed to open inter_layer_links file: {}", inter_layer_links_path));
         }
 
-        // Manually deserialize inter_layer_links
+        // Get references to hier_vecs_manager and inter_layer_links
+        auto& hier_vecs_manager = hier_graph.get_hier_vecs_manager();
+        auto& inter_layer_links = hier_graph.get_inter_layer_links();
+
+        // Reconstruct layers from inter_layer_links (Layer 1 to num_layers-1)
         for (layer_id_t layer_id = 1; layer_id < num_layers; ++layer_id) {
             vertex_num_t num_links;
             links_ifs.read(reinterpret_cast<char*>(&num_links), sizeof(vertex_num_t));
@@ -283,7 +287,13 @@ public:
             links_ifs.read(reinterpret_cast<char*>(layer_links.data()),
                           static_cast<std::streamsize>(num_links * sizeof(vertex_id_t)));
 
-            hier_graph.get_inter_layer_links().add_layer_links(layer_id, std::move(layer_links));
+            // Extract subset from parent layer
+            const auto& parent_layer_vecs = hier_vecs_manager.get_layer_vecs(layer_id - 1);
+            vector_array_t layer_vecs = parent_layer_vecs.extract_subset(layer_links);
+
+            // Append to hier_vecs_manager and inter_layer_links
+            inter_layer_links.bottom_up_append(std::move(layer_links));
+            hier_vecs_manager.bottom_up_append(std::move(layer_vecs));
         }
         links_ifs.close();
 
@@ -295,7 +305,7 @@ public:
             std::string layer_dir = index_dir + "/layers/layer_" + std::to_string(layer_id);
 
             // Get the appropriate vector data for this layer
-            const auto& layer_vecs = hier_vecs_manager.get_layer_vecs(layer_id);
+            const auto& layer_vecs = hier_graph.get_hier_vecs_manager().get_layer_vecs(layer_id);
 
             // Restore the flat graph using FlatGraphFileManager
             auto layer_graph = flat_graph_file_manager_t::restore(layer_dir, layer_vecs);

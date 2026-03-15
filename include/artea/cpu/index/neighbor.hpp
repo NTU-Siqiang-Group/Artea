@@ -168,6 +168,18 @@ public:
         distance = dist;
     }
 
+    /** @brief Equality operator for testing. */
+    __attribute__((always_inline))
+    constexpr bool operator==(const Neighbor& other) const noexcept {
+        return get_id() == other.get_id() && distance == other.distance;
+    }
+
+    /** @brief Inequality operator for testing. */
+    __attribute__((always_inline))
+    constexpr bool operator!=(const Neighbor& other) const noexcept {
+        return !(*this == other);
+    }
+
 };  // struct Neighbor
 
 // TO enable optimizations for POD types

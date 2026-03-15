@@ -63,7 +63,7 @@ class HierarchicalGraph {
 public:
     /**
      * @brief Construct a new Hierarchical Graph object.
-     * @param hier_vecs_manager Reference to the hierarchical vector manager.
+     * @param base_vecs Reference to the base layer vector data.
      * @param bottom_layer_config Configuration for bottom layer.
      * @param upper_layer_config Configuration for upper layers.
      * @param bottom_edges_builder_config Edge builder configuration for bottom layer.
@@ -71,19 +71,19 @@ public:
      * @param vertices_builder_config Configuration for vertices builder (greedy or random).
      */
     HierarchicalGraph(
-        hierarchical_vecs_manager_t& hier_vecs_manager,
+        const vector_array_t& base_vecs,
         layer_config_t bottom_layer_config,
         layer_config_t upper_layer_config,
         edges_builder_config_t bottom_edges_builder_config,
         edges_builder_config_t upper_edges_builder_config,
         vertices_builder_config_t vertices_builder_config
-    ) : _num_vertices(hier_vecs_manager.get_num_base_vecs()),
+    ) : _num_vertices(base_vecs.get_num_vecs()),
         _bottom_layer_config(bottom_layer_config),
         _upper_layer_config(upper_layer_config),
         _bottom_edges_builder_config(bottom_edges_builder_config),
         _upper_edges_builder_config(upper_edges_builder_config),
         _vertices_builder_config(vertices_builder_config),
-        _hier_vecs_manager(hier_vecs_manager),
+        _hier_vecs_manager(base_vecs),
         _inter_layer_links(inter_layer_links_t(_num_vertices))
     {
         // Resize layer graphs based on the number of layers in hier_vecs_manager
@@ -290,7 +290,7 @@ protected:
     vertices_builder_config_t _vertices_builder_config;
 
     /** @brief Hierarchical vector manager. */
-    hierarchical_vecs_manager_t& _hier_vecs_manager;
+    hierarchical_vecs_manager_t _hier_vecs_manager;
 
     /** @brief Flat graphs for all layers. layer_id 0 is the bottom layer at _layer_graphs[0]. */
     std::vector<std::unique_ptr<flat_graph_t>> _layer_graphs;
