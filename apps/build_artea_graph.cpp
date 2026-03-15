@@ -214,7 +214,7 @@ int main(int argc, char** argv) {
     nlohmann::json index_params;
     index_params["dataset"] = dataset_name;
     index_params["vb_min_radius"] = program.get<float>("--vb-min-radius");
-    index_params["vb_beta_sq"] = program.get<float>("--vb-beta-sq");
+    index_params["vb_beta_sq"] = std::round(program.get<float>("--vb-beta-sq") * 100.0f) / 100.0f;
     index_params["bl_max_nbr_size"] = program.get<uint32_t>("--bl-max-nbr-size");
     index_params["ul_max_nbr_size"] = program.get<uint32_t>("--ul-max-nbr-size");
 
