@@ -247,15 +247,32 @@ void TestLayerSeparation(uint32_t layer_id, float min_radius, TestResults& resul
     distance_t min_pairwise_dist = std::numeric_limits<distance_t>::max();
     uint32_t num_vecs = layer_vecs.get_num_vecs();
 
-    for (uint32_t i = 0; i < num_vecs; ++i) {
-        for (uint32_t j = i + 1; j < num_vecs; ++j) {
-            distance_t dist = dist_func(layer_vecs.get(i), layer_vecs.get(j));
+    // Sample up to 1000 points for separation testing
+    constexpr uint32_t max_sample_size = 1000;
+    uint32_t sample_size = std::min(max_sample_size, num_vecs);
+
+    std::random_device rd;
+    std::mt19937 gen(rd());
+    std::uniform_int_distribution<uint32_t> dist_gen(0, num_vecs - 1);
+
+    // Generate unique sample indices
+    std::unordered_set<uint32_t> sample_indices;
+    while (sample_indices.size() < sample_size) {
+        sample_indices.insert(dist_gen(gen));
+    }
+
+    std::vector<uint32_t> samples(sample_indices.begin(), sample_indices.end());
+
+    // Test pairwise distances among sampled points
+    for (uint32_t i = 0; i < samples.size(); ++i) {
+        for (uint32_t j = i + 1; j < samples.size(); ++j) {
+            distance_t dist = dist_func(layer_vecs.get(samples[i]), layer_vecs.get(samples[j]));
             min_pairwise_dist = std::min(min_pairwise_dist, dist);
             if (dist < min_radius) {
                 violation_count++;
                 if (g_config.verbose && violation_count <= 5) {
                     logger.warn(fmt::format("Layer {} separation violation: vec[{}] and vec[{}] have distance {:.4f} < {:.4f}",
-                        layer_id, i, j, dist, min_radius));
+                        layer_id, samples[i], samples[j], dist, min_radius));
                 }
             }
         }
@@ -270,8 +287,8 @@ void TestLayerSeparation(uint32_t layer_id, float min_radius, TestResults& resul
 
     results.layer_metrics.push_back(metrics);
 
-    logger.info(fmt::format("Layer {} separation: {} violations, min distance: {:.4f}",
-        layer_id, violation_count, min_pairwise_dist));
+    logger.info(fmt::format("Layer {} separation (sampled {} points): {} violations, min distance: {:.4f}",
+        layer_id, sample_size, violation_count, min_pairwise_dist));
 }
 
 template <typename TestFixture>

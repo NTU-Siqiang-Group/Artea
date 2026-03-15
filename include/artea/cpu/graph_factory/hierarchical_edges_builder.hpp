@@ -44,6 +44,9 @@ public:
         const auto& base_vecs = hierarchical_graph.get_base_vecs();
         const auto num_layers = hierarchical_graph.get_num_layers();
 
+        // Resize layer_graphs to match the number of layers after vertices construction
+        hierarchical_graph.resize(num_layers);
+
         conv_graph_factory_t conv_factory;
 
         // Construct bottom layer (layer_id = 0)
