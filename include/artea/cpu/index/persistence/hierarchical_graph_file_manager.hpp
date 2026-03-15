@@ -300,6 +300,9 @@ public:
         // Read entry_point from metadata
         hier_graph.set_entry_point(meta["entry_point"].get<vertex_id_t>());
 
+        // Resize layer_graphs to match the number of layers
+        hier_graph.resize(num_layers);
+
         // Load each layer
         for (layer_id_t layer_id = 0; layer_id < num_layers; ++layer_id) {
             std::string layer_dir = index_dir + "/layers/layer_" + std::to_string(layer_id);
