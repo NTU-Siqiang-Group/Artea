@@ -86,11 +86,7 @@ public:
         _hier_vecs_manager(base_vecs),
         _inter_layer_links(inter_layer_links_t(_num_vertices))
     {
-        // Resize layer graphs based on the number of layers in hier_vecs_manager
-        const auto num_layers = _hier_vecs_manager.get_num_layers();
-        if (num_layers > 0) {
-            _layer_graphs.resize(num_layers);
-        }
+        // Note: _layer_graphs will be resized in HierarchicalEdgesBuilder after vertices construction
     }
 
     // Copying is deleted
