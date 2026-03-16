@@ -92,7 +92,7 @@ struct IndexTraits : virtual public BaseTraitsT {
     using hierarchical_graph_file_manager_t = HierarchicalGraphFileManager<index_traits_t>;
 
     /** @brief Minimum number of vertices required for a layer to continue building upper layers. */
-    static constexpr uint32_t min_num_layer_vertex = 96;
+    static constexpr uint32_t min_num_layer_vertex = 64;
 
 };  // struct IndexTraits
 

@@ -170,6 +170,27 @@ int main(int argc, char** argv) {
     logger.info(fmt::format("Loading flat graph from {}...", index_path));
     flat_graph_t flat_graph = flat_graph_file_manager_t::restore(index_path, base_vecs);
 
+    // Print graph construction configuration
+    std::cout << "\n" << std::string(80, '=') << std::endl;
+    std::cout << "                    CONVERGENT GRAPH CONFIGURATION" << std::endl;
+    std::cout << std::string(80, '=') << std::endl;
+    std::cout << "\n--- Dataset ---" << std::endl;
+    std::cout << fmt::format("  Name:                   {}", dataset_name) << std::endl;
+    std::cout << fmt::format("  Base vectors:           {}", base_vecs.get_num_vecs()) << std::endl;
+    std::cout << fmt::format("  Query vectors:          {}", query_vecs.get_num_vecs()) << std::endl;
+    std::cout << fmt::format("  Vector dimension:       {}", base_vecs.get_vec_dim()) << std::endl;
+    std::cout << "\n--- Graph Construction Config ---" << std::endl;
+    std::cout << fmt::format("  Max nbr size:           {}", flat_graph.layer_config().max_nbr_size()) << std::endl;
+    std::cout << fmt::format("  Reserved nbr size:      {}", flat_graph.layer_config().reserved_nbr_size()) << std::endl;
+    std::cout << fmt::format("  Scale coeffs:           {}", flat_graph.edges_builder_config().scale_coeffs()) << std::endl;
+    std::cout << fmt::format("  Shifted coeffs:         {}", flat_graph.edges_builder_config().shifted_coeffs()) << std::endl;
+    std::cout << fmt::format("  Num outer iters:        {}", flat_graph.edges_builder_config().num_outer_iters()) << std::endl;
+    std::cout << fmt::format("  Num inner iters:        {}", flat_graph.edges_builder_config().num_inner_iters()) << std::endl;
+    std::cout << "\n--- Query Config ---" << std::endl;
+    std::cout << fmt::format("  Top-k:                  {}", topk) << std::endl;
+    std::cout << fmt::format("  Candidate queue size:   {}", candidate_queue_size) << std::endl;
+    std::cout << std::string(80, '=') << std::endl << std::endl;
+
     // Determine extracted neighbor size
     vertex_num_t extracted_nbr_size = program.is_used("--extracted-nbr-size")
         ? program.get<uint32_t>("--extracted-nbr-size")
@@ -196,11 +217,6 @@ int main(int argc, char** argv) {
 
     logger.info(fmt::format("Router initialized: topk={}, candidate_queue_size={}",
         topk, candidate_queue_size));
-
-    // Warm-up run
-    logger.info("Running warm-up...");
-    run_benchmark(router, query_vecs, groundtruth, base_vecs, dist_func, topk);
-    logger.info("Warm-up completed");
 
     // Run 3 benchmark iterations
     std::vector<BenchmarkResult> results;

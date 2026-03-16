@@ -35,7 +35,7 @@ using namespace artea::cpu::default_context;
 struct GraphParams {
     vertex_num_t max_nbr_size = 32;
     vertex_num_t reserved_nbr_size = 64;
-    ratio_t scale_coeffs = 1.10;
+    ratio_t scale_coeffs = 1.00;
     ratio_t shifted_coeffs = 0.00;
     iter_t num_outer_iters = 4;
     iter_t num_inner_iters = 14;
@@ -70,7 +70,7 @@ int main(int argc, char** argv) {
         .help("Reserved neighbor size for memory allocation");
 
     program.add_argument("--scale-coeffs")
-        .default_value(1.10)
+        .default_value(1.00)
         .scan<'g', double>()
         .help("Scale coefficient for triangle updater");
 

@@ -34,12 +34,12 @@ CMAKE_BIN="${CMAKE_BIN:-cmake}"
 # Parse command line arguments
 while [[ $# -gt 0 ]]; do
     case $1 in
-        --debug)
-            BUILD_TYPE="Debug"
-            shift
-            ;;
         --release)
             BUILD_TYPE="Release"
+            shift
+            ;;
+        --debug)
+            BUILD_TYPE="Debug"
             shift
             ;;
         --profile)
