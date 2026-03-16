@@ -55,16 +55,18 @@ int main(int argc, char** argv) {
     program.add_argument("--vb-confidence").default_value(0.99f).scan<'g', float>();
     program.add_argument("--vb-max-result-ratio").default_value(0.2f).scan<'g', float>();
     program.add_argument("--vb-sampling-batch-size").default_value(2048u).scan<'u', uint32_t>();
-    program.add_argument("--shuffle").default_value(false).implicit_value(true)
-        .help("Shuffle dataset before building graph");
+    program.add_argument("--shuffle-seed").scan<'u', uint32_t>()
+        .help("Shuffle seed (if not specified, uses random seed)");
 
     // Bottom layer config
     program.add_argument("--bl-max-nbr-size").default_value(32u).scan<'u', uint32_t>();
-    program.add_argument("--bl-reserved-nbr-size").default_value(48u).scan<'u', uint32_t>();
+    program.add_argument("--bl-reserved-nbr-size").scan<'u', uint32_t>()
+        .help("Bottom layer reserved neighbor size (defaults to bl-max-nbr-size * 1.5)");
 
     // Upper layer config
     program.add_argument("--ul-max-nbr-size").default_value(24u).scan<'u', uint32_t>();
-    program.add_argument("--ul-reserved-nbr-size").default_value(40u).scan<'u', uint32_t>();
+    program.add_argument("--ul-reserved-nbr-size").scan<'u', uint32_t>()
+        .help("Upper layer reserved neighbor size (defaults to ul-max-nbr-size * 1.5)");
 
     // Bottom edges builder config
     program.add_argument("--bl-scale-coeffs").default_value(1.0f).scan<'g', float>();
@@ -100,21 +102,26 @@ int main(int argc, char** argv) {
     logger.info(fmt::format("Dataset loaded: {} vectors, {} dims",
         base_vecs.get_num_vecs(), base_vecs.get_vec_dim()));
 
-    // Shuffle dataset if requested
-    if (program.get<bool>("--shuffle")) {
-        logger.info("Shuffling dataset...");
-        dataset.shuffle_in_place();
-    }
+    // Shuffle dataset (always enabled)
+    logger.info("Shuffling dataset...");
+    uint32_t shuffle_seed = program.is_used("--shuffle-seed")
+        ? program.get<uint32_t>("--shuffle-seed")
+        : std::random_device{}();
+    shuffle_seed = dataset.shuffle_in_place(shuffle_seed);
 
     // Create layer configs
-    layer_config_t bottom_layer_config(
-        program.get<uint32_t>("--bl-max-nbr-size"),
-        program.get<uint32_t>("--bl-reserved-nbr-size")
-    );
-    layer_config_t upper_layer_config(
-        program.get<uint32_t>("--ul-max-nbr-size"),
-        program.get<uint32_t>("--ul-reserved-nbr-size")
-    );
+    uint32_t bl_max_nbr_size = program.get<uint32_t>("--bl-max-nbr-size");
+    uint32_t bl_reserved_nbr_size = program.is_used("--bl-reserved-nbr-size")
+        ? program.get<uint32_t>("--bl-reserved-nbr-size")
+        : static_cast<uint32_t>(bl_max_nbr_size * 1.5);
+
+    uint32_t ul_max_nbr_size = program.get<uint32_t>("--ul-max-nbr-size");
+    uint32_t ul_reserved_nbr_size = program.is_used("--ul-reserved-nbr-size")
+        ? program.get<uint32_t>("--ul-reserved-nbr-size")
+        : static_cast<uint32_t>(ul_max_nbr_size * 1.5);
+
+    layer_config_t bottom_layer_config(bl_max_nbr_size, bl_reserved_nbr_size);
+    layer_config_t upper_layer_config(ul_max_nbr_size, ul_reserved_nbr_size);
 
     // Create edges builder configs
     edges_builder_config_t bottom_edges_config(
@@ -186,6 +193,13 @@ int main(int argc, char** argv) {
 
     logger.info(fmt::format("Edges construction completed in {:.2f} s", edges_duration.count() / 1000.0));
 
+    // Calculate and output index size
+    index_size_calculator_t index_size_calc;
+    auto index_size_info = index_size_calc.calculate_size(hierarchical_graph);
+
+    logger.info(fmt::format("Index size: {:.2f} MB ({} bytes)",
+        index_size_info.total_mb, index_size_info.total_bytes));
+
     // Generate directory name with timestamp
     auto now = std::chrono::system_clock::now();
     auto time_t_now = std::chrono::system_clock::to_time_t(now);
@@ -196,6 +210,48 @@ int main(int argc, char** argv) {
     std::string subdir = "artea_graph." + dataset_name;
     std::filesystem::path output_path = std::filesystem::path(output_dir) / subdir / dirname;
 
+    // Print construction summary
+    double total_time_s = (vertices_duration.count() + edges_duration.count()) / 1000.0;
+    std::cout << "\n" << std::string(80, '=') << std::endl;
+    std::cout << "                    ARTEA HIERARCHICAL GRAPH BUILD SUMMARY" << std::endl;
+    std::cout << std::string(80, '=') << std::endl;
+    std::cout << "\n--- Dataset ---" << std::endl;
+    std::cout << fmt::format("  Name:                   {}", dataset_name) << std::endl;
+    std::cout << fmt::format("  Base vectors:           {}", base_vecs.get_num_vecs()) << std::endl;
+    std::cout << fmt::format("  Vector dimension:       {}", base_vecs.get_vec_dim()) << std::endl;
+    std::cout << fmt::format("  Shuffle seed:           {}", shuffle_seed) << std::endl;
+    std::cout << "\n--- Graph Structure ---" << std::endl;
+    std::cout << fmt::format("  Num layers:             {}", hierarchical_graph.get_num_layers()) << std::endl;
+    std::cout << fmt::format("  Index size:             {:.2f} MB ({} bytes)", index_size_info.total_mb, index_size_info.total_bytes) << std::endl;
+    std::cout << "  Bottom layer:" << std::endl;
+    std::cout << fmt::format("    Max nbr size:         {}", bl_max_nbr_size) << std::endl;
+    std::cout << fmt::format("    Reserved nbr size:    {}", bl_reserved_nbr_size) << std::endl;
+    std::cout << fmt::format("    Scale coeffs:         {}", program.get<float>("--bl-scale-coeffs")) << std::endl;
+    std::cout << fmt::format("    Shifted coeffs:       {}", program.get<float>("--bl-shifted-coeffs")) << std::endl;
+    std::cout << fmt::format("    Num outer iters:      {}", program.get<uint32_t>("--bl-num-outer-iters")) << std::endl;
+    std::cout << fmt::format("    Num inner iters:      {}", program.get<uint32_t>("--bl-num-inner-iters")) << std::endl;
+    std::cout << "  Upper layers:" << std::endl;
+    std::cout << fmt::format("    Max nbr size:         {}", ul_max_nbr_size) << std::endl;
+    std::cout << fmt::format("    Reserved nbr size:    {}", ul_reserved_nbr_size) << std::endl;
+    std::cout << fmt::format("    Scale coeffs:         {}", program.get<float>("--ul-scale-coeffs")) << std::endl;
+    std::cout << fmt::format("    Shifted coeffs:       {}", program.get<float>("--ul-shifted-coeffs")) << std::endl;
+    std::cout << fmt::format("    Num outer iters:      {}", program.get<uint32_t>("--ul-num-outer-iters")) << std::endl;
+    std::cout << fmt::format("    Num inner iters:      {}", program.get<uint32_t>("--ul-num-inner-iters")) << std::endl;
+    std::cout << "\n--- Vertices Builder Config ---" << std::endl;
+    std::cout << fmt::format("  Min radius:             {}", program.get<float>("--vb-min-radius")) << std::endl;
+    std::cout << fmt::format("  Beta squared:           {}", program.get<float>("--vb-beta-sq")) << std::endl;
+    std::cout << fmt::format("  Coverage ratio:         {}", program.get<float>("--vb-coverage-ratio")) << std::endl;
+    std::cout << fmt::format("  Confidence:             {}", program.get<float>("--vb-confidence")) << std::endl;
+    std::cout << fmt::format("  Max result ratio:       {}", program.get<float>("--vb-max-result-ratio")) << std::endl;
+    std::cout << fmt::format("  Sampling batch size:    {}", program.get<uint32_t>("--vb-sampling-batch-size")) << std::endl;
+    std::cout << "\n--- Construction Time ---" << std::endl;
+    std::cout << fmt::format("  Vertices construction:  {:.2f} s", vertices_duration.count() / 1000.0) << std::endl;
+    std::cout << fmt::format("  Edges construction:     {:.2f} s", edges_duration.count() / 1000.0) << std::endl;
+    std::cout << fmt::format("  Total time:             {:.2f} s", total_time_s) << std::endl;
+    std::cout << "\n--- Output ---" << std::endl;
+    std::cout << fmt::format("  Index path:             {}", output_path.string()) << std::endl;
+    std::cout << std::string(80, '=') << std::endl << std::endl;
+
     logger.info(fmt::format("Saving hierarchical graph to {}...", output_path.string()));
     std::filesystem::create_directories(output_path);
 
@@ -204,6 +260,7 @@ int main(int argc, char** argv) {
     metadata["dataset"] = dataset_name;
     metadata["vec_dim"] = base_vecs.get_vec_dim();
     metadata["num_base_vecs"] = base_vecs.get_num_vecs();
+    metadata["shuffle_seed"] = shuffle_seed;
 
     std::ostringstream timestamp_stream;
     timestamp_stream << std::put_time(std::gmtime(&time_t_now), "%Y-%m-%dT%H:%M:%SZ");

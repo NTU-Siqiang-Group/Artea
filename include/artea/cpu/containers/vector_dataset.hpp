@@ -119,14 +119,14 @@ public:
      *       3. Parallelize ground truth updates with TBB
      *       This would reduce peak memory from 2N to N bytes.
      */
-    auto shuffle_in_place(uint32_t seed = std::random_device{}()) -> void {
+    auto shuffle_in_place(uint32_t seed = std::random_device{}()) -> uint32_t {
         const vec_num_t num_base_vecs = _base_vecs.get_num_vecs();
         if (num_base_vecs == 0) {
             logger.warn("Cannot shuffle empty dataset");
-            return;
+            return seed;
         }
 
-        logger.info(fmt::format("Shuffling dataset with {} base vectors...", num_base_vecs));
+        logger.info(fmt::format("Shuffling dataset with {} base vectors (seed={})...", num_base_vecs, seed));
 
         // Generate shuffle indices using RandomSeqNR
         random_seq_nr_t shuffle_gen(num_base_vecs, seed);
@@ -158,6 +158,7 @@ public:
         }
 
         logger.success("Dataset shuffled successfully");
+        return seed;
     }
 
 private:

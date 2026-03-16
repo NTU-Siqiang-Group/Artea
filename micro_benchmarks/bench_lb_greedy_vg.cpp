@@ -43,7 +43,6 @@ struct BenchConfig {
     float coverage_ratio;
     float confidence;
 
-    bool shuffle;
     int64_t iterations;
 };
 
@@ -62,11 +61,9 @@ public:
             g_config.dataset_name
         );
 
-        // Shuffle dataset if requested
-        if (g_config.shuffle) {
-            logger.info("Shuffling dataset...");
-            dataset->shuffle_in_place();
-        }
+        // Always shuffle dataset
+        logger.info("Shuffling dataset...");
+        dataset->shuffle_in_place();
 
         dim_ = dataset->get_base_vecs().get_vec_dim();
         num_base_vecs_ = dataset->get_base_vecs().get_num_vecs();
@@ -170,11 +167,6 @@ int main(int argc, char** argv) {
         .scan<'u', uint32_t>()
         .help("Batch size for processing (default: 512)");
 
-    program.add_argument("--shuffle")
-        .default_value(false)
-        .implicit_value(true)
-        .help("Enable shuffling to eliminate spatial correlation");
-
     // Benchmark control
     program.add_argument("-i", "--iterations")
         .default_value(int64_t(5))
@@ -197,7 +189,6 @@ int main(int argc, char** argv) {
     g_config.coverage_ratio = program.get<float>("--coverage-ratio");
     g_config.confidence = program.get<float>("--confidence");
     g_config.batch_size = program.get<uint32_t>("--batch-size");
-    g_config.shuffle = program.get<bool>("--shuffle");
     g_config.iterations = program.get<int64_t>("--iterations");
 
     // Initialize data
@@ -220,7 +211,6 @@ int main(int argc, char** argv) {
     std::cout << "Confidence: " << g_config.confidence << std::endl;
     std::cout << "Batch size: " << g_config.batch_size << std::endl;
     std::cout << "Computed term thresh: " << computed_term_thresh << std::endl;
-    std::cout << "Shuffle: " << (g_config.shuffle ? "enabled" : "disabled") << std::endl;
     std::cout << "Iterations: " << g_config.iterations << std::endl;
     std::cout << "================================\n" << std::endl;
 

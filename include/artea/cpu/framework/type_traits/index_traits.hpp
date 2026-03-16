@@ -39,6 +39,7 @@ template <typename IndexTraitsT> class HierarchicalVecsManager;
 template <typename IndexTraitsT> class SearchGraphConverter;
 template <typename IndexTraitsT> class FlatGraphFileManager;
 template <typename IndexTraitsT> class HierarchicalGraphFileManager;
+template <typename IndexTraitsT> class IndexSizeCalculator;
 
 template <typename BaseTraitsT>
 struct IndexTraits : virtual public BaseTraitsT {
@@ -90,6 +91,9 @@ struct IndexTraits : virtual public BaseTraitsT {
 
     /** @brief Hierarchical graph file manager type. */
     using hierarchical_graph_file_manager_t = HierarchicalGraphFileManager<index_traits_t>;
+
+    /** @brief Index size calculator type. */
+    using index_size_calculator_t = IndexSizeCalculator<index_traits_t>;
 
     /** @brief Minimum number of vertices required for a layer to continue building upper layers. */
     static constexpr uint32_t min_num_layer_vertex = 64;

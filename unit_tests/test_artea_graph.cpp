@@ -64,7 +64,6 @@ struct TestConfig {
     uint32_t bl_extracted_nbr_size;
     uint32_t ul_extracted_nbr_size;
 
-    bool shuffle;
     bool verbose;
 } g_config;
 
@@ -106,11 +105,9 @@ public:
         logger.info(fmt::format("Loading Dataset: {} from {}", g_config.dataset_name, g_config.config_path));
         dataset_ = std::make_unique<vector_dataset_t>(g_config.config_path, g_config.dataset_name);
 
-        // Shuffle dataset if requested
-        if (g_config.shuffle) {
-            logger.info("Shuffling dataset...");
-            dataset_->shuffle_in_place();
-        }
+        // Always shuffle dataset
+        logger.info("Shuffling dataset...");
+        dataset_->shuffle_in_place();
 
         dist_func_ = std::make_unique<dist_func_t>(dataset_->get_base_vecs().get_vec_dim());
 
@@ -448,16 +445,16 @@ int main(int argc, char** argv) {
     program.add_argument("--vb-confidence").default_value(0.99f).scan<'g', float>();
     program.add_argument("--vb-max-result-ratio").default_value(0.2f).scan<'g', float>();
     program.add_argument("--vb-sampling-batch-size").default_value(2048u).scan<'u', uint32_t>();
-    program.add_argument("--shuffle").default_value(false).implicit_value(true)
-        .help("Shuffle dataset before building graph");
 
     // Bottom layer config
     program.add_argument("--bl-max-nbr-size").default_value(32u).scan<'u', uint32_t>();
-    program.add_argument("--bl-reserved-nbr-size").default_value(48u).scan<'u', uint32_t>();
+    program.add_argument("--bl-reserved-nbr-size").scan<'u', uint32_t>()
+        .help("Bottom layer reserved neighbor size (defaults to bl-max-nbr-size * 1.5)");
 
     // Upper layer config
     program.add_argument("--ul-max-nbr-size").default_value(24u).scan<'u', uint32_t>();
-    program.add_argument("--ul-reserved-nbr-size").default_value(40u).scan<'u', uint32_t>();
+    program.add_argument("--ul-reserved-nbr-size").scan<'u', uint32_t>()
+        .help("Upper layer reserved neighbor size (defaults to ul-max-nbr-size * 1.5)");
 
     // Bottom edges builder config
     program.add_argument("--bl-scale-coeffs").default_value(1.0f).scan<'g', float>();
@@ -501,10 +498,14 @@ int main(int argc, char** argv) {
     g_config.vertices_config.sampling_batch_size = program.get<uint32_t>("--vb-sampling-batch-size");
 
     g_config.bottom_layer_config.max_nbr_size = program.get<uint32_t>("--bl-max-nbr-size");
-    g_config.bottom_layer_config.reserved_nbr_size = program.get<uint32_t>("--bl-reserved-nbr-size");
+    g_config.bottom_layer_config.reserved_nbr_size = program.is_used("--bl-reserved-nbr-size")
+        ? program.get<uint32_t>("--bl-reserved-nbr-size")
+        : static_cast<uint32_t>(g_config.bottom_layer_config.max_nbr_size * 1.5);
 
     g_config.upper_layer_config.max_nbr_size = program.get<uint32_t>("--ul-max-nbr-size");
-    g_config.upper_layer_config.reserved_nbr_size = program.get<uint32_t>("--ul-reserved-nbr-size");
+    g_config.upper_layer_config.reserved_nbr_size = program.is_used("--ul-reserved-nbr-size")
+        ? program.get<uint32_t>("--ul-reserved-nbr-size")
+        : static_cast<uint32_t>(g_config.upper_layer_config.max_nbr_size * 1.5);
 
     g_config.bottom_edges_config.scale_coeffs = program.get<float>("--bl-scale-coeffs");
     g_config.bottom_edges_config.shifted_coeffs = program.get<float>("--bl-shifted-coeffs");
@@ -527,7 +528,6 @@ int main(int argc, char** argv) {
         ? program.get<uint32_t>("--ul-extracted-nbr-size")
         : g_config.upper_layer_config.max_nbr_size;
 
-    g_config.shuffle = program.get<bool>("--shuffle");
     g_config.verbose = program.get<bool>("--verbose");
 
     std::cout << "\n=== Test Configuration ===" << std::endl;
@@ -559,7 +559,6 @@ int main(int argc, char** argv) {
     std::cout << "Candidate queue size: " << g_config.candidate_queue_size << std::endl;
     std::cout << "Bottom layer extracted nbr size: " << g_config.bl_extracted_nbr_size << std::endl;
     std::cout << "Upper layer extracted nbr size: " << g_config.ul_extracted_nbr_size << std::endl;
-    std::cout << "Shuffle: " << (g_config.shuffle ? "true" : "false") << std::endl;
     std::cout << "Verbose: " << (g_config.verbose ? "true" : "false") << std::endl;
     std::cout << "==========================\n" << std::endl;
 

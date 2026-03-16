@@ -135,10 +135,6 @@ public:
         double score_strict = static_cast<double>(total_counts.strict) / num_queries;
         double score_soft = static_cast<double>(total_counts.soft) / num_queries;
 
-        logger.info(fmt::format("Evaluation (Recall@{}, Threshold: {:.1e}):", k, epsilon));
-        logger.info(fmt::format("   -> Strict Recall@{}: {:.2f}%", k, score_strict * 100.0));
-        logger.info(fmt::format("   -> Soft Recall@{}:   {:.2f}%", k, score_soft * 100.0));
-
         return RecallMetrics { score_strict, score_soft };
     }
 

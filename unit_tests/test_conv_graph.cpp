@@ -196,7 +196,8 @@ int main(int argc, char** argv) {
     program.add_argument("-c", "--config").default_value(std::string("./configs/datasets.json"));
     program.add_argument("-d", "--dataset").default_value(std::string("sift-1m"));
     program.add_argument("--max-nbr-size").default_value(32u).scan<'u', uint32_t>();
-    program.add_argument("--reserved-nbr-size").default_value(48u).scan<'u', uint32_t>();
+    program.add_argument("--reserved-nbr-size").scan<'u', uint32_t>()
+        .help("Reserved neighbor size (defaults to max-nbr-size * 1.5)");
     program.add_argument("--extracted-nbr-size").default_value(32u).scan<'u', uint32_t>();
     program.add_argument("--scale-coeffs").default_value(1.0f).scan<'g', float>();
     program.add_argument("--shifted-coeffs").default_value(0.0f).scan<'g', float>();
@@ -216,10 +217,13 @@ int main(int argc, char** argv) {
 
     g_config.config_path = program.get<std::string>("--config");
     g_config.dataset_name = program.get<std::string>("--dataset");
-    g_config.layer_config = layer_config_t(
-        program.get<uint32_t>("--max-nbr-size"),
-        program.get<uint32_t>("--reserved-nbr-size")
-    );
+
+    uint32_t max_nbr_size = program.get<uint32_t>("--max-nbr-size");
+    uint32_t reserved_nbr_size = program.is_used("--reserved-nbr-size")
+        ? program.get<uint32_t>("--reserved-nbr-size")
+        : static_cast<uint32_t>(max_nbr_size * 1.5);
+
+    g_config.layer_config = layer_config_t(max_nbr_size, reserved_nbr_size);
     g_config.edges_builder_config = edges_builder_config_t(
         program.get<float>("--scale-coeffs"),
         program.get<float>("--shifted-coeffs"),

@@ -37,7 +37,6 @@ struct RNetSelectionConfig {
     float confidence;
     float max_result_ratio;
     uint32_t sampling_batch_size;
-    bool is_shuffle;
 };
 
 struct RandomSelectionConfig {
@@ -92,11 +91,9 @@ public:
         logger.info(fmt::format("Loading Dataset: {} from {}", g_config.dataset_name, g_config.config_path));
         dataset_ = std::make_unique<vector_dataset_t>(g_config.config_path, g_config.dataset_name);
 
-        // Shuffle dataset if requested
-        if (g_config.rnet_config.is_shuffle) {
-            logger.info("Shuffling dataset...");
-            dataset_->shuffle_in_place();
-        }
+        // Always shuffle dataset
+        logger.info("Shuffling dataset...");
+        dataset_->shuffle_in_place();
 
         dist_func_ = std::make_unique<dist_func_t>(dataset_->get_base_vecs().get_vec_dim());
 
@@ -504,7 +501,6 @@ int main(int argc, char** argv) {
     program.add_argument("--confidence").default_value(0.99f).scan<'g', float>();
     program.add_argument("--max-result-ratio").default_value(0.2f).scan<'g', float>();
     program.add_argument("--sampling-batch-size").default_value(2048u).scan<'u', uint32_t>();
-    program.add_argument("--shuffle").default_value(false).implicit_value(true);
 
     // Random selection parameters
     program.add_argument("--random-result-ratio").default_value(1.0f/16.0f).scan<'g', float>();
@@ -529,7 +525,6 @@ int main(int argc, char** argv) {
     g_config.rnet_config.confidence = program.get<float>("--confidence");
     g_config.rnet_config.max_result_ratio = program.get<float>("--max-result-ratio");
     g_config.rnet_config.sampling_batch_size = program.get<uint32_t>("--sampling-batch-size");
-    g_config.rnet_config.is_shuffle = program.get<bool>("--shuffle");
 
     g_config.random_config.result_ratio = program.get<float>("--random-result-ratio");
 
@@ -546,7 +541,6 @@ int main(int argc, char** argv) {
     std::cout << "Confidence: " << g_config.rnet_config.confidence << std::endl;
     std::cout << "Max result ratio: " << g_config.rnet_config.max_result_ratio << std::endl;
     std::cout << "Sampling batch size: " << g_config.rnet_config.sampling_batch_size << std::endl;
-    std::cout << "Shuffle: " << (g_config.rnet_config.is_shuffle ? "true" : "false") << std::endl;
     std::cout << "\n--- Random Selection Parameters ---" << std::endl;
     std::cout << "Result ratio: " << g_config.random_config.result_ratio << std::endl;
     std::cout << "\n--- Test Parameters ---" << std::endl;

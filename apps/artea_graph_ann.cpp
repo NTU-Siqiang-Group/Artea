@@ -180,6 +180,38 @@ int main(int argc, char** argv) {
 
     logger.info(fmt::format("Loaded hierarchical graph with {} layers", hierarchical_graph.get_num_layers()));
 
+    // Load shuffle seed from metadata and shuffle dataset
+    std::string metadata_path = index_path + "/metadata.json";
+    std::ifstream metadata_file(metadata_path);
+    if (!metadata_file.is_open()) {
+        logger.error(fmt::format("Failed to open metadata file: {}", metadata_path));
+        return 1;
+    }
+    nlohmann::json metadata = nlohmann::json::parse(metadata_file);
+    metadata_file.close();
+
+    if (!metadata.contains("shuffle_seed")) {
+        logger.error("No shuffle_seed found in metadata. Please rebuild the index with the latest version.");
+        return 1;
+    }
+
+    uint32_t shuffle_seed = metadata["shuffle_seed"];
+    logger.info(fmt::format("Shuffling dataset with seed from metadata: {}", shuffle_seed));
+    dataset.shuffle_in_place(shuffle_seed);
+
+    // Calculate and output index size
+    index_size_calculator_t index_size_calc;
+    auto index_size_info = index_size_calc.calculate_size(hierarchical_graph);
+
+    // Determine extracted neighbor sizes
+    vertex_num_t bl_extracted_nbr_size = program.is_used("--bl-extracted-nbr-size")
+        ? program.get<uint32_t>("--bl-extracted-nbr-size")
+        : hierarchical_graph.bottom_layer_config().max_nbr_size();
+
+    vertex_num_t ul_extracted_nbr_size = program.is_used("--ul-extracted-nbr-size")
+        ? program.get<uint32_t>("--ul-extracted-nbr-size")
+        : hierarchical_graph.upper_layer_config().max_nbr_size();
+
     // Print graph construction configuration
     std::cout << "\n" << std::string(80, '=') << std::endl;
     std::cout << "                    ARTEA HIERARCHICAL GRAPH CONFIGURATION" << std::endl;
@@ -191,7 +223,29 @@ int main(int argc, char** argv) {
     std::cout << fmt::format("  Vector dimension:       {}", base_vecs.get_vec_dim()) << std::endl;
     std::cout << "\n--- Graph Construction Config ---" << std::endl;
     std::cout << fmt::format("  Num layers:             {}", hierarchical_graph.get_num_layers()) << std::endl;
-    std::cout << "  Bottom layer:" << std::endl;
+    std::cout << fmt::format("  Index size:             {:.2f} MB ({} bytes)", index_size_info.total_mb, index_size_info.total_bytes) << std::endl;
+
+    // Output layer-by-layer information
+    std::cout << "\n  Layer-by-Layer Structure:" << std::endl;
+    for (uint32_t layer_id = 0; layer_id < hierarchical_graph.get_num_layers(); ++layer_id) {
+        const auto& layer_vecs = hierarchical_graph.get_hier_vecs_manager().get_layer_vecs(layer_id);
+        const auto& layer_graph = hierarchical_graph.get_layer_graph(layer_id);
+
+        uint32_t num_vertices = layer_vecs.get_num_vecs();
+
+        // Calculate total edges
+        uint32_t total_edges = 0;
+        const auto& nbrs_arr = layer_graph.get_nbrs_arr();
+        for (const auto& nbrs : nbrs_arr) {
+            total_edges += nbrs.size();
+        }
+
+        float vertex_ratio = 100.0f * num_vertices / base_vecs.get_num_vecs();
+        std::cout << fmt::format("    Layer {}: {} vertices ({:.2f}%), {} edges",
+            layer_id, num_vertices, vertex_ratio, total_edges) << std::endl;
+    }
+
+    std::cout << "\n  Bottom layer:" << std::endl;
     std::cout << fmt::format("    Max nbr size:         {}", hierarchical_graph.bottom_layer_config().max_nbr_size()) << std::endl;
     std::cout << fmt::format("    Reserved nbr size:    {}", hierarchical_graph.bottom_layer_config().reserved_nbr_size()) << std::endl;
     std::cout << fmt::format("    Scale coeffs:         {}", hierarchical_graph.bottom_edges_builder_config().scale_coeffs()) << std::endl;
@@ -208,16 +262,9 @@ int main(int argc, char** argv) {
     std::cout << "\n--- Query Config ---" << std::endl;
     std::cout << fmt::format("  Top-k:                  {}", topk) << std::endl;
     std::cout << fmt::format("  Candidate queue size:   {}", candidate_queue_size) << std::endl;
+    std::cout << fmt::format("  BL extracted nbr size:  {}", bl_extracted_nbr_size) << std::endl;
+    std::cout << fmt::format("  UL extracted nbr size:  {}", ul_extracted_nbr_size) << std::endl;
     std::cout << std::string(80, '=') << std::endl << std::endl;
-
-    // Determine extracted neighbor sizes
-    vertex_num_t bl_extracted_nbr_size = program.is_used("--bl-extracted-nbr-size")
-        ? program.get<uint32_t>("--bl-extracted-nbr-size")
-        : hierarchical_graph.bottom_layer_config().max_nbr_size();
-
-    vertex_num_t ul_extracted_nbr_size = program.is_used("--ul-extracted-nbr-size")
-        ? program.get<uint32_t>("--ul-extracted-nbr-size")
-        : hierarchical_graph.upper_layer_config().max_nbr_size();
 
     logger.info(fmt::format("Using extracted neighbor sizes: bottom={}, upper={}",
         bl_extracted_nbr_size, ul_extracted_nbr_size));
@@ -243,27 +290,33 @@ int main(int argc, char** argv) {
     logger.info(fmt::format("Router initialized: topk={}, candidate_queue_size={}",
         topk, candidate_queue_size));
 
-    // Run 3 benchmark iterations
+    // Run benchmark iterations (200 total, use last 100 for statistics)
+    const uint32_t total_iterations = 200;
+    const uint32_t warmup_iterations = 100;
     std::vector<BenchmarkResult> results;
-    for (int i = 0; i < 3; ++i) {
-        logger.info(fmt::format("Running benchmark iteration {}...", i + 1));
+
+    for (uint32_t i = 0; i < total_iterations; ++i) {
         auto result = run_benchmark(router, query_vecs, groundtruth, base_vecs, dist_func, topk);
 
-        logger.info(fmt::format("  Query time: {:.2f} ms", result.query_time_ms));
-        logger.info(fmt::format("  Avg query time: {:.2f} us", result.avg_query_time_us));
-        logger.info(fmt::format("  Throughput: {:.2f} QPS", result.throughput_qps));
-        logger.info(fmt::format("  Recall@{}: {:.4f}", topk, result.recall));
+        logger.info(fmt::format("Iter {}: {:.2f} ms, {:.2f} QPS, Recall@{}={:.4f}",
+            i + 1, result.query_time_ms, result.throughput_qps, topk, result.recall));
 
-        results.push_back(result);
+        // Only collect statistics for last 100 iterations
+        if (i >= warmup_iterations) {
+            results.push_back(result);
+        }
     }
 
-    // Compute averages
+    // Compute averages from last 100 iterations
+    double avg_query_time_ms = 0.0;
     double avg_throughput = 0.0;
     double avg_recall = 0.0;
     for (const auto& result : results) {
+        avg_query_time_ms += result.query_time_ms;
         avg_throughput += result.throughput_qps;
         avg_recall += result.recall;
     }
+    avg_query_time_ms /= results.size();
     avg_throughput /= results.size();
     avg_recall /= results.size();
 
@@ -275,12 +328,9 @@ int main(int argc, char** argv) {
     std::cout << fmt::format("Index: {}", index_path) << std::endl;
     std::cout << fmt::format("Top-k: {}", topk) << std::endl;
     std::cout << fmt::format("Candidate queue size: {}", candidate_queue_size) << std::endl;
-    std::cout << "\n--- Individual Runs ---" << std::endl;
-    for (size_t i = 0; i < results.size(); ++i) {
-        std::cout << fmt::format("Run {}: Throughput = {:.2f} QPS, Recall@{} = {:.4f}",
-            i + 1, results[i].throughput_qps, topk, results[i].recall) << std::endl;
-    }
-    std::cout << "\n--- Average Results ---" << std::endl;
+    std::cout << fmt::format("Total iterations: {}, Statistics from last: {}", total_iterations, results.size()) << std::endl;
+    std::cout << fmt::format("\n--- Average Results (Last {} Iterations) ---", results.size()) << std::endl;
+    std::cout << fmt::format("Average Query Time: {:.2f} ms", avg_query_time_ms) << std::endl;
     std::cout << fmt::format("Average Throughput: {:.2f} QPS", avg_throughput) << std::endl;
     std::cout << fmt::format("Average Recall@{}: {:.4f}", topk, avg_recall) << std::endl;
     std::cout << std::string(80, '=') << std::endl;

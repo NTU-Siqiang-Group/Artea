@@ -65,9 +65,8 @@ int main(int argc, char** argv) {
         .help("Maximum number of neighbors per vertex");
 
     program.add_argument("--reserved-nbr-size")
-        .default_value(uint32_t(64))
         .scan<'u', uint32_t>()
-        .help("Reserved neighbor size for memory allocation");
+        .help("Reserved neighbor size for memory allocation (defaults to max-nbr-size * 1.5)");
 
     program.add_argument("--scale-coeffs")
         .default_value(1.00)
@@ -104,7 +103,9 @@ int main(int argc, char** argv) {
 
     GraphParams params;
     params.max_nbr_size = program.get<uint32_t>("--max-nbr-size");
-    params.reserved_nbr_size = program.get<uint32_t>("--reserved-nbr-size");
+    params.reserved_nbr_size = program.is_used("--reserved-nbr-size")
+        ? program.get<uint32_t>("--reserved-nbr-size")
+        : static_cast<uint32_t>(params.max_nbr_size * 1.5);
     params.scale_coeffs = program.get<double>("--scale-coeffs");
     params.shifted_coeffs = program.get<double>("--shifted-coeffs");
     params.num_outer_iters = program.get<uint32_t>("--num-outer-iters");
@@ -156,8 +157,12 @@ int main(int argc, char** argv) {
 
     logger.info(fmt::format("Graph construction completed in {:.2f} seconds", duration.count() / 1000.0));
 
-    // Save flat graph
-    std::string subdir = "conv_graph." + dataset_name;
+    // Calculate and output index size
+    index_size_calculator_t index_size_calc;
+    auto index_size_info = index_size_calc.calculate_size(flat_graph);
+
+    logger.info(fmt::format("Index size: {:.2f} MB ({} bytes)",
+        index_size_info.total_mb, index_size_info.total_bytes));
 
     // Generate directory name with timestamp
     auto now = std::chrono::system_clock::now();
@@ -166,7 +171,32 @@ int main(int argc, char** argv) {
     dirname_stream << "conv_graph_" << std::put_time(std::localtime(&time_t_now), "%Y%m%d_%H%M%S");
     std::string dirname = dirname_stream.str();
 
+    std::string subdir = "conv_graph." + dataset_name;
     std::filesystem::path output_path = std::filesystem::path(output_dir) / subdir / dirname;
+
+    // Print construction summary
+    std::cout << "\n" << std::string(80, '=') << std::endl;
+    std::cout << "                    CONVERGENT GRAPH BUILD SUMMARY" << std::endl;
+    std::cout << std::string(80, '=') << std::endl;
+    std::cout << "\n--- Dataset ---" << std::endl;
+    std::cout << fmt::format("  Name:                   {}", dataset_name) << std::endl;
+    std::cout << fmt::format("  Base vectors:           {}", num_base_vecs) << std::endl;
+    std::cout << fmt::format("  Vector dimension:       {}", dim) << std::endl;
+    std::cout << "\n--- Graph Configuration ---" << std::endl;
+    std::cout << fmt::format("  Max nbr size:           {}", params.max_nbr_size) << std::endl;
+    std::cout << fmt::format("  Reserved nbr size:      {}", params.reserved_nbr_size) << std::endl;
+    std::cout << fmt::format("  Scale coeffs:           {:.2f}", params.scale_coeffs) << std::endl;
+    std::cout << fmt::format("  Shifted coeffs:         {:.2f}", params.shifted_coeffs) << std::endl;
+    std::cout << fmt::format("  Num outer iters:        {}", params.num_outer_iters) << std::endl;
+    std::cout << fmt::format("  Num inner iters:        {}", params.num_inner_iters) << std::endl;
+    std::cout << "\n--- Build Results ---" << std::endl;
+    std::cout << fmt::format("  Num vertices:           {}", flat_graph.get_num_vertices()) << std::endl;
+    std::cout << fmt::format("  Index size:             {:.2f} MB ({} bytes)", index_size_info.total_mb, index_size_info.total_bytes) << std::endl;
+    std::cout << fmt::format("  Construction time:      {:.2f} s", duration.count() / 1000.0) << std::endl;
+    std::cout << "\n--- Output ---" << std::endl;
+    std::cout << fmt::format("  Index path:             {}", output_path.string()) << std::endl;
+    std::cout << std::string(80, '=') << std::endl << std::endl;
+
     logger.info(fmt::format("Saving flat graph to {}...", output_path.string()));
 
     // Create output directory if it doesn't exist

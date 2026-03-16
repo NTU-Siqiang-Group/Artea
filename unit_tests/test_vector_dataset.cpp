@@ -395,6 +395,63 @@ TEST_F(VectorDatasetTest, VerifyShuffleInPlace) {
     logger.success("shuffle_in_place passed verification.");
 }
 
+TEST_F(VectorDatasetTest, VerifyShuffleSeedReproducibility) {
+    ASSERT_TRUE(dataset != nullptr) << "Dataset failed to initialize.";
+
+    // Load two independent datasets
+    vector_dataset_t dataset1(g_config.config_path, g_config.dataset_name);
+    vector_dataset_t dataset2(g_config.config_path, g_config.dataset_name);
+
+    auto& base_vecs1 = dataset1.get_base_vecs();
+    auto& base_vecs2 = dataset2.get_base_vecs();
+    auto& gt_vecs1 = dataset1.get_gt_vecs();
+    auto& gt_vecs2 = dataset2.get_gt_vecs();
+
+    vec_num_t total_vecs = base_vecs1.get_num_vecs();
+    vec_dim_t dim = base_vecs1.get_vec_dim();
+    vec_num_t num_gt = gt_vecs1.get_num_vecs();
+    vec_dim_t gt_dim = gt_vecs1.get_vec_dim();
+
+    logger.info(fmt::format("Testing shuffle seed reproducibility with {} base vectors...", total_vecs));
+
+    // Shuffle both datasets with the same seed
+    uint32_t seed = 12345;
+    dataset1.shuffle_in_place(seed);
+    dataset2.shuffle_in_place(seed);
+
+    // Verify metadata unchanged
+    EXPECT_EQ(base_vecs1.get_num_vecs(), total_vecs) << "Dataset1 base vectors count changed";
+    EXPECT_EQ(base_vecs2.get_num_vecs(), total_vecs) << "Dataset2 base vectors count changed";
+    EXPECT_EQ(base_vecs1.get_vec_dim(), dim) << "Dataset1 dimension changed";
+    EXPECT_EQ(base_vecs2.get_vec_dim(), dim) << "Dataset2 dimension changed";
+
+    // Verify all base vectors match exactly
+    logger.info("Verifying all base vectors match...");
+    for (vec_num_t i = 0; i < total_vecs; ++i) {
+        const float* vec1 = base_vecs1.get(i);
+        const float* vec2 = base_vecs2.get(i);
+
+        for (vec_dim_t d = 0; d < dim; ++d) {
+            ASSERT_FLOAT_EQ(vec1[d], vec2[d])
+                << fmt::format("Base vector mismatch at index {}, dim {}", i, d);
+        }
+    }
+
+    // Verify all ground truth vectors match exactly
+    logger.info("Verifying all ground truth vectors match...");
+    for (vec_num_t i = 0; i < num_gt; ++i) {
+        const uint32_t* gt1 = gt_vecs1.get(i);
+        const uint32_t* gt2 = gt_vecs2.get(i);
+
+        for (vec_dim_t k = 0; k < gt_dim; ++k) {
+            ASSERT_EQ(gt1[k], gt2[k])
+                << fmt::format("Ground truth mismatch at query {}, k={}", i, k);
+        }
+    }
+
+    logger.success("Shuffle seed reproducibility test passed.");
+}
+
 // --- Main ---
 
 int main(int argc, char* argv[]) {
