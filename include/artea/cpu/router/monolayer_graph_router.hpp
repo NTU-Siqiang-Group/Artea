@@ -275,12 +275,9 @@ private:
             random_seq,
             this->_dist_func,
             query_vec,
-            this->_vecs_data
+            this->_vecs_data,
+            visited_table
         );
-
-        // Mark all initial candidates as visited
-        // We need to extract the initial candidates from the queue to mark them as visited
-        // Since we can't directly access the queue's internal data, we'll mark them during the search loop
 
         // Beam search loop
         while (!candidate_queue.empty()) {
@@ -291,10 +288,8 @@ private:
             // Check for invalid entry or early termination
             if (current_id == RouterTraitsT::invalid_vertex_id) { break; }
 
-            // Mark as visited if not already visited
-            if (!visited_table.test(current_id)) {
-                visited_table.set(current_id);
-            }
+            // Mark as visited
+            visited_table.set(current_id);
 
             // Explore neighbors of current vertex
             const vertex_id_t* neighbors = _flat_search_graph.get_neighbors(current_id);

@@ -56,6 +56,7 @@ public:
     using dist_func_t = typename RouterTraitsT::dist_func_t;
     using vec_ele_t = typename RouterTraitsT::vec_ele_t;
     using vector_array_t = typename RouterTraitsT::vector_array_t;
+    using visited_table_t = typename RouterTraitsT::visited_table_t;
 
     /** @brief Maximum possible distance value (used for threshold initialization). */
     static constexpr distance_t max_distance = RouterTraitsT::max_distance;
@@ -129,6 +130,7 @@ public:
      * @param dist_func Distance function for computing distances.
      * @param query_vec Pointer to the query vector.
      * @param base_vecs Reference to the base vector array.
+     * @param visited_table Reference to visited table to mark initial candidates.
      * @note Generates random IDs, computes distances using dist_func, and calls seeded_initialize.
      * @complexity O(N) for generation + O(N log N) for heap operations.
      */
@@ -136,14 +138,15 @@ public:
         random_seq_t& random_seq,
         const dist_func_t& dist_func,
         const vec_ele_t* query_vec,
-        const vector_array_t& base_vecs
+        const vector_array_t& base_vecs,
+        visited_table_t& visited_table
     ) {
         // Generate random vertex IDs directly into std::vector
         std::vector<vertex_id_t> init_vids(_capacity);
         random_seq.generate(init_vids, _capacity);
 
         // Call seeded_initialize with the generated IDs
-        seeded_initialize(init_vids, dist_func, query_vec, base_vecs);
+        seeded_initialize(init_vids, dist_func, query_vec, base_vecs, visited_table);
     }
 
     /**
@@ -152,6 +155,7 @@ public:
      * @param dist_func Distance function for computing distances.
      * @param query_vec Pointer to the query vector.
      * @param base_vecs Reference to the base vector array.
+     * @param visited_table Reference to visited table to mark initial candidates.
      * @note If init_vids.size() > capacity, only the best capacity candidates are kept.
      * @complexity O(N) for distance computation + O(N log N) for sorting + O(L log L) for heap operations.
      */
@@ -159,7 +163,8 @@ public:
         const std::vector<vertex_id_t>& init_vids,
         const dist_func_t& dist_func,
         const vec_ele_t* query_vec,
-        const vector_array_t& base_vecs
+        const vector_array_t& base_vecs,
+        visited_table_t& visited_table
     ) {
         // Create candidate entries with computed distances
         std::vector<candidate_entry_t> init_candidates;
@@ -190,6 +195,7 @@ public:
         for (auto& entry : init_candidates) {
             _unexplored_set.push(entry);
             _top_candidates.push(entry);
+            visited_table.set(entry.get_id());
         }
 
         _update_lower_bound();

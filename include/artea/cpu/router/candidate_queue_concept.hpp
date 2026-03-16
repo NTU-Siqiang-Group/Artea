@@ -43,6 +43,7 @@ namespace cpu {
  *    - random_initialize: Initialize with random vertex IDs from random_seq
  *    - seeded_initialize: Initialize with provided vertex IDs
  *    - Both compute distances and populate the queue with initial candidates
+ *    - Both mark all initial candidates as visited in the provided visited_table
  *    - If init_vids.size() > capacity, only the best capacity candidates are kept
  *
  * 3. Query Operations (const):
@@ -84,6 +85,7 @@ std::constructible_from<CandidateQueueImpl, std::size_t> && requires(
     typename CandidateQueueImpl::dist_func_t;
     typename CandidateQueueImpl::vec_ele_t;
     typename CandidateQueueImpl::vector_array_t;
+    typename CandidateQueueImpl::visited_table_t;
 
     // Query operations (const)
     { const_queue.empty() }              -> std::convertible_to<bool>;
@@ -116,13 +118,15 @@ std::constructible_from<CandidateQueueImpl, std::size_t> && requires(
         std::declval<typename CandidateQueueImpl::random_seq_t&>(),
         std::declval<const typename CandidateQueueImpl::dist_func_t&>(),
         std::declval<const typename CandidateQueueImpl::vec_ele_t*>(),
-        std::declval<const typename CandidateQueueImpl::vector_array_t&>()
+        std::declval<const typename CandidateQueueImpl::vector_array_t&>(),
+        std::declval<typename CandidateQueueImpl::visited_table_t&>()
     ) } -> std::same_as<void>;
     { queue.seeded_initialize(
         std::declval<const std::vector<typename CandidateQueueImpl::vertex_id_t>&>(),
         std::declval<const typename CandidateQueueImpl::dist_func_t&>(),
         std::declval<const typename CandidateQueueImpl::vec_ele_t*>(),
-        std::declval<const typename CandidateQueueImpl::vector_array_t&>()
+        std::declval<const typename CandidateQueueImpl::vector_array_t&>(),
+        std::declval<typename CandidateQueueImpl::visited_table_t&>()
     ) } -> std::same_as<void>;
 };
 

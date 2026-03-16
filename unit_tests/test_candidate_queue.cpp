@@ -45,6 +45,7 @@ using candidate_entry_t = typename router_traits_t::candidate_entry_t;
 using vertex_id_t = typename router_traits_t::vertex_id_t;
 using distance_t = typename router_traits_t::distance_t;
 using container_t = cache_aligned_container_t<candidate_entry_t>;
+using visited_table_t = typename router_traits_t::visited_table_t;
 
 // Queue types under test
 using std_queue_t = StdCandidateQueue<router_traits_t>;
@@ -246,9 +247,12 @@ TEST_F(CandidateQueueTest, RandomInitialize_StdQueue) {
     dist_func_t dist_func(dim);
     random_seq_t random_seq(num_vecs);
 
+    // Create visited table
+    visited_table_t visited_table(num_vecs);
+
     // Initialize queue
     std_queue_t q(K);
-    q.random_initialize(random_seq, dist_func, query_vec.data(), base_vecs);
+    q.random_initialize(random_seq, dist_func, query_vec.data(), base_vecs, visited_table);
 
     // Verify queue size
     EXPECT_EQ(q.get_result_size(), K);
@@ -296,8 +300,11 @@ TEST_F(CandidateQueueTest, RandomInitialize_LinearQueue) {
     dist_func_t dist_func(dim);
     random_seq_t random_seq(num_vecs);
 
+    // Create visited table
+    visited_table_t visited_table(num_vecs);
+
     linear_queue_t q(K);
-    q.random_initialize(random_seq, dist_func, query_vec.data(), base_vecs);
+    q.random_initialize(random_seq, dist_func, query_vec.data(), base_vecs, visited_table);
 
     EXPECT_EQ(q.get_result_size(), K);
     EXPECT_FALSE(q.empty());
@@ -343,8 +350,11 @@ TEST_F(CandidateQueueTest, RandomInitialize_FHQueue) {
     dist_func_t dist_func(dim);
     random_seq_t random_seq(num_vecs);
 
+    // Create visited table
+    visited_table_t visited_table(num_vecs);
+
     fh_queue_t q(K);
-    q.random_initialize(random_seq, dist_func, query_vec.data(), base_vecs);
+    q.random_initialize(random_seq, dist_func, query_vec.data(), base_vecs, visited_table);
 
     EXPECT_EQ(q.get_result_size(), K);
     EXPECT_FALSE(q.empty());
@@ -1130,8 +1140,12 @@ TEST_F(CandidateQueueTest, SeededInitialize_StdQueue) {
     }
 
     dist_func_t dist_func(dim);
+
+    // Create visited table
+    visited_table_t visited_table(num_vecs);
+
     std_queue_t q(K);
-    q.seeded_initialize(init_vids, dist_func, query_vec.data(), base_vecs);
+    q.seeded_initialize(init_vids, dist_func, query_vec.data(), base_vecs, visited_table);
 
     // Verify queue size
     EXPECT_EQ(q.get_result_size(), init_size);
@@ -1181,8 +1195,12 @@ TEST_F(CandidateQueueTest, SeededInitialize_LinearQueue) {
     }
 
     dist_func_t dist_func(dim);
+
+    // Create visited table
+    visited_table_t visited_table(num_vecs);
+
     linear_queue_t q(K);
-    q.seeded_initialize(init_vids, dist_func, query_vec.data(), base_vecs);
+    q.seeded_initialize(init_vids, dist_func, query_vec.data(), base_vecs, visited_table);
 
     EXPECT_EQ(q.get_result_size(), init_size);
     EXPECT_FALSE(q.empty());
@@ -1230,8 +1248,12 @@ TEST_F(CandidateQueueTest, SeededInitialize_FHQueue) {
     }
 
     dist_func_t dist_func(dim);
+
+    // Create visited table
+    visited_table_t visited_table(num_vecs);
+
     fh_queue_t q(K);
-    q.seeded_initialize(init_vids, dist_func, query_vec.data(), base_vecs);
+    q.seeded_initialize(init_vids, dist_func, query_vec.data(), base_vecs, visited_table);
 
     EXPECT_EQ(q.get_result_size(), init_size);
     EXPECT_FALSE(q.empty());
@@ -1284,8 +1306,12 @@ TEST_F(CandidateQueueTest, SeededInitialize_ExceedsCapacity_StdQueue) {
     }
 
     dist_func_t dist_func(dim);
+
+    // Create visited table
+    visited_table_t visited_table(num_vecs);
+
     std_queue_t q(K);
-    q.seeded_initialize(init_vids, dist_func, query_vec.data(), base_vecs);
+    q.seeded_initialize(init_vids, dist_func, query_vec.data(), base_vecs, visited_table);
 
     // Should only keep best K candidates
     EXPECT_EQ(q.get_result_size(), K);
@@ -1336,8 +1362,12 @@ TEST_F(CandidateQueueTest, SeededInitialize_ExceedsCapacity_LinearQueue) {
     }
 
     dist_func_t dist_func(dim);
+
+    // Create visited table
+    visited_table_t visited_table(num_vecs);
+
     linear_queue_t q(K);
-    q.seeded_initialize(init_vids, dist_func, query_vec.data(), base_vecs);
+    q.seeded_initialize(init_vids, dist_func, query_vec.data(), base_vecs, visited_table);
 
     EXPECT_EQ(q.get_result_size(), K);
     EXPECT_FALSE(q.empty());
@@ -1386,8 +1416,12 @@ TEST_F(CandidateQueueTest, SeededInitialize_ExceedsCapacity_FHQueue) {
     }
 
     dist_func_t dist_func(dim);
+
+    // Create visited table
+    visited_table_t visited_table(num_vecs);
+
     fh_queue_t q(K);
-    q.seeded_initialize(init_vids, dist_func, query_vec.data(), base_vecs);
+    q.seeded_initialize(init_vids, dist_func, query_vec.data(), base_vecs, visited_table);
 
     EXPECT_EQ(q.get_result_size(), K);
     EXPECT_FALSE(q.empty());
