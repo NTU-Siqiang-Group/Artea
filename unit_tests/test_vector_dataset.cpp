@@ -26,6 +26,7 @@
 #include <filesystem>
 #include <memory>
 #include <type_traits>
+#include <unordered_map>
 
 #include <gtest/gtest.h>
 #include <argparse/argparse.hpp>
@@ -273,6 +274,125 @@ TEST_F(VectorDatasetTest, VerifyGetSubset) {
     }
 
     logger.success("extract_subset passed verification.");
+}
+
+TEST_F(VectorDatasetTest, VerifyShuffleInPlace) {
+    ASSERT_TRUE(dataset != nullptr) << "Dataset failed to initialize.";
+
+    auto& base_vecs = dataset->get_base_vecs();
+    auto& gt_vecs = dataset->get_gt_vecs();
+
+    vec_num_t total_vecs = base_vecs.get_num_vecs();
+    vec_dim_t dim = base_vecs.get_vec_dim();
+    vec_num_t num_gt = gt_vecs.get_num_vecs();
+    vec_dim_t gt_dim = gt_vecs.get_vec_dim();
+
+    logger.info(fmt::format("Testing shuffle_in_place with {} base vectors...", total_vecs));
+
+    // Sample a subset for verification to avoid O(n²) complexity
+    constexpr vec_num_t sample_size = 1000;
+    vec_num_t num_samples = std::min(sample_size, total_vecs);
+
+    std::mt19937 rng(std::random_device{}());
+    std::uniform_int_distribution<vec_num_t> dist(0, total_vecs - 1);
+
+    // Sample random indices
+    std::vector<vec_num_t> sample_indices;
+    sample_indices.reserve(num_samples);
+    for (vec_num_t i = 0; i < num_samples; ++i) {
+        sample_indices.push_back(dist(rng));
+    }
+
+    // Store original data for sampled vectors only
+    std::unordered_map<vec_num_t, std::vector<float>> original_base_vecs;
+    for (vec_num_t idx : sample_indices) {
+        const float* vec = base_vecs.get(idx);
+        original_base_vecs[idx].assign(vec, vec + dim);
+    }
+
+    // Store original ground truth
+    std::vector<std::vector<uint32_t>> original_gt_vecs(num_gt);
+    for (vec_num_t i = 0; i < num_gt; ++i) {
+        const uint32_t* gt_row = gt_vecs.get(i);
+        original_gt_vecs[i].assign(gt_row, gt_row + gt_dim);
+    }
+
+    // Perform shuffle with fixed seed for reproducibility
+    uint32_t seed = 42;
+    dataset->shuffle_in_place(seed);
+
+    // Verify metadata unchanged
+    EXPECT_EQ(base_vecs.get_num_vecs(), total_vecs) << "Base vectors count changed after shuffle";
+    EXPECT_EQ(base_vecs.get_vec_dim(), dim) << "Base vectors dimension changed after shuffle";
+    EXPECT_EQ(gt_vecs.get_num_vecs(), num_gt) << "Ground truth count changed after shuffle";
+    EXPECT_EQ(gt_vecs.get_vec_dim(), gt_dim) << "Ground truth dimension changed after shuffle";
+
+    // Verify sampled vectors still exist (just reordered)
+    logger.info(fmt::format("Verifying {} sampled vectors...", num_samples));
+    for (const auto& [old_idx, old_vec] : original_base_vecs) {
+        bool match_found = false;
+
+        // Search for this vector in the shuffled dataset
+        for (vec_num_t new_id = 0; new_id < total_vecs; ++new_id) {
+            const float* shuffled_vec = base_vecs.get(new_id);
+
+            bool matches = true;
+            for (vec_dim_t d = 0; d < dim; ++d) {
+                if (std::abs(shuffled_vec[d] - old_vec[d]) > 1e-6f) {
+                    matches = false;
+                    break;
+                }
+            }
+
+            if (matches) {
+                match_found = true;
+                break;
+            }
+        }
+
+        ASSERT_TRUE(match_found) << fmt::format("Original vector at index {} not found in shuffled data", old_idx);
+    }
+
+    // Verify ground truth IDs are correctly updated (sample a subset)
+    logger.info(fmt::format("Verifying ground truth for {} sampled queries...", std::min(100u, num_gt)));
+    vec_num_t num_gt_samples = std::min(100u, num_gt);
+
+    for (vec_num_t query_id = 0; query_id < num_gt_samples; ++query_id) {
+        const uint32_t* new_gt_row = gt_vecs.get(query_id);
+        const auto& old_gt_row = original_gt_vecs[query_id];
+
+        // Only check first 10 ground truth entries per query
+        vec_dim_t num_gt_checks = std::min(10u, gt_dim);
+        for (vec_dim_t k = 0; k < num_gt_checks; ++k) {
+            uint32_t old_base_id = old_gt_row[k];
+            uint32_t new_base_id = new_gt_row[k];
+
+            if (old_base_id >= total_vecs || new_base_id >= total_vecs) continue;
+
+            // Verify the vectors are the same
+            const float* old_vec_data = original_base_vecs.count(old_base_id)
+                ? original_base_vecs[old_base_id].data()
+                : nullptr;
+
+            if (!old_vec_data) continue; // Skip if not in our sample
+
+            const float* new_vec_data = base_vecs.get(new_base_id);
+
+            bool vectors_match = true;
+            for (vec_dim_t d = 0; d < dim; ++d) {
+                if (std::abs(old_vec_data[d] - new_vec_data[d]) > 1e-6f) {
+                    vectors_match = false;
+                    break;
+                }
+            }
+
+            ASSERT_TRUE(vectors_match)
+                << fmt::format("Ground truth mismatch: query {}, k={}, old_id={}, new_id={}",
+                              query_id, k, old_base_id, new_base_id);
+        }
+    }
+
+    logger.success("shuffle_in_place passed verification.");
 }
 
 // --- Main ---

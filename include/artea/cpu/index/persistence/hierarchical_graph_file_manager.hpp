@@ -108,8 +108,7 @@ public:
                 {"coverage_ratio", config.coverage_ratio()},
                 {"confidence", config.confidence()},
                 {"max_result_ratio", config.max_result_ratio()},
-                {"sampling_batch_size", config.sampling_batch_size()},
-                {"is_shuffle", config.is_shuffle()}
+                {"sampling_batch_size", config.sampling_batch_size()}
             };
         } else if (std::holds_alternative<random_vertices_builder_config_t>(vertices_builder_config)) {
             const auto& config = std::get<random_vertices_builder_config_t>(vertices_builder_config);
@@ -242,8 +241,7 @@ public:
                     meta["vertices_builder_config"]["coverage_ratio"].get<typename greedy_vertices_builder_config_t::ratio_t>(),
                     meta["vertices_builder_config"]["confidence"].get<typename greedy_vertices_builder_config_t::ratio_t>(),
                     meta["vertices_builder_config"]["max_result_ratio"].get<typename greedy_vertices_builder_config_t::ratio_t>(),
-                    meta["vertices_builder_config"]["sampling_batch_size"].get<vertex_num_t>(),
-                    meta["vertices_builder_config"]["is_shuffle"].get<bool>()
+                    meta["vertices_builder_config"]["sampling_batch_size"].get<vertex_num_t>()
                 );
             } else if (vertices_builder_config_type == "random") {
                 return random_vertices_builder_config_t(

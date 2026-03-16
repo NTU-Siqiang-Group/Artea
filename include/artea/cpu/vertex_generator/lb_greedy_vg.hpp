@@ -114,7 +114,6 @@ public:
      * @param coverage_ratio Target coverage ratio (e.g., 0.95 for 95% coverage)
      * @param confidence Confidence level (e.g., 0.96 for 96% confidence)
      * @param sampling_batch_size Batch size for processing
-     * @param is_shuffle Whether to shuffle the dataset to eliminate spatial correlation
      * @return Approximate r-net (VertexSubset)
      */
     auto generate_impl(
@@ -123,11 +122,10 @@ public:
         const vertex_num_t max_result_size,
         const float coverage_ratio,
         const float confidence,
-        const vertex_num_t sampling_batch_size,
-        const bool is_shuffle = false
+        const vertex_num_t sampling_batch_size
     ) -> approx_rnet_t {
         vertex_num_t term_thresh = compute_term_thresh(coverage_ratio, confidence, sampling_batch_size);
-        return generate_impl(vecs_data, rnet_radius, max_result_size, sampling_batch_size, term_thresh, is_shuffle);
+        return generate_impl(vecs_data, rnet_radius, max_result_size, sampling_batch_size, term_thresh);
     }
 
     /**
@@ -140,7 +138,6 @@ public:
      * @param max_result_size Maximum number of vertices to generate
      * @param sampling_batch_size Batch size for processing
      * @param term_thresh Termination threshold
-     * @param is_shuffle Whether to shuffle the dataset to eliminate spatial correlation
      * @return Approximate r-net (VertexSubset)
      */
     auto generate_impl(
@@ -148,8 +145,7 @@ public:
         const distance_t rnet_radius,
         const vertex_num_t max_result_size,
         const vertex_num_t sampling_batch_size,
-        const vertex_num_t term_thresh,
-        const bool is_shuffle = false
+        const vertex_num_t term_thresh
     ) -> approx_rnet_t {
         const vec_num_t total_vecs = vecs_data.get_num_vecs();
 
@@ -159,16 +155,9 @@ public:
 
         approx_rnet.reserve(max_result_size);
 
-        // Initialize shuffle generator if needed
-        std::unique_ptr<random_seq_nr_t> shuffle_gen;
-        if (is_shuffle) {
-            shuffle_gen = std::make_unique<random_seq_nr_t>(total_vecs);
-        }
-
-        // Select first vertex (either shuffled or sequential)
-        vec_id_t first_id = is_shuffle ? (*shuffle_gen)[0] : 0;
-        approx_rnet.vec_ids.push_back(first_id);
-        approx_rnet.vecs_data.append_vec(vecs_data.get(first_id));
+        // Select first vertex
+        approx_rnet.vec_ids.push_back(0);
+        approx_rnet.vecs_data.append_vec(vecs_data.get(0));
 
         vec_num_t batch_start = 0;
 
@@ -186,13 +175,8 @@ public:
                     auto& local_candidates = thread_local_candidates.local();
 
                     for (vec_num_t local_idx = r.begin(); local_idx != r.end(); ++local_idx) {
-                        // Get actual candidate index (shuffled or sequential)
-                        vec_num_t candidate_idx;
-                        if (is_shuffle) {
-                            candidate_idx = (*shuffle_gen)[batch_start + local_idx];
-                        } else {
-                            candidate_idx = batch_start + local_idx;
-                        }
+                        // Get actual candidate index
+                        vec_num_t candidate_idx = batch_start + local_idx;
 
                         const vec_ele_t* candidate_vec = vecs_data.get(candidate_idx);
 

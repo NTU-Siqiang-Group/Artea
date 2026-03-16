@@ -71,7 +71,7 @@ TEST_F(HierarchicalGraphPersistenceTest, SnapshotAndRestore) {
 
     // Create vertices builder config
     greedy_vertices_builder_config_t vertices_builder_config(
-        34875.0f, 2.56f, 0.96f, 0.99f, 0.2f, 2048, false
+        34875.0f, 2.56f, 0.96f, 0.99f, 0.2f, 2048
     );
 
     // Create hierarchical graph

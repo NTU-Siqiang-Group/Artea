@@ -62,6 +62,12 @@ public:
             g_config.dataset_name
         );
 
+        // Shuffle dataset if requested
+        if (g_config.shuffle) {
+            logger.info("Shuffling dataset...");
+            dataset->shuffle_in_place();
+        }
+
         dim_ = dataset->get_base_vecs().get_vec_dim();
         num_base_vecs_ = dataset->get_base_vecs().get_num_vecs();
 
@@ -96,8 +102,7 @@ static void BM_LBGreedyVG(benchmark::State& state) {
             g_config.max_result_size,
             g_config.coverage_ratio,
             g_config.confidence,
-            g_config.batch_size,
-            g_config.shuffle
+            g_config.batch_size
         );
         benchmark::DoNotOptimize(result);
         benchmark::ClobberMemory();
@@ -110,8 +115,7 @@ static void BM_LBGreedyVG(benchmark::State& state) {
         g_config.max_result_size,
         g_config.coverage_ratio,
         g_config.confidence,
-        g_config.batch_size,
-        g_config.shuffle
+        g_config.batch_size
     );
     state.counters["result_size"] = benchmark::Counter(
         static_cast<double>(result.size())

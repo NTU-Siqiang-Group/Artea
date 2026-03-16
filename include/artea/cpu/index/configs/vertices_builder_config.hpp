@@ -42,7 +42,6 @@ struct GreedyVerticesBuilderConfig {
      * @param confidence Confidence level for R-net generation (recommend: 0.95).
      * @param max_result_ratio Maximum result size ratio relative to current layer size (recommend: 0.2).
      * @param sampling_batch_size Batch size for sampling (recommend: 1024).
-     * @param is_shuffle Whether to shuffle the input vectors before processing.
      */
     GreedyVerticesBuilderConfig(
         distance_t min_radius,
@@ -50,16 +49,14 @@ struct GreedyVerticesBuilderConfig {
         ratio_t coverage_ratio,
         ratio_t confidence,
         ratio_t max_result_ratio,
-        vertex_num_t sampling_batch_size,
-        bool is_shuffle
+        vertex_num_t sampling_batch_size
     ) :
         _min_radius(min_radius),
         _beta_sq(beta_sq),
         _coverage_ratio(coverage_ratio),
         _confidence(confidence),
         _max_result_ratio(max_result_ratio),
-        _sampling_batch_size(sampling_batch_size),
-        _is_shuffle(is_shuffle)
+        _sampling_batch_size(sampling_batch_size)
     {}
 
     // Builder pattern setters (chainable)
@@ -69,7 +66,6 @@ struct GreedyVerticesBuilderConfig {
     auto confidence(ratio_t value) -> GreedyVerticesBuilderConfig& { _confidence = value; return *this; }
     auto max_result_ratio(ratio_t value) -> GreedyVerticesBuilderConfig& { _max_result_ratio = value; return *this; }
     auto sampling_batch_size(vertex_num_t value) -> GreedyVerticesBuilderConfig& { _sampling_batch_size = value; return *this; }
-    auto is_shuffle(bool value) -> GreedyVerticesBuilderConfig& { _is_shuffle = value; return *this; }
 
     // Const getters
     auto min_radius() const -> distance_t { return _min_radius; }
@@ -78,7 +74,6 @@ struct GreedyVerticesBuilderConfig {
     auto confidence() const -> ratio_t { return _confidence; }
     auto max_result_ratio() const -> ratio_t { return _max_result_ratio; }
     auto sampling_batch_size() const -> vertex_num_t { return _sampling_batch_size; }
-    auto is_shuffle() const -> bool { return _is_shuffle; }
 
 private:
     /** @brief Minimum radius for R-net (bottom layer radius). */
@@ -98,9 +93,6 @@ private:
 
     /** @brief Batch size for sampling (recommend: 1024). */
     vertex_num_t _sampling_batch_size;
-
-    /** @brief Whether to shuffle the input vectors before processing. */
-    bool _is_shuffle;
 };
 
 /**

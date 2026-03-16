@@ -91,6 +91,13 @@ public:
         }
         logger.info(fmt::format("Loading Dataset: {} from {}", g_config.dataset_name, g_config.config_path));
         dataset_ = std::make_unique<vector_dataset_t>(g_config.config_path, g_config.dataset_name);
+
+        // Shuffle dataset if requested
+        if (g_config.rnet_config.is_shuffle) {
+            logger.info("Shuffling dataset...");
+            dataset_->shuffle_in_place();
+        }
+
         dist_func_ = std::make_unique<dist_func_t>(dataset_->get_base_vecs().get_vec_dim());
 
         const auto& base_vecs = dataset_->get_base_vecs();
@@ -140,8 +147,7 @@ protected:
                 g_config.rnet_config.coverage_ratio,
                 g_config.rnet_config.confidence,
                 g_config.rnet_config.max_result_ratio,
-                g_config.rnet_config.sampling_batch_size,
-                g_config.rnet_config.is_shuffle
+                g_config.rnet_config.sampling_batch_size
             );
             auto hierarchical_graph = std::make_unique<hierarchical_graph_t>(
                 base_vecs,

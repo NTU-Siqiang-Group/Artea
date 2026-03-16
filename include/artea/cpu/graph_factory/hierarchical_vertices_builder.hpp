@@ -80,8 +80,7 @@ public:
                 vertices_builder_config.coverage_ratio(),
                 vertices_builder_config.confidence(),
                 max_result_size,
-                vertices_builder_config.sampling_batch_size(),
-                vertices_builder_config.is_shuffle()
+                vertices_builder_config.sampling_batch_size()
             );
 
             // Update layer_id for the new layer
@@ -168,8 +167,7 @@ private:
         const ratio_t coverage_ratio,
         const ratio_t confidence,
         const vertex_num_t max_result_size,
-        const vertex_num_t sampling_batch_size,
-        const bool is_shuffle
+        const vertex_num_t sampling_batch_size
     ) -> vertex_subset_t {
         lb_greedy_vg_t lb_greedy_vg(dist_func);
 
@@ -180,8 +178,7 @@ private:
             max_result_size,
             coverage_ratio,
             confidence,
-            sampling_batch_size,
-            is_shuffle
+            sampling_batch_size
         );
     }
 

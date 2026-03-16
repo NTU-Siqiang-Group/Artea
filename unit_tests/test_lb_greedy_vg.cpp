@@ -65,7 +65,6 @@ struct TestResults {
     float empirical_coverage = 0.0f;
     float min_pairwise_dist = 0.0f;
     uint32_t separation_violations = 0;
-    bool ordering_passed = false;
     bool data_consistency_passed = false;
     bool uniqueness_passed = false;
 } g_test_results;
@@ -83,6 +82,13 @@ public:
         }
         logger.info(fmt::format("Loading Dataset: {} from {}", g_config.dataset_name, g_config.config_path));
         dataset_ = std::make_unique<vector_dataset_t>(g_config.config_path, g_config.dataset_name);
+
+        // Shuffle dataset if requested
+        if (g_config.shuffle) {
+            logger.info("Shuffling dataset...");
+            dataset_->shuffle_in_place();
+        }
+
         dist_func_ = std::make_unique<dist_func_t>(dataset_->get_base_vecs().get_vec_dim());
 
         // Generate r-net once for all tests
@@ -106,8 +112,7 @@ public:
             g_config.max_result_size,
             g_config.coverage_ratio,
             g_config.confidence,
-            g_config.batch_size,
-            g_config.shuffle
+            g_config.batch_size
         ));
 
         auto end_time = std::chrono::high_resolution_clock::now();
@@ -135,30 +140,6 @@ private:
 };
 
 class LBGreedyVGTest : public ::testing::Test {};
-
-TEST_F(LBGreedyVGTest, VerifyRNetOrdering) {
-    auto& provider = DataProvider::instance();
-    auto& dataset = provider.get_dataset();
-    auto& approx_rnet = provider.get_approx_rnet();
-
-    const auto& base_vecs = dataset.get_base_vecs();
-
-    logger.info("Testing arrange_in_order correctness...");
-    logger.info(fmt::format("R-net has {} vertices", approx_rnet.get_num_vecs()));
-
-    // Test 1: Verify vec_ids are sorted in ascending order
-    logger.info("Verifying vec_ids are sorted...");
-    bool is_sorted = std::is_sorted(approx_rnet.vec_ids.begin(), approx_rnet.vec_ids.end());
-    EXPECT_TRUE(is_sorted) << "vec_ids should be sorted in ascending order";
-
-    g_test_results.ordering_passed = is_sorted;
-
-    if (is_sorted) {
-        logger.success("vec_ids are correctly sorted");
-    } else {
-        logger.error("vec_ids are NOT sorted");
-    }
-}
 
 TEST_F(LBGreedyVGTest, VerifyRNetDataConsistency) {
     auto& provider = DataProvider::instance();
@@ -389,7 +370,6 @@ int main(int argc, char** argv) {
     std::cout << fmt::format("  Min Pairwise Distance:  {:.4f}", g_test_results.min_pairwise_dist) << std::endl;
     std::cout << fmt::format("  Separation Violations:  {}", g_test_results.separation_violations) << std::endl;
     std::cout << "\n--- Test Results ---" << std::endl;
-    std::cout << fmt::format("  Ordering Test:          {}", g_test_results.ordering_passed ? "PASS" : "FAIL") << std::endl;
     std::cout << fmt::format("  Data Consistency Test:  {}", g_test_results.data_consistency_passed ? "PASS" : "FAIL") << std::endl;
     std::cout << fmt::format("  Uniqueness Test:        {}", g_test_results.uniqueness_passed ? "PASS" : "FAIL") << std::endl;
     std::cout << fmt::format("  Separation Test:        {}", (g_test_results.separation_violations == 0) ? "PASS" : "FAIL") << std::endl;

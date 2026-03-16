@@ -10,10 +10,12 @@
 #include <fstream>
 #include <filesystem>
 #include <utility> // For std::move, though it's implicitly used in assignment
+#include <unordered_map>
 
 #include <fmt/format.h>
 #include <nlohmann/json.hpp>
 #include <artea/common/logger.hpp>
+#include <artea/cpu/utils/random_seq_nr.hpp>
 
 namespace artea {
 namespace cpu {
@@ -28,6 +30,7 @@ class VectorDataset {
     using base_vecs_t = typename BaseTraitsT::base_vecs_t;
     using query_vecs_t = typename BaseTraitsT::query_vecs_t;
     using ground_truth_t = typename BaseTraitsT::ground_truth_t;
+    using random_seq_nr_t = RandomSeqNR<BaseTraitsT>;
 
 public:
 
@@ -101,6 +104,60 @@ public:
     __attribute__((always_inline))
     auto get_vec_dim() const -> vec_num_t {
         return static_cast<vec_num_t>(_base_vecs.get_vec_dim());
+    }
+
+    /**
+     * @brief Shuffle the dataset in-place using Fisher-Yates algorithm.
+     *        Updates base vectors and ground truth IDs accordingly.
+     * @param seed Random seed for reproducibility (default: random_device).
+     *
+     * TODO: Optimize memory usage by implementing true in-place shuffle.
+     *       Current implementation uses extract_subset which creates a full copy,
+     *       resulting in 2x peak memory usage. A better approach would be:
+     *       1. Use Fisher-Yates shuffle with direct vector swapping via get()
+     *       2. Parallelize vector element swaps with TBB for large dimensions
+     *       3. Parallelize ground truth updates with TBB
+     *       This would reduce peak memory from 2N to N bytes.
+     */
+    auto shuffle_in_place(uint32_t seed = std::random_device{}()) -> void {
+        const vec_num_t num_base_vecs = _base_vecs.get_num_vecs();
+        if (num_base_vecs == 0) {
+            logger.warn("Cannot shuffle empty dataset");
+            return;
+        }
+
+        logger.info(fmt::format("Shuffling dataset with {} base vectors...", num_base_vecs));
+
+        // Generate shuffle indices using RandomSeqNR
+        random_seq_nr_t shuffle_gen(num_base_vecs, seed);
+
+        // Create old_id -> new_id mapping for ground truth update
+        std::vector<vec_id_t> old_to_new(num_base_vecs);
+        std::vector<vec_id_t> shuffle_ids(num_base_vecs);
+        for (vec_num_t new_id = 0; new_id < num_base_vecs; ++new_id) {
+            vec_id_t old_id = shuffle_gen[new_id];
+            old_to_new[old_id] = static_cast<vec_id_t>(new_id);
+            shuffle_ids[new_id] = old_id;
+        }
+
+        // Shuffle base vectors in-place using extract_subset and move assignment
+        _base_vecs = std::move(_base_vecs.extract_subset(shuffle_ids));
+
+        // Update ground truth IDs
+        const vec_num_t num_gt_vecs = _gt_vecs.get_num_vecs();
+        const vec_num_t gt_vec_dim = _gt_vecs.get_vec_dim();
+
+        for (vec_num_t i = 0; i < num_gt_vecs; ++i) {
+            vec_id_t* gt_row = _gt_vecs.get(i);
+            for (vec_num_t j = 0; j < gt_vec_dim; ++j) {
+                vec_id_t old_id = gt_row[j];
+                if (old_id < num_base_vecs) {
+                    gt_row[j] = old_to_new[old_id];
+                }
+            }
+        }
+
+        logger.success("Dataset shuffled successfully");
     }
 
 private:

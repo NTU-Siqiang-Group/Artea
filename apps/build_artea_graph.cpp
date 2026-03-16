@@ -55,7 +55,8 @@ int main(int argc, char** argv) {
     program.add_argument("--vb-confidence").default_value(0.99f).scan<'g', float>();
     program.add_argument("--vb-max-result-ratio").default_value(0.2f).scan<'g', float>();
     program.add_argument("--vb-sampling-batch-size").default_value(2048u).scan<'u', uint32_t>();
-    program.add_argument("--vb-shuffle").default_value(false).implicit_value(true);
+    program.add_argument("--shuffle").default_value(false).implicit_value(true)
+        .help("Shuffle dataset before building graph");
 
     // Bottom layer config
     program.add_argument("--bl-max-nbr-size").default_value(32u).scan<'u', uint32_t>();
@@ -99,6 +100,12 @@ int main(int argc, char** argv) {
     logger.info(fmt::format("Dataset loaded: {} vectors, {} dims",
         base_vecs.get_num_vecs(), base_vecs.get_vec_dim()));
 
+    // Shuffle dataset if requested
+    if (program.get<bool>("--shuffle")) {
+        logger.info("Shuffling dataset...");
+        dataset.shuffle_in_place();
+    }
+
     // Create layer configs
     layer_config_t bottom_layer_config(
         program.get<uint32_t>("--bl-max-nbr-size"),
@@ -130,8 +137,7 @@ int main(int argc, char** argv) {
         program.get<float>("--vb-coverage-ratio"),
         program.get<float>("--vb-confidence"),
         program.get<float>("--vb-max-result-ratio"),
-        program.get<uint32_t>("--vb-sampling-batch-size"),
-        program.get<bool>("--vb-shuffle")
+        program.get<uint32_t>("--vb-sampling-batch-size")
     );
 
     // Create hierarchical graph
