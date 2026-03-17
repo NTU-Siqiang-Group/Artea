@@ -415,17 +415,14 @@ TEST_F(ArteaGraphConstructTest, QueryRecall) {
     logger.info(fmt::format("Throughput: {:.2f} QPS", g_results.throughput_qps));
 
     // Compute recall
-    recall_estimator_t recall_estimator(dist_func);
-    auto recall_metrics = recall_estimator.calculate_recall_at_k(
+    recall_estimator_t recall_estimator;
+    g_results.recall = recall_estimator.calculate_recall_at_k(
         results,
-        groundtruth,
-        query_vecs,
-        base_vecs
+        groundtruth
     );
-    g_results.recall = recall_metrics.soft_recall;
 
-    logger.info(fmt::format("Recall@{}: {:.4f} (soft: {:.4f})",
-        g_config.topk, recall_metrics.strict_recall, recall_metrics.soft_recall));
+    logger.info(fmt::format("Recall@{}: {:.4f}",
+        g_config.topk, g_results.recall));
 
     // Expect reasonable recall (at least 50%)
     EXPECT_GE(g_results.recall, 0.5f) << "Recall should be at least 50%";

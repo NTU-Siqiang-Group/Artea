@@ -1,7 +1,7 @@
 /*
  * @FilePath: /Artea/include/artea/cpu/utils/recall_estimator.hpp
  * @Author: Chandler (Weitang Ye) <weitang.ye@ntu.edu.sg>
- * @Description: TBB-accelerated Recall Estimator with soft validation.
+ * @Description: TBB-accelerated Recall Estimator with zero-overhead design.
  */
 
 #pragma once
@@ -9,19 +9,12 @@
 #include <cstddef>
 #include <cstdint>
 #include <vector>
-#include <cmath>
+#include <algorithm>
 #include <tbb/parallel_reduce.h>
 #include <tbb/blocked_range.h>
+#include <tbb/enumerable_thread_specific.h>
 #include <fmt/format.h>
 #include <artea/common/logger.hpp>
-
-/**
- * @brief Structure to hold recall evaluation results (Used for Recall@1).
- */
-struct RecallMetrics {
-    double strict_recall; // Recall based purely on ID matching
-    double soft_recall;   // Recall considering distance tolerance (epsilon)
-};
 
 namespace artea {
 namespace cpu {
@@ -31,115 +24,117 @@ class RecallEstimator final {
 
     using vertex_id_t = typename ComputerTraitsT::vertex_id_t;
     using vertex_num_t = typename ComputerTraitsT::vertex_num_t;
-    using vec_ele_t = typename ComputerTraitsT::vec_ele_t;
-    using distance_t = typename ComputerTraitsT::distance_t;
-    using dist_func_t = typename ComputerTraitsT::dist_func_t;
-    using vector_array_t = typename ComputerTraitsT::vector_array_t;
-    using base_vecs_t = typename ComputerTraitsT::base_vecs_t;
-    using query_vecs_t = typename ComputerTraitsT::query_vecs_t;
-    using ground_truth_t = typename ComputerTraitsT::ground_truth_t;
     using idlist_array_t = typename ComputerTraitsT::idlist_array_t;
-    static constexpr std::size_t inversed_epsilon = 1000000; // Default epsilon = 1e-6
-    static constexpr distance_t epsilon = static_cast<distance_t>(1.0) / static_cast<distance_t>(inversed_epsilon);
 
 public:
 
     /**
      * @brief Construct a new Recall Estimator.
-     * @param dist_func The distance function used for verification.
      */
-    explicit RecallEstimator(const dist_func_t& dist_func)
-        : _dist_func(dist_func) {}
+    RecallEstimator() = default;
 
     /**
      * @brief Calculate Recall@K comparing predictions against ground truth using TBB parallelism.
-     *        This method includes both strict (ID match) and soft (distance tolerance) recall.
+     *
+     * Recall@K = (|predicted_top_K ∩ groundtruth_top_K|) / K
+     *
+     * Performance optimizations:
+     * - Thread-local buffers pre-allocated based on K (no runtime reallocation)
+     * - Direct memory write via resize() instead of back_inserter (zero branch overhead)
+     * - assign() for idiomatic memory copy (enables memmove optimization)
+     * - Avoids unnecessary erase() by passing logical end iterator to set_intersection
      *
      * @param predictions VectorArray of predicted IDs (num_queries vectors, each with dimension k).
      *                    Each vector contains the top-k predictions for one query.
      * @param gt_vecs Ground truth vector array (stores IDs).
-     * @param query_vecs Original query vector data (needed for distance check).
-     * @param base_vecs Original base vector data (needed for distance check).
-     * @return RecallMetrics Containing both strict and soft recall scores.
+     * @return double Recall@K score.
      */
     auto calculate_recall_at_k(
         const idlist_array_t& predictions,
-        const ground_truth_t& gt_vecs,
-        const query_vecs_t& query_vecs,
-        const base_vecs_t& base_vecs
-    ) const -> RecallMetrics {
+        const idlist_array_t& gt_vecs
+    ) const -> double {
         std::size_t num_queries = gt_vecs.get_num_vecs();
         std::size_t k = predictions.get_vec_dim();
 
         // Assertion: Check predictions size
         if (predictions.get_num_vecs() != num_queries) {
-            throw std::invalid_argument(fmt::format(
+            logger.error(fmt::format(
                 "Predictions size mismatch: expected {} queries, got {}",
                 num_queries, predictions.get_num_vecs()
             ));
+            return 0.0;
         }
 
-        // Helper struct for TBB reduction
-        struct CorrectCounts {
-            std::size_t strict = 0;
-            std::size_t soft = 0;
+        // Assertion: Check ground truth has at least k elements
+        if (gt_vecs.get_vec_dim() < k) {
+            logger.error(fmt::format(
+                "Ground truth dimension {} is less than k={}",
+                gt_vecs.get_vec_dim(), k
+            ));
+            return 0.0;
+        }
+
+        // Thread-local buffers pre-allocated based on K
+        struct ThreadLocalBuffers {
+            std::vector<vertex_id_t> sorted_gt;
+            std::vector<vertex_id_t> sorted_pred;
+            std::vector<vertex_id_t> intersect_cache;
+
+            explicit ThreadLocalBuffers(std::size_t k) {
+                sorted_gt.reserve(k);
+                sorted_pred.reserve(k);
+                intersect_cache.resize(k);  // Pre-allocate for direct write
+            }
         };
 
-        // Parallel Reduction
-        CorrectCounts total_counts = tbb::parallel_reduce(
+        tbb::enumerable_thread_specific<ThreadLocalBuffers> thread_buffers([k]() {
+            return ThreadLocalBuffers(k);
+        });
+
+        // Parallel Reduction to count total matches
+        std::size_t total_matches = tbb::parallel_reduce(
             tbb::blocked_range<std::size_t>(0, num_queries),
-            CorrectCounts {},
-            [&](const tbb::blocked_range<std::size_t>& r, CorrectCounts local_counts) -> CorrectCounts {
+            std::size_t(0),
+            [&](const tbb::blocked_range<std::size_t>& r, std::size_t local_matches) -> std::size_t {
+                auto& buffers = thread_buffers.local();
+
                 for (std::size_t i = r.begin(); i != r.end(); ++i) {
-                    const vertex_id_t gt_id = gt_vecs.get(i)[0]; // Nearest GT
+                    const vertex_id_t* gt_vec = gt_vecs.get(i);
                     const vertex_id_t* pred_vec = predictions.get(i);
-                    const vec_ele_t* q_vec = query_vecs.get(i);
-                    const vec_ele_t* gt_vec_data = base_vecs.get(gt_id);
-                    distance_t dist_gt = _dist_func(q_vec, gt_vec_data);
 
-                    bool strict_found = false;
-                    bool soft_found = false;
+                    // Prepare sorted ground truth IDs using assign (enables memmove optimization)
+                    buffers.sorted_gt.assign(gt_vec, gt_vec + k);
+                    std::sort(buffers.sorted_gt.begin(), buffers.sorted_gt.end());
 
-                    // Iterate through top-K predictions
-                    for (std::size_t j = 0; j < k; ++j) {
-                        vertex_id_t pred_id = pred_vec[j];
+                    // Prepare sorted prediction IDs using assign
+                    buffers.sorted_pred.assign(pred_vec, pred_vec + k);
+                    std::sort(buffers.sorted_pred.begin(), buffers.sorted_pred.end());
 
-                        // Strict ID matching
-                        if (pred_id == gt_id) {
-                            strict_found = true;
-                            soft_found = true;
-                            break;
-                        }
+                    // Remove duplicates from predictions (prevents inflated recall)
+                    auto pred_end = std::unique(buffers.sorted_pred.begin(), buffers.sorted_pred.end());
 
-                        // Soft distance-based tolerance check
-                        if (!soft_found) {
-                            const vec_ele_t* pred_vec_data = base_vecs.get(pred_id);
-                            distance_t dist_pred = _dist_func(q_vec, pred_vec_data);
+                    // Compute intersection using direct memory write (zero branch overhead)
+                    auto intersect_end = std::set_intersection(
+                        buffers.sorted_gt.begin(), buffers.sorted_gt.end(),
+                        buffers.sorted_pred.begin(), pred_end,
+                        buffers.intersect_cache.begin()
+                    );
 
-                            if (dist_pred <= dist_gt * (static_cast<distance_t>(1.0) + epsilon)) {
-                                soft_found = true;
-                            }
-                        }
-                    }
-
-                    if (strict_found) local_counts.strict++;
-                    if (soft_found) local_counts.soft++;
+                    // Count intersection size
+                    local_matches += std::distance(buffers.intersect_cache.begin(), intersect_end);
                 }
-                return local_counts;
+                return local_matches;
             },
-            [](CorrectCounts a, CorrectCounts b) -> CorrectCounts {
-                return CorrectCounts{ a.strict + b.strict, a.soft + b.soft };
+            [](std::size_t a, std::size_t b) -> std::size_t {
+                return a + b;
             }
         );
 
-        double score_strict = static_cast<double>(total_counts.strict) / num_queries;
-        double score_soft = static_cast<double>(total_counts.soft) / num_queries;
+        // Recall@K = total_matches / (num_queries * k)
+        double recall = static_cast<double>(total_matches) / (num_queries * k);
 
-        return RecallMetrics { score_strict, score_soft };
+        return recall;
     }
-
-private:
-    const dist_func_t& _dist_func;
 
 };  // class RecallEstimator
 

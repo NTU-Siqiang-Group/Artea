@@ -86,14 +86,11 @@ auto run_benchmark(
     result.avg_query_time_us = static_cast<double>(duration.count()) / query_vecs.get_num_vecs();
     result.throughput_qps = query_vecs.get_num_vecs() * 1000000.0 / duration.count();
 
-    recall_estimator_t recall_estimator(dist_func);
-    auto recall_metrics = recall_estimator.calculate_recall_at_k(
+    recall_estimator_t recall_estimator;
+    result.recall = recall_estimator.calculate_recall_at_k(
         results,
-        groundtruth,
-        query_vecs,
-        base_vecs
+        groundtruth
     );
-    result.recall = recall_metrics.strict_recall;
 
     return result;
 }

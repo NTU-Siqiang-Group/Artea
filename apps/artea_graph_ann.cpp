@@ -41,7 +41,7 @@ auto find_latest_index(const std::string& base_dir, const std::string& dataset_n
     std::filesystem::path search_path = std::filesystem::path(base_dir) / subdir;
 
     if (!std::filesystem::exists(search_path)) {
-        throw std::runtime_error(fmt::format("Index directory not found: {}", search_path.string()));
+        logger.error(fmt::format("Index directory not found: {}", search_path.string()));
     }
 
     std::filesystem::path latest_path;
@@ -50,6 +50,39 @@ auto find_latest_index(const std::string& base_dir, const std::string& dataset_n
 
     for (const auto& entry : std::filesystem::directory_iterator(search_path)) {
         if (entry.is_directory()) {
+            // Verify metadata exists and matches dataset
+            std::filesystem::path metadata_path = entry.path() / "metadata.json";
+            if (!std::filesystem::exists(metadata_path)) {
+                logger.warn(fmt::format("Skipping {}: no metadata.json found", entry.path().filename().string()));
+                continue;
+            }
+
+            // Read and verify metadata
+            std::ifstream metadata_file(metadata_path);
+            if (!metadata_file.is_open()) {
+                logger.warn(fmt::format("Skipping {}: cannot open metadata.json", entry.path().filename().string()));
+                continue;
+            }
+
+            nlohmann::json metadata;
+            try {
+                metadata = nlohmann::json::parse(metadata_file);
+            } catch (const std::exception& e) {
+                logger.warn(fmt::format("Skipping {}: invalid metadata.json", entry.path().filename().string()));
+                metadata_file.close();
+                continue;
+            }
+            metadata_file.close();
+
+            // Verify dataset name matches
+            if (!metadata.contains("dataset") || metadata["dataset"] != dataset_name) {
+                logger.warn(fmt::format("Skipping {}: dataset mismatch (expected: {}, found: {})",
+                    entry.path().filename().string(), dataset_name,
+                    metadata.contains("dataset") ? metadata["dataset"].get<std::string>() : "none"));
+                continue;
+            }
+
+            // Check if this is the latest valid index
             auto current_time = std::filesystem::last_write_time(entry.path());
             if (!found || current_time > latest_time) {
                 latest_time = current_time;
@@ -60,7 +93,8 @@ auto find_latest_index(const std::string& base_dir, const std::string& dataset_n
     }
 
     if (!found) {
-        throw std::runtime_error(fmt::format("No index found in {}", search_path.string()));
+        logger.error(fmt::format("No valid index found for dataset '{}' in {}", dataset_name, search_path.string()));
+        return "";
     }
 
     return latest_path.string();
@@ -86,14 +120,11 @@ auto run_benchmark(
     result.avg_query_time_us = static_cast<double>(duration.count()) / query_vecs.get_num_vecs();
     result.throughput_qps = query_vecs.get_num_vecs() * 1000000.0 / duration.count();
 
-    recall_estimator_t recall_estimator(dist_func);
-    auto recall_metrics = recall_estimator.calculate_recall_at_k(
+    recall_estimator_t recall_estimator;
+    result.recall = recall_estimator.calculate_recall_at_k(
         results,
-        groundtruth,
-        query_vecs,
-        base_vecs
+        groundtruth
     );
-    result.recall = recall_metrics.strict_recall;
 
     return result;
 }

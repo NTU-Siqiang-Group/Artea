@@ -100,16 +100,15 @@ TEST_F(BruteforceCorrectnessTest, VerifyRecallAccuracy) {
     idlist_array_t predictions = router.batch_query(query_vecs);
 
     // 3. Verify against Ground Truth using calculate_recall_at_k with k=1
-    recall_estimator_t estimator(dist_func);
-    auto metrics = estimator.calculate_recall_at_k(
-        predictions, gt_vecs, query_vecs, base_vecs
+    recall_estimator_t estimator;
+    auto recall = estimator.calculate_recall_at_k(
+        predictions, gt_vecs
     );
 
-    logger.info(fmt::format("Artea Strict Recall@1: {:.4f}", metrics.strict_recall));
-    logger.info(fmt::format("Artea Soft Recall@1: {:.4f}", metrics.soft_recall));
+    logger.info(fmt::format("Artea Recall@1: {:.4f}", recall));
 
     // Bruteforce should theoretically be 100% (or extremely close due to float precision)
-    EXPECT_GE(metrics.soft_recall, 0.999f) << "Bruteforce router recall is lower than 0.999!";
+    EXPECT_GE(recall, 0.999f) << "Bruteforce router recall is lower than 0.999!";
 }
 
 TEST(BruteforceRouterTest, BatchTopKQuery) {
@@ -150,17 +149,16 @@ TEST(BruteforceRouterTest, BatchTopKQuery) {
         EXPECT_EQ(batch_results.get_vec_dim(), k)
             << fmt::format("Each result vector should have dimension {}", k);
 
-        // Calculate Recall@K using the new idlist_array_t overload with soft check
-        recall_estimator_t estimator(dist_func);
-        auto metrics = estimator.calculate_recall_at_k(batch_results, gt_subset, query_subset, base_vecs);
+        // Calculate Recall@K using the new idlist_array_t overload
+        recall_estimator_t estimator;
+        auto recall = estimator.calculate_recall_at_k(batch_results, gt_subset);
 
         // Bruteforce should achieve perfect recall
-        EXPECT_GE(metrics.soft_recall, 0.999)
-            << fmt::format("Bruteforce router batch Soft Recall@{} is too low: {:.4f}", k, metrics.soft_recall);
+        EXPECT_GE(recall, 0.999)
+            << fmt::format("Bruteforce router batch Recall@{} is too low: {:.4f}", k, recall);
 
         logger.info(fmt::format("Batch top-{} query test passed:", k));
-        logger.info(fmt::format("   -> Strict Recall@{}: {:.2f}%", k, metrics.strict_recall * 100.0));
-        logger.info(fmt::format("   -> Soft Recall@{}:   {:.2f}%", k, metrics.soft_recall * 100.0));
+        logger.info(fmt::format("   -> Recall@{}: {:.2f}%", k, recall * 100.0));
     }
 
     logger.info("Batch top-k query test passed");
