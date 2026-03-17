@@ -9,4 +9,4 @@
 	url = git@github.com:WittenYeh/arena-benchmark.git
 [submodule "third_party/ann-datasets"]
 	path = third_party/ann-datasets
-	url = git@github.com:WittenYeh/ANNDatasets.git
+	url = git@github.com:WittenYeh/ann-datasets.git
