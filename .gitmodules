@@ -1,12 +1,12 @@
 [submodule "third_party/faiss"]
 	path = third_party/faiss
-	url = https://github.com/facebookresearch/faiss.git
+	url = git@github.com:facebookresearch/faiss.git
 [submodule "third_party/hnswlib"]
 	path = third_party/hnswlib
 	url = git@github.com:nmslib/hnswlib.git
 [submodule "third_party/arena-benchmark"]
 	path = third_party/arena-benchmark
-	url = https://github.com/WittenYeh/arena-benchmark
+	url = git@github.com:WittenYeh/arena-benchmark.git
 [submodule "third_party/ann-datasets"]
 	path = third_party/ann-datasets
-	url = https://github.com/WittenYeh/ANNDatasets
+	url = git@github.com:WittenYeh/ANNDatasets.git
