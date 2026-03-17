@@ -8,12 +8,40 @@
       "query_path": "sift_query.fvecs",
       "gt_path": "sift_groundtruth.ivecs"
     },
+    "sift-10m": {
+      "dataset_dir": "sift-10m",
+      "train_path": "sift10m_learn.bvecs",
+      "base_path": "sift10m_base.bvecs",
+      "query_path": "sift10m_query.bvecs",
+      "gt_path": "sift10m_groundtruth.ivecs"
+    },
+    "sift-100m": {
+      "dataset_dir": "sift-100m",
+      "train_path": "sift100m_learn.bvecs",
+      "base_path": "sift100m_base.bvecs",
+      "query_path": "sift100m_query.bvecs",
+      "gt_path": "sift100m_groundtruth.ivecs"
+    },
+    "sift-1b": {
+      "dataset_dir": "sift-1b",
+      "train_path": "bigann_learn.bvecs",
+      "base_path": "bigann_base.bvecs",
+      "query_path": "bigann_query.bvecs",
+      "gt_path": "idx_1000M.ivecs"
+    },
     "gist-1m": {
       "dataset_dir": "gist-1m",
       "train_path": "gist_learn.fvecs",
       "base_path": "gist_base.fvecs",
       "query_path": "gist_query.fvecs",
       "gt_path": "gist_groundtruth.ivecs"
+    },
+    "deep-1m": {
+      "dataset_dir": "deep-1m",
+      "train_path": "deep1m_learn.fvecs",
+      "base_path": "deep1m_base.fvecs",
+      "query_path": "deep1m_query.fvecs",
+      "gt_path": "deep1m_groundtruth.ivecs"
     }
   }
 }
