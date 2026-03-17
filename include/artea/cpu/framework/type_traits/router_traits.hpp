@@ -29,12 +29,8 @@ namespace cpu {
 /** ------ Forward Declaration  ------ **/
 template <typename RouterTraitsT, typename DerivedClassT> class VectorRouter;
 template <typename RouterTraitsT> class BruteforceRouter;
-template <typename RouterTraitsT, CandidateQueue CandidateQueueImpl, VisitedTable VisitedTableImpl>
-    requires CandidateQueue<CandidateQueueImpl> && VisitedTable<VisitedTableImpl>
-class MonolayerGraphRouter;
-template <typename RouterTraitsT, CandidateQueue CandidateQueueImpl, VisitedTable VisitedTableImpl>
-    requires CandidateQueue<CandidateQueueImpl> && VisitedTable<VisitedTableImpl>
-class HierarchicalGraphRouter;
+template <typename RouterTraitsT> class MonolayerGraphRouter;
+template <typename RouterTraitsT> class HierarchicalGraphRouter;
 template <typename RouterTraitsT> struct CandidateEntry;
 template <typename RouterTraitsT> struct CandidateEntryComparator;
 template <typename RouterTraitsT> struct StatefulCandidateEntry;
@@ -93,20 +89,20 @@ struct RouterTraits : virtual public ComputerTraitsT, virtual public IndexTraits
     /** @brief Type for four-ary heap candidate queue */
     using fh_candidate_queue_t = FHCandidateQueue<router_traits_t>;
 
+    /** @brief Type for candidate queue */
+    using candidate_queue_t = typename router_traits_t::linear_candidate_queue_t;
+
     /** @brief Default visited table type (used by candidate queues and routers). */
     using visited_table_t = typename router_traits_t::thread_local_bitmap_t;
 
     /** @brief Type for visited table pool (default uses thread_local_bitmap_t). */
-    template <VisitedTable VisitedTableImpl = visited_table_t>
-    using visited_table_pool_t = VisitedTablePool<router_traits_t, VisitedTableImpl>;
+    using visited_table_pool_t = VisitedTablePool<router_traits_t, visited_table_t>;
 
     /** @brief Type for monolayer graph router. */
-    template <CandidateQueue CandidateQueueImpl = std_candidate_queue_t, VisitedTable VisitedTableImpl = visited_table_t>
-    using monolayer_graph_router_t = MonolayerGraphRouter<router_traits_t, CandidateQueueImpl, VisitedTableImpl>;
+    using monolayer_graph_router_t = MonolayerGraphRouter<router_traits_t>;
 
     /** @brief Type for hierarchical graph router. */
-    template <CandidateQueue CandidateQueueImpl = std_candidate_queue_t, VisitedTable VisitedTableImpl = visited_table_t>
-    using hierarchical_graph_router_t = HierarchicalGraphRouter<router_traits_t, CandidateQueueImpl, VisitedTableImpl>;
+    using hierarchical_graph_router_t = HierarchicalGraphRouter<router_traits_t>;
 
     /** @brief Indicates whether to enable intra-query parallelism. */
     static constexpr bool intra_query_parallel = IntraQueryParallel;

@@ -33,18 +33,11 @@
 namespace artea {
 namespace cpu {
 
-template <
-    typename RouterTraitsT,
-    CandidateQueue CandidateQueueImpl = typename RouterTraitsT::std_candidate_queue_t,
-    VisitedTable VisitedTableImpl = typename RouterTraitsT::thread_local_bitmap_t
->   requires CandidateQueue<CandidateQueueImpl> && VisitedTable<VisitedTableImpl>
+template <typename RouterTraitsT>
 class HierarchicalGraphRouter :
-    public RouterTraitsT::template vector_router_t<HierarchicalGraphRouter<RouterTraitsT, CandidateQueueImpl, VisitedTableImpl>>
+    public RouterTraitsT::template vector_router_t<HierarchicalGraphRouter<RouterTraitsT>>
 {
 
-    using candidate_queue_t = CandidateQueueImpl;
-    using visited_table_t = VisitedTableImpl;
-    using visited_table_pool_t = typename RouterTraitsT::template visited_table_pool_t<VisitedTableImpl>;
     using vertex_num_t = typename RouterTraitsT::vertex_num_t;
     using vertex_id_t = typename RouterTraitsT::vertex_id_t;
     using layer_id_t = typename RouterTraitsT::layer_id_t;
@@ -58,7 +51,10 @@ class HierarchicalGraphRouter :
     using flat_search_graph_t = typename RouterTraitsT::flat_search_graph_t;
     using hierarchical_search_graph_t = typename RouterTraitsT::hierarchical_search_graph_t;
     using inter_layer_links_t = typename RouterTraitsT::inter_layer_links_t;
-    using base_class_t = typename RouterTraitsT::template vector_router_t<HierarchicalGraphRouter<RouterTraitsT, CandidateQueueImpl, VisitedTableImpl>>;
+    using candidate_queue_t = typename RouterTraitsT::candidate_queue_t;
+    using visited_table_t = typename RouterTraitsT::visited_table_t;
+    using visited_table_pool_t = typename RouterTraitsT::visited_table_pool_t;
+    using base_class_t = typename RouterTraitsT::template vector_router_t<HierarchicalGraphRouter<RouterTraitsT>>;
 
     static constexpr vertex_num_t min_num_layer_vertex = RouterTraitsT::min_num_layer_vertex;
 
@@ -147,9 +143,9 @@ private:
             // Greedy search on current layer
             _greedy_search_layer(
                 query_vec,
+                layer_id,
                 current_nearest,
-                current_dist,
-                layer_id
+                current_dist
             );
 
             // Convert to next layer using inter-layer links
@@ -165,9 +161,9 @@ private:
         // Search bottom layer
         _beam_search_layer(
             query_vec,
+            0,  // bottom layer id
             visited_table,
-            candidate_queue,
-            0
+            candidate_queue
         );
 
         // Extract top-k results
@@ -183,9 +179,9 @@ private:
      */
     auto _greedy_search_layer(
         const vec_ele_t* query_vec,
+        const layer_id_t layer_id,
         vertex_id_t& current_nearest,
-        distance_t& current_dist,
-        const layer_id_t layer_id
+        distance_t& current_dist
     ) const -> void {
         const auto& layer_graph = _hierarchical_search_graph.get_layer_graph(layer_id);
         const auto& layer_vecs = _hierarchical_search_graph.get_hier_vecs_manager().get_layer_vecs(layer_id);
@@ -218,9 +214,9 @@ private:
      */
     auto _beam_search_layer(
         const vec_ele_t* query_vec,
+        const layer_id_t layer_id,
         visited_table_t& visited_table,
-        candidate_queue_t& candidate_queue,
-        const layer_id_t layer_id
+        candidate_queue_t& candidate_queue
     ) const -> void {
         const auto& layer_graph = _hierarchical_search_graph.get_layer_graph(layer_id);
         // Get the layer-specific vectors for distance computation
@@ -256,29 +252,6 @@ private:
                 // Try to add neighbor to candidate queue
                 candidate_queue.try_push(nbr_id, nbr_dist);
             }
-        }
-    }
-
-    /**
-     * @brief Convert candidate queue from current layer to next layer using inter-layer links.
-     * @param candidate_queue Reference to the candidate queue (modified in-place).
-     * @param current_layer_id Current layer ID.
-     */
-    auto _convert_to_next_layer(
-        candidate_queue_t& candidate_queue,
-        const layer_id_t current_layer_id
-    ) const -> void {
-        const auto& inter_layer_links = _hierarchical_search_graph.get_inter_layer_links();
-
-        // Extract current results with distances
-        auto current_results = candidate_queue.extract_results(candidate_queue.get_result_size());
-
-        // Clear and rebuild with next layer vertex IDs
-        candidate_queue.clear();
-
-        for (const auto& [current_vid, dist] : current_results) {
-            const vertex_id_t next_vid = inter_layer_links.get_linked_vertex(current_layer_id, current_vid);
-            candidate_queue.try_push(next_vid, dist);
         }
     }
 

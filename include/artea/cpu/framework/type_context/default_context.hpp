@@ -146,20 +146,13 @@ using stateful_candidate_entry_t = typename router_traits_t::stateful_candidate_
 using std_candidate_queue_t = typename router_traits_t::std_candidate_queue_t;
 using linear_candidate_queue_t = typename router_traits_t::linear_candidate_queue_t;
 using fh_candidate_queue_t = typename router_traits_t::fh_candidate_queue_t;
-template <VisitedTable VisitedTableImpl = typename router_traits_t::version_tag_table_t>
-using visited_table_pool_t = typename router_traits_t::template visited_table_pool_t<VisitedTableImpl>;
-using vector_router_t = typename router_traits_t::template vector_router_t<BruteforceRouter<router_traits_t>>;
-using bruteforce_router_t = BruteforceRouter<router_traits_t>;
+using candidate_queue_t = typename router_traits_t::candidate_queue_t;
+using visited_table_pool_t = typename router_traits_t::visited_table_pool_t;
+using bruteforce_router_t = typename router_traits_t::bruteforce_router_t;
 
-// Template alias for routers with customizable queue and visited table
-template <CandidateQueue CandidateQueueImpl = std_candidate_queue_t, VisitedTable VisitedTableImpl = thread_local_bitmap_t>
-using monolayer_graph_router_template_t = typename router_traits_t::template monolayer_graph_router_t<CandidateQueueImpl, VisitedTableImpl>;
-template <CandidateQueue CandidateQueueImpl = std_candidate_queue_t, VisitedTable VisitedTableImpl = thread_local_bitmap_t>
-using hierarchical_graph_router_template_t = typename router_traits_t::template hierarchical_graph_router_t<CandidateQueueImpl, VisitedTableImpl>;
-
-// Concrete router types with default template parameters (for convenience)
-using monolayer_graph_router_t = monolayer_graph_router_template_t<>;
-using hierarchical_graph_router_t = hierarchical_graph_router_template_t<>;
+// alias for routers with customizable queue and visited table
+using monolayer_graph_router_t = typename router_traits_t::monolayer_graph_router_t;
+using hierarchical_graph_router_t = typename router_traits_t::hierarchical_graph_router_t;
 
 // Utility types
 using index_register_util_t = IndexRegisterUtil;

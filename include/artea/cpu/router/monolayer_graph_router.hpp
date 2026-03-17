@@ -35,20 +35,13 @@
 namespace artea {
 namespace cpu {
 
-template <
-    typename RouterTraitsT,
-    CandidateQueue CandidateQueueImpl = typename RouterTraitsT::std_candidate_queue_t,
-    VisitedTable VisitedTableImpl = typename RouterTraitsT::thread_local_bitmap_t
->   requires CandidateQueue<CandidateQueueImpl> && VisitedTable<VisitedTableImpl>
+template <typename RouterTraitsT>
 class MonolayerGraphRouter :
-    public RouterTraitsT::template vector_router_t<MonolayerGraphRouter<RouterTraitsT, CandidateQueueImpl, VisitedTableImpl>>
+    public RouterTraitsT::template vector_router_t<MonolayerGraphRouter<RouterTraitsT>>
 {
     // Friend declaration for HierarchicalGraphRouter to access internal methods
-    friend typename RouterTraitsT::template hierarchical_graph_router_t<CandidateQueueImpl, VisitedTableImpl>;
+    friend typename RouterTraitsT::hierarchical_graph_router_t;
 
-    using candidate_queue_t = CandidateQueueImpl;
-    using visited_table_t = VisitedTableImpl;
-    using visited_table_pool_t = typename RouterTraitsT::template visited_table_pool_t<VisitedTableImpl>;
     using vertex_num_t = typename RouterTraitsT::vertex_num_t;
     using vertex_id_t = typename RouterTraitsT::vertex_id_t;
     using vec_ele_t = typename RouterTraitsT::vec_ele_t;
@@ -59,7 +52,10 @@ class MonolayerGraphRouter :
     using idlist_array_t = typename RouterTraitsT::idlist_array_t;
     using flat_search_graph_t = typename RouterTraitsT::flat_search_graph_t;
     using random_seq_t = typename RouterTraitsT::random_seq_t;
-    using base_class_t = typename RouterTraitsT::template vector_router_t<MonolayerGraphRouter<RouterTraitsT, CandidateQueueImpl, VisitedTableImpl>>;
+    using candidate_queue_t = typename RouterTraitsT::candidate_queue_t;
+    using visited_table_t = typename RouterTraitsT::visited_table_t;
+    using visited_table_pool_t = typename RouterTraitsT::visited_table_pool_t;
+    using base_class_t = typename RouterTraitsT::template vector_router_t<MonolayerGraphRouter<RouterTraitsT>>;
 
 public:
 
