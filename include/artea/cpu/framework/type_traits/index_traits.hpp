@@ -96,7 +96,7 @@ struct IndexTraits : virtual public BaseTraitsT {
     using index_size_calculator_t = IndexSizeCalculator<index_traits_t>;
 
     /** @brief Minimum number of vertices required for a layer to continue building upper layers. */
-    static constexpr uint32_t min_num_layer_vertex = 64;
+    static constexpr uint32_t min_num_layer_vertex = 1024;
 
 };  // struct IndexTraits
 

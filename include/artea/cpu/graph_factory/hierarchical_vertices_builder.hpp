@@ -83,17 +83,17 @@ public:
                 vertices_builder_config.sampling_batch_size()
             );
 
+            // Check termination condition: if this layer is too small, stop building further layers
+            if (next_layer_subset.get_num_vecs() < min_num_layer_vertex) {
+                break;
+            }
+
             // Update layer_id for the new layer
             current_layer_id++;
 
             // Add inter-layer links and vector data (move semantics)
             inter_layer_links.bottom_up_append(std::move(next_layer_subset.vec_ids));
             hier_vecs_manager.bottom_up_append(std::move(next_layer_subset.vecs_data));
-
-            // Check termination condition: if this layer is too small, stop building further layers
-            if (next_layer_subset.get_num_vecs() < min_num_layer_vertex) {
-                break;
-            }
 
             // Update for next iteration
             current_layer_vecs = &hier_vecs_manager.get_layer_vecs(current_layer_id);
@@ -138,17 +138,17 @@ public:
                 current_result_size
             );
 
+            // Check termination condition: if this layer is too small, stop building further layers
+            if (next_layer_subset.get_num_vecs() < min_num_layer_vertex) {
+                break;
+            }
+
             // Update layer_id for the new layer
             current_layer_id++;
 
             // Add inter-layer links and vector data (move semantics)
             inter_layer_links.bottom_up_append(std::move(next_layer_subset.vec_ids));
             hier_vecs_manager.bottom_up_append(std::move(next_layer_subset.vecs_data));
-
-            // Check termination condition: if this layer is too small, stop building further layers
-            if (next_layer_subset.get_num_vecs() < min_num_layer_vertex) {
-                break;
-            }
 
             // Update for next iteration
             current_layer_vecs = &hier_vecs_manager.get_layer_vecs(current_layer_id);

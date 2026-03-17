@@ -439,12 +439,12 @@ int main(int argc, char** argv) {
     program.add_argument("-d", "--dataset").default_value(std::string("sift-1m"));
 
     // Vertices builder parameters
-    program.add_argument("--vb-min-radius").default_value(34875.0f).scan<'g', float>();
-    program.add_argument("--vb-beta-sq").default_value(2.56f).scan<'g', float>();
-    program.add_argument("--vb-coverage-ratio").default_value(0.96f).scan<'g', float>();
-    program.add_argument("--vb-confidence").default_value(0.99f).scan<'g', float>();
-    program.add_argument("--vb-max-result-ratio").default_value(0.2f).scan<'g', float>();
-    program.add_argument("--vb-sampling-batch-size").default_value(2048u).scan<'u', uint32_t>();
+    program.add_argument("--min-radius").default_value(34875.0f).scan<'g', float>();
+    program.add_argument("--beta-sq").default_value(2.56f).scan<'g', float>();
+    program.add_argument("--coverage-ratio").default_value(0.96f).scan<'g', float>();
+    program.add_argument("--confidence").default_value(0.99f).scan<'g', float>();
+    program.add_argument("--max-result-ratio").default_value(0.2f).scan<'g', float>();
+    program.add_argument("--sampling-batch-size").default_value(2048u).scan<'u', uint32_t>();
 
     // Bottom layer config
     program.add_argument("--bl-max-nbr-size").default_value(32u).scan<'u', uint32_t>();
@@ -490,12 +490,12 @@ int main(int argc, char** argv) {
     g_config.config_path = program.get<std::string>("--config");
     g_config.dataset_name = program.get<std::string>("--dataset");
 
-    g_config.vertices_config.min_radius = program.get<float>("--vb-min-radius");
-    g_config.vertices_config.beta_sq = program.get<float>("--vb-beta-sq");
-    g_config.vertices_config.coverage_ratio = program.get<float>("--vb-coverage-ratio");
-    g_config.vertices_config.confidence = program.get<float>("--vb-confidence");
-    g_config.vertices_config.max_result_ratio = program.get<float>("--vb-max-result-ratio");
-    g_config.vertices_config.sampling_batch_size = program.get<uint32_t>("--vb-sampling-batch-size");
+    g_config.vertices_config.min_radius = program.get<float>("--min-radius");
+    g_config.vertices_config.beta_sq = program.get<float>("--beta-sq");
+    g_config.vertices_config.coverage_ratio = program.get<float>("--coverage-ratio");
+    g_config.vertices_config.confidence = program.get<float>("--confidence");
+    g_config.vertices_config.max_result_ratio = program.get<float>("--max-result-ratio");
+    g_config.vertices_config.sampling_batch_size = program.get<uint32_t>("--sampling-batch-size");
 
     g_config.bottom_layer_config.max_nbr_size = program.get<uint32_t>("--bl-max-nbr-size");
     g_config.bottom_layer_config.reserved_nbr_size = program.is_used("--bl-reserved-nbr-size")

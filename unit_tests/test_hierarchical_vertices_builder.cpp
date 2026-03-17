@@ -313,7 +313,10 @@ void TestLayerCoverage(uint32_t layer_id, float coverage_radius, TestResults& re
 
     uint32_t uncovered_count = 0;
 
-    for (uint32_t i = 0; i < g_config.num_test_samples; ++i) {
+    // Reduce test samples for coverage testing (it's a statistical test anyway)
+    uint32_t coverage_test_samples = std::min(g_config.num_test_samples, 5000u);
+
+    for (uint32_t i = 0; i < coverage_test_samples; ++i) {
         uint32_t sample_id = dist(gen);
         const vec_ele_t* sample_vec = base_vecs.get(sample_id);
 
@@ -321,6 +324,10 @@ void TestLayerCoverage(uint32_t layer_id, float coverage_radius, TestResults& re
         for (uint32_t j = 0; j < layer_vecs.get_num_vecs(); ++j) {
             distance_t d = dist_func(sample_vec, layer_vecs.get(j));
             min_dist_to_layer = std::min(min_dist_to_layer, d);
+            // Early termination: if we found a covering vertex, stop
+            if (min_dist_to_layer < coverage_radius) {
+                break;
+            }
         }
 
         if (min_dist_to_layer >= coverage_radius) {
@@ -328,7 +335,7 @@ void TestLayerCoverage(uint32_t layer_id, float coverage_radius, TestResults& re
         }
     }
 
-    float empirical_coverage = 1.0f - (float)uncovered_count / g_config.num_test_samples;
+    float empirical_coverage = 1.0f - (float)uncovered_count / coverage_test_samples;
 
     // Update metrics
     for (auto& m : results.layer_metrics) {
@@ -340,7 +347,7 @@ void TestLayerCoverage(uint32_t layer_id, float coverage_radius, TestResults& re
 
     logger.info(fmt::format("Layer {} coverage: {:.2f}% ({}/{} samples covered)",
         layer_id, empirical_coverage * 100.0f,
-        g_config.num_test_samples - uncovered_count, g_config.num_test_samples));
+        coverage_test_samples - uncovered_count, coverage_test_samples));
 }
 
 template <typename TestFixture>

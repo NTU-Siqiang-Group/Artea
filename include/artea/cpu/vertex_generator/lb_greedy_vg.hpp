@@ -120,8 +120,8 @@ public:
         const vector_array_t& vecs_data,
         const distance_t rnet_radius,
         const vertex_num_t max_result_size,
-        const float coverage_ratio,
-        const float confidence,
+        const ratio_t coverage_ratio,
+        const ratio_t confidence,
         const vertex_num_t sampling_batch_size
     ) -> approx_rnet_t {
         vertex_num_t term_thresh = compute_term_thresh(coverage_ratio, confidence, sampling_batch_size);
@@ -161,13 +161,22 @@ public:
 
         vec_num_t batch_start = 0;
 
+        // Pre-allocate thread-local storage and reusable buffers outside the loop
+        tbb::enumerable_thread_specific<std::vector<CandidateInfo>> thread_local_candidates;
+        std::vector<CandidateInfo> qualifying_candidates;
+        std::vector<const vec_ele_t*> batch_added_vecs;
+
+        qualifying_candidates.reserve(sampling_batch_size);
+        batch_added_vecs.reserve(sampling_batch_size);
+
         while (approx_rnet.get_num_vecs() < max_result_size) {
             if (batch_start >= total_vecs) { break; }
 
             const vec_num_t batch_end = std::min(batch_start + sampling_batch_size, total_vecs);
             const vec_num_t current_batch_size = batch_end - batch_start;
 
-            tbb::enumerable_thread_specific<std::vector<CandidateInfo>> thread_local_candidates;
+            // Clear thread-local storage for reuse
+            thread_local_candidates.clear();
 
             tbb::parallel_for(
                 tbb::blocked_range<vec_num_t>(0, current_batch_size),
@@ -199,7 +208,8 @@ public:
                 }
             );
 
-            std::vector<CandidateInfo> qualifying_candidates;
+            // Reuse qualifying_candidates vector
+            qualifying_candidates.clear();
             for (const auto& local_candidates : thread_local_candidates) {
                 qualifying_candidates.insert(
                     qualifying_candidates.end(),
@@ -214,8 +224,8 @@ public:
                 }
             );
 
-            std::vector<const vec_ele_t*> batch_added_vecs;
-            batch_added_vecs.reserve(qualifying_candidates.size());
+            // Reuse batch_added_vecs vector
+            batch_added_vecs.clear();
 
             for (const auto& candidate : qualifying_candidates) {
                 if (approx_rnet.get_num_vecs() >= max_result_size) { break; }

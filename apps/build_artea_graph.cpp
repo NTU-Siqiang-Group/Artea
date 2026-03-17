@@ -49,12 +49,12 @@ int main(int argc, char** argv) {
         .help("Output directory for the graph index");
 
     // Vertices builder parameters
-    program.add_argument("--vb-min-radius").default_value(34875.0f).scan<'g', float>();
-    program.add_argument("--vb-beta-sq").default_value(2.56f).scan<'g', float>();
-    program.add_argument("--vb-coverage-ratio").default_value(0.96f).scan<'g', float>();
-    program.add_argument("--vb-confidence").default_value(0.99f).scan<'g', float>();
-    program.add_argument("--vb-max-result-ratio").default_value(0.2f).scan<'g', float>();
-    program.add_argument("--vb-sampling-batch-size").default_value(2048u).scan<'u', uint32_t>();
+    program.add_argument("--min-radius").default_value(34875.0f).scan<'g', float>();
+    program.add_argument("--beta-sq").default_value(2.56f).scan<'g', float>();
+    program.add_argument("--coverage-ratio").default_value(0.96f).scan<'g', float>();
+    program.add_argument("--confidence").default_value(0.99f).scan<'g', float>();
+    program.add_argument("--max-result-ratio").default_value(0.2f).scan<'g', float>();
+    program.add_argument("--sampling-batch-size").default_value(2048u).scan<'u', uint32_t>();
     program.add_argument("--shuffle-seed").scan<'u', uint32_t>()
         .help("Shuffle seed (if not specified, uses random seed)");
 
@@ -139,12 +139,12 @@ int main(int argc, char** argv) {
 
     // Create vertices builder config
     greedy_vertices_builder_config_t vertices_builder_config(
-        program.get<float>("--vb-min-radius"),
-        program.get<float>("--vb-beta-sq"),
-        program.get<float>("--vb-coverage-ratio"),
-        program.get<float>("--vb-confidence"),
-        program.get<float>("--vb-max-result-ratio"),
-        program.get<uint32_t>("--vb-sampling-batch-size")
+        program.get<float>("--min-radius"),
+        program.get<float>("--beta-sq"),
+        program.get<float>("--coverage-ratio"),
+        program.get<float>("--confidence"),
+        program.get<float>("--max-result-ratio"),
+        program.get<uint32_t>("--sampling-batch-size")
     );
 
     // Create hierarchical graph
@@ -238,12 +238,12 @@ int main(int argc, char** argv) {
     std::cout << fmt::format("    Num outer iters:      {}", program.get<uint32_t>("--ul-num-outer-iters")) << std::endl;
     std::cout << fmt::format("    Num inner iters:      {}", program.get<uint32_t>("--ul-num-inner-iters")) << std::endl;
     std::cout << "\n--- Vertices Builder Config ---" << std::endl;
-    std::cout << fmt::format("  Min radius:             {}", program.get<float>("--vb-min-radius")) << std::endl;
-    std::cout << fmt::format("  Beta squared:           {}", program.get<float>("--vb-beta-sq")) << std::endl;
-    std::cout << fmt::format("  Coverage ratio:         {}", program.get<float>("--vb-coverage-ratio")) << std::endl;
-    std::cout << fmt::format("  Confidence:             {}", program.get<float>("--vb-confidence")) << std::endl;
-    std::cout << fmt::format("  Max result ratio:       {}", program.get<float>("--vb-max-result-ratio")) << std::endl;
-    std::cout << fmt::format("  Sampling batch size:    {}", program.get<uint32_t>("--vb-sampling-batch-size")) << std::endl;
+    std::cout << fmt::format("  Min radius:             {}", program.get<float>("--min-radius")) << std::endl;
+    std::cout << fmt::format("  Beta squared:           {}", program.get<float>("--beta-sq")) << std::endl;
+    std::cout << fmt::format("  Coverage ratio:         {}", program.get<float>("--coverage-ratio")) << std::endl;
+    std::cout << fmt::format("  Confidence:             {}", program.get<float>("--confidence")) << std::endl;
+    std::cout << fmt::format("  Max result ratio:       {}", program.get<float>("--max-result-ratio")) << std::endl;
+    std::cout << fmt::format("  Sampling batch size:    {}", program.get<uint32_t>("--sampling-batch-size")) << std::endl;
     std::cout << "\n--- Construction Time ---" << std::endl;
     std::cout << fmt::format("  Vertices construction:  {:.2f} s", vertices_duration.count() / 1000.0) << std::endl;
     std::cout << fmt::format("  Edges construction:     {:.2f} s", edges_duration.count() / 1000.0) << std::endl;
@@ -276,8 +276,8 @@ int main(int argc, char** argv) {
 
     nlohmann::json index_params;
     index_params["dataset"] = dataset_name;
-    index_params["vb_min_radius"] = program.get<float>("--vb-min-radius");
-    index_params["vb_beta_sq"] = std::round(program.get<float>("--vb-beta-sq") * 100.0f) / 100.0f;
+    index_params["vb_min_radius"] = program.get<float>("--min-radius");
+    index_params["vb_beta_sq"] = std::round(program.get<float>("--beta-sq") * 100.0f) / 100.0f;
     index_params["bl_max_nbr_size"] = program.get<uint32_t>("--bl-max-nbr-size");
     index_params["ul_max_nbr_size"] = program.get<uint32_t>("--ul-max-nbr-size");
 

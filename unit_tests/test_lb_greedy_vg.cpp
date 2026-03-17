@@ -53,7 +53,6 @@ struct TestConfig {
     uint32_t batch_size;
     uint32_t num_test_samples;
     bool verbose;
-    bool shuffle;
 } g_config;
 
 // Global test results
@@ -83,11 +82,9 @@ public:
         logger.info(fmt::format("Loading Dataset: {} from {}", g_config.dataset_name, g_config.config_path));
         dataset_ = std::make_unique<vector_dataset_t>(g_config.config_path, g_config.dataset_name);
 
-        // Shuffle dataset if requested
-        if (g_config.shuffle) {
-            logger.info("Shuffling dataset...");
-            dataset_->shuffle_in_place();
-        }
+        // Always shuffle dataset for randomness
+        logger.info("Shuffling dataset...");
+        dataset_->shuffle_in_place();
 
         dist_func_ = std::make_unique<dist_func_t>(dataset_->get_base_vecs().get_vec_dim());
 
@@ -99,7 +96,6 @@ public:
             logger.info(fmt::format("Coverage ratio: {}", g_config.coverage_ratio));
             logger.info(fmt::format("Confidence: {}", g_config.confidence));
             logger.info(fmt::format("Batch size: {}", g_config.batch_size));
-            logger.info(fmt::format("Shuffle: {}", g_config.shuffle ? "enabled" : "disabled"));
         }
 
         // Time the generation
@@ -308,7 +304,6 @@ int main(int argc, char** argv) {
     program.add_argument("-b", "--batch-size").default_value(2048u).scan<'u', uint32_t>();
     program.add_argument("-n", "--num-test-samples").default_value(10000u).scan<'u', uint32_t>();
     program.add_argument("-v", "--verbose").default_value(false).implicit_value(true);
-    program.add_argument("--shuffle").default_value(false).implicit_value(true);
 
     try {
         program.parse_args(argc, argv);
@@ -327,7 +322,6 @@ int main(int argc, char** argv) {
     g_config.batch_size = program.get<uint32_t>("--batch-size");
     g_config.num_test_samples = program.get<uint32_t>("--num-test-samples");
     g_config.verbose = program.get<bool>("--verbose");
-    g_config.shuffle = program.get<bool>("--shuffle");
 
     // Print test configuration
     std::cout << "\n=== Test Configuration ===" << std::endl;
@@ -346,7 +340,6 @@ int main(int argc, char** argv) {
     std::cout << "Computed term thresh: " << computed_term_thresh << std::endl;
     std::cout << "Num test samples: " << g_config.num_test_samples << std::endl;
     std::cout << "Verbose: " << (g_config.verbose ? "true" : "false") << std::endl;
-    std::cout << "Shuffle: " << (g_config.shuffle ? "true" : "false") << std::endl;
     std::cout << "==========================\n" << std::endl;
 
     DataProvider::instance().init();
