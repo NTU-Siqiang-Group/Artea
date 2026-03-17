@@ -1,5 +1,5 @@
 {
-  "root_dir": "/home/yeweitang/ANNDatasets",
+  "root_dir": "third_party/ann-datasets",
   "datasets": {
     "sift-1m": {
       "dataset_dir": "sift-1m",
