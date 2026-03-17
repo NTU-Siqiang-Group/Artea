@@ -112,7 +112,7 @@ int main(int argc, char** argv) {
     logger.info("Probing min_radius from dataset...");
     constexpr float QUANTILE = 0.0001f;
     constexpr float CONFIDENCE = 0.95f;
-    constexpr float RELATIVE_ERR = 0.1f;
+    constexpr float RELATIVE_ERR = 0.05f;
 
     radius_prober_t prober(dist_func);
     auto probe_start = std::chrono::high_resolution_clock::now();
