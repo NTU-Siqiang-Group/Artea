@@ -7,6 +7,13 @@
       "base_path": "sift_base.fvecs",
       "query_path": "sift_query.fvecs",
       "gt_path": "sift_groundtruth.ivecs"
+    },
+    "gist-1m": {
+      "dataset_dir": "gist-1m",
+      "train_path": "gist_learn.fvecs",
+      "base_path": "gist_base.fvecs",
+      "query_path": "gist_query.fvecs",
+      "gt_path": "gist_groundtruth.ivecs"
     }
   }
 }

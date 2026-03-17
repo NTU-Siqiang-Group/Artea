@@ -49,7 +49,6 @@ int main(int argc, char** argv) {
         .help("Output directory for the graph index");
 
     // Vertices builder parameters
-    program.add_argument("--min-radius").default_value(34875.0f).scan<'g', float>();
     program.add_argument("--beta-sq").default_value(2.56f).scan<'g', float>();
     program.add_argument("--coverage-ratio").default_value(0.96f).scan<'g', float>();
     program.add_argument("--confidence").default_value(0.99f).scan<'g', float>();
@@ -109,6 +108,22 @@ int main(int argc, char** argv) {
         : std::random_device{}();
     shuffle_seed = dataset.shuffle_in_place(shuffle_seed);
 
+    // Probe min_radius using radius prober
+    logger.info("Probing min_radius from dataset...");
+    constexpr float QUANTILE = 0.0001f;
+    constexpr float CONFIDENCE = 0.95f;
+    constexpr float RELATIVE_ERR = 0.1f;
+
+    radius_prober_t prober(dist_func);
+    auto probe_start = std::chrono::high_resolution_clock::now();
+    auto probe_result = prober.probe(base_vecs, QUANTILE, CONFIDENCE, RELATIVE_ERR);
+    auto probe_end = std::chrono::high_resolution_clock::now();
+    auto probe_duration = std::chrono::duration_cast<std::chrono::milliseconds>(probe_end - probe_start);
+
+    float min_radius = probe_result.radius;
+    logger.info(fmt::format("Probed min_radius: {:.6f} (quantile: {:.4f}, samples: {}, time: {:.2f}s)",
+        min_radius, probe_result.quantile, probe_result.num_dists_sampled, probe_duration.count() / 1000.0));
+
     // Create layer configs
     uint32_t bl_max_nbr_size = program.get<uint32_t>("--bl-max-nbr-size");
     uint32_t bl_reserved_nbr_size = program.is_used("--bl-reserved-nbr-size")
@@ -139,7 +154,7 @@ int main(int argc, char** argv) {
 
     // Create vertices builder config
     greedy_vertices_builder_config_t vertices_builder_config(
-        program.get<float>("--min-radius"),
+        min_radius,
         program.get<float>("--beta-sq"),
         program.get<float>("--coverage-ratio"),
         program.get<float>("--confidence"),
@@ -223,6 +238,14 @@ int main(int argc, char** argv) {
     std::cout << "\n--- Graph Structure ---" << std::endl;
     std::cout << fmt::format("  Num layers:             {}", hierarchical_graph.get_num_layers()) << std::endl;
     std::cout << fmt::format("  Index size:             {:.2f} MB ({} bytes)", index_size_info.total_mb, index_size_info.total_bytes) << std::endl;
+
+    // Output layer-by-layer vertex counts
+    std::cout << "\n  Layer Vertices:" << std::endl;
+    for (uint32_t layer_id = 0; layer_id < hierarchical_graph.get_num_layers(); ++layer_id) {
+        const auto& layer_vecs = hierarchical_graph.get_hier_vecs_manager().get_layer_vecs(layer_id);
+        std::cout << fmt::format("    Layer {}: {}", layer_id, layer_vecs.get_num_vecs()) << std::endl;
+    }
+    std::cout << std::endl;
     std::cout << "  Bottom layer:" << std::endl;
     std::cout << fmt::format("    Max nbr size:         {}", bl_max_nbr_size) << std::endl;
     std::cout << fmt::format("    Reserved nbr size:    {}", bl_reserved_nbr_size) << std::endl;
@@ -237,8 +260,8 @@ int main(int argc, char** argv) {
     std::cout << fmt::format("    Shifted coeffs:       {}", program.get<float>("--ul-shifted-coeffs")) << std::endl;
     std::cout << fmt::format("    Num outer iters:      {}", program.get<uint32_t>("--ul-num-outer-iters")) << std::endl;
     std::cout << fmt::format("    Num inner iters:      {}", program.get<uint32_t>("--ul-num-inner-iters")) << std::endl;
-    std::cout << "\n--- Vertices Builder Config ---" << std::endl;
-    std::cout << fmt::format("  Min radius:             {}", program.get<float>("--min-radius")) << std::endl;
+    std::cout << "--- Vertices Builder Config ---" << std::endl;
+    std::cout << fmt::format("  Min radius:             {:.6f} (auto-probed)", min_radius) << std::endl;
     std::cout << fmt::format("  Beta squared:           {}", program.get<float>("--beta-sq")) << std::endl;
     std::cout << fmt::format("  Coverage ratio:         {}", program.get<float>("--coverage-ratio")) << std::endl;
     std::cout << fmt::format("  Confidence:             {}", program.get<float>("--confidence")) << std::endl;
@@ -276,8 +299,8 @@ int main(int argc, char** argv) {
 
     nlohmann::json index_params;
     index_params["dataset"] = dataset_name;
-    index_params["vb_min_radius"] = program.get<float>("--min-radius");
-    index_params["vb_beta_sq"] = std::round(program.get<float>("--beta-sq") * 100.0f) / 100.0f;
+    index_params["min_radius"] = min_radius;
+    index_params["beta_sq"] = std::round(program.get<float>("--beta-sq") * 100.0f) / 100.0f;
     index_params["bl_max_nbr_size"] = program.get<uint32_t>("--bl-max-nbr-size");
     index_params["ul_max_nbr_size"] = program.get<uint32_t>("--ul-max-nbr-size");
 
