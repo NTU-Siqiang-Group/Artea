@@ -22,8 +22,8 @@
       "query_path": "sift100m_query.bvecs",
       "gt_path": "sift100m_groundtruth.ivecs"
     },
-    "sift-1b": {
-      "dataset_dir": "sift-1b",
+    "big-ann": {
+      "dataset_dir": "big-ann",
       "train_path": "bigann_learn.bvecs",
       "base_path": "bigann_base.bvecs",
       "query_path": "bigann_query.bvecs",
