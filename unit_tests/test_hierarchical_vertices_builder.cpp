@@ -493,7 +493,8 @@ TEST_F(HierVertexRandomTest, VerifyHierarchicalStructure) {
 
     EXPECT_GE(g_random_results.num_layers, 1) << "Should have at least 1 layer (bottom layer)";
 
-    // For random selection, we just verify layer sizes decrease
+    // For random selection, we verify layer sizes and test coverage with same radius as rnet
+    float current_radius = g_config.rnet_config.min_radius * g_config.rnet_config.beta;
     for (uint32_t layer_id = 1; layer_id < g_random_results.num_layers; ++layer_id) {
         const auto& layer_vecs = hier_vecs_manager.get_layer_vecs(layer_id);
 
@@ -509,6 +510,10 @@ TEST_F(HierVertexRandomTest, VerifyHierarchicalStructure) {
 
         logger.info(fmt::format("Layer {}: {} vertices ({:.2f}%)",
             layer_id, metrics.num_vertices, metrics.layer_ratio));
+
+        // Test coverage with same radius as rnet for comparison
+        TestLayerCoverage<HierVertexRandomTest>(layer_id, current_radius, g_random_results);
+        current_radius *= g_config.rnet_config.beta;
     }
 
     // Test inter-layer links
@@ -620,15 +625,16 @@ int main(int argc, char** argv) {
 
         if (!g_random_results.layer_metrics.empty()) {
             std::cout << "\n--- Layer-by-Layer Analysis ---" << std::endl;
-            std::cout << fmt::format("{:<8} {:<15} {:<12}",
-                "Layer", "Vertices", "Ratio (%)") << std::endl;
-            std::cout << std::string(50, '-') << std::endl;
+            std::cout << fmt::format("{:<8} {:<15} {:<12} {:<15}",
+                "Layer", "Vertices", "Ratio (%)", "Coverage (%)") << std::endl;
+            std::cout << std::string(60, '-') << std::endl;
 
             for (const auto& metrics : g_random_results.layer_metrics) {
-                std::cout << fmt::format("{:<8} {:<15} {:<12.2f}",
+                std::cout << fmt::format("{:<8} {:<15} {:<12.2f} {:<15.2f}",
                     metrics.layer_id,
                     metrics.num_vertices,
-                    metrics.layer_ratio) << std::endl;
+                    metrics.layer_ratio,
+                    metrics.empirical_coverage * 100.0f) << std::endl;
             }
         }
     }

@@ -44,9 +44,8 @@ int main(int argc, char** argv) {
 
     // Probing parameters
     program.add_argument("-q", "--quantile")
-        .default_value(0.0005f)
         .scan<'g', float>()
-        .help("Target quantile (e.g., 0.0005 for 0.05%, 0.001 for 0.1%, 0.01 for 1%)");
+        .help("Target quantile (e.g., 0.0005 for 0.05%%, 0.001 for 0.1%%, 0.01 for 1%%). If not specified, probes multiple quantiles.");
 
     // Option 1: Specify number of distance samples directly
     program.add_argument("-m", "--num-distances")
@@ -75,7 +74,8 @@ int main(int argc, char** argv) {
     // Parse configuration
     std::string config_path = program.get<std::string>("--config");
     std::string dataset_name = program.get<std::string>("--dataset");
-    float quantile = program.get<float>("--quantile");
+    bool has_quantile = program.is_used("--quantile");
+    float quantile = has_quantile ? program.get<float>("--quantile") : 0.0f;
 
     // Check which mode is being used
     bool has_num_distances = program.is_used("--num-distances");
@@ -83,7 +83,7 @@ int main(int argc, char** argv) {
     bool has_relative_err = program.is_used("--relative-err");
 
     // Validate parameter combinations
-    if (has_num_distances && (has_confidence || has_relative_err)) {
+    if (has_quantile && has_num_distances && (has_confidence || has_relative_err)) {
         logger.error("Cannot specify both --num-distances and (--confidence/--relative-err)");
         logger.error("Use either:");
         logger.error("  Option 1: -m/--num-distances (manual)");
@@ -91,11 +91,73 @@ int main(int argc, char** argv) {
         return 1;
     }
 
-    if ((has_confidence && !has_relative_err) || (!has_confidence && has_relative_err)) {
+    if (has_quantile && ((has_confidence && !has_relative_err) || (!has_confidence && has_relative_err))) {
         logger.error("--confidence and --relative-err must be specified together");
         return 1;
     }
 
+    // Load dataset
+    logger.info("Loading dataset...");
+    vector_dataset_t dataset(config_path, dataset_name);
+
+    vec_dim_t dim = dataset.get_vec_dim();
+    vertex_num_t num_base_vecs = dataset.get_num_base_vecs();
+
+    logger.info(fmt::format("Dataset loaded:"));
+    logger.info(fmt::format("  Dimension: {}", dim));
+    logger.info(fmt::format("  Base vectors: {}", num_base_vecs));
+
+    // Create distance function
+    dist_func_t dist_func(dim);
+
+    // Create radius prober
+    radius_prober_t prober(dist_func);
+
+    // Check if multi-quantile mode
+    if (!has_quantile) {
+        // Multi-quantile mode
+        float confidence = program.get<float>("--confidence");
+        float relative_err = program.get<float>("--relative-err");
+
+        logger.info("Multi-Quantile Probing Configuration:");
+        logger.info(fmt::format("  Dataset: {}", dataset_name));
+        logger.info(fmt::format("  Config path: {}", config_path));
+        logger.info(fmt::format("  Confidence: {:.2f}%", confidence * 100));
+        logger.info(fmt::format("  Relative error: {:.2f}%", relative_err * 100));
+
+        // Probe multiple quantiles
+        logger.info("Probing multiple quantiles...");
+        auto start_time = std::chrono::high_resolution_clock::now();
+
+        auto result = prober.probe_multi_quantiles(dataset.get_base_vecs(), confidence, relative_err);
+
+        auto end_time = std::chrono::high_resolution_clock::now();
+        auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(end_time - start_time);
+
+        // Display results
+        logger.info(fmt::format("Probing Results:"));
+        logger.info(fmt::format("  Distance samples: {}", result.num_dists_sampled));
+        logger.info(fmt::format("  Time elapsed: {:.3f} seconds", duration.count() / 1000.0));
+
+        std::cout << "\n" << std::string(80, '=') << std::endl;
+        std::cout << "                    MULTI-QUANTILE PROBING SUMMARY" << std::endl;
+        std::cout << std::string(80, '=') << std::endl;
+        std::cout << fmt::format("\n{:<15} {:<20} {:<20}", "Quantile", "Percentage", "Radius") << std::endl;
+        std::cout << std::string(80, '-') << std::endl;
+
+        for (size_t i = 0; i < result.quantiles.size(); ++i) {
+            std::cout << fmt::format("{:<15.4f} {:<20} {:<20.6f}",
+                result.quantiles[i],
+                fmt::format("{:.2f}%", result.quantiles[i] * 100),
+                result.radii[i]) << std::endl;
+        }
+
+        std::cout << std::string(80, '=') << std::endl;
+
+        return 0;
+    }
+
+    // Single quantile mode (original behavior)
     // Determine which mode to use
     vertex_num_t num_distances;
     float confidence = 0.0f;
@@ -136,23 +198,6 @@ int main(int argc, char** argv) {
         logger.info(fmt::format("  Relative error: {:.2f}% (default)", relative_err * 100));
         logger.info(fmt::format("  Computed distance samples: {}", num_distances));
     }
-
-    // Load dataset
-    logger.info("Loading dataset...");
-    vector_dataset_t dataset(config_path, dataset_name);
-
-    vec_dim_t dim = dataset.get_vec_dim();
-    vertex_num_t num_base_vecs = dataset.get_num_base_vecs();
-
-    logger.info(fmt::format("Dataset loaded:"));
-    logger.info(fmt::format("  Dimension: {}", dim));
-    logger.info(fmt::format("  Base vectors: {}", num_base_vecs));
-
-    // Create distance function
-    dist_func_t dist_func(dim);
-
-    // Create radius prober
-    radius_prober_t prober(dist_func);
 
     // Probe radius
     logger.info("Probing radius...");

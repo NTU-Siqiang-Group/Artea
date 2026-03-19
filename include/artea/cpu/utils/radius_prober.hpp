@@ -59,6 +59,15 @@ public:
     };
 
     /**
+     * @brief Result containing multiple quantile radius values
+     */
+    struct MultiQuantileProbeResult {
+        std::vector<float> quantiles;       // Quantile values
+        std::vector<distance_t> radii;      // Corresponding radius values
+        vec_num_t num_dists_sampled;        // Number of independent distance samples
+    };
+
+    /**
      * @brief Construct a new RadiusProber object
      * @param dist_func Distance function for computing pairwise distances
      */
@@ -191,6 +200,79 @@ public:
         result.radius = distances[quantile_index];
         result.num_dists_sampled = num_distances_to_sample;
         result.quantile = quantile;
+
+        return result;
+    }
+
+    /**
+     * @brief Probe multiple quantiles from the distance distribution
+     *
+     * This method samples independent pairs of vectors and computes multiple quantiles
+     * in a single pass through the sorted distances.
+     *
+     * @param base_vecs The dataset to probe
+     * @param confidence Confidence level for computing sample size (e.g., 0.95 for 95%, 0.99 for 99%)
+     * @param relative_err Relative error for computing sample size (e.g., 0.1 for 10%, 0.2 for 20%)
+     * @return MultiQuantileProbeResult containing all quantile radii and sampling information
+     */
+    auto probe_multi_quantiles(
+        const vector_array_t& base_vecs,
+        float confidence,
+        float relative_err
+    ) -> MultiQuantileProbeResult {
+        // Define quantiles to probe
+        std::vector<float> quantiles = {
+            0.0001f, 0.0005f, 0.001f, 0.005f, 0.01f, 0.05f, 0.1f,
+            0.2f, 0.3f, 0.4f, 0.5f, 0.6f, 0.7f, 0.8f, 0.9f
+        };
+
+        // Use the smallest quantile to compute required sample size (most conservative)
+        float min_quantile = *std::min_element(quantiles.begin(), quantiles.end());
+        vec_num_t num_distances = compute_num_dists_sampled(min_quantile, confidence, relative_err);
+
+        const vec_num_t total_vecs = base_vecs.get_num_vecs();
+        if (total_vecs < 2) {
+            throw std::invalid_argument("Dataset must contain at least 2 vectors");
+        }
+
+        // Allocate result vector for all distances
+        std::vector<distance_t> distances;
+        distances.reserve(num_distances);
+
+        // Process in batches to reduce memory usage
+        vec_num_t remaining = num_distances;
+        while (remaining > 0) {
+            vec_num_t batch_size = std::min(remaining, SAMPLING_BATCH_SIZE);
+
+            // Sample two independent sets of vector indices for this batch
+            std::vector<vec_id_t> vec_ids_1 = sample_vec_ids(total_vecs, batch_size);
+            std::vector<vec_id_t> vec_ids_2 = sample_vec_ids(total_vecs, batch_size);
+
+            // Compute distances for this batch
+            std::vector<distance_t> batch_distances = compute_paired_distances(base_vecs, vec_ids_1, vec_ids_2);
+
+            // Append to result
+            distances.insert(distances.end(), batch_distances.begin(), batch_distances.end());
+
+            remaining -= batch_size;
+        }
+
+        // Sort distances once
+        std::sort(distances.begin(), distances.end());
+
+        // Extract all quantile values in one pass
+        MultiQuantileProbeResult result;
+        result.quantiles = quantiles;
+        result.radii.reserve(quantiles.size());
+        result.num_dists_sampled = num_distances;
+
+        for (float quantile : quantiles) {
+            vec_num_t quantile_index = static_cast<vec_num_t>(quantile * distances.size());
+            if (quantile_index >= distances.size()) {
+                quantile_index = distances.size() - 1;
+            }
+            result.radii.push_back(distances[quantile_index]);
+        }
 
         return result;
     }

@@ -49,9 +49,9 @@ int main(int argc, char** argv) {
         .help("Output directory for the graph index");
 
     // Vertices builder parameters
-    program.add_argument("--beta").default_value(2.56f).scan<'g', float>();
-    program.add_argument("--coverage-ratio").default_value(0.96f).scan<'g', float>();
-    program.add_argument("--confidence").default_value(0.99f).scan<'g', float>();
+    program.add_argument("--beta").default_value(1.69f).scan<'g', float>();
+    program.add_argument("--coverage-ratio").default_value(0.999f).scan<'g', float>();
+    program.add_argument("--confidence").default_value(0.950f).scan<'g', float>();
     program.add_argument("--max-result-ratio").default_value(0.2f).scan<'g', float>();
     program.add_argument("--sampling-batch-size").default_value(2048u).scan<'u', uint32_t>();
     program.add_argument("--shuffle-seed").scan<'u', uint32_t>()
@@ -110,7 +110,7 @@ int main(int argc, char** argv) {
 
     // Probe min_radius using radius prober
     logger.info("Probing min_radius from dataset...");
-    constexpr float QUANTILE = 0.0001f;
+    constexpr float QUANTILE = 0.001f;
     constexpr float CONFIDENCE = 0.95f;
     constexpr float RELATIVE_ERR = 0.05f;
 
@@ -239,11 +239,41 @@ int main(int argc, char** argv) {
     std::cout << fmt::format("  Num layers:             {}", hierarchical_graph.get_num_layers()) << std::endl;
     std::cout << fmt::format("  Index size:             {:.2f} MB ({} bytes)", index_size_info.total_mb, index_size_info.total_bytes) << std::endl;
 
-    // Output layer-by-layer vertex counts
-    std::cout << "\n  Layer Vertices:" << std::endl;
+    // Output layer-by-layer statistics
+    std::cout << "\n  Layer Statistics:" << std::endl;
+    std::cout << fmt::format("  {:<8} {:<15} {:<15} {:<20}", "Layer", "Vertices", "Edges", "R-Net Radius") << std::endl;
+    std::cout << "  " << std::string(60, '-') << std::endl;
+
+    float current_radius = min_radius * program.get<float>("--beta");
     for (uint32_t layer_id = 0; layer_id < hierarchical_graph.get_num_layers(); ++layer_id) {
         const auto& layer_vecs = hierarchical_graph.get_hier_vecs_manager().get_layer_vecs(layer_id);
-        std::cout << fmt::format("    Layer {}: {}", layer_id, layer_vecs.get_num_vecs()) << std::endl;
+        uint32_t num_vertices = layer_vecs.get_num_vecs();
+
+        // Count edges for this layer
+        uint64_t num_edges = 0;
+        if (layer_id == 0) {
+            // Bottom layer
+            const auto& bottom_graph = hierarchical_graph.get_bottom_graph();
+            for (uint32_t v = 0; v < num_vertices; ++v) {
+                num_edges += bottom_graph.get_nbr_size(v);
+            }
+        } else {
+            // Upper layers
+            const auto& upper_graph = hierarchical_graph.get_upper_graph(layer_id);
+            for (uint32_t v = 0; v < num_vertices; ++v) {
+                num_edges += upper_graph.get_nbr_size(v);
+            }
+        }
+
+        // Display layer info
+        if (layer_id == 0) {
+            std::cout << fmt::format("  {:<8} {:<15} {:<15} {:<20}",
+                layer_id, num_vertices, num_edges, "N/A (base layer)") << std::endl;
+        } else {
+            std::cout << fmt::format("  {:<8} {:<15} {:<15} {:<20.6f}",
+                layer_id, num_vertices, num_edges, current_radius) << std::endl;
+            current_radius *= program.get<float>("--beta");
+        }
     }
     std::cout << std::endl;
     std::cout << "  Bottom layer:" << std::endl;
