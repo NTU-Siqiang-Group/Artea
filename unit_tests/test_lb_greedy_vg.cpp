@@ -61,6 +61,7 @@ struct TestResults {
     double generation_time_ms = 0.0;
     double probe_time_ms = 0.0;
     float min_radius = 0.0f;
+    float rnet_radius = 0.0f;
     uint32_t num_vertices = 0;
     uint32_t total_base_vecs = 0;
     float rnet_ratio = 0.0f;
@@ -106,16 +107,17 @@ public:
         auto probe_duration = std::chrono::duration_cast<std::chrono::microseconds>(probe_end - probe_start);
 
         g_test_results.probe_time_ms = probe_duration.count() / 1000.0;
-        g_test_results.min_radius = probe_result.radius * g_config.beta;
+        g_test_results.min_radius = probe_result.radius;
+        g_test_results.rnet_radius = probe_result.radius * g_config.beta;
 
-        logger.info(fmt::format("Probed base radius: {:.6f} (quantile: {:.4f}, samples: {}, time: {:.2f}ms)",
+        logger.info(fmt::format("Probed min radius: {:.6f} (quantile: {:.4f}, samples: {}, time: {:.2f}ms)",
             probe_result.radius, probe_result.quantile, probe_result.num_dists_sampled, g_test_results.probe_time_ms));
-        logger.info(fmt::format("Min radius (beta={:.2f}): {:.6f}", g_config.beta, g_test_results.min_radius));
+        logger.info(fmt::format("R-net radius (beta={:.2f}): {:.6f}", g_config.beta, g_test_results.rnet_radius));
 
         // Generate r-net once for all tests
         if (g_config.verbose) {
             logger.info(fmt::format("Base vectors size: {}", base_vecs.get_num_vecs()));
-            logger.info(fmt::format("Min radius: {}", g_test_results.min_radius));
+            logger.info(fmt::format("R-net radius: {}", g_test_results.rnet_radius));
             logger.info(fmt::format("Coverage ratio: {}", g_config.coverage_ratio));
             logger.info(fmt::format("Confidence: {}", g_config.confidence));
             logger.info(fmt::format("Batch size: {}", g_config.batch_size));
@@ -127,7 +129,7 @@ public:
         lb_greedy_vg_t generator(*dist_func_);
         approx_rnet_ = std::make_unique<approx_rnet_t>(generator.generate(
             base_vecs,
-            g_test_results.min_radius,
+            g_test_results.rnet_radius,
             g_config.max_result_size,
             g_config.coverage_ratio,
             g_config.confidence,
@@ -251,11 +253,11 @@ TEST_F(LBGreedyVGTest, VerifyRNetSeparation) {
             min_pairwise_dist = std::min(min_pairwise_dist, dist);
             total_pairs_checked++;
 
-            if (dist < g_test_results.min_radius) {
+            if (dist < g_test_results.rnet_radius) {
                 violation_count++;
                 if (g_config.verbose && violation_count <= 10) {
                     logger.warn(fmt::format("Separation violation: rnet[{}] and rnet[{}] have distance {:.4f} < {:.4f}",
-                        i, j, dist, g_test_results.min_radius));
+                        i, j, dist, g_test_results.rnet_radius));
                 }
             }
         }
@@ -305,12 +307,12 @@ TEST_F(LBGreedyVGTest, VerifyRNetCoverage) {
             min_dist_to_rnet = std::min(min_dist_to_rnet, d);
         }
 
-        // Check if covered (distance < min_radius)
-        if (min_dist_to_rnet >= g_test_results.min_radius) {
+        // Check if covered (distance < rnet_radius)
+        if (min_dist_to_rnet >= g_test_results.rnet_radius) {
             uncovered_count++;
             if (g_config.verbose && uncovered_count <= 10) {
                 logger.warn(fmt::format("Uncovered sample: vec[{}] has min distance {:.4f} >= {:.4f}",
-                    sample_id, min_dist_to_rnet, g_test_results.min_radius));
+                    sample_id, min_dist_to_rnet, g_test_results.rnet_radius));
             }
         }
     }
@@ -394,6 +396,7 @@ int main(int argc, char** argv) {
     std::cout << fmt::format("  Probe Time:             {:.2f} ms", g_test_results.probe_time_ms) << std::endl;
     std::cout << fmt::format("  Beta:                   {:.2f}", g_config.beta) << std::endl;
     std::cout << fmt::format("  Min Radius:             {:.6f}", g_test_results.min_radius) << std::endl;
+    std::cout << fmt::format("  R-Net Radius:           {:.6f}", g_test_results.rnet_radius) << std::endl;
     std::cout << "\n--- R-Net Generation ---" << std::endl;
     std::cout << fmt::format("  Generation Time:        {:.2f} ms", g_test_results.generation_time_ms) << std::endl;
     std::cout << fmt::format("  Num Vertices:           {} / {}", g_test_results.num_vertices, g_test_results.total_base_vecs) << std::endl;
@@ -403,7 +406,7 @@ int main(int argc, char** argv) {
     std::cout << fmt::format("  Empirical Coverage:     {:.2f}%", g_test_results.empirical_coverage * 100.0f) << std::endl;
     std::cout << fmt::format("  Coverage Difference:    {:.2f}%", (g_test_results.empirical_coverage - g_config.coverage_ratio) * 100.0f) << std::endl;
     std::cout << "\n--- Separation Analysis ---" << std::endl;
-    std::cout << fmt::format("  Min Radius:             {:.4f}", g_test_results.min_radius) << std::endl;
+    std::cout << fmt::format("  R-Net Radius:           {:.4f}", g_test_results.rnet_radius) << std::endl;
     std::cout << fmt::format("  Min Pairwise Distance:  {:.4f}", g_test_results.min_pairwise_dist) << std::endl;
     std::cout << fmt::format("  Separation Violations:  {}", g_test_results.separation_violations) << std::endl;
     std::cout << "\n--- Test Results ---" << std::endl;

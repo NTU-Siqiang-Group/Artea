@@ -113,11 +113,11 @@ public:
         auto probe_duration = std::chrono::duration_cast<std::chrono::microseconds>(probe_end - probe_start);
 
         double probe_time_ms = probe_duration.count() / 1000.0;
-        g_config.rnet_config.min_radius = probe_result.radius * g_config.rnet_config.beta;
+        g_config.rnet_config.min_radius = probe_result.radius;
 
         logger.info(fmt::format("Probed base radius: {:.6f} (quantile: {:.4f}, samples: {}, time: {:.2f}ms)",
             probe_result.radius, probe_result.quantile, probe_result.num_dists_sampled, probe_time_ms));
-        logger.info(fmt::format("Min radius (beta={:.2f}): {:.6f}", g_config.rnet_config.beta, g_config.rnet_config.min_radius));
+        logger.info(fmt::format("Min radius: {:.6f}", g_config.rnet_config.min_radius));
 
         g_rnet_results.total_base_vecs = base_vecs.get_num_vecs();
         g_random_results.total_base_vecs = base_vecs.get_num_vecs();
