@@ -59,12 +59,12 @@ public:
         auto& inter_layer_links = hierarchical_graph.get_inter_layer_links();
 
         // Layer 0 is the base_vecs (full dataset), already in hier_vecs_manager by construction
-        // Start building from Layer 1 with radius = min_radius * beta_sq
+        // Start building from Layer 1 with radius = min_radius * beta
 
         // Build upper layers iteratively
         layer_id_t current_layer_id = 0;
         const vector_array_t* current_layer_vecs = &base_vecs;
-        distance_t current_radius = vertices_builder_config.min_radius() * vertices_builder_config.beta_sq();  // Layer 1 starts with min_radius * beta_sq
+        distance_t current_radius = vertices_builder_config.min_radius() * vertices_builder_config.beta();  // Layer 1 starts with min_radius * beta
 
         while (true) {
             // Calculate max_result_size based on current layer size and ratio
@@ -97,7 +97,7 @@ public:
 
             // Update for next iteration
             current_layer_vecs = &hier_vecs_manager.get_layer_vecs(current_layer_id);
-            current_radius *= vertices_builder_config.beta_sq();  // Scale radius for next layer
+            current_radius *= vertices_builder_config.beta();  // Scale radius for next layer
         }
 
         // Set entry point: find the vertex closest to the centroid in the top layer

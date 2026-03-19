@@ -47,7 +47,7 @@ using radius_prober_t = typename vg_traits_t::radius_prober_t;
 struct TestConfig {
     std::string config_path;
     std::string dataset_name;
-    float beta_sq;
+    float beta;
     uint32_t max_result_size;
     float coverage_ratio;
     float confidence;
@@ -95,8 +95,8 @@ public:
         const auto& base_vecs = dataset_->get_base_vecs();
         logger.info("Probing min_radius from dataset...");
 
-        constexpr float QUANTILE = 0.0001f;
-        constexpr float CONFIDENCE = 0.95f;
+        constexpr float QUANTILE = 0.001f;
+        constexpr float CONFIDENCE = 0.99f;
         constexpr float RELATIVE_ERR = 0.05f;
 
         radius_prober_t prober(*dist_func_);
@@ -106,11 +106,11 @@ public:
         auto probe_duration = std::chrono::duration_cast<std::chrono::microseconds>(probe_end - probe_start);
 
         g_test_results.probe_time_ms = probe_duration.count() / 1000.0;
-        g_test_results.min_radius = probe_result.radius * g_config.beta_sq;
+        g_test_results.min_radius = probe_result.radius * g_config.beta;
 
         logger.info(fmt::format("Probed base radius: {:.6f} (quantile: {:.4f}, samples: {}, time: {:.2f}ms)",
             probe_result.radius, probe_result.quantile, probe_result.num_dists_sampled, g_test_results.probe_time_ms));
-        logger.info(fmt::format("Min radius (beta_sq={:.2f}): {:.6f}", g_config.beta_sq, g_test_results.min_radius));
+        logger.info(fmt::format("Min radius (beta={:.2f}): {:.6f}", g_config.beta, g_test_results.min_radius));
 
         // Generate r-net once for all tests
         if (g_config.verbose) {
@@ -337,10 +337,10 @@ int main(int argc, char** argv) {
     argparse::ArgumentParser program("test_lb_greedy_vg");
     program.add_argument("-c", "--config").default_value(std::string("./configs/datasets.json"));
     program.add_argument("-d", "--dataset").default_value(std::string("sift-1m"));
-    program.add_argument("--beta-sq").default_value(2.56f).scan<'g', float>();
+    program.add_argument("--beta").default_value(1.69f).scan<'g', float>();
     program.add_argument("-m", "--max-result-size").default_value(100000u).scan<'u', uint32_t>();
-    program.add_argument("--coverage-ratio").default_value(0.96f).scan<'g', float>();
-    program.add_argument("--confidence").default_value(0.95f).scan<'g', float>();
+    program.add_argument("--coverage-ratio").default_value(0.999f).scan<'g', float>();
+    program.add_argument("--confidence").default_value(0.950f).scan<'g', float>();
     program.add_argument("-b", "--batch-size").default_value(2048u).scan<'u', uint32_t>();
     program.add_argument("-n", "--num-test-samples").default_value(10000u).scan<'u', uint32_t>();
     program.add_argument("-v", "--verbose").default_value(false).implicit_value(true);
@@ -355,7 +355,7 @@ int main(int argc, char** argv) {
 
     g_config.config_path = program.get<std::string>("--config");
     g_config.dataset_name = program.get<std::string>("--dataset");
-    g_config.beta_sq = program.get<float>("--beta-sq");
+    g_config.beta = program.get<float>("--beta");
     g_config.max_result_size = program.get<uint32_t>("--max-result-size");
     g_config.coverage_ratio = program.get<float>("--coverage-ratio");
     g_config.confidence = program.get<float>("--confidence");
@@ -367,7 +367,7 @@ int main(int argc, char** argv) {
     std::cout << "\n=== Test Configuration ===" << std::endl;
     std::cout << "Dataset: " << g_config.dataset_name << std::endl;
     std::cout << "Config path: " << g_config.config_path << std::endl;
-    std::cout << "Beta squared: " << g_config.beta_sq << std::endl;
+    std::cout << "Beta: " << g_config.beta << std::endl;
     std::cout << "Max result size: " << g_config.max_result_size << std::endl;
     std::cout << "Coverage ratio: " << g_config.coverage_ratio << std::endl;
     std::cout << "Confidence: " << g_config.confidence << std::endl;
@@ -392,7 +392,7 @@ int main(int argc, char** argv) {
     std::cout << std::string(80, '=') << std::endl;
     std::cout << "\n--- Radius Probing ---" << std::endl;
     std::cout << fmt::format("  Probe Time:             {:.2f} ms", g_test_results.probe_time_ms) << std::endl;
-    std::cout << fmt::format("  Beta Squared:           {:.2f}", g_config.beta_sq) << std::endl;
+    std::cout << fmt::format("  Beta:                   {:.2f}", g_config.beta) << std::endl;
     std::cout << fmt::format("  Min Radius:             {:.6f}", g_test_results.min_radius) << std::endl;
     std::cout << "\n--- R-Net Generation ---" << std::endl;
     std::cout << fmt::format("  Generation Time:        {:.2f} ms", g_test_results.generation_time_ms) << std::endl;

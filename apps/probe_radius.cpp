@@ -60,7 +60,7 @@ int main(int argc, char** argv) {
         .help("Confidence level (e.g., 0.95 for 95%, 0.99 for 99%)");
 
     program.add_argument("--relative-err")
-        .default_value(0.1f)
+        .default_value(0.05f)
         .scan<'g', float>()
         .help("Relative error (e.g., 0.1 for 10%, 0.2 for 20%)");
 

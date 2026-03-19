@@ -18,14 +18,11 @@
 #include <limits>
 #include <vector>
 #include <cmath>
-#include <stdexcept>
-#include <random>
-#include <span>
 #include <tbb/parallel_for.h>
 #include <tbb/blocked_range.h>
 #include <tbb/enumerable_thread_specific.h>
 #include <boost/math/distributions/normal.hpp>
-#include <artea/cpu/utils/random_seq_nr.hpp>
+#include <artea/common/logger.hpp>
 
 namespace artea {
 namespace cpu {
@@ -43,18 +40,9 @@ class LBGreedyVG : public VertexGeneratorTraitsT::template vertex_generator_t<LB
     using vector_array_t = typename VertexGeneratorTraitsT::vector_array_t;
     using dist_func_t = typename VertexGeneratorTraitsT::dist_func_t;
     using approx_rnet_t = typename VertexGeneratorTraitsT::approx_rnet_t;
-    using random_seq_nr_t = typename VertexGeneratorTraitsT::random_seq_nr_t;
-
-    /**
-     * @brief Candidate information for batch processing
-     */
-    struct CandidateInfo {
-        vec_id_t vec_id;                // Vector IDs
-        distance_t min_dist_to_rnet;    // Minimum distance to existing approx_rnet
-    };
 
 public:
-    LBGreedyVG(const dist_func_t& dist_func) : _dist_func(dist_func) {}
+    explicit LBGreedyVG(const dist_func_t& dist_func) : _dist_func(dist_func) {}
 
     /**
      * @brief Compute sampling_batch_size and term_thresh from coverage_ratio and confidence
@@ -73,14 +61,14 @@ public:
         const ratio_t confidence,
         const vertex_num_t sampling_batch_size
     ) -> vertex_num_t {
-        if (coverage_ratio <= 0.0f || coverage_ratio >= 1.0f) {
-            throw std::invalid_argument("coverage_ratio must be in (0, 1)");
+        if (coverage_ratio <= 0.0 || coverage_ratio >= 1.0) {
+            logger.error("coverage_ratio must be in (0, 1)");
         }
-        if (confidence <= 0.0f || confidence >= 1.0f) {
-            throw std::invalid_argument("confidence must be in (0, 1)");
+        if (confidence <= 0.0 || confidence >= 1.0) {
+            logger.error("confidence must be in (0, 1)");
         }
         if (sampling_batch_size < 1) {
-            throw std::invalid_argument("sampling_batch_size must be at least 1");
+            logger.error("sampling_batch_size must be at least 1");
         }
 
         // Calculate uncovered rate
@@ -151,7 +139,7 @@ public:
 
         approx_rnet_t approx_rnet(vecs_data.get_vec_dim());
 
-        if (total_vecs == 0) { return approx_rnet; }
+        if (total_vecs == 0 || max_result_size == 0) { return approx_rnet; }
 
         approx_rnet.reserve(max_result_size);
 
@@ -162,8 +150,8 @@ public:
         vec_num_t batch_start = 0;
 
         // Pre-allocate thread-local storage and reusable buffers outside the loop
-        tbb::enumerable_thread_specific<std::vector<CandidateInfo>> thread_local_candidates;
-        std::vector<CandidateInfo> qualifying_candidates;
+        tbb::enumerable_thread_specific<std::vector<std::pair<vec_id_t, distance_t>>> thread_local_candidates;
+        std::vector<std::pair<vec_id_t, distance_t>> qualifying_candidates;
         std::vector<const vec_ele_t*> batch_added_vecs;
 
         qualifying_candidates.reserve(sampling_batch_size);
@@ -175,8 +163,10 @@ public:
             const vec_num_t batch_end = std::min(batch_start + sampling_batch_size, total_vecs);
             const vec_num_t current_batch_size = batch_end - batch_start;
 
-            // Clear thread-local storage for reuse
-            thread_local_candidates.clear();
+            // Clear thread-local vectors (preserve capacity for reuse)
+            for (auto& local_vec : thread_local_candidates) {
+                local_vec.clear();
+            }
 
             tbb::parallel_for(
                 tbb::blocked_range<vec_num_t>(0, current_batch_size),
@@ -219,33 +209,22 @@ public:
             }
 
             std::sort(qualifying_candidates.begin(), qualifying_candidates.end(),
-                [](const CandidateInfo& a, const CandidateInfo& b) {
-                    return a.min_dist_to_rnet > b.min_dist_to_rnet;
+                [](const auto& a, const auto& b) {
+                    return a.second > b.second;
                 }
             );
 
             // Reuse batch_added_vecs vector
             batch_added_vecs.clear();
 
-            for (const auto& candidate : qualifying_candidates) {
-                if (approx_rnet.get_num_vecs() >= max_result_size) { break; }
-
-                const vec_ele_t* candidate_vec = vecs_data.get(candidate.vec_id);
-
-                bool conflicts_with_batch = false;
-                for (const vec_ele_t* batch_vec : batch_added_vecs) {
-                    if (_dist_func(candidate_vec, batch_vec) < rnet_radius) {
-                        conflicts_with_batch = true;
-                        break;
-                    }
-                }
-
-                if (!conflicts_with_batch) {
-                    approx_rnet.vec_ids.push_back(candidate.vec_id);
-                    approx_rnet.vecs_data.append_vec(candidate_vec);
-                    batch_added_vecs.push_back(candidate_vec);
-                }
-            }
+            _inner_batch_filter(
+                vecs_data,
+                qualifying_candidates,
+                rnet_radius,
+                max_result_size,
+                approx_rnet,
+                batch_added_vecs
+            );
 
             /**
              * @brief Termination condition based on statistical coverage analysis.
@@ -292,6 +271,44 @@ public:
 
 private:
     const dist_func_t& _dist_func;
+
+    /**
+     * @brief Greedily insert qualifying candidates from current batch
+     * @param vecs_data Source vector array
+     * @param qualifying_candidates Sorted candidates (by distance, descending)
+     * @param rnet_radius Minimum distance threshold
+     * @param max_result_size Maximum number of vertices to generate
+     * @param approx_rnet Output r-net (modified in-place)
+     * @param batch_added_vecs Vectors added in this batch (modified in-place)
+     */
+    __attribute__((always_inline)) inline auto _inner_batch_filter(
+        const vector_array_t& vecs_data,
+        const std::vector<std::pair<vec_id_t, distance_t>>& qualifying_candidates,
+        const distance_t rnet_radius,
+        const vertex_num_t max_result_size,
+        approx_rnet_t& approx_rnet,
+        std::vector<const vec_ele_t*>& batch_added_vecs
+    ) const -> void {
+        for (const auto& [candidate_id, candidate_dist] : qualifying_candidates) {
+            if (approx_rnet.get_num_vecs() >= max_result_size) { break; }
+
+            const vec_ele_t* candidate_vec = vecs_data.get(candidate_id);
+
+            bool conflicts_with_batch = false;
+            for (const vec_ele_t* batch_vec : batch_added_vecs) {
+                if (_dist_func(candidate_vec, batch_vec) < rnet_radius) {
+                    conflicts_with_batch = true;
+                    break;
+                }
+            }
+
+            if (!conflicts_with_batch) {
+                approx_rnet.vec_ids.push_back(candidate_id);
+                approx_rnet.vecs_data.append_vec(candidate_vec);
+                batch_added_vecs.push_back(candidate_vec);
+            }
+        }
+    }
 
 };
 

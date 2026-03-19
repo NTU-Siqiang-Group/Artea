@@ -49,7 +49,7 @@ int main(int argc, char** argv) {
         .help("Output directory for the graph index");
 
     // Vertices builder parameters
-    program.add_argument("--beta-sq").default_value(2.56f).scan<'g', float>();
+    program.add_argument("--beta").default_value(2.56f).scan<'g', float>();
     program.add_argument("--coverage-ratio").default_value(0.96f).scan<'g', float>();
     program.add_argument("--confidence").default_value(0.99f).scan<'g', float>();
     program.add_argument("--max-result-ratio").default_value(0.2f).scan<'g', float>();
@@ -155,7 +155,7 @@ int main(int argc, char** argv) {
     // Create vertices builder config
     greedy_vertices_builder_config_t vertices_builder_config(
         min_radius,
-        program.get<float>("--beta-sq"),
+        program.get<float>("--beta"),
         program.get<float>("--coverage-ratio"),
         program.get<float>("--confidence"),
         program.get<float>("--max-result-ratio"),
@@ -262,7 +262,7 @@ int main(int argc, char** argv) {
     std::cout << fmt::format("    Num inner iters:      {}", program.get<uint32_t>("--ul-num-inner-iters")) << std::endl;
     std::cout << "--- Vertices Builder Config ---" << std::endl;
     std::cout << fmt::format("  Min radius:             {:.6f} (auto-probed)", min_radius) << std::endl;
-    std::cout << fmt::format("  Beta squared:           {}", program.get<float>("--beta-sq")) << std::endl;
+    std::cout << fmt::format("  Beta:                   {}", program.get<float>("--beta")) << std::endl;
     std::cout << fmt::format("  Coverage ratio:         {}", program.get<float>("--coverage-ratio")) << std::endl;
     std::cout << fmt::format("  Confidence:             {}", program.get<float>("--confidence")) << std::endl;
     std::cout << fmt::format("  Max result ratio:       {}", program.get<float>("--max-result-ratio")) << std::endl;
@@ -300,7 +300,7 @@ int main(int argc, char** argv) {
     nlohmann::json index_params;
     index_params["dataset"] = dataset_name;
     index_params["min_radius"] = min_radius;
-    index_params["beta_sq"] = std::round(program.get<float>("--beta-sq") * 100.0f) / 100.0f;
+    index_params["beta"] = std::round(program.get<float>("--beta") * 100.0f) / 100.0f;
     index_params["bl_max_nbr_size"] = program.get<uint32_t>("--bl-max-nbr-size");
     index_params["ul_max_nbr_size"] = program.get<uint32_t>("--ul-max-nbr-size");
 

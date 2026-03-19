@@ -68,6 +68,7 @@
 #include <artea/cpu/vertex_generator/pstable_lsh_generator.hpp>
 #include <artea/cpu/vertex_generator/ortho_lsh_generator.hpp>
 #include <artea/cpu/vertex_generator/lb_greedy_vg.hpp>
+#include <artea/cpu/vertex_generator/mb_greedy_vg.hpp>
 #include <artea/cpu/vertex_generator/random_vg.hpp>
 
 #include <artea/cpu/edge_generator/nbr_log_table.hpp>

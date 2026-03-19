@@ -32,7 +32,7 @@ using namespace artea::cpu::default_context;
 
 struct RNetSelectionConfig {
     float min_radius;
-    float beta_sq;
+    float beta;
     float coverage_ratio;
     float confidence;
     float max_result_ratio;
@@ -98,6 +98,27 @@ public:
         dist_func_ = std::make_unique<dist_func_t>(dataset_->get_base_vecs().get_vec_dim());
 
         const auto& base_vecs = dataset_->get_base_vecs();
+
+        // Probe min_radius using radius prober
+        logger.info("Probing min_radius from dataset...");
+
+        constexpr float QUANTILE = 0.001f;
+        constexpr float CONFIDENCE = 0.99f;
+        constexpr float RELATIVE_ERR = 0.05f;
+
+        radius_prober_t prober(*dist_func_);
+        auto probe_start = std::chrono::high_resolution_clock::now();
+        auto probe_result = prober.probe(base_vecs, QUANTILE, CONFIDENCE, RELATIVE_ERR);
+        auto probe_end = std::chrono::high_resolution_clock::now();
+        auto probe_duration = std::chrono::duration_cast<std::chrono::microseconds>(probe_end - probe_start);
+
+        double probe_time_ms = probe_duration.count() / 1000.0;
+        g_config.rnet_config.min_radius = probe_result.radius * g_config.rnet_config.beta;
+
+        logger.info(fmt::format("Probed base radius: {:.6f} (quantile: {:.4f}, samples: {}, time: {:.2f}ms)",
+            probe_result.radius, probe_result.quantile, probe_result.num_dists_sampled, probe_time_ms));
+        logger.info(fmt::format("Min radius (beta={:.2f}): {:.6f}", g_config.rnet_config.beta, g_config.rnet_config.min_radius));
+
         g_rnet_results.total_base_vecs = base_vecs.get_num_vecs();
         g_random_results.total_base_vecs = base_vecs.get_num_vecs();
 
@@ -140,7 +161,7 @@ protected:
         if constexpr (VGPolicy == VGPolicyT::rnet_selection) {
             greedy_vertices_builder_config_t vertices_builder_config(
                 g_config.rnet_config.min_radius,
-                g_config.rnet_config.beta_sq,
+                g_config.rnet_config.beta,
                 g_config.rnet_config.coverage_ratio,
                 g_config.rnet_config.confidence,
                 g_config.rnet_config.max_result_ratio,
@@ -451,12 +472,12 @@ TEST_F(HierVertexRNetTest, VerifyHierarchicalStructure) {
 
     EXPECT_GE(g_rnet_results.num_layers, 1) << "Should have at least 1 layer (bottom layer)";
 
-    // Test each layer, starting from Layer 1 with radius = min_radius * beta_sq
-    float current_radius = g_config.rnet_config.min_radius * g_config.rnet_config.beta_sq;
+    // Test each layer, starting from Layer 1 with radius = min_radius * beta
+    float current_radius = g_config.rnet_config.min_radius * g_config.rnet_config.beta;
     for (uint32_t layer_id = 1; layer_id < g_rnet_results.num_layers; ++layer_id) {
         TestLayerSeparation<HierVertexRNetTest>(layer_id, current_radius, g_rnet_results);
         TestLayerCoverage<HierVertexRNetTest>(layer_id, current_radius, g_rnet_results);
-        current_radius *= g_config.rnet_config.beta_sq;
+        current_radius *= g_config.rnet_config.beta;
     }
 
     // Test inter-layer links
@@ -502,10 +523,9 @@ int main(int argc, char** argv) {
     program.add_argument("-d", "--dataset").default_value(std::string("sift-1m"));
 
     // RNet selection parameters
-    program.add_argument("--min-radius").default_value(34875.0f).scan<'g', float>();
-    program.add_argument("--beta-sq").default_value(2.56f).scan<'g', float>();
-    program.add_argument("--coverage-ratio").default_value(0.96f).scan<'g', float>();
-    program.add_argument("--confidence").default_value(0.99f).scan<'g', float>();
+    program.add_argument("--beta").default_value(1.69f).scan<'g', float>();
+    program.add_argument("--coverage-ratio").default_value(0.999f).scan<'g', float>();
+    program.add_argument("--confidence").default_value(0.950f).scan<'g', float>();
     program.add_argument("--max-result-ratio").default_value(0.2f).scan<'g', float>();
     program.add_argument("--sampling-batch-size").default_value(2048u).scan<'u', uint32_t>();
 
@@ -526,8 +546,7 @@ int main(int argc, char** argv) {
     g_config.config_path = program.get<std::string>("--config");
     g_config.dataset_name = program.get<std::string>("--dataset");
 
-    g_config.rnet_config.min_radius = program.get<float>("--min-radius");
-    g_config.rnet_config.beta_sq = program.get<float>("--beta-sq");
+    g_config.rnet_config.beta = program.get<float>("--beta");
     g_config.rnet_config.coverage_ratio = program.get<float>("--coverage-ratio");
     g_config.rnet_config.confidence = program.get<float>("--confidence");
     g_config.rnet_config.max_result_ratio = program.get<float>("--max-result-ratio");
@@ -542,8 +561,7 @@ int main(int argc, char** argv) {
     std::cout << "Dataset: " << g_config.dataset_name << std::endl;
     std::cout << "Config path: " << g_config.config_path << std::endl;
     std::cout << "\n--- RNet Selection Parameters ---" << std::endl;
-    std::cout << "Min radius: " << g_config.rnet_config.min_radius << std::endl;
-    std::cout << "Beta squared: " << g_config.rnet_config.beta_sq << std::endl;
+    std::cout << "Beta: " << g_config.rnet_config.beta << std::endl;
     std::cout << "Coverage ratio: " << g_config.rnet_config.coverage_ratio << std::endl;
     std::cout << "Confidence: " << g_config.rnet_config.confidence << std::endl;
     std::cout << "Max result ratio: " << g_config.rnet_config.max_result_ratio << std::endl;
@@ -556,6 +574,10 @@ int main(int argc, char** argv) {
     std::cout << "==========================\n" << std::endl;
 
     DataProvider::instance().init();
+
+    // Print auto-probed min_radius
+    std::cout << "Auto-probed min radius: " << g_config.rnet_config.min_radius << std::endl;
+    std::cout << std::endl;
 
     int result = RUN_ALL_TESTS();
 

@@ -37,7 +37,7 @@ struct GreedyVerticesBuilderConfig {
     /**
      * @brief Constructor for greedy vertices builder configuration.
      * @param min_radius Minimum radius for R-net (bottom layer radius).
-     * @param beta_sq Beta squared coefficient for radius scaling between layers.
+     * @param beta Beta coefficient for radius scaling between layers.
      * @param coverage_ratio Coverage ratio for R-net generation (recommend: 0.95).
      * @param confidence Confidence level for R-net generation (recommend: 0.95).
      * @param max_result_ratio Maximum result size ratio relative to current layer size (recommend: 0.2).
@@ -45,14 +45,14 @@ struct GreedyVerticesBuilderConfig {
      */
     GreedyVerticesBuilderConfig(
         distance_t min_radius,
-        ratio_t beta_sq,
+        ratio_t beta,
         ratio_t coverage_ratio,
         ratio_t confidence,
         ratio_t max_result_ratio,
         vertex_num_t sampling_batch_size
     ) :
         _min_radius(min_radius),
-        _beta_sq(beta_sq),
+        _beta(beta),
         _coverage_ratio(coverage_ratio),
         _confidence(confidence),
         _max_result_ratio(max_result_ratio),
@@ -61,7 +61,7 @@ struct GreedyVerticesBuilderConfig {
 
     // Builder pattern setters (chainable)
     auto min_radius(distance_t value) -> GreedyVerticesBuilderConfig& { _min_radius = value; return *this; }
-    auto beta_sq(ratio_t value) -> GreedyVerticesBuilderConfig& { _beta_sq = value; return *this; }
+    auto beta(ratio_t value) -> GreedyVerticesBuilderConfig& { _beta = value; return *this; }
     auto coverage_ratio(ratio_t value) -> GreedyVerticesBuilderConfig& { _coverage_ratio = value; return *this; }
     auto confidence(ratio_t value) -> GreedyVerticesBuilderConfig& { _confidence = value; return *this; }
     auto max_result_ratio(ratio_t value) -> GreedyVerticesBuilderConfig& { _max_result_ratio = value; return *this; }
@@ -69,7 +69,7 @@ struct GreedyVerticesBuilderConfig {
 
     // Const getters
     auto min_radius() const -> distance_t { return _min_radius; }
-    auto beta_sq() const -> ratio_t { return _beta_sq; }
+    auto beta() const -> ratio_t { return _beta; }
     auto coverage_ratio() const -> ratio_t { return _coverage_ratio; }
     auto confidence() const -> ratio_t { return _confidence; }
     auto max_result_ratio() const -> ratio_t { return _max_result_ratio; }
@@ -79,8 +79,8 @@ private:
     /** @brief Minimum radius for R-net (bottom layer radius). */
     distance_t _min_radius;
 
-    /** @brief Beta squared coefficient for radius scaling between layers. */
-    ratio_t _beta_sq;
+    /** @brief Beta coefficient for radius scaling between layers. */
+    ratio_t _beta;
 
     /** @brief Coverage ratio for R-net generation (recommend: 0.95). */
     ratio_t _coverage_ratio;

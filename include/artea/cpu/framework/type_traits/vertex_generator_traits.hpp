@@ -29,6 +29,7 @@ template <typename VertexGeneratorTraitsT> class OrthoLSHGenerator;
 template <typename VertexGeneratorTraitsT> class PStableLSHGenerator;
 template <typename VertexGeneratorTraitsT> class LSHTable;
 template <typename VertexGeneratorTraitsT> class LBGreedyVG;
+template <typename VertexGeneratorTraitsT> class MBGreedyVG;
 template <typename VertexGeneratorTraitsT> class RandomVG;
 
 template <typename ComputerTraitsT>
@@ -54,6 +55,9 @@ struct VertexGeneratorTraits : virtual public ComputerTraitsT {
 
     /** @brief Large batch greedy vertex generator. */
     using lb_greedy_vg_t = LBGreedyVG<vertex_generator_traits_t>;
+
+    /** @brief Mini batch greedy vertex generator. */
+    using mb_greedy_vg_t = MBGreedyVG<vertex_generator_traits_t>;
 
     /** @brief Random vertex generator. */
     using random_vg_t = RandomVG<vertex_generator_traits_t>;

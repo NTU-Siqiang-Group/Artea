@@ -30,7 +30,7 @@ using namespace artea::cpu::default_context;
 
 struct VerticesBuilderConfigParams {
     float min_radius;
-    float beta_sq;
+    float beta;
     float coverage_ratio;
     float confidence;
     float max_result_ratio;
@@ -184,7 +184,7 @@ protected:
         // Create vertices builder config
         greedy_vertices_builder_config_t vertices_builder_config(
             g_config.vertices_config.min_radius,
-            g_config.vertices_config.beta_sq,
+            g_config.vertices_config.beta,
             g_config.vertices_config.coverage_ratio,
             g_config.vertices_config.confidence,
             g_config.vertices_config.max_result_ratio,
@@ -437,7 +437,7 @@ int main(int argc, char** argv) {
 
     // Vertices builder parameters
     program.add_argument("--min-radius").default_value(34875.0f).scan<'g', float>();
-    program.add_argument("--beta-sq").default_value(2.56f).scan<'g', float>();
+    program.add_argument("--beta").default_value(2.56f).scan<'g', float>();
     program.add_argument("--coverage-ratio").default_value(0.96f).scan<'g', float>();
     program.add_argument("--confidence").default_value(0.99f).scan<'g', float>();
     program.add_argument("--max-result-ratio").default_value(0.2f).scan<'g', float>();
@@ -488,7 +488,7 @@ int main(int argc, char** argv) {
     g_config.dataset_name = program.get<std::string>("--dataset");
 
     g_config.vertices_config.min_radius = program.get<float>("--min-radius");
-    g_config.vertices_config.beta_sq = program.get<float>("--beta-sq");
+    g_config.vertices_config.beta = program.get<float>("--beta");
     g_config.vertices_config.coverage_ratio = program.get<float>("--coverage-ratio");
     g_config.vertices_config.confidence = program.get<float>("--confidence");
     g_config.vertices_config.max_result_ratio = program.get<float>("--max-result-ratio");
@@ -532,7 +532,7 @@ int main(int argc, char** argv) {
     std::cout << "Config path: " << g_config.config_path << std::endl;
     std::cout << "\n--- Vertices Builder Parameters ---" << std::endl;
     std::cout << "Min radius: " << g_config.vertices_config.min_radius << std::endl;
-    std::cout << "Beta squared: " << g_config.vertices_config.beta_sq << std::endl;
+    std::cout << "Beta: " << g_config.vertices_config.beta << std::endl;
     std::cout << "Coverage ratio: " << g_config.vertices_config.coverage_ratio << std::endl;
     std::cout << "Confidence: " << g_config.vertices_config.confidence << std::endl;
     std::cout << "Max result ratio: " << g_config.vertices_config.max_result_ratio << std::endl;

@@ -104,7 +104,7 @@ public:
             meta["vertices_builder_config"] = {
                 {"type", "approx_rnet"},
                 {"min_radius", config.min_radius()},
-                {"beta_sq", config.beta_sq()},
+                {"beta", config.beta()},
                 {"coverage_ratio", config.coverage_ratio()},
                 {"confidence", config.confidence()},
                 {"max_result_ratio", config.max_result_ratio()},
@@ -237,7 +237,7 @@ public:
             if (vertices_builder_config_type == "approx_rnet") {
                 return greedy_vertices_builder_config_t(
                     meta["vertices_builder_config"]["min_radius"].get<distance_t>(),
-                    meta["vertices_builder_config"]["beta_sq"].get<typename greedy_vertices_builder_config_t::ratio_t>(),
+                    meta["vertices_builder_config"]["beta"].get<typename greedy_vertices_builder_config_t::ratio_t>(),
                     meta["vertices_builder_config"]["coverage_ratio"].get<typename greedy_vertices_builder_config_t::ratio_t>(),
                     meta["vertices_builder_config"]["confidence"].get<typename greedy_vertices_builder_config_t::ratio_t>(),
                     meta["vertices_builder_config"]["max_result_ratio"].get<typename greedy_vertices_builder_config_t::ratio_t>(),
