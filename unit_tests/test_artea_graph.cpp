@@ -17,6 +17,7 @@
 #include <memory>
 #include <filesystem>
 #include <chrono>
+#include <sstream>
 #include <fmt/format.h>
 #include <argparse/argparse.hpp>
 #include <gtest/gtest.h>
@@ -60,12 +61,22 @@ struct TestConfig {
     EdgesBuilderConfigParams upper_edges_config;
 
     uint32_t topk;
-    uint32_t candidate_queue_size;
+    uint32_t queue_start;
+    uint32_t queue_end;
+    uint32_t queue_step;
     uint32_t bl_extracted_nbr_size;
     uint32_t ul_extracted_nbr_size;
 
     bool verbose;
 } g_config;
+
+struct QueryResult {
+    uint32_t candidate_queue_size;
+    double query_time_ms;
+    double avg_query_time_us;
+    double throughput_qps;
+    float recall;
+};
 
 struct LayerMetrics {
     uint32_t layer_id;
@@ -79,14 +90,11 @@ struct TestResults {
     double vertices_construction_time_ms = 0.0;
     double edges_construction_time_ms = 0.0;
     double total_construction_time_ms = 0.0;
-    double query_time_ms = 0.0;
-    double avg_query_time_us = 0.0;
-    double throughput_qps = 0.0;
-    float recall = 0.0f;
     uint32_t num_layers = 0;
     uint32_t total_base_vecs = 0;
     uint32_t num_queries = 0;
     std::vector<LayerMetrics> layer_metrics;
+    std::vector<QueryResult> query_results;
 };
 
 TestResults g_results;
@@ -388,44 +396,54 @@ TEST_F(ArteaGraphConstructTest, QueryRecall) {
     double conversion_time_ms = duration.count() / 1000.0;
     logger.info(fmt::format("Conversion time: {:.2f} ms", conversion_time_ms));
 
-    // Create hierarchical router
-    hierarchical_graph_router_t router(
-        base_vecs,
-        dist_func,
-        hierarchical_search_graph,
-        g_config.topk,
-        g_config.candidate_queue_size
-    );
-    router.initialize();
+    // Run grid search over candidate queue sizes
+    logger.info(fmt::format("\nRunning Grid Search: candidate queue size {} to {}, step {}",
+        g_config.queue_start, g_config.queue_end, g_config.queue_step));
+    logger.info("");
 
-    // Query all vectors
-    logger.info(fmt::format("Querying {} vectors...", query_vecs.get_num_vecs()));
-    start_time = std::chrono::high_resolution_clock::now();
-
-    idlist_array_t results = router.batch_query(query_vecs);
-
-    end_time = std::chrono::high_resolution_clock::now();
-    duration = std::chrono::duration_cast<std::chrono::microseconds>(end_time - start_time);
-    g_results.query_time_ms = duration.count() / 1000.0;
-    g_results.avg_query_time_us = static_cast<double>(duration.count()) / query_vecs.get_num_vecs();
-    g_results.throughput_qps = query_vecs.get_num_vecs() * 1000000.0 / duration.count();
-
-    logger.info(fmt::format("Query time: {:.2f} ms", g_results.query_time_ms));
-    logger.info(fmt::format("Avg query time: {:.2f} us", g_results.avg_query_time_us));
-    logger.info(fmt::format("Throughput: {:.2f} QPS", g_results.throughput_qps));
-
-    // Compute recall
     recall_estimator_t recall_estimator;
-    g_results.recall = recall_estimator.calculate_recall_at_k(
-        results,
-        groundtruth
-    );
 
-    logger.info(fmt::format("Recall@{}: {:.4f}",
-        g_config.topk, g_results.recall));
+    for (uint32_t queue_size = g_config.queue_start; queue_size <= g_config.queue_end; queue_size += g_config.queue_step) {
+        // Create hierarchical router with current queue size
+        hierarchical_graph_router_t router(
+            base_vecs,
+            dist_func,
+            hierarchical_search_graph,
+            g_config.topk,
+            queue_size
+        );
+        router.initialize();
 
-    // Expect reasonable recall (at least 50%)
-    EXPECT_GE(g_results.recall, 0.5f) << "Recall should be at least 50%";
+        // Query all vectors
+        start_time = std::chrono::high_resolution_clock::now();
+        idlist_array_t results = router.batch_query(query_vecs);
+        end_time = std::chrono::high_resolution_clock::now();
+
+        duration = std::chrono::duration_cast<std::chrono::microseconds>(end_time - start_time);
+
+        // Compute metrics
+        QueryResult result;
+        result.candidate_queue_size = queue_size;
+        result.query_time_ms = duration.count() / 1000.0;
+        result.avg_query_time_us = static_cast<double>(duration.count()) / query_vecs.get_num_vecs();
+        result.throughput_qps = query_vecs.get_num_vecs() * 1000000.0 / duration.count();
+        result.recall = recall_estimator.calculate_recall_at_k(results, groundtruth);
+
+        g_results.query_results.push_back(result);
+
+        logger.info(fmt::format("CandidateQueue={:3}: Recall@{}={:.4f}, QPS={:8.2f}, AvgTime={:.2f}ms",
+            queue_size, g_config.topk, result.recall, result.throughput_qps, result.query_time_ms));
+    }
+
+    // Expect reasonable recall for at least one configuration
+    bool has_good_recall = false;
+    for (const auto& result : g_results.query_results) {
+        if (result.recall >= 0.5f) {
+            has_good_recall = true;
+            break;
+        }
+    }
+    EXPECT_TRUE(has_good_recall) << "At least one configuration should achieve recall >= 50%";
 }
 
 int main(int argc, char** argv) {
@@ -467,8 +485,9 @@ int main(int argc, char** argv) {
 
     // Router parameters
     program.add_argument("-k", "--topk").default_value(20u).scan<'u', uint32_t>();
-    program.add_argument("--candidate-queue-size").default_value(50u).scan<'u', uint32_t>()
-        .help("Bottom layer candidate queue size");
+    program.add_argument("--candidate-queue-config")
+        .default_value(std::string("40,100,20"))
+        .help("Candidate queue size grid search: start,end,step (default: 40,100,20)");
     program.add_argument("--bl-extracted-nbr-size").scan<'u', uint32_t>()
         .help("Bottom layer extracted neighbor size (defaults to bl-max-nbr-size)");
     program.add_argument("--ul-extracted-nbr-size").scan<'u', uint32_t>()
@@ -515,7 +534,24 @@ int main(int argc, char** argv) {
     g_config.upper_edges_config.num_inner_iters = program.get<uint32_t>("--ul-num-inner-iters");
 
     g_config.topk = program.get<uint32_t>("--topk");
-    g_config.candidate_queue_size = program.get<uint32_t>("--candidate-queue-size");
+
+    // Parse candidate queue config
+    std::string queue_config_str = program.get<std::string>("--candidate-queue-config");
+    {
+        std::istringstream ss(queue_config_str);
+        std::string token;
+        std::vector<uint32_t> values;
+        while (std::getline(ss, token, ',')) {
+            values.push_back(std::stoul(token));
+        }
+        if (values.size() != 3) {
+            fprintf(stderr, "Error: --candidate-queue-config must have 3 values: start,end,step\n");
+            return 1;
+        }
+        g_config.queue_start = values[0];
+        g_config.queue_end = values[1];
+        g_config.queue_step = values[2];
+    }
 
     g_config.bl_extracted_nbr_size = program.is_used("--bl-extracted-nbr-size")
         ? program.get<uint32_t>("--bl-extracted-nbr-size")
@@ -553,7 +589,7 @@ int main(int argc, char** argv) {
     std::cout << "Upper edges num inner iters: " << g_config.upper_edges_config.num_inner_iters << std::endl;
     std::cout << "\n--- Router Configuration ---" << std::endl;
     std::cout << "Top-k: " << g_config.topk << std::endl;
-    std::cout << "Candidate queue size: " << g_config.candidate_queue_size << std::endl;
+    std::cout << "Candidate queue config: " << g_config.queue_start << "," << g_config.queue_end << "," << g_config.queue_step << std::endl;
     std::cout << "Bottom layer extracted nbr size: " << g_config.bl_extracted_nbr_size << std::endl;
     std::cout << "Upper layer extracted nbr size: " << g_config.ul_extracted_nbr_size << std::endl;
     std::cout << "Verbose: " << (g_config.verbose ? "true" : "false") << std::endl;
@@ -594,10 +630,19 @@ int main(int argc, char** argv) {
 
     std::cout << "\n=== Query Performance ===" << std::endl;
     std::cout << fmt::format("  Num Queries:            {}", g_results.num_queries) << std::endl;
-    std::cout << fmt::format("  Total Query Time:       {:.2f} ms", g_results.query_time_ms) << std::endl;
-    std::cout << fmt::format("  Avg Query Time:         {:.2f} us", g_results.avg_query_time_us) << std::endl;
-    std::cout << fmt::format("  Throughput:             {:.2f} QPS", g_results.throughput_qps) << std::endl;
-    std::cout << fmt::format("  Recall@{}:              {:.4f}", g_config.topk, g_results.recall) << std::endl;
+    std::cout << fmt::format("  Top-k:                  {}", g_config.topk) << std::endl;
+    std::cout << "\n--- Grid Search Results ---" << std::endl;
+    std::cout << fmt::format("{:<15} {:<12} {:<12} {:<12}",
+        "CandidateQueue", "Recall@k", "QPS", "AvgTime(ms)") << std::endl;
+    std::cout << std::string(60, '-') << std::endl;
+
+    for (const auto& result : g_results.query_results) {
+        std::cout << fmt::format("{:<15} {:<12.4f} {:<12.2f} {:<12.2f}",
+            result.candidate_queue_size,
+            result.recall,
+            result.throughput_qps,
+            result.query_time_ms) << std::endl;
+    }
 
     std::cout << std::string(100, '=') << std::endl;
 

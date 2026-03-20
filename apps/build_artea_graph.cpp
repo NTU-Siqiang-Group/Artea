@@ -251,18 +251,9 @@ int main(int argc, char** argv) {
 
         // Count edges for this layer
         uint64_t num_edges = 0;
-        if (layer_id == 0) {
-            // Bottom layer
-            const auto& bottom_graph = hierarchical_graph.get_bottom_graph();
-            for (uint32_t v = 0; v < num_vertices; ++v) {
-                num_edges += bottom_graph.get_nbr_size(v);
-            }
-        } else {
-            // Upper layers
-            const auto& upper_graph = hierarchical_graph.get_upper_graph(layer_id);
-            for (uint32_t v = 0; v < num_vertices; ++v) {
-                num_edges += upper_graph.get_nbr_size(v);
-            }
+        const auto& layer_graph = hierarchical_graph.get_layer_graph(layer_id);
+        for (uint32_t v = 0; v < num_vertices; ++v) {
+            num_edges += layer_graph.fetch_nbrs(v).size();
         }
 
         // Display layer info

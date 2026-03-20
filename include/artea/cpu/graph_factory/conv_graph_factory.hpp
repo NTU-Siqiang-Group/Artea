@@ -85,6 +85,7 @@ public:
         auto reverse_updater = propagate_engine.template make_updater<reverse_updater_t>();
         // run propagation engine to refine the graph
         for (iter_t outer_iter = 0; outer_iter < edges_builder_config.num_outer_iters(); ++outer_iter) {
+            // propagate_engine.run(1, reverse_updater);
             propagate_engine.run(edges_builder_config.num_inner_iters(), triangle_updater);
             propagate_engine.run(1, reverse_updater);
         }
