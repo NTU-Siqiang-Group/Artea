@@ -42,7 +42,7 @@ class ArteaGraphFactory :
     using hierarchical_vertices_builder_t = typename GraphFactoryTraitsT::hierarchical_vertices_builder_t;
     using hierarchical_edges_builder_t = typename GraphFactoryTraitsT::hierarchical_edges_builder_t;
     using layer_config_t = typename GraphFactoryTraitsT::layer_config_t;
-    using edges_builder_config_t = typename GraphFactoryTraitsT::edges_builder_config_t;
+    using edges_builder_config_t = typename GraphFactoryTraitsT::artea_graph::edges_builder_config_t;
     using greedy_vertices_builder_config_t = typename GraphFactoryTraitsT::greedy_vertices_builder_config_t;
     using random_vertices_builder_config_t = typename GraphFactoryTraitsT::random_vertices_builder_config_t;
     using vg_policy_t = typename GraphFactoryTraitsT::vg_policy_t;

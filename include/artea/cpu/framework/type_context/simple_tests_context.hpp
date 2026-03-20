@@ -16,7 +16,6 @@
 
 namespace artea {
 namespace cpu {
-namespace simple_tests_context {
 
 // Type definitions using SIMPLE_EUCLIDEAN for low-dimensional vectors
 using vec_num_t = uint32_t;
@@ -100,7 +99,6 @@ using log_table_t = typename buffer_traits_t::log_table_t;
 
 // Index types from IndexTraits
 using layer_config_t = typename index_traits_t::layer_config_t;
-using edges_builder_config_t = typename index_traits_t::edges_builder_config_t;
 using greedy_vertices_builder_config_t = typename index_traits_t::greedy_vertices_builder_config_t;
 using random_vertices_builder_config_t = typename index_traits_t::random_vertices_builder_config_t;
 using vertices_builder_config_t = typename index_traits_t::vertices_builder_config_t;
@@ -141,6 +139,14 @@ using propagate_engine_noss_t = typename edge_generator_traits_t::propagate_engi
 // Currently, NO SELECTIVE SCHEDULING is faster
 using propagate_engine_t = propagate_engine_noss_t;
 
-}   // namespace simple_tests_context
+// Edges builder config types in namespaces
+namespace conv_graph {
+    using edges_builder_config_t = typename index_traits_t::conv_graph::edges_builder_config_t;
+}
+
+namespace artea_graph {
+    using edges_builder_config_t = typename index_traits_t::artea_graph::edges_builder_config_t;
+}
+
 }   // namespace cpu
 }   // namespace artea

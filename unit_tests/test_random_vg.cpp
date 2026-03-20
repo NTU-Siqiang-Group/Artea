@@ -26,7 +26,6 @@
 
 using namespace artea;
 using namespace artea::cpu;
-using namespace artea::cpu::default_context;
 
 // Global configuration
 struct TestConfig {
@@ -36,12 +35,6 @@ struct TestConfig {
 
 class RandomVGTest : public ::testing::Test {
 protected:
-    using vector_dataset_t = artea::cpu::default_context::vector_dataset_t;
-    using vector_array_t = artea::cpu::default_context::vector_array_t;
-    using random_vg_t = artea::cpu::default_context::random_vg_t;
-    using vertex_subset_t = artea::cpu::default_context::vertex_subset_t;
-    using vec_id_t = artea::cpu::default_context::vec_id_t;
-
     static std::unique_ptr<vector_dataset_t> dataset;
     static const vector_array_t* vecs_data;
     static uint32_t num_vecs;
@@ -67,8 +60,8 @@ protected:
     }
 };
 
-std::unique_ptr<RandomVGTest::vector_dataset_t> RandomVGTest::dataset = nullptr;
-const RandomVGTest::vector_array_t* RandomVGTest::vecs_data = nullptr;
+std::unique_ptr<vector_dataset_t> RandomVGTest::dataset = nullptr;
+const vector_array_t* RandomVGTest::vecs_data = nullptr;
 uint32_t RandomVGTest::num_vecs = 0;
 uint32_t RandomVGTest::vec_dim = 0;
 

@@ -28,7 +28,6 @@
 
 using namespace artea;
 using namespace artea::cpu;
-using namespace artea::cpu::default_context;
 
 // Serial implementation for comparison
 class SerialCentroidComputer {

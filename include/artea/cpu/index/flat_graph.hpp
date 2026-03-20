@@ -28,7 +28,7 @@ class FlatGraph {
     using nbr_arr_t = typename IndexTraitsT::nbr_arr_t;
     using vector_array_t = typename IndexTraitsT::vector_array_t;
     using layer_config_t = typename IndexTraitsT::layer_config_t;
-    using edges_builder_config_t = typename IndexTraitsT::edges_builder_config_t;
+    using edges_builder_config_t = typename IndexTraitsT::conv_graph::edges_builder_config_t;
 
 public:
     /**

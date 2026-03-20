@@ -32,7 +32,6 @@
 
 using namespace artea;
 using namespace artea::cpu;
-using namespace artea::cpu::default_context;
 
 class FlatSearchGraphTest : public ::testing::Test {
 protected:
@@ -41,7 +40,7 @@ protected:
         num_vertices_ = 10000;
         vec_dim_ = 128;
         layer_config_ = layer_config_t(64, 128);
-        edges_builder_config_ = edges_builder_config_t(1.0, 0.0, 4, 14);
+        edges_builder_config_ = conv_graph::edges_builder_config_t(1.0, 0.0, 4, 14);
 
         // Create VectorArray and populate with random vectors
         vecs_ = std::make_unique<vector_array_t>(vec_dim_);
@@ -108,7 +107,7 @@ protected:
     vertex_num_t num_vertices_;
     vec_dim_t vec_dim_;
     layer_config_t layer_config_{64, 128};
-    edges_builder_config_t edges_builder_config_{1.0, 0.0, 4, 14};
+    conv_graph::edges_builder_config_t edges_builder_config_{1.0, 0.0, 4, 14};
     std::unique_ptr<vector_array_t> vecs_;
     std::unique_ptr<dist_func_t> dist_func_;
     std::unique_ptr<flat_graph_t> flat_graph_;

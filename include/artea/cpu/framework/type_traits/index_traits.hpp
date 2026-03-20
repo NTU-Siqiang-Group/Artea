@@ -27,9 +27,16 @@ namespace cpu {
 
 /** ------ Forward Declaration  ------ **/
 template <typename IndexTraitsT> struct LayerConfig;
-template <typename IndexTraitsT> struct EdgesBuilderConfig;
 template <typename IndexTraitsT> struct GreedyVerticesBuilderConfig;
 template <typename IndexTraitsT> struct RandomVerticesBuilderConfig;
+
+namespace conv_graph {
+    template <typename IndexTraitsT> struct EdgesBuilderConfig;
+}
+
+namespace artea_graph {
+    template <typename IndexTraitsT> using EdgesBuilderConfig = conv_graph::EdgesBuilderConfig<IndexTraitsT>;
+}
 template <typename IndexTraitsT> class FlatGraph;
 template <typename IndexTraitsT> class FlatSearchGraph;
 template <typename IndexTraitsT> class HierarchicalGraph;
@@ -53,9 +60,6 @@ struct IndexTraits : virtual public BaseTraitsT {
     /** @brief Layer configuration type. */
     using layer_config_t = LayerConfig<index_traits_t>;
 
-    /** @brief Edges builder configuration type. */
-    using edges_builder_config_t = EdgesBuilderConfig<index_traits_t>;
-
     /** @brief Greedy vertices builder configuration type. */
     using greedy_vertices_builder_config_t = GreedyVerticesBuilderConfig<index_traits_t>;
 
@@ -64,6 +68,16 @@ struct IndexTraits : virtual public BaseTraitsT {
 
     /** @brief Vertices builder configuration variant type (greedy or random). */
     using vertices_builder_config_t = std::variant<greedy_vertices_builder_config_t, random_vertices_builder_config_t>;
+
+    /** @brief Namespace-specific type aliases for conv_graph. */
+    struct conv_graph {
+        using edges_builder_config_t = cpu::conv_graph::EdgesBuilderConfig<index_traits_t>;
+    };
+
+    /** @brief Namespace-specific type aliases for artea_graph. */
+    struct artea_graph {
+        using edges_builder_config_t = cpu::artea_graph::EdgesBuilderConfig<index_traits_t>;
+    };
 
     /** @brief Flat graph type. */
     using flat_graph_t = FlatGraph<index_traits_t>;

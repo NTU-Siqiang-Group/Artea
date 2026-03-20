@@ -24,7 +24,6 @@
 
 using namespace artea;
 using namespace artea::cpu;
-using namespace artea::cpu::default_context;
 
 // Global configuration
 struct BenchConfig {
@@ -33,10 +32,6 @@ struct BenchConfig {
 } g_config;
 
 // Global dataset
-using vector_dataset_t = artea::cpu::default_context::vector_dataset_t;
-using vector_array_t = artea::cpu::default_context::vector_array_t;
-using random_vg_t = artea::cpu::default_context::random_vg_t;
-
 std::unique_ptr<vector_dataset_t> g_dataset = nullptr;
 const vector_array_t* g_vecs_data = nullptr;
 uint32_t g_num_vecs = 0;

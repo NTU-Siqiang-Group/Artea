@@ -27,7 +27,6 @@
 
 using namespace artea;
 using namespace artea::cpu;
-using namespace artea::cpu::default_context;
 
 struct VerticesBuilderConfigParams {
     float min_radius;
@@ -176,13 +175,13 @@ protected:
         );
 
         // Create edges builder configs
-        edges_builder_config_t bottom_edges_config(
+        artea_graph::edges_builder_config_t bottom_edges_config(
             g_config.bottom_edges_config.scale_coeffs,
             g_config.bottom_edges_config.shifted_coeffs,
             g_config.bottom_edges_config.num_outer_iters,
             g_config.bottom_edges_config.num_inner_iters
         );
-        edges_builder_config_t upper_edges_config(
+        artea_graph::edges_builder_config_t upper_edges_config(
             g_config.upper_edges_config.scale_coeffs,
             g_config.upper_edges_config.shifted_coeffs,
             g_config.upper_edges_config.num_outer_iters,

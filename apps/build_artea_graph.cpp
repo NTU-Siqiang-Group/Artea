@@ -29,7 +29,6 @@
 
 using namespace artea;
 using namespace artea::cpu;
-using namespace artea::cpu::default_context;
 
 int main(int argc, char** argv) {
     argparse::ArgumentParser program("build_artea_graph");
@@ -139,13 +138,13 @@ int main(int argc, char** argv) {
     layer_config_t upper_layer_config(ul_max_nbr_size, ul_reserved_nbr_size);
 
     // Create edges builder configs
-    edges_builder_config_t bottom_edges_config(
+    artea_graph::edges_builder_config_t bottom_edges_config(
         program.get<float>("--bl-scale-coeffs"),
         program.get<float>("--bl-shifted-coeffs"),
         program.get<uint32_t>("--bl-num-outer-iters"),
         program.get<uint32_t>("--bl-num-inner-iters")
     );
-    edges_builder_config_t upper_edges_config(
+    artea_graph::edges_builder_config_t upper_edges_config(
         program.get<float>("--ul-scale-coeffs"),
         program.get<float>("--ul-shifted-coeffs"),
         program.get<uint32_t>("--ul-num-outer-iters"),

@@ -28,7 +28,6 @@
 
 using namespace artea;
 using namespace artea::cpu;
-using namespace artea::cpu::default_context;
 
 struct RNetSelectionConfig {
     float min_radius;
@@ -155,7 +154,7 @@ protected:
         layer_config_t dummy_config(32, 32);
 
         // Create hierarchical graph with reference to the stored manager
-        edges_builder_config_t dummy_edges_config(1.0, 0.0, 4, 14);
+        artea_graph::edges_builder_config_t dummy_edges_config(1.0, 0.0, 4, 14);
 
         // Create vertices_builder_config based on VGPolicy
         if constexpr (VGPolicy == VGPolicyT::rnet_selection) {

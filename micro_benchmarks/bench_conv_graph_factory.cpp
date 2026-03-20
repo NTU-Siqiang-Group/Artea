@@ -22,12 +22,11 @@
 
 using namespace artea;
 using namespace artea::cpu;
-using namespace artea::cpu::default_context;
 using namespace arena_benchmark;
 
 struct GraphParams {
     layer_config_t layer_config;
-    edges_builder_config_t edges_builder_config;
+    conv_graph::edges_builder_config_t edges_builder_config;
 };
 
 struct BenchConfig {
@@ -152,9 +151,9 @@ int main(int argc, char** argv) {
     // Initialize parameter sets
     g_config.param_sets = {
         // Set 1: max_nbrs=32, reserved=64, outer_iters=4, inner_iters=14, scale=1.10, shift=0.00
-        {layer_config_t(32, 64), edges_builder_config_t(1.10, 0.00, 4, 14)},
+        {layer_config_t(32, 64), conv_graph::edges_builder_config_t(1.10, 0.00, 4, 14)},
         // Set 2: max_nbrs=64, reserved=128, outer_iters=4, inner_iters=14, scale=1.00, shift=0.00
-        {layer_config_t(64, 128), edges_builder_config_t(1.00, 0.00, 4, 14)}
+        {layer_config_t(64, 128), conv_graph::edges_builder_config_t(1.00, 0.00, 4, 14)}
     };
 
     logger.info(fmt::format("Benchmark Configuration:"));

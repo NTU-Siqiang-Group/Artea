@@ -19,14 +19,14 @@
 #include <memory>
 #include <vector>
 
-using namespace artea::cpu::default_context;
+using namespace artea::cpu;
 using namespace artea;
 
 struct BenchConfig {
     std::string config_path;
     std::string dataset_name;
     layer_config_t layer_config{16, 32};
-    edges_builder_config_t edges_builder_config{1.0, 0.0, 4, 14};
+    conv_graph::edges_builder_config_t edges_builder_config{1.0, 0.0, 4, 14};
     vec_num_t rand_gen_size;
     iter_t num_iters;
     ratio_t scale_coeffs;

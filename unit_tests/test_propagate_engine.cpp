@@ -31,7 +31,7 @@
 
 // Type definitions using SIMPLE_EUCLIDEAN for low-dimensional vectors
 using namespace artea;
-using namespace artea::cpu::simple_tests_context;
+using namespace artea::cpu;
 
 class PropagateEngineCorrectnessTest : public ::testing::Test {
 protected:
@@ -130,7 +130,7 @@ protected:
     vec_num_t num_vertices_;
     vec_num_t vec_dim_;
     layer_config_t layer_config_{8, 16};
-    edges_builder_config_t edges_builder_config_{1.0, 0.0, 4, 14};
+    conv_graph::edges_builder_config_t edges_builder_config_{1.0, 0.0, 4, 14};
     std::unique_ptr<vector_array_t> vecs_;
     std::unique_ptr<dist_func_t> dist_func_;
     std::unique_ptr<flat_graph_t> flat_graph_;

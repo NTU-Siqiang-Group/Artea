@@ -46,7 +46,7 @@ class FlatGraphFileManager {
     using vector_array_t = typename IndexTraitsT::vector_array_t;
     using flat_graph_t = typename IndexTraitsT::flat_graph_t;
     using layer_config_t = typename IndexTraitsT::layer_config_t;
-    using edges_builder_config_t = typename IndexTraitsT::edges_builder_config_t;
+    using edges_builder_config_t = typename IndexTraitsT::conv_graph::edges_builder_config_t;
 
 public:
     /**

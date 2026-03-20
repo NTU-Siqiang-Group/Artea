@@ -47,7 +47,7 @@ class ConvGraphFactory :
     using vector_dataset_t = typename GraphFactoryTraitsT::vector_dataset_t;
     using dist_func_t = typename GraphFactoryTraitsT::dist_func_t;
     using layer_config_t = typename GraphFactoryTraitsT::layer_config_t;
-    using edges_builder_config_t = typename GraphFactoryTraitsT::edges_builder_config_t;
+    using edges_builder_config_t = typename GraphFactoryTraitsT::conv_graph::edges_builder_config_t;
     // Using propagate_engine_t with no selective scheduling currently.
     using random_eg_t = typename GraphFactoryTraitsT::random_eg_t;
     using propagate_engine_t = typename GraphFactoryTraitsT::template propagate_engine_t<false>;

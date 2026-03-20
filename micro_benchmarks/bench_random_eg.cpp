@@ -33,7 +33,7 @@ using vector_array_t = typename computer_traits_t::vector_array_t;
 using vector_dataset_t = typename computer_traits_t::vector_dataset_t;
 using flat_graph_t = typename index_traits_t::flat_graph_t;
 using layer_config_t = typename index_traits_t::layer_config_t;
-using edges_builder_config_t = typename index_traits_t::edges_builder_config_t;
+using edges_builder_config_t = typename index_traits_t::conv_graph::edges_builder_config_t;
 using random_eg_t = typename edge_generator_traits_t::random_eg_t;
 
 struct BenchConfig {

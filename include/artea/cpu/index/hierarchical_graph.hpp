@@ -55,7 +55,7 @@ class HierarchicalGraph {
     using inter_layer_links_t = typename IndexTraitsT::inter_layer_links_t;
     using hierarchical_vecs_manager_t = typename IndexTraitsT::hierarchical_vecs_manager_t;
     using layer_config_t = typename IndexTraitsT::layer_config_t;
-    using edges_builder_config_t = typename IndexTraitsT::edges_builder_config_t;
+    using edges_builder_config_t = typename IndexTraitsT::artea_graph::edges_builder_config_t;
     using greedy_vertices_builder_config_t = typename IndexTraitsT::greedy_vertices_builder_config_t;
     using random_vertices_builder_config_t = typename IndexTraitsT::random_vertices_builder_config_t;
     using vertices_builder_config_t = typename IndexTraitsT::vertices_builder_config_t;

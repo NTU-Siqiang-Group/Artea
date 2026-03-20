@@ -23,7 +23,6 @@
 
 using namespace artea;
 using namespace artea::cpu;
-using namespace artea::cpu::default_context;
 
 class IVFPartitionsTest : public ::testing::Test {
 protected:

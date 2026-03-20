@@ -27,7 +27,6 @@
 
 using namespace artea;
 using namespace artea::cpu;
-using namespace artea::cpu::default_context;
 
 int main(int argc, char** argv) {
     argparse::ArgumentParser program("probe_radius");

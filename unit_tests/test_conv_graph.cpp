@@ -27,13 +27,12 @@
 
 using namespace artea;
 using namespace artea::cpu;
-using namespace artea::cpu::default_context;
 
 struct TestConfig {
     std::string config_path;
     std::string dataset_name;
     layer_config_t layer_config{16, 32};
-    edges_builder_config_t edges_builder_config{1.0f, 0.0f, 4, 14};
+    conv_graph::edges_builder_config_t edges_builder_config{1.0f, 0.0f, 4, 14};
     uint32_t extracted_nbr_size;
     uint32_t topk;
     uint32_t queue_start;
@@ -242,7 +241,7 @@ int main(int argc, char** argv) {
         : static_cast<uint32_t>(max_nbr_size * 1.5);
 
     g_config.layer_config = layer_config_t(max_nbr_size, reserved_nbr_size);
-    g_config.edges_builder_config = edges_builder_config_t(
+    g_config.edges_builder_config = conv_graph::edges_builder_config_t(
         program.get<float>("--scale-coeffs"),
         program.get<float>("--shifted-coeffs"),
         program.get<uint32_t>("--num-outer-iters"),

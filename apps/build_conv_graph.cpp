@@ -30,7 +30,6 @@
 
 using namespace artea;
 using namespace artea::cpu;
-using namespace artea::cpu::default_context;
 
 struct GraphParams {
     vertex_num_t max_nbr_size = 32;
@@ -138,7 +137,7 @@ int main(int argc, char** argv) {
     auto start_time = std::chrono::high_resolution_clock::now();
 
     layer_config_t layer_config(params.max_nbr_size, params.reserved_nbr_size);
-    edges_builder_config_t edges_builder_config(
+    conv_graph::edges_builder_config_t edges_builder_config(
         params.scale_coeffs,
         params.shifted_coeffs,
         params.num_outer_iters,

@@ -27,7 +27,6 @@
 
 using namespace artea;
 using namespace artea::cpu;
-using namespace artea::cpu::default_context;
 
 struct BenchmarkResult {
     double query_time_ms;

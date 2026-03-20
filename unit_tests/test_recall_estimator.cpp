@@ -21,7 +21,6 @@
 
 using namespace artea;
 using namespace artea::cpu;
-using namespace artea::cpu::default_context;
 
 // Helper function to create idlist_array_t from raw data
 static idlist_array_t create_idlist_array(const std::vector<vertex_id_t>& data, uint32_t num_vecs, uint32_t dim) {

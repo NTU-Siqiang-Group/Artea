@@ -23,7 +23,6 @@
 
 using namespace artea;
 using namespace artea::cpu;
-using namespace artea::cpu::default_context;
 
 class HierarchicalGraphPersistenceTest : public ::testing::Test {
 protected:
@@ -66,8 +65,8 @@ TEST_F(HierarchicalGraphPersistenceTest, SnapshotAndRestore) {
     layer_config_t upper_layer_config(24, 40);
 
     // Create edges builder configs
-    edges_builder_config_t bottom_edges_config(1.0f, 0.0f, 4, 14);
-    edges_builder_config_t upper_edges_config(1.0f, 0.0f, 4, 14);
+    artea_graph::edges_builder_config_t bottom_edges_config(1.0f, 0.0f, 4, 14);
+    artea_graph::edges_builder_config_t upper_edges_config(1.0f, 0.0f, 4, 14);
 
     // Create vertices builder config
     greedy_vertices_builder_config_t vertices_builder_config(

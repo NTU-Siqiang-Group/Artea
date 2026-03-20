@@ -23,6 +23,8 @@
 namespace artea {
 namespace cpu {
 
+namespace conv_graph {
+
 /**
  * @brief Configuration for edges builder algorithm.
  * Supports builder pattern for flexible configuration.
@@ -77,6 +79,16 @@ private:
     /** @brief Number of inner iterations (recommend: 14). */
     iter_t _num_inner_iters;
 };
+
+}   // namespace conv_graph
+
+namespace artea_graph {
+
+/** @brief Artea graph uses the same EdgesBuilderConfig as conv_graph. */
+template <typename IndexTraitsT>
+using EdgesBuilderConfig = conv_graph::EdgesBuilderConfig<IndexTraitsT>;
+
+}   // namespace artea_graph
 
 }   // namespace cpu
 }   // namespace artea

@@ -36,7 +36,7 @@ class HierarchicalGraphFactory {
     using vector_array_t = typename GraphFactoryTraitsT::vector_array_t;
     using dist_func_t = typename GraphFactoryTraitsT::dist_func_t;
     using layer_config_t = typename GraphFactoryTraitsT::layer_config_t;
-    using edges_builder_config_t = typename GraphFactoryTraitsT::edges_builder_config_t;
+    using edges_builder_config_t = typename GraphFactoryTraitsT::artea_graph::edges_builder_config_t;
     using vg_policy_t = typename GraphFactoryTraitsT::vg_policy_t;
     using eg_policy_t = typename GraphFactoryTraitsT::eg_policy_t;
 
