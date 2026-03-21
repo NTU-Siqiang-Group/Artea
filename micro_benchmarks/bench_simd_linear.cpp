@@ -27,7 +27,7 @@
 using namespace artea;
 using namespace artea::cpu;
 
-using base_traits_t = BaseTraits<uint32_t, float, false>;
+using base_traits_t = BaseTraits<uint32_t, float>;
 using computer_traits_t = ComputerTraits<base_traits_t, DistanceMetricsT::DOT>;
 template <std::size_t U> using artea_simd_linear_t = SIMDLinear<computer_traits_t, U>;
 

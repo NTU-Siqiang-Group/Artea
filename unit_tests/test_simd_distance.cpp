@@ -34,7 +34,7 @@
 using namespace artea;
 using namespace artea::cpu;
 
-using base_traits_t = BaseTraits<uint32_t, float, false>;
+using base_traits_t = BaseTraits<uint32_t, float>;
 using computer_traits_t = ComputerTraits<base_traits_t, DistanceMetricsT::EUCLIDEAN>;
 using vector_dataset_t = typename base_traits_t::vector_dataset_t;
 // Define aliases for all unroll sizes

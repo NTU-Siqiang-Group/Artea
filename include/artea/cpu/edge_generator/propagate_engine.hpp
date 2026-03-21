@@ -55,6 +55,7 @@ class PropagateEngine {
     using neighbor_updater_t = typename EdgeGeneratorTraitsT::template neighbor_updater_t<DerivedClassT>;
 
     static constexpr bool selective_schedule = SelectiveSchedule;
+    static constexpr bool profiling_mode = EdgeGeneratorTraitsT::profiling_mode;
 
 public:
     PropagateEngine(const vertex_num_t num_vertices, const dist_func_t& dist_func) :
@@ -136,32 +137,47 @@ public:
 
     /** @brief Merge the logged operations for a single vertex back to the flat graph.
       * @param executor_vid The vertex id whose logged operations are to be merged.
+      * @return Number of logs merged.
     */
     __attribute__((always_inline))
-    auto merge_logs(const vertex_id_t executor_vid) -> void {
+    auto merge_logs(const vertex_id_t executor_vid) -> size_t {
         // Logic decoupled to NbrLogTable
-        _log_table.apply_logs(executor_vid, *_flat_graph);
+        return _log_table.apply_logs(executor_vid, *_flat_graph);
     }
 
-    /** @brief Merge the logged operations for all vertices back to the flat graph. */
-    auto merge_logs() -> void {
+    /** @brief Merge the logged operations for all vertices back to the flat graph.
+     *  @return Total number of logs merged in this call.
+     */
+    auto merge_logs() -> size_t {
         // Dense Mode: Iterate all vertices
         if constexpr (not selective_schedule) {
             const vertex_num_t num_vertices = _flat_graph->get_num_vertices();
+
+            // Thread-local counters for lock-free statistics
+            tbb::enumerable_thread_specific<size_t> local_counts;
+
             tbb::parallel_for(
                 tbb::blocked_range<vertex_id_t>(0, num_vertices),
                 [&](const tbb::blocked_range<vertex_id_t>& r) {
+                    size_t& local_count = local_counts.local();
                     for (vertex_id_t executor_vid = r.begin(); executor_vid != r.end(); ++executor_vid) {
-                        merge_logs(executor_vid);
+                        local_count += merge_logs(executor_vid);
                     }
                 }
             );  // end tbb::parallel_for
+
+            if constexpr (profiling_mode) {
+                _merged_logs_count = local_counts.combine(std::plus<size_t>());
+            }
         }
         // Sparse Mode: Word Skipping + Bit Scanning
         else {
             _executor_bitmap.clear();
 
             const size_t num_words = _executor_bitmap.get_num_words();
+
+            // Thread-local counters for lock-free statistics
+            tbb::enumerable_thread_specific<size_t> local_counts;
 
             #ifndef NDEBUG
             if (num_words != _executor_bitmap.get_num_words()) {
@@ -174,6 +190,7 @@ public:
             tbb::parallel_for(
                 tbb::blocked_range<size_t>(0, num_words),
                 [&](const tbb::blocked_range<size_t>& r) {
+                    size_t& local_count = local_counts.local();
                     for (size_t word_idx = r.begin(); word_idx != r.end(); ++word_idx) {
                         uint64_t next_round_mask = 0;
                         size_t start_vid, end_vid;
@@ -182,7 +199,7 @@ public:
                         for (vertex_id_t vid = start_vid; vid < end_vid; ++vid) {
                             auto& log_container = _log_table.get_log_container(vid);
                             if (!log_container.empty()) {
-                                _log_table.apply_logs(vid, *_flat_graph);
+                                local_count += merge_logs(vid);
                                 next_round_mask |= (1ULL << (vid & word_aligned_bitmap_t::WORD_MASK));
                             }
                         }
@@ -192,6 +209,16 @@ public:
                     }
                 }
             );
+
+            if constexpr (profiling_mode) {
+                _merged_logs_count = local_counts.combine(std::plus<size_t>());
+            }
+        }
+
+        if constexpr (profiling_mode) {
+            return _merged_logs_count;
+        } else {
+            return 0;
         }
     }
 
@@ -207,6 +234,9 @@ public:
     auto run(const iter_t num_iters, UdfUpdaterT& udf_updater) -> void {
         for (iter_t iter = 0; iter < num_iters; ++iter) {
             next<UdfUpdaterT>(udf_updater);
+            if constexpr (profiling_mode) {
+                logger.info(fmt::format("Iteration {}: Merged {} logs", iter, _merged_logs_count));
+            }
         }
     }
 
@@ -219,6 +249,18 @@ public:
     __attribute__((always_inline))
     auto get_executor_bitmap() -> word_aligned_bitmap_t& {
         return _executor_bitmap;
+    }
+
+    /** @brief Get the total count of merged logs across all merge_logs() calls.
+     *  @return Total number of logs merged.
+     */
+    __attribute__((always_inline))
+    auto get_merged_logs_count() const -> size_t {
+        if constexpr (profiling_mode) {
+            return _merged_logs_count;
+        } else {
+            return 0;
+        }
     }
 
     /** @brief Factory method to create an updater of the specified type.
@@ -277,6 +319,9 @@ private:
 
     /** @brief Distance function reference. */
     const dist_func_t& _dist_func;
+
+    /** @brief Total count of merged logs (accumulated across all merge_logs() calls). */
+    size_t _merged_logs_count = 0;
 
 };  // class PropagateEngine
 

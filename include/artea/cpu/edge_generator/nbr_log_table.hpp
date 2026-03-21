@@ -88,12 +88,15 @@ public:
      *        Precondition: graph neighbors are sorted by StrictNeighborComparator (Dist, ID).
      * @param executor_vid The vertex whose logs are to be applied.
      * @param graph The bottom layer graph to which the logs will be applied.
+     * @return Number of logs applied.
      * @note This function can be called thread-safely for different executor_vids in parallel.
      */
     template <typename GraphType>
-    auto apply_logs(const vertex_id_t executor_vid, GraphType& graph) -> void {
+    auto apply_logs(const vertex_id_t executor_vid, GraphType& graph) -> size_t {
         auto& log_container = _nbr_logs[executor_vid].get_container();
-        if (log_container.empty()) return;
+        if (log_container.empty()) return 0;
+
+        const size_t num_logs = log_container.size();
 
         auto& cur_nbrs = graph.fetch_nbrs(executor_vid);
 
@@ -137,6 +140,8 @@ public:
             throw std::runtime_error("Error: Integrity check failed after applying logs.");
         }
         #endif
+
+        return num_logs;
     }
 
 private:

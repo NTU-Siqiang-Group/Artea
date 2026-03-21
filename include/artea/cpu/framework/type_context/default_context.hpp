@@ -21,7 +21,7 @@ namespace cpu {
 using vec_num_t = uint32_t;
 using vec_ele_t = float;
 
-using base_traits_t = BaseTraits<vec_num_t, vec_ele_t, false>;
+using base_traits_t = BaseTraits<vec_num_t, vec_ele_t>;
 using computer_traits_t = ComputerTraits<base_traits_t, DistanceMetricsT::EUCLIDEAN>;
 using buffer_traits_t = BufferTraits<base_traits_t, BufferPolicyT::LOCKED_BUFFER_WITH_MUTEX, 32>;
 using index_traits_t = IndexTraits<base_traits_t>;

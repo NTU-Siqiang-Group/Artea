@@ -36,7 +36,7 @@ using namespace artea::cpu;
 
 using vec_num_t = uint32_t;
 using vec_ele_t = float;
-using base_traits_t = BaseTraits<vec_num_t, vec_ele_t, false>;
+using base_traits_t = BaseTraits<vec_num_t, vec_ele_t>;
 using random_seq_t = typename base_traits_t::random_seq_t;
 
 // -----------------------------------------------------------------------------

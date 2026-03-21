@@ -54,12 +54,12 @@ template <typename T, typename ContainerT, typename Compare> class FourAryHeap;
 enum class PruningConditionT;
 
 /* ------ Base Traits Definition ------ */
-template <typename VertexNumT, typename VecEleT, bool ProfilingMode = false>
+template <typename VertexNumT, typename VecEleT>
 struct BaseTraits {
 
 private:
     /** ------ Basic Type ------ **/
-    using base_traits_t = BaseTraits<VertexNumT, VecEleT, ProfilingMode>;
+    using base_traits_t = BaseTraits<VertexNumT, VecEleT>;
 
 public:
     /** @brief vector dimensions. */
@@ -184,8 +184,11 @@ public:
     /** @brief pruning condition type for triangle inequality. */
     using pruning_condition_t = PruningConditionT;
 
-    /** @brief profiling mode flag. */
-    static constexpr bool profiling_mode = ProfilingMode;
+    #ifdef ARTEA_PROFILING
+    static constexpr bool profiling_mode = true;
+    #else
+    static constexpr bool profiling_mode = false;
+    #endif
 
     __attribute__((always_inline))
     static constexpr auto invalid_vertex_id_generator() -> vertex_id_t {

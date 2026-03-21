@@ -191,9 +191,9 @@ template <typename BaseTraitsT>
 inline constexpr bool __neighbor_is_trivially_destructible =
     std::is_trivially_destructible<Neighbor<BaseTraitsT>>::value;
 
-static_assert(std::is_trivially_copyable<Neighbor<BaseTraits<uint32_t, float, false>>>::value,
+static_assert(std::is_trivially_copyable<Neighbor<BaseTraits<uint32_t, float>>>::value,
             "Neighbor must be trivially copyable to enable vector memcpy optimizations!");
-static_assert(std::is_trivially_destructible<Neighbor<BaseTraits<uint32_t, float, false>>>::value,
+static_assert(std::is_trivially_destructible<Neighbor<BaseTraits<uint32_t, float>>>::value,
             "Neighbor must be trivially destructible!");
 
 /** @brief Comparator for Neighbor (Distance primary, ID secondary). */

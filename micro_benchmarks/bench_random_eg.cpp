@@ -20,7 +20,7 @@
 using namespace artea;
 using namespace artea::cpu;
 
-using base_traits_t = BaseTraits<uint32_t, float, false>;
+using base_traits_t = BaseTraits<uint32_t, float>;
 using computer_traits_t = ComputerTraits<base_traits_t, DistanceMetricsT::EUCLIDEAN>;
 using buffer_traits_t = BufferTraits<base_traits_t, BufferPolicyT::LOCKED_BUFFER_WITH_MUTEX, /* BufCapacity = */32>;
 using index_traits_t = IndexTraits<base_traits_t>;

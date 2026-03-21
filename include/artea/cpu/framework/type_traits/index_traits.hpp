@@ -71,11 +71,13 @@ struct IndexTraits : virtual public BaseTraitsT {
 
     /** @brief Namespace-specific type aliases for conv_graph. */
     struct conv_graph {
+        conv_graph() = delete;
         using edges_builder_config_t = cpu::conv_graph::EdgesBuilderConfig<index_traits_t>;
     };
 
     /** @brief Namespace-specific type aliases for artea_graph. */
     struct artea_graph {
+        artea_graph() = delete;
         using edges_builder_config_t = cpu::artea_graph::EdgesBuilderConfig<index_traits_t>;
     };
 

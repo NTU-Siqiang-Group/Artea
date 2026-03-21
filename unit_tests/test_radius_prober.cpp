@@ -29,7 +29,7 @@ using namespace artea::cpu;
 // Typename Definitions
 using vec_num_t = uint32_t;
 using vec_ele_t = float;
-using base_traits_t = BaseTraits<vec_num_t, vec_ele_t, false>;
+using base_traits_t = BaseTraits<vec_num_t, vec_ele_t>;
 using computer_traits_t = ComputerTraits<base_traits_t, DistanceMetricsT::EUCLIDEAN>;
 using vector_array_t = typename computer_traits_t::vector_array_t;
 using vector_dataset_t = typename computer_traits_t::vector_dataset_t;

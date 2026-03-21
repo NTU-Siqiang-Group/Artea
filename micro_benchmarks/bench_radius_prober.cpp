@@ -21,7 +21,7 @@
 using namespace artea;
 using namespace artea::cpu;
 
-using base_traits_t = BaseTraits<uint32_t, float, false>;
+using base_traits_t = BaseTraits<uint32_t, float>;
 using computer_traits_t = ComputerTraits<base_traits_t, DistanceMetricsT::EUCLIDEAN>;
 using vec_num_t = typename base_traits_t::vec_num_t;
 using dist_func_t = typename computer_traits_t::dist_func_t;

@@ -44,7 +44,7 @@ using vec_num_t = uint32_t;
 using vec_dim_t = uint32_t;
 using vec_ele_t = float;
 // Define Traits
-using base_traits_t = BaseTraits<vec_num_t, vec_ele_t, false>;
+using base_traits_t = BaseTraits<vec_num_t, vec_ele_t>;
 using vector_dataset_t = typename base_traits_t::vector_dataset_t;
 using vector_array_t = typename base_traits_t::vector_array_t;
 
