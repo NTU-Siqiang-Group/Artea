@@ -231,16 +231,26 @@ public:
 
     template <typename UdfUpdaterT>
         requires std::derived_from<UdfUpdaterT, neighbor_updater_t<UdfUpdaterT>>
-    auto run(const iter_t num_iters, UdfUpdaterT& udf_updater) -> void {
+    auto run(const iter_t num_iters, UdfUpdaterT& udf_updater, const bool do_merge_logs = true) -> void {
         for (iter_t iter = 0; iter < num_iters; ++iter) {
-            next<UdfUpdaterT>(udf_updater);
+            propagate<UdfUpdaterT>(udf_updater);
+            if (do_merge_logs) { merge_logs(); }
+
             if constexpr (profiling_mode) {
-                logger.info(fmt::format(
-                    "Inner Iter {} ({}): Merged {} logs",
-                    iter,
-                    UdfUpdaterT::updater_name,
-                    _merged_logs_count
-                ));
+                if (do_merge_logs) {
+                    logger.info(fmt::format(
+                        "Inner Iter {} ({}): Merged {} logs",
+                        iter,
+                        UdfUpdaterT::updater_name,
+                        _merged_logs_count
+                    ));
+                } else {
+                    logger.info(fmt::format(
+                        "Inner Iter {} ({}): do_merge_logs = false, no logs merged",
+                        iter,
+                        UdfUpdaterT::updater_name
+                    ));
+                }
             }
         }
     }

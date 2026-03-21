@@ -87,7 +87,13 @@ public:
         for (iter_t outer_iter = 0; outer_iter < edges_builder_config.num_outer_iters(); ++outer_iter) {
             // propagate_engine.run(1, reverse_updater);
             propagate_engine.run(edges_builder_config.num_inner_iters(), triangle_updater);
+            // if (outer_iter != edges_builder_config.num_outer_iters() - 1) {
+            //     propagate_engine.run(1, reverse_updater);
+            // }
             propagate_engine.run(1, reverse_updater);
+            if (outer_iter == edges_builder_config.num_outer_iters() - 1) {
+                propagate_engine.run(1, triangle_updater, false);
+            }
         }
 
         return flat_graph;

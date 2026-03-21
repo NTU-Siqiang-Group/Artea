@@ -80,20 +80,10 @@ public:
                 for (vertex_id_t vid = r.begin(); vid != r.end(); ++vid) {
                     const auto& nbrs = nbrs_arr[vid];
                     vertex_id_t* dst_nbrs = &csr_nbrs[static_cast<size_t>(vid) * extracted_nbr_size];
-
                     // Copy up to extracted_nbr_size neighbors
-                    const vertex_num_t copy_count = std::min(
-                        static_cast<vertex_num_t>(nbrs.size()),
-                        extracted_nbr_size
-                    );
-
-                    for (vertex_num_t i = 0; i < copy_count; ++i) {
-                        dst_nbrs[i] = nbrs[i].get_id();
-                    }
-
-                    // Fill remaining slots with invalid vertex ID if needed
-                    for (vertex_num_t i = copy_count; i < extracted_nbr_size; ++i) {
-                        dst_nbrs[i] = invalid_id;
+                    const vertex_num_t copy_count = std::min(static_cast<vertex_num_t>(nbrs.size()), extracted_nbr_size);
+                    for (vertex_num_t i = 0; i < extracted_nbr_size; ++i) {
+                        dst_nbrs[i] = (i < copy_count) ? nbrs[i].get_id() : invalid_id;
                     }
                 }
             }
