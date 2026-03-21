@@ -43,6 +43,8 @@ class ReverseUpdater :
     using base_class_t = typename EdgeGeneratorTraitsT::template neighbor_updater_t<ReverseUpdater<EdgeGeneratorTraitsT>>;
 
 public:
+    static constexpr const char* updater_name = "reverse_updater";
+
     /**
      * @brief Constructor for ReverseUpdater.
      * @param dist_func Distance function reference.

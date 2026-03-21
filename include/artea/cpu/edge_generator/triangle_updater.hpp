@@ -60,6 +60,8 @@ class TriangleUpdater :
     static constexpr bool rejected = false;
 
 public:
+    static constexpr const char* updater_name = "triangle_updater";
+
     TriangleUpdater(
         const dist_func_t& dist_func,
         const vector_array_t& vecs_data,

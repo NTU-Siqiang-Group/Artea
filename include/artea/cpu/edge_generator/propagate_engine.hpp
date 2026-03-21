@@ -235,7 +235,12 @@ public:
         for (iter_t iter = 0; iter < num_iters; ++iter) {
             next<UdfUpdaterT>(udf_updater);
             if constexpr (profiling_mode) {
-                logger.info(fmt::format("Iteration {}: Merged {} logs", iter, _merged_logs_count));
+                logger.info(fmt::format(
+                    "Inner Iter {} ({}): Merged {} logs",
+                    iter,
+                    UdfUpdaterT::updater_name,
+                    _merged_logs_count
+                ));
             }
         }
     }

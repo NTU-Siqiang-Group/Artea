@@ -48,6 +48,8 @@ class RandomUpdater :
     using base_traits_t = typename EdgeGeneratorTraitsT::base_traits_t;
 
 public:
+    static constexpr const char* updater_name = "random_updater";
+
     /**
      * @brief Constructor for RandomUpdater.
      * @param dist_func Distance function reference.

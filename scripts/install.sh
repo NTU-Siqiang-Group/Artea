@@ -30,20 +30,24 @@ BUILD_TYPE="${BUILD_TYPE:-Release}"
 JOBS="${JOBS:-64}"
 MIN_CMAKE_VERSION="${MIN_CMAKE_VERSION:-3.24.0}"
 CMAKE_BIN="${CMAKE_BIN:-cmake}"
+PROFILING_DEFS=""
 
 # Parse command line arguments
 while [[ $# -gt 0 ]]; do
     case $1 in
         --release)
             BUILD_TYPE="Release"
+            PROFILING_DEFS=""
             shift
             ;;
         --debug)
             BUILD_TYPE="Debug"
+            PROFILING_DEFS=""
             shift
             ;;
         --profile)
-            BUILD_TYPE="RelWithDebInfo"
+            BUILD_TYPE="Release"
+            PROFILING_DEFS="-DARTEA_PROFILING"
             shift
             ;;
         *)
@@ -58,6 +62,9 @@ log_info "Project root: ${PROJECT_ROOT}"
 log_info "Build directory: ${BUILD_DIR}"
 log_info "Build type: ${BUILD_TYPE}"
 log_info "CMake binary: ${CMAKE_BIN}"
+if [[ -n "${PROFILING_DEFS}" ]]; then
+  log_info "Profiling definitions: ${PROFILING_DEFS}"
+fi
 check_cmake_version "${CMAKE_BIN}" "${MIN_CMAKE_VERSION}"
 
 if ! oneapi_is_active; then
@@ -84,6 +91,7 @@ log_info "Running CMake configure..."
       -DCMAKE_BUILD_TYPE="${BUILD_TYPE}" \
       -DCMAKE_CXX_COMPILER="${ICPX_BIN}" \
       -DCMAKE_C_COMPILER="${ICX_BIN}" \
+      -DCMAKE_CXX_FLAGS="${PROFILING_DEFS}" \
       "${PROJECT_ROOT}"
 log_success "CMake configure completed."
 
