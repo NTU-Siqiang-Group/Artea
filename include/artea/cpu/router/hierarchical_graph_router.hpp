@@ -192,7 +192,7 @@ private:
             const auto& neighbors = layer_graph.fetch_nbrs(current_nearest);
 
             for (const auto& nbr_id : neighbors) {
-                if (nbr_id == RouterTraitsT::invalid_vertex_id) { continue; }
+                if (nbr_id == RouterTraitsT::invalid_vertex_id) { break; }
 
                 const distance_t nbr_dist = this->_dist_func(query_vec, layer_vecs.get(nbr_id));
 
@@ -238,7 +238,7 @@ private:
 
             for (const auto& nbr_id : neighbors) {
                 // Skip invalid neighbors
-                if (nbr_id == RouterTraitsT::invalid_vertex_id) { continue; }
+                if (nbr_id == RouterTraitsT::invalid_vertex_id) { break; }
 
                 // Skip already visited neighbors
                 if (visited_table.test(nbr_id)) { continue; }

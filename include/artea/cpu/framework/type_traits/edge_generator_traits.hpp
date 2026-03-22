@@ -72,6 +72,9 @@ struct EdgeGeneratorTraits :
     template <bool SelectiveSchedule>
     using propagate_engine_t = PropagateEngine<edge_generator_traits_t, SelectiveSchedule>;
 
+    /** @brief Neighbor array checker. */
+    using nbr_arr_checker_t = typename edge_generator_traits_t::base_traits_t::nbr_arr_checker_t;
+
     /** @brief IVF partitions for partition-based operations. */
     using ivf_partitions_t = IVFPartitions<edge_generator_traits_t>;
 

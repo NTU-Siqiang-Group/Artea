@@ -163,17 +163,6 @@ public:
         }
 
         std::swap(origin_nbrs, retained_nbrs);
-
-        #ifndef NDEBUG
-        // Verify that neighbors are sorted by distance after pruning
-        if (!NbrArrChecker<EdgeGeneratorTraitsT>::distance_order_check(origin_nbrs)) {
-            logger.error(fmt::format(
-                "Neighbor array for vertex {} is not sorted by distance after triangle pruning.",
-                pivot_vid
-            ));
-            throw std::runtime_error("Triangle pruning resulted in unsorted neighbor array.");
-        }
-        #endif
     }
 
 private:

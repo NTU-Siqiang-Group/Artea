@@ -229,8 +229,8 @@ private:
 
             for (vertex_num_t i = 0; i < nbr_count; ++i) {
                 const vertex_id_t nbr_id = neighbors[i];
-                // Skip invalid neighbors
-                if (nbr_id == RouterTraitsT::invalid_vertex_id) { continue; }
+                // Stop at invalid suffix neighbors
+                if (nbr_id == RouterTraitsT::invalid_vertex_id) { break; }
                 // Skip already visited neighbors
                 if (visited_table.test(nbr_id)) { continue; }
                 // Mark as visited
@@ -293,8 +293,8 @@ private:
 
             for (vertex_num_t i = 0; i < nbr_count; ++i) {
                 const vertex_id_t nbr_id = neighbors[i];
-                // Skip invalid neighbors
-                if (nbr_id == RouterTraitsT::invalid_vertex_id) { continue; }
+                // Stop at invalid suffix neighbors
+                if (nbr_id == RouterTraitsT::invalid_vertex_id) { break; }
                 // Skip already visited neighbors
                 if (visited_table.test(nbr_id)) { continue; }
                 // Mark as visited

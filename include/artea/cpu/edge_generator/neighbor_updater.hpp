@@ -40,6 +40,7 @@ class NeighborUpdater {
     using nbr_arr_t = typename EdgeGeneratorTraitsT::nbr_arr_t;
     using log_table_t = typename EdgeGeneratorTraitsT::log_table_t;
     using dist_func_t = typename EdgeGeneratorTraitsT::dist_func_t;
+    using nbr_arr_checker_t = typename EdgeGeneratorTraitsT::nbr_arr_checker_t;
 
 public:
 
@@ -61,6 +62,16 @@ public:
         nbr_arr_t& origin_nbrs
     ) -> void {
         static_cast<DerivedClassT*>(this)->update_impl(pivot_vid, origin_nbrs);
+
+        #ifndef NDEBUG
+        if (!nbr_arr_checker_t::full_check(origin_nbrs)) {
+            logger.error(fmt::format(
+                "Updater {} produced an invalid neighbor array for vertex {}.",
+                DerivedClassT::updater_name,
+                pivot_vid
+            ));
+        }
+        #endif
     }
 
 protected:

@@ -20,6 +20,7 @@
 
 #pragma once
 
+#include <algorithm>
 #include <cstddef>
 #include <vector>
 #include <stdexcept>
@@ -42,6 +43,35 @@ class NbrArrChecker {
 
 public:
 
+    static auto invalid_id_suffix_check(const nbr_arr_t& nbrs) -> bool {
+        bool seen_invalid_id = false;
+        for (std::size_t i = 0; i < nbrs.size(); ++i) {
+            const vertex_id_t nbr_id = nbrs[i].get_id();
+            const bool is_invalid_id = nbr_id == BaseTraitsT::invalid_vertex_id;
+            if (is_invalid_id) {
+                seen_invalid_id = true;
+            } else if (seen_invalid_id) {
+                logger.error("Neighbor array contains a valid neighbor after invalid_vertex_id suffix begins.");
+                return false;
+            }
+        }
+        return true;
+    }
+
+    static auto invalid_id_suffix_check(const vertex_id_t* nbrs, const vertex_num_t nbr_count) -> bool {
+        bool seen_invalid_id = false;
+        for (vertex_num_t i = 0; i < nbr_count; ++i) {
+            const bool is_invalid_id = nbrs[i] == BaseTraitsT::invalid_vertex_id;
+            if (is_invalid_id) {
+                seen_invalid_id = true;
+            } else if (seen_invalid_id) {
+                logger.error("Neighbor row contains a valid neighbor after invalid_vertex_id suffix begins.");
+                return false;
+            }
+        }
+        return true;
+    }
+
     static auto no_nan_check(const nbr_arr_t& nbrs) -> bool {
         for (std::size_t i = 0; i < nbrs.size(); ++i) {
             if (BaseTraitsT::is_nan_distance(nbrs[i].get_distance())) {
@@ -59,9 +89,11 @@ public:
 
         for (std::size_t i = 0; i < nbrs.size(); ++i) {
             vertex_num_t nbr_id = nbrs[i].get_id();
+            if (nbr_id == BaseTraitsT::invalid_vertex_id) {
+                break;
+            }
             if (std::find(seen_ids.begin(), seen_ids.end(), nbr_id) != seen_ids.end()) {
                 logger.error("Neighbor array contains duplicate neighbors before applying logs.");
-                // throw std::runtime_error("Error: Neighbor array contains duplicate neighbors before applying logs.");
                 return false;
             }
             seen_ids.push_back(nbr_id);
@@ -71,9 +103,12 @@ public:
 
     static auto distance_order_check(const nbr_arr_t& nbrs) -> bool {
         for (std::size_t i = 1; i < nbrs.size(); ++i) {
+            if (nbrs[i - 1].get_id() == BaseTraitsT::invalid_vertex_id ||
+                nbrs[i].get_id() == BaseTraitsT::invalid_vertex_id) {
+                break;
+            }
             if (nbr_dist_comp(nbrs[i], nbrs[i - 1])) {
                 logger.error("Neighbor array is not sorted by distance before applying logs.");
-                // throw std::runtime_error("Error: Neighbor array is not sorted by distance before applying logs.");
                 return false;
             }
         }
@@ -81,7 +116,8 @@ public:
     }
 
     static auto full_check(const nbr_arr_t& nbrs) -> bool {
-        return no_nan_check(nbrs) &&
+        return invalid_id_suffix_check(nbrs) &&
+               no_nan_check(nbrs) &&
                no_duplicate_check(nbrs) &&
                distance_order_check(nbrs);
     }
