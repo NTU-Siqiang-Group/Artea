@@ -182,7 +182,6 @@ public:
             #ifndef NDEBUG
             if (num_words != _executor_bitmap.get_num_words()) {
                 logger.error("Inconsistent executor bitmap word counts between IN and OUT.");
-                throw std::runtime_error("Error: Inconsistent executor bitmap word counts between IN and OUT.");
             }
             #endif
 
@@ -317,7 +316,7 @@ public:
             // RandomUpdater(dist_func, vecs_arr, log_table, num_vertices, rand_gen_size)
             return UpdaterT(_dist_func, vecs_arr, log_table, num_vertices, std::forward<Args>(args)...);
         } else {
-            throw std::runtime_error("Unsupported updater type");
+            logger.error("Unsupported updater type");
         }
     }
 

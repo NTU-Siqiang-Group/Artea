@@ -22,6 +22,7 @@
 #pragma once
 
 #include <algorithm>
+#include <stdexcept>
 #include <string>
 #include <tbb/parallel_for.h>
 #include <tbb/blocked_range.h>
@@ -41,6 +42,7 @@ class SearchGraphConverter {
     using flat_search_graph_t = typename IndexTraitsT::flat_search_graph_t;
     using hierarchical_graph_t = typename IndexTraitsT::hierarchical_graph_t;
     using hierarchical_search_graph_t = typename IndexTraitsT::hierarchical_search_graph_t;
+    using nbr_arr_checker_t = typename IndexTraitsT::nbr_arr_checker_t;
 
 public:
     /**
@@ -85,6 +87,18 @@ public:
                     for (vertex_num_t i = 0; i < extracted_nbr_size; ++i) {
                         dst_nbrs[i] = (i < copy_count) ? nbrs[i].get_id() : invalid_id;
                     }
+
+                    #ifndef NDEBUG
+                    if (!nbr_arr_checker_t::invalid_id_suffix_check(dst_nbrs, extracted_nbr_size)) {
+                        logger.error("Error: Invalid search graph row suffix layout.");
+                    }
+                    #endif
+
+                    #ifndef NDEBUG
+                    if (!nbr_arr_checker_t::invalid_id_suffix_check(dst_nbrs, extracted_nbr_size)) {
+                        logger.error("Error: Invalid search graph row suffix layout.");
+                    }
+                    #endif
                 }
             }
         );

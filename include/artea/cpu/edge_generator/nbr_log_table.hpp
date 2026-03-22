@@ -67,7 +67,6 @@ public:
         #ifndef NDEBUG
         if (BufferTraitsT::is_nan_distance(new_edge_dist)) {
             logger.error("Attempted to log an operation with NaN distance.");
-            throw std::runtime_error("Error: Logging an operation with NaN distance is not allowed.");
         }
         #endif
         _nbr_logs[executor_vid].append(nbr_id, new_edge_dist, true); // is_new = true
@@ -102,7 +101,7 @@ public:
 
         #ifndef NDEBUG
         if (!nbr_arr_checker_t::full_check(cur_nbrs)) {
-            throw std::runtime_error("Error: Integrity check failed before applying logs.");
+            logger.error("Error: Integrity check failed before applying logs.");
         }
         #endif
 
@@ -137,7 +136,10 @@ public:
 
         #ifndef NDEBUG
         if (!nbr_arr_checker_t::full_check(cur_nbrs)) {
-            throw std::runtime_error("Error: Integrity check failed after applying logs.");
+            logger.error(fmt::format(
+                "Neighbor array integrity check failed after applying logs for vertex {}.",
+                executor_vid
+            ));
         }
         #endif
 

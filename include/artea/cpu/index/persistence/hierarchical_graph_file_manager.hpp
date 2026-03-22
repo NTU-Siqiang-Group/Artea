@@ -250,7 +250,6 @@ public:
             }
             // This will throw and never return
             logger.error(fmt::format("Unknown vertices_builder_config type: {}", vertices_builder_config_type));
-            throw std::runtime_error("Unreachable");  // Suppress compiler warning
         }();
 
         // Create hierarchical graph with base_vecs

@@ -56,7 +56,7 @@ public:
      */
     std::span<const vec_id_t> generate(vec_num_t sample_size) {
         if (sample_size > _num_vecs) {
-            throw std::invalid_argument("Sample size cannot exceed total number of vectors");
+            logger.error("Sample size cannot exceed total number of vectors");
         }
 
         // Check if we need to reshuffle

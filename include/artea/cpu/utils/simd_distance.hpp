@@ -64,7 +64,7 @@ public:
         } else if constexpr (distance_metrics == distance_metrics_t::COSINE) {
             return _impl_cosine(vec1, vec2);
         } else {
-            throw std::runtime_error("Invalid DistanceMetrics");
+            logger.error("Invalid DistanceMetrics");
         }
     }
 
@@ -187,13 +187,13 @@ private:
 
     __attribute__((always_inline))
     auto _impl_dot(const vec_ele_t* vec1, const vec_ele_t* vec2) const -> distance_t {
-        throw std::runtime_error("Currently DOT distance is not supported");
+        logger.error("Currently DOT distance is not supported");
     }
 
 
     __attribute__((always_inline))
     auto _impl_cosine(const vec_ele_t* vec1, const vec_ele_t* vec2) const -> distance_t {
-        throw std::runtime_error("Currently COSINE distance is not supported");
+        logger.error("Currently COSINE distance is not supported");
     }
 
 };  // class SIMDDistance

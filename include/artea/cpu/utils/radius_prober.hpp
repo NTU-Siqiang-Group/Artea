@@ -30,6 +30,7 @@
 #include <artea/cpu/containers/vector_array.hpp>
 #include <artea/cpu/utils/random_seq.hpp>
 #include <boost/math/distributions/normal.hpp>
+#include <artea/common/logger.hpp>
 
 namespace artea {
 namespace cpu {
@@ -90,13 +91,13 @@ public:
         float relative_err
     ) -> vec_num_t {
         if (quantile <= 0.0f || quantile >= 1.0f) {
-            throw std::invalid_argument("quantile must be in (0, 1)");
+            logger.error("quantile must be in (0, 1)");
         }
         if (confidence <= 0.0f || confidence >= 1.0f) {
-            throw std::invalid_argument("confidence must be in (0, 1)");
+            logger.error("confidence must be in (0, 1)");
         }
         if (relative_err <= 0.0f) {
-            throw std::invalid_argument("relative_err must be positive");
+            logger.error("relative_err must be positive");
         }
 
         // Calculate alpha and Z-value
@@ -153,16 +154,16 @@ public:
     ) -> ProbeResult {
 
         if (quantile <= 0.0f || quantile >= 1.0f) {
-            throw std::invalid_argument("quantile must be in (0, 1)");
+            logger.error("quantile must be in (0, 1)");
         }
 
         const vec_num_t total_vecs = base_vecs.get_num_vecs();
         if (total_vecs < 2) {
-            throw std::invalid_argument("Dataset must contain at least 2 vectors");
+            logger.error("Dataset must contain at least 2 vectors");
         }
 
         if (num_distances_to_sample < 1) {
-            throw std::invalid_argument("num_distances_to_sample must be at least 1");
+            logger.error("num_distances_to_sample must be at least 1");
         }
 
         // Allocate result vector for all distances
@@ -232,7 +233,7 @@ public:
 
         const vec_num_t total_vecs = base_vecs.get_num_vecs();
         if (total_vecs < 2) {
-            throw std::invalid_argument("Dataset must contain at least 2 vectors");
+            logger.error("Dataset must contain at least 2 vectors");
         }
 
         // Allocate result vector for all distances

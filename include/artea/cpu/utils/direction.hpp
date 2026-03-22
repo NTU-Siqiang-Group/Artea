@@ -22,6 +22,7 @@
 
 #include <cstdint>
 #include <cstddef>
+#include <artea/common/logger.hpp>
 
 namespace artea {
 namespace cpu {
@@ -60,7 +61,6 @@ auto reverse(const op_direction_t dir) -> op_direction_t {
 /** @brief Convert graph_direction_t to op_direction_t.
   * @param dir The graph direction.
   * @return The corresponding operation direction.
-  * @throws std::invalid_argument if the input direction is HIBRID.
   */
 __attribute__((always_inline))
 auto convert(const graph_direction_t dir) -> op_direction_t {
@@ -69,7 +69,7 @@ auto convert(const graph_direction_t dir) -> op_direction_t {
     } else if (dir == graph_direction_t::OUT) {
         return op_direction_t::OUT;
     } else {
-        throw std::invalid_argument("Cannot convert HIBRID graph_direction_t to op_direction_t.");
+        logger.error("Cannot convert HIBRID graph_direction_t to op_direction_t.");
     }
 }
 
