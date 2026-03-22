@@ -72,7 +72,7 @@ public:
         _random_seq(vecs_data.get_num_vecs())
     {
         if (candidate_queue_size < topk) {
-            logger.error(fmt::format(
+            ARTEA_ERROR(fmt::format(
                 "candidate_queue_size ({}) must be >= topk ({})",
                 candidate_queue_size, topk
             ));

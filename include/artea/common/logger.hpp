@@ -140,3 +140,11 @@ private:
 inline ArteaLogger logger("Artea", LogLevelT::INFO);
 
 }   // namespace artea
+
+// Convenience macros for logging via the global artea::logger instance.
+// ARTEA_ERROR logs the message and throws, then marks the path unreachable
+// so the compiler knows control never continues past this point.
+#define ARTEA_ERROR(msg)   do { ::artea::logger.error(msg); __builtin_unreachable(); } while(0)
+#define ARTEA_WARN(msg)    ::artea::logger.warn(msg)
+#define ARTEA_INFO(msg)    ::artea::logger.info(msg)
+#define ARTEA_SUCCESS(msg) ::artea::logger.success(msg)

@@ -65,7 +65,7 @@ public:
 
         #ifndef NDEBUG
         if (!nbr_arr_checker_t::full_check(origin_nbrs)) {
-            logger.error(fmt::format(
+            ARTEA_ERROR(fmt::format(
                 "Updater {} produced an invalid neighbor array for vertex {}.",
                 DerivedClassT::updater_name,
                 pivot_vid

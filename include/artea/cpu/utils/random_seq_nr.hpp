@@ -56,12 +56,12 @@ public:
      */
     std::span<const vec_id_t> generate(vec_num_t sample_size) {
         if (sample_size > _num_vecs) {
-            logger.error("Sample size cannot exceed total number of vectors");
+            ARTEA_ERROR("Sample size cannot exceed total number of vectors");
         }
 
         // Check if we need to reshuffle
         if (_cursor + sample_size > _num_vecs) {
-            logger.warn(fmt::format(
+            ARTEA_WARN(fmt::format(
                 "RandomSeqNR: cursor ({}) + sample_size ({}) > num_vecs ({}), reshuffling",
                 _cursor, sample_size, _num_vecs
             ));

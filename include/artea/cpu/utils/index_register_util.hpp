@@ -76,14 +76,14 @@ public:
                 // Update existing entry
                 existing_entry["file_path"] = file_path;
                 found = true;
-                logger.info(fmt::format("Updated existing registry entry for algorithm '{}'", algorithm));
+                ARTEA_INFO(fmt::format("Updated existing registry entry for algorithm '{}'", algorithm));
                 break;
             }
         }
 
         if (!found) {
             registry.push_back(entry);
-            logger.info(fmt::format("Added new registry entry for algorithm '{}'", algorithm));
+            ARTEA_INFO(fmt::format("Added new registry entry for algorithm '{}'", algorithm));
         }
 
         return save_registry(registry_path, registry);
@@ -130,7 +130,7 @@ private:
 
         std::ifstream registry_file(registry_path);
         if (!registry_file.is_open()) {
-            logger.error(fmt::format("Failed to open registry file: {}", registry_path.string()));
+            ARTEA_ERROR(fmt::format("Failed to open registry file: {}", registry_path.string()));
             return nlohmann::json::array();
         }
 
@@ -138,12 +138,12 @@ private:
         try {
             registry_file >> registry;
             if (!registry.is_array()) {
-                logger.error(fmt::format("Registry file {} is not a JSON array, reinitializing",
+                ARTEA_ERROR(fmt::format("Registry file {} is not a JSON array, reinitializing",
                                        registry_path.string()));
                 return nlohmann::json::array();
             }
         } catch (const std::exception& e) {
-            logger.error(fmt::format("Failed to parse existing registry: {}", e.what()));
+            ARTEA_ERROR(fmt::format("Failed to parse existing registry: {}", e.what()));
             return nlohmann::json::array();
         }
 
@@ -165,17 +165,17 @@ private:
 
         std::ofstream registry_out(registry_path);
         if (!registry_out.is_open()) {
-            logger.error(fmt::format("Failed to open registry file for writing: {}",
+            ARTEA_ERROR(fmt::format("Failed to open registry file for writing: {}",
                                     registry_path.string()));
             return false;
         }
 
         try {
             registry_out << registry.dump(2);
-            logger.info(fmt::format("Registry saved to {}", registry_path.string()));
+            ARTEA_INFO(fmt::format("Registry saved to {}", registry_path.string()));
             return true;
         } catch (const std::exception& e) {
-            logger.error(fmt::format("Failed to write registry: {}", e.what()));
+            ARTEA_ERROR(fmt::format("Failed to write registry: {}", e.what()));
             return false;
         }
     }

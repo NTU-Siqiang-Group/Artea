@@ -92,7 +92,7 @@ struct alignas(CACHE_LINE_SIZE) TbbBuffer {
 
     __attribute__((always_inline))
     auto atomic_flush_to(std::vector<T>& dest) -> void {
-        logger.error("TbbBuffer does not support atomic_flush_to operation.");
+        ARTEA_ERROR("TbbBuffer does not support atomic_flush_to operation.");
     }
 
     /**

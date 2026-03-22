@@ -28,7 +28,7 @@ namespace artea {
 namespace cpu {
 
 auto clear_cpu_cache() -> void {
-    // artea::logger.info("Clearing CPU cache by allocating large dummy buffer...");
+    // ARTEA_INFO("Clearing CPU cache by allocating large dummy buffer...");
     constexpr std::size_t CACHE_FLUSH_BYTES = 1024 * 1024 * 1024;
     constexpr std::size_t NUM_INTS = CACHE_FLUSH_BYTES / sizeof(int);
 
@@ -45,7 +45,7 @@ auto clear_cpu_cache() -> void {
 
     std::atomic_thread_fence(std::memory_order_seq_cst);
 
-    artea::logger.success("CPU cache cleared.");
+    ARTEA_SUCCESS("CPU cache cleared.");
 }
 
 }   // namespace cpu

@@ -123,7 +123,7 @@ public:
         std::string metadata_path = index_dir + "/metadata.json";
         std::ofstream meta_ofs(metadata_path);
         if (!meta_ofs.is_open()) {
-            logger.error(fmt::format("Failed to open metadata file: {}", metadata_path));
+            ARTEA_ERROR(fmt::format("Failed to open metadata file: {}", metadata_path));
         }
         meta_ofs << meta.dump(2);
         meta_ofs.close();
@@ -132,7 +132,7 @@ public:
         std::string inter_layer_links_path = index_dir + "/inter_layer_links.bin";
         std::ofstream links_ofs(inter_layer_links_path, std::ios::binary);
         if (!links_ofs.is_open()) {
-            logger.error(fmt::format("Failed to open inter_layer_links file: {}", inter_layer_links_path));
+            ARTEA_ERROR(fmt::format("Failed to open inter_layer_links file: {}", inter_layer_links_path));
         }
 
         // Manually serialize inter_layer_links
@@ -171,7 +171,7 @@ public:
             std::string layer_metadata_path = layer_dir + "/metadata.json";
             std::ofstream layer_meta_ofs(layer_metadata_path);
             if (!layer_meta_ofs.is_open()) {
-                logger.error(fmt::format("Failed to open layer metadata file: {}", layer_metadata_path));
+                ARTEA_ERROR(fmt::format("Failed to open layer metadata file: {}", layer_metadata_path));
             }
             layer_meta_ofs << layer_meta.dump(2);
             layer_meta_ofs.close();
@@ -195,7 +195,7 @@ public:
         std::string metadata_path = index_dir + "/metadata.json";
         std::ifstream meta_ifs(metadata_path);
         if (!meta_ifs.is_open()) {
-            logger.error(fmt::format("Failed to open metadata file: {}", metadata_path));
+            ARTEA_ERROR(fmt::format("Failed to open metadata file: {}", metadata_path));
         }
 
         nlohmann::json meta;
@@ -204,7 +204,7 @@ public:
 
         // Validate graph type
         if (meta["graph_type"] != "hierarchical_graph") {
-            logger.error(fmt::format("Invalid graph type in metadata: {}", meta["graph_type"].get<std::string>()));
+            ARTEA_ERROR(fmt::format("Invalid graph type in metadata: {}", meta["graph_type"].get<std::string>()));
         }
 
         // Extract configuration
@@ -249,7 +249,8 @@ public:
                 );
             }
             // This will throw and never return
-            logger.error(fmt::format("Unknown vertices_builder_config type: {}", vertices_builder_config_type));
+            ARTEA_ERROR(fmt::format("Unknown vertices_builder_config type: {}", vertices_builder_config_type));
+            __builtin_unreachable();
         }();
 
         // Create hierarchical graph with base_vecs
@@ -268,7 +269,7 @@ public:
         std::string inter_layer_links_path = index_dir + "/inter_layer_links.bin";
         std::ifstream links_ifs(inter_layer_links_path, std::ios::binary);
         if (!links_ifs.is_open()) {
-            logger.error(fmt::format("Failed to open inter_layer_links file: {}", inter_layer_links_path));
+            ARTEA_ERROR(fmt::format("Failed to open inter_layer_links file: {}", inter_layer_links_path));
         }
 
         // Get references to hier_vecs_manager and inter_layer_links

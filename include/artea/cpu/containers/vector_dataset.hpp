@@ -122,11 +122,11 @@ public:
     auto shuffle_in_place(uint32_t seed = std::random_device{}()) -> uint32_t {
         const vec_num_t num_base_vecs = _base_vecs.get_num_vecs();
         if (num_base_vecs == 0) {
-            logger.warn("Cannot shuffle empty dataset");
+            ARTEA_WARN("Cannot shuffle empty dataset");
             return seed;
         }
 
-        logger.info(fmt::format("Shuffling dataset with {} base vectors (seed={})...", num_base_vecs, seed));
+        ARTEA_INFO(fmt::format("Shuffling dataset with {} base vectors (seed={})...", num_base_vecs, seed));
 
         // Generate shuffle indices using RandomSeqNR
         random_seq_nr_t shuffle_gen(num_base_vecs, seed);
@@ -157,7 +157,7 @@ public:
             }
         }
 
-        logger.success("Dataset shuffled successfully");
+        ARTEA_SUCCESS("Dataset shuffled successfully");
         return seed;
     }
 
@@ -176,7 +176,7 @@ private:
         _config = nlohmann::json::parse(config_file);
         config_file.close();
 
-        logger.success(fmt::format("Successfully loaded dataset config from {}", config_path));
+        ARTEA_SUCCESS(fmt::format("Successfully loaded dataset config from {}", config_path));
     }
 
     auto _load_datasets(const std::string& dataset_name) -> void {
@@ -188,13 +188,13 @@ private:
         std::filesystem::path query_vecs_path = dataset_dir / dataset_config["query_path"];
         std::filesystem::path gt_vecs_path = dataset_dir / dataset_config["gt_path"];
 
-        logger.info(fmt::format("Loading dataset {} from {} ...", dataset_name, dataset_dir.string()));
+        ARTEA_INFO(fmt::format("Loading dataset {} from {} ...", dataset_name, dataset_dir.string()));
 
         _base_vecs = base_vecs_t(base_vecs_path.string());
         _query_vecs = query_vecs_t(query_vecs_path.string());
         _gt_vecs = ground_truth_t(gt_vecs_path.string());
 
-        logger.success(
+        ARTEA_SUCCESS(
             fmt::format(
                 "Successfully loaded {} base vectors ({} dims), {} query vectors ({} dims), and {} ground truth vectors ({} dims).",
                 _base_vecs.get_num_vecs(),

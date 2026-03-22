@@ -75,7 +75,7 @@ public:
         const dist_func_t& dist_func,
         hierarchical_graph_t& hierarchical_graph
     ) -> void requires (EGPolicy == eg_policy_t::speculative_conv_graph_descent) {
-        logger.error("HierarchicalEdgesBuilder::construct<speculative_conv_graph_descent> not implemented yet");
+        ARTEA_ERROR("HierarchicalEdgesBuilder::construct<speculative_conv_graph_descent> not implemented yet");
     }
 
 };  // class HierarchicalEdgesBuilder

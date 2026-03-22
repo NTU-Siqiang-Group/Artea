@@ -69,7 +69,8 @@ auto convert(const graph_direction_t dir) -> op_direction_t {
     } else if (dir == graph_direction_t::OUT) {
         return op_direction_t::OUT;
     } else {
-        logger.error("Cannot convert HIBRID graph_direction_t to op_direction_t.");
+        ARTEA_ERROR("Cannot convert HIBRID graph_direction_t to op_direction_t.");
+        __builtin_unreachable();
     }
 }
 

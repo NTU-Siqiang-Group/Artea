@@ -53,7 +53,7 @@ public:
         //     _storage.resize(total_elements);
         // }
         // else {
-        //     logger.warn("VectorArray initialized with zero size or dimension.");
+        //     ARTEA_WARN("VectorArray initialized with zero size or dimension.");
         // }
 
         std::size_t total_elements = static_cast<std::size_t>(num_vecs) * dim;
@@ -286,7 +286,7 @@ public:
      */
     auto extract_subset(vec_num_t start, vec_num_t count) const -> VectorArray {
         if (static_cast<std::size_t>(start) + count > _num_vecs) {
-            logger.error(fmt::format(
+            ARTEA_ERROR(fmt::format(
                 "VectorArray::extract_subset: Range out of bounds. Start: {}, Count: {}, Total: {}",
                 start, count, _num_vecs));
         }
@@ -325,7 +325,7 @@ public:
 
         std::ifstream temp_file(fvecs_file_path, std::ios::binary);
         if (!temp_file.is_open()) {
-            logger.error("Error: Could not open file " + fvecs_file_path);
+            ARTEA_ERROR("Error: Could not open file " + fvecs_file_path);
         }
 
         // --- Determine dimension from the first vector ---
@@ -340,7 +340,7 @@ public:
         }
 
         if (first_dim <= 0) {
-            logger.error("Error: Vector dimension read from file must be positive.");
+            ARTEA_ERROR("Error: Vector dimension read from file must be positive.");
         }
 
         // --- Determine the number of vectors from file size ---
@@ -350,11 +350,11 @@ public:
 
         const std::streamoff record_size = sizeof(int) + static_cast<std::streamoff>(first_dim) * sizeof(vec_ele_t);
         if (record_size <= 0) { // Should not happen with positive dimension
-            logger.error("Error: Calculated record size is invalid.");
+            ARTEA_ERROR("Error: Calculated record size is invalid.");
         }
 
         if (file_size % record_size != 0) {
-            logger.error("Error: File size indicates a malformed or incomplete file.");
+            ARTEA_ERROR("Error: File size indicates a malformed or incomplete file.");
         }
 
         vec_num_t num_vecs_in_file = static_cast<vec_num_t>(file_size / record_size);
@@ -432,7 +432,7 @@ public:
             _storage.clear();
             _num_vecs = 0;
             _vec_dim = 0;
-            logger.error(error_message);
+            ARTEA_ERROR(error_message);
         }
     }
 

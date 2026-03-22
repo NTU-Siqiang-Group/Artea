@@ -66,7 +66,7 @@ public:
     ) -> void {
         #ifndef NDEBUG
         if (BufferTraitsT::is_nan_distance(new_edge_dist)) {
-            logger.error("Attempted to log an operation with NaN distance.");
+            ARTEA_ERROR("Attempted to log an operation with NaN distance.");
         }
         #endif
         _nbr_logs[executor_vid].append(nbr_id, new_edge_dist, true); // is_new = true
@@ -101,7 +101,7 @@ public:
 
         #ifndef NDEBUG
         if (!nbr_arr_checker_t::full_check(cur_nbrs)) {
-            logger.error("Error: Integrity check failed before applying logs.");
+            ARTEA_ERROR("Error: Integrity check failed before applying logs.");
         }
         #endif
 
@@ -136,7 +136,7 @@ public:
 
         #ifndef NDEBUG
         if (!nbr_arr_checker_t::full_check(cur_nbrs)) {
-            logger.error(fmt::format(
+            ARTEA_ERROR(fmt::format(
                 "Neighbor array integrity check failed after applying logs for vertex {}.",
                 executor_vid
             ));

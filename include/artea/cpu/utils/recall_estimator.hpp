@@ -58,7 +58,7 @@ public:
 
         // Assertion: Check predictions size
         if (predictions.get_num_vecs() != num_queries) {
-            logger.error(fmt::format(
+            ARTEA_ERROR(fmt::format(
                 "Predictions size mismatch: expected {} queries, got {}",
                 num_queries, predictions.get_num_vecs()
             ));
@@ -67,7 +67,7 @@ public:
 
         // Assertion: Check ground truth has at least k elements
         if (gt_vecs.get_vec_dim() < k) {
-            logger.error(fmt::format(
+            ARTEA_ERROR(fmt::format(
                 "Ground truth dimension {} is less than k={}",
                 gt_vecs.get_vec_dim(), k
             ));

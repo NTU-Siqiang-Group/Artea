@@ -139,7 +139,7 @@ public:
         #ifndef NDEBUG
         if (layer_id >= _layer_offsets.size() ||
             vertex_id >= _layer_offsets[layer_id] - _layer_offsets[layer_id - 1]) {
-            logger.error(fmt::format(
+            ARTEA_ERROR(fmt::format(
                 "Invalid layer_id ({}) or vertex_id ({}) for inter-layer links",
                 layer_id, vertex_id
             ));

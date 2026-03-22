@@ -122,7 +122,7 @@ public:
     ) -> void {
         #ifndef NDEBUG
         if (origin_nbrs.empty()) {
-            logger.error("[TriangleUpdater]: origin_nbrs cannot be empty");
+            ARTEA_ERROR("[TriangleUpdater]: origin_nbrs cannot be empty");
         }
         #endif
 

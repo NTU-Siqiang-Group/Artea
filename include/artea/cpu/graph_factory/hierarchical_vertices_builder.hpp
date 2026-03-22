@@ -205,7 +205,7 @@ private:
         const layer_num_t num_layers = hier_vecs_manager.get_num_layers();
 
         if (num_layers == 0) {
-            logger.error("Cannot find entry point: no layers in hierarchical graph");
+            ARTEA_ERROR("Cannot find entry point: no layers in hierarchical graph");
             return 0;
         }
 
@@ -215,7 +215,7 @@ private:
         const vertex_num_t top_layer_num_vecs = top_layer_vecs.get_num_vecs();
 
         if (top_layer_num_vecs == 0) {
-            logger.error("Cannot find entry point: top layer is empty");
+            ARTEA_ERROR("Cannot find entry point: top layer is empty");
             return 0;
         }
 
@@ -228,7 +228,7 @@ private:
         auto nearest_vertices = bf_router.query(centroid.data());
 
         if (nearest_vertices.empty()) {
-            logger.error("Cannot find entry point: bruteforce router returned empty result");
+            ARTEA_ERROR("Cannot find entry point: bruteforce router returned empty result");
             return 0;
         }
 

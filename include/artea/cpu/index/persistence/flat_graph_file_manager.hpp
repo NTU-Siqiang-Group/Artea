@@ -87,7 +87,7 @@ public:
         std::string metadata_path = index_dir + "/metadata.json";
         std::ofstream meta_ofs(metadata_path);
         if (!meta_ofs.is_open()) {
-            logger.error(fmt::format("Failed to open metadata file: {}", metadata_path));
+            ARTEA_ERROR(fmt::format("Failed to open metadata file: {}", metadata_path));
         }
         meta_ofs << meta.dump(2);
         meta_ofs.close();
@@ -96,7 +96,7 @@ public:
         std::string graph_bin_path = index_dir + "/graph.bin";
         std::ofstream ofs(graph_bin_path, std::ios::binary | std::ios::trunc);
         if (!ofs.is_open()) {
-            logger.error(fmt::format("Failed to open file for snapshotting flat graph: {}", graph_bin_path));
+            ARTEA_ERROR(fmt::format("Failed to open file for snapshotting flat graph: {}", graph_bin_path));
         }
 
         const uint32_t magic = k_file_magic;
@@ -127,7 +127,7 @@ public:
         }
 
         if (!ofs.good()) {
-            logger.error(fmt::format("Failed while writing flat graph to file: {}", graph_bin_path));
+            ARTEA_ERROR(fmt::format("Failed while writing flat graph to file: {}", graph_bin_path));
         }
     }
 
@@ -150,7 +150,7 @@ public:
         std::string metadata_path = index_dir + "/metadata.json";
         std::ifstream meta_ifs(metadata_path);
         if (!meta_ifs.is_open()) {
-            logger.error(fmt::format("Failed to open metadata file: {}", metadata_path));
+            ARTEA_ERROR(fmt::format("Failed to open metadata file: {}", metadata_path));
         }
 
         nlohmann::json meta;
@@ -159,14 +159,14 @@ public:
 
         // Validate graph type
         if (meta["graph_type"] != "flat_graph") {
-            logger.error(fmt::format("Invalid graph type in metadata: {}", meta["graph_type"].get<std::string>()));
+            ARTEA_ERROR(fmt::format("Invalid graph type in metadata: {}", meta["graph_type"].get<std::string>()));
         }
 
         // Read binary graph data
         std::string graph_bin_path = index_dir + "/graph.bin";
         std::ifstream ifs(graph_bin_path, std::ios::binary);
         if (!ifs.is_open()) {
-            logger.error(fmt::format("Failed to open file for loading flat graph: {}", graph_bin_path));
+            ARTEA_ERROR(fmt::format("Failed to open file for loading flat graph: {}", graph_bin_path));
         }
 
         uint32_t magic = 0;
@@ -182,15 +182,15 @@ public:
         ifs.read(reinterpret_cast<char*>(&max_nbr_size), sizeof(max_nbr_size));
 
         if (!ifs.good()) {
-            logger.error(fmt::format("Failed to read flat graph header from file: {}", graph_bin_path));
+            ARTEA_ERROR(fmt::format("Failed to read flat graph header from file: {}", graph_bin_path));
         }
 
         if (magic != k_file_magic) {
-            logger.error(fmt::format("Invalid flat graph file magic: {}", graph_bin_path));
+            ARTEA_ERROR(fmt::format("Invalid flat graph file magic: {}", graph_bin_path));
         }
 
         if (version != k_file_version) {
-            logger.error(fmt::format("Unsupported flat graph file version: {}", graph_bin_path));
+            ARTEA_ERROR(fmt::format("Unsupported flat graph file version: {}", graph_bin_path));
         }
 
         layer_config_t layer_config(max_nbr_size, reserved_nbr_size);
@@ -207,7 +207,7 @@ public:
 
         // Check if the number of vertices matches
         if (flat_graph.get_num_vertices() != num_vertices) {
-            logger.error(fmt::format(
+            ARTEA_ERROR(fmt::format(
                 "Vertex count mismatch: vecs_data has {} vertices but file has {} vertices",
                 flat_graph.get_num_vertices(), num_vertices
             ));
@@ -229,7 +229,7 @@ public:
         }
 
         if (!ifs.good()) {
-            logger.error(fmt::format("Failed to read flat graph data from file: {}", graph_bin_path));
+            ARTEA_ERROR(fmt::format("Failed to read flat graph data from file: {}", graph_bin_path));
         }
 
         return flat_graph;

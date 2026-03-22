@@ -53,9 +53,8 @@ public:
         NUM_SIMD_CHUNKS(_vec_dim / SIMD_CHUNK_SIZE),
         NUM_REMAINING_ELES(_vec_dim % SIMD_CHUNK_SIZE)
     {
-        ArteaLogger logger("SIMDFMA", LogLevelT::INFO);
         if (vec_dim % SIMD_CHUNK_SIZE != 0) {
-            logger.error(
+            ARTEA_ERROR(
                 "Vector dimension must be a multiple of SIMD chunk size (e.g. 16 for float type)"
             );
         }

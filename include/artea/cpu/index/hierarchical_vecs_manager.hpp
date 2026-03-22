@@ -130,7 +130,7 @@ public:
     auto set_layer_vecs(const layer_id_t layer_id, vertex_subset_t&& vertex_subset) -> void {
         #ifndef NDEBUG
         if (layer_id < 1) {
-            logger.error("layer_id must be >= 1 for set_layer_vecs");
+            ARTEA_ERROR("layer_id must be >= 1 for set_layer_vecs");
         }
         #endif
         _upper_layer_vecs[layer_id - 1] = std::move(vertex_subset.vecs_data);
@@ -144,7 +144,7 @@ public:
     auto set_layer_vecs(const layer_id_t layer_id, vector_array_t&& vecs_data) -> void {
         #ifndef NDEBUG
         if (layer_id < 1) {
-            logger.error("layer_id must be >= 1 for set_layer_vecs");
+            ARTEA_ERROR("layer_id must be >= 1 for set_layer_vecs");
         }
         #endif
         _upper_layer_vecs[layer_id - 1] = std::move(vecs_data);

@@ -62,13 +62,13 @@ public:
         const vertex_num_t sampling_batch_size
     ) -> vertex_num_t {
         if (coverage_ratio <= 0.0 || coverage_ratio >= 1.0) {
-            logger.error("coverage_ratio must be in (0, 1)");
+            ARTEA_ERROR("coverage_ratio must be in (0, 1)");
         }
         if (confidence <= 0.0 || confidence >= 1.0) {
-            logger.error("confidence must be in (0, 1)");
+            ARTEA_ERROR("confidence must be in (0, 1)");
         }
         if (sampling_batch_size < 1) {
-            logger.error("sampling_batch_size must be at least 1");
+            ARTEA_ERROR("sampling_batch_size must be at least 1");
         }
 
         // Calculate uncovered rate

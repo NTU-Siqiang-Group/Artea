@@ -72,10 +72,9 @@ public:
         _vec_dim(vec_dim),
         NUM_SIMD_CHUNKS(_vec_dim / SIMD_CHUNK_SIZE)
     {
-        ArteaLogger logger("SIMDLinear", LogLevelT::INFO);
         // Runtime check for alignment/padding requirements
         if (vec_dim % SIMD_CHUNK_SIZE != 0) {
-            logger.error(
+            ARTEA_ERROR(
                 "Vector dimension must be a multiple of SIMD chunk size (e.g. 16 for float type)"
             );
         }

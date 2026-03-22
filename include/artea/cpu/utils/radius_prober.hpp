@@ -91,13 +91,13 @@ public:
         float relative_err
     ) -> vec_num_t {
         if (quantile <= 0.0f || quantile >= 1.0f) {
-            logger.error("quantile must be in (0, 1)");
+            ARTEA_ERROR("quantile must be in (0, 1)");
         }
         if (confidence <= 0.0f || confidence >= 1.0f) {
-            logger.error("confidence must be in (0, 1)");
+            ARTEA_ERROR("confidence must be in (0, 1)");
         }
         if (relative_err <= 0.0f) {
-            logger.error("relative_err must be positive");
+            ARTEA_ERROR("relative_err must be positive");
         }
 
         // Calculate alpha and Z-value
@@ -154,16 +154,16 @@ public:
     ) -> ProbeResult {
 
         if (quantile <= 0.0f || quantile >= 1.0f) {
-            logger.error("quantile must be in (0, 1)");
+            ARTEA_ERROR("quantile must be in (0, 1)");
         }
 
         const vec_num_t total_vecs = base_vecs.get_num_vecs();
         if (total_vecs < 2) {
-            logger.error("Dataset must contain at least 2 vectors");
+            ARTEA_ERROR("Dataset must contain at least 2 vectors");
         }
 
         if (num_distances_to_sample < 1) {
-            logger.error("num_distances_to_sample must be at least 1");
+            ARTEA_ERROR("num_distances_to_sample must be at least 1");
         }
 
         // Allocate result vector for all distances
@@ -233,7 +233,7 @@ public:
 
         const vec_num_t total_vecs = base_vecs.get_num_vecs();
         if (total_vecs < 2) {
-            logger.error("Dataset must contain at least 2 vectors");
+            ARTEA_ERROR("Dataset must contain at least 2 vectors");
         }
 
         // Allocate result vector for all distances

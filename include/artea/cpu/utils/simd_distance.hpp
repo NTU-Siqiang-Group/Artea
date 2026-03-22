@@ -47,9 +47,8 @@ public:
         NUM_SIMD_CHUNKS(_vec_dim / SIMD_CHUNK_SIZE),
         NUM_REMAINING_ELES(_vec_dim % SIMD_CHUNK_SIZE)
     {
-        ArteaLogger logger("SIMDDistance", LogLevelT::INFO);
         if (vec_dim % SIMD_CHUNK_SIZE != 0) {
-            logger.error(
+            ARTEA_ERROR(
                 "Vector dimension must be a multiple of SIMD chunk size (e.g. 16 for float type)"
             );
         }
@@ -64,7 +63,7 @@ public:
         } else if constexpr (distance_metrics == distance_metrics_t::COSINE) {
             return _impl_cosine(vec1, vec2);
         } else {
-            logger.error("Invalid DistanceMetrics");
+            ARTEA_ERROR("Invalid DistanceMetrics");
         }
     }
 
@@ -187,13 +186,13 @@ private:
 
     __attribute__((always_inline))
     auto _impl_dot(const vec_ele_t* vec1, const vec_ele_t* vec2) const -> distance_t {
-        logger.error("Currently DOT distance is not supported");
+        ARTEA_ERROR("Currently DOT distance is not supported");
     }
 
 
     __attribute__((always_inline))
     auto _impl_cosine(const vec_ele_t* vec1, const vec_ele_t* vec2) const -> distance_t {
-        logger.error("Currently COSINE distance is not supported");
+        ARTEA_ERROR("Currently COSINE distance is not supported");
     }
 
 };  // class SIMDDistance

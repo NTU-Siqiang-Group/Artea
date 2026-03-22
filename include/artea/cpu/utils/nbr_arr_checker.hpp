@@ -51,7 +51,7 @@ public:
             if (is_invalid_id) {
                 seen_invalid_id = true;
             } else if (seen_invalid_id) {
-                logger.error("Neighbor array contains a valid neighbor after invalid_vertex_id suffix begins.");
+                ARTEA_ERROR("Neighbor array contains a valid neighbor after invalid_vertex_id suffix begins.");
                 return false;
             }
         }
@@ -65,7 +65,7 @@ public:
             if (is_invalid_id) {
                 seen_invalid_id = true;
             } else if (seen_invalid_id) {
-                logger.error("Neighbor row contains a valid neighbor after invalid_vertex_id suffix begins.");
+                ARTEA_ERROR("Neighbor row contains a valid neighbor after invalid_vertex_id suffix begins.");
                 return false;
             }
         }
@@ -75,7 +75,7 @@ public:
     static auto no_nan_check(const nbr_arr_t& nbrs) -> bool {
         for (std::size_t i = 0; i < nbrs.size(); ++i) {
             if (BaseTraitsT::is_nan_distance(nbrs[i].get_distance())) {
-                logger.error("Neighbor array contains NaN distances before applying logs.");
+                ARTEA_ERROR("Neighbor array contains NaN distances before applying logs.");
                 // throw std::runtime_error("Error: Neighbor array contains NaN distances before applying logs.");
                 return false;
             }
@@ -93,7 +93,7 @@ public:
                 break;
             }
             if (std::find(seen_ids.begin(), seen_ids.end(), nbr_id) != seen_ids.end()) {
-                logger.error("Neighbor array contains duplicate neighbors before applying logs.");
+                ARTEA_ERROR("Neighbor array contains duplicate neighbors before applying logs.");
                 return false;
             }
             seen_ids.push_back(nbr_id);
@@ -108,7 +108,7 @@ public:
                 break;
             }
             if (nbr_dist_comp(nbrs[i], nbrs[i - 1])) {
-                logger.error("Neighbor array is not sorted by distance before applying logs.");
+                ARTEA_ERROR("Neighbor array is not sorted by distance before applying logs.");
                 return false;
             }
         }

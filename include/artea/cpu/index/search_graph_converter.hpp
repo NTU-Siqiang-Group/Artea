@@ -59,7 +59,7 @@ public:
 
         // Validate extracted_nbr_size does not exceed max_nbr_size
         if (extracted_nbr_size > max_nbr_size) {
-            logger.error(fmt::format(
+            ARTEA_ERROR(fmt::format(
                 "extracted_nbr_size ({}) cannot exceed max_nbr_size ({})",
                 extracted_nbr_size, max_nbr_size
             ));
@@ -90,13 +90,13 @@ public:
 
                     #ifndef NDEBUG
                     if (!nbr_arr_checker_t::invalid_id_suffix_check(dst_nbrs, extracted_nbr_size)) {
-                        logger.error("Error: Invalid search graph row suffix layout.");
+                        ARTEA_ERROR("Error: Invalid search graph row suffix layout.");
                     }
                     #endif
 
                     #ifndef NDEBUG
                     if (!nbr_arr_checker_t::invalid_id_suffix_check(dst_nbrs, extracted_nbr_size)) {
-                        logger.error("Error: Invalid search graph row suffix layout.");
+                        ARTEA_ERROR("Error: Invalid search graph row suffix layout.");
                     }
                     #endif
                 }
