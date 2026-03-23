@@ -149,9 +149,14 @@ using candidate_queue_t = typename router_traits_t::candidate_queue_t;
 using visited_table_pool_t = typename router_traits_t::visited_table_pool_t;
 using bruteforce_router_t = typename router_traits_t::bruteforce_router_t;
 
-// alias for routers with customizable queue and visited table
-using monolayer_graph_router_t = typename router_traits_t::monolayer_graph_router_t;
-using hierarchical_graph_router_t = typename router_traits_t::hierarchical_graph_router_t;
+// alias for routers with customizable GraphModeT
+using graph_mode_t = typename router_traits_t::graph_mode_t;
+
+template <GraphModeT Mode = GraphModeT::search_mode>
+using monolayer_graph_router_t = typename router_traits_t::template monolayer_graph_router_t<Mode>;
+
+template <GraphModeT Mode = GraphModeT::search_mode>
+using hierarchical_graph_router_t = typename router_traits_t::template hierarchical_graph_router_t<Mode>;
 
 // Utility types
 using index_register_util_t = IndexRegisterUtil;

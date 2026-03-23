@@ -100,7 +100,7 @@ auto find_latest_index(const std::string& base_dir, const std::string& dataset_n
 }
 
 auto run_benchmark(
-    hierarchical_graph_router_t& router,
+    hierarchical_graph_router_t<graph_mode_t::search_mode>& router,
     const vector_array_t& query_vecs,
     const idlist_array_t& groundtruth,
     const vector_array_t& base_vecs,
@@ -308,7 +308,7 @@ int main(int argc, char** argv) {
     );
 
     // Create router
-    hierarchical_graph_router_t router(
+    hierarchical_graph_router_t<graph_mode_t::search_mode> router(
         base_vecs,
         dist_func,
         hierarchical_search_graph,

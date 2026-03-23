@@ -42,63 +42,27 @@ class ArteaGraphFactory :
     using hierarchical_vertices_builder_t = typename GraphFactoryTraitsT::hierarchical_vertices_builder_t;
     using hierarchical_edges_builder_t = typename GraphFactoryTraitsT::hierarchical_edges_builder_t;
     using layer_config_t = typename GraphFactoryTraitsT::layer_config_t;
-    using edges_builder_config_t = typename GraphFactoryTraitsT::artea_graph::edges_builder_config_t;
-    using greedy_vertices_builder_config_t = typename GraphFactoryTraitsT::greedy_vertices_builder_config_t;
-    using random_vertices_builder_config_t = typename GraphFactoryTraitsT::random_vertices_builder_config_t;
     using vg_policy_t = typename GraphFactoryTraitsT::vg_policy_t;
     using eg_policy_t = typename GraphFactoryTraitsT::eg_policy_t;
 
 public:
 
-    /** @brief construct a new artea graph from vector array with greedy vertices builder */
-    template <vg_policy_t VGPolicy, eg_policy_t EGPolicy>
+    template <
+        vg_policy_t VGPolicy,
+        eg_policy_t EGPolicy,
+        typename edges_builder_config_t,
+        typename vertices_builder_config_t
+    >
     static auto construct_graph_impl(
         const vector_array_t& base_vecs,
         layer_config_t bottom_layer_config,
         layer_config_t upper_layer_config,
         edges_builder_config_t bottom_edges_builder_config,
         edges_builder_config_t upper_edges_builder_config,
-        greedy_vertices_builder_config_t vertices_builder_config
-    ) -> hierarchical_graph_t requires (VGPolicy == vg_policy_t::rnet_selection) {
+        vertices_builder_config_t vertices_builder_config
+    ) -> hierarchical_graph_t {
         dist_func_t dist_func(base_vecs.get_vec_dim());
 
-        // Create hierarchical graph
-        hierarchical_graph_t hierarchical_graph(
-            base_vecs,
-            bottom_layer_config,
-            upper_layer_config,
-            bottom_edges_builder_config,
-            upper_edges_builder_config,
-            vertices_builder_config
-        );
-
-        hierarchical_vertices_builder_t::template construct<VGPolicy>(
-            dist_func,
-            hierarchical_graph,
-            vertices_builder_config
-        );
-
-        hierarchical_edges_builder_t::template construct<EGPolicy>(
-            dist_func,
-            hierarchical_graph
-        );
-
-        return hierarchical_graph;
-    }
-
-    /** @brief construct a new artea graph from vector array with random vertices builder */
-    template <vg_policy_t VGPolicy, eg_policy_t EGPolicy>
-    static auto construct_graph_impl(
-        const vector_array_t& base_vecs,
-        layer_config_t bottom_layer_config,
-        layer_config_t upper_layer_config,
-        edges_builder_config_t bottom_edges_builder_config,
-        edges_builder_config_t upper_edges_builder_config,
-        random_vertices_builder_config_t vertices_builder_config
-    ) -> hierarchical_graph_t requires (VGPolicy == vg_policy_t::random_selection) {
-        dist_func_t dist_func(base_vecs.get_vec_dim());
-
-        // Create hierarchical graph
         hierarchical_graph_t hierarchical_graph(
             base_vecs,
             bottom_layer_config,

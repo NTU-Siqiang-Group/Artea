@@ -404,7 +404,7 @@ TEST_F(ArteaGraphConstructTest, QueryRecall) {
 
     for (uint32_t queue_size = g_config.queue_start; queue_size <= g_config.queue_end; queue_size += g_config.queue_step) {
         // Create hierarchical router with current queue size
-        hierarchical_graph_router_t router(
+        hierarchical_graph_router_t<graph_mode_t::search_mode> router(
             base_vecs,
             dist_func,
             hierarchical_search_graph,
@@ -462,13 +462,8 @@ int main(int argc, char** argv) {
 
     // Bottom layer config
     program.add_argument("--bl-max-nbr-size").default_value(32u).scan<'u', uint32_t>();
-    program.add_argument("--bl-reserved-nbr-size").scan<'u', uint32_t>()
-        .help("Bottom layer reserved neighbor size (defaults to bl-max-nbr-size * 1.5)");
-
     // Upper layer config
     program.add_argument("--ul-max-nbr-size").default_value(24u).scan<'u', uint32_t>();
-    program.add_argument("--ul-reserved-nbr-size").scan<'u', uint32_t>()
-        .help("Upper layer reserved neighbor size (defaults to ul-max-nbr-size * 1.5)");
 
     // Bottom edges builder config
     program.add_argument("--bl-scale-coeffs").default_value(1.0f).scan<'g', float>();
@@ -513,14 +508,12 @@ int main(int argc, char** argv) {
     g_config.vertices_config.sampling_batch_size = program.get<uint32_t>("--sampling-batch-size");
 
     g_config.bottom_layer_config.max_nbr_size = program.get<uint32_t>("--bl-max-nbr-size");
-    g_config.bottom_layer_config.reserved_nbr_size = program.is_used("--bl-reserved-nbr-size")
-        ? program.get<uint32_t>("--bl-reserved-nbr-size")
-        : static_cast<uint32_t>(g_config.bottom_layer_config.max_nbr_size * 1.5);
+    g_config.bottom_layer_config.reserved_nbr_size =
+        static_cast<uint32_t>(g_config.bottom_layer_config.max_nbr_size * 1.5);
 
     g_config.upper_layer_config.max_nbr_size = program.get<uint32_t>("--ul-max-nbr-size");
-    g_config.upper_layer_config.reserved_nbr_size = program.is_used("--ul-reserved-nbr-size")
-        ? program.get<uint32_t>("--ul-reserved-nbr-size")
-        : static_cast<uint32_t>(g_config.upper_layer_config.max_nbr_size * 1.5);
+    g_config.upper_layer_config.reserved_nbr_size =
+        static_cast<uint32_t>(g_config.upper_layer_config.max_nbr_size * 1.5);
 
     g_config.bottom_edges_config.scale_coeffs = program.get<float>("--bl-scale-coeffs");
     g_config.bottom_edges_config.shifted_coeffs = program.get<float>("--bl-shifted-coeffs");
@@ -574,9 +567,7 @@ int main(int argc, char** argv) {
     std::cout << "Sampling batch size: " << g_config.vertices_config.sampling_batch_size << std::endl;
     std::cout << "\n--- Layer Configuration ---" << std::endl;
     std::cout << "Bottom layer max nbr size: " << g_config.bottom_layer_config.max_nbr_size << std::endl;
-    std::cout << "Bottom layer reserved nbr size: " << g_config.bottom_layer_config.reserved_nbr_size << std::endl;
     std::cout << "Upper layer max nbr size: " << g_config.upper_layer_config.max_nbr_size << std::endl;
-    std::cout << "Upper layer reserved nbr size: " << g_config.upper_layer_config.reserved_nbr_size << std::endl;
     std::cout << "\n--- Edges Builder Configuration ---" << std::endl;
     std::cout << "Bottom edges scale coeffs: " << g_config.bottom_edges_config.scale_coeffs << std::endl;
     std::cout << "Bottom edges shifted coeffs: " << g_config.bottom_edges_config.shifted_coeffs << std::endl;

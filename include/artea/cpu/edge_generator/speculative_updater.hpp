@@ -32,9 +32,7 @@ class SpeculativeUpdater :
         const dist_func_t& dist_func,
         const vector_array_t& vecs_data,
         log_table_t& log_table
-    ) : base_class_t(dist_func, vecs_data, log_table),
-        _ivf_partitions
-
+    ) : base_class_t(dist_func, vecs_data, log_table) {}
 
 };  //  class SpeculativeUpdater
 

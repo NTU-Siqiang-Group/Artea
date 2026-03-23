@@ -63,10 +63,6 @@ int main(int argc, char** argv) {
         .scan<'u', uint32_t>()
         .help("Maximum number of neighbors per vertex");
 
-    program.add_argument("--reserved-nbr-size")
-        .scan<'u', uint32_t>()
-        .help("Reserved neighbor size for memory allocation (defaults to max-nbr-size * 1.5)");
-
     program.add_argument("--scale-coeffs")
         .default_value(1.00)
         .scan<'g', double>()
@@ -102,9 +98,7 @@ int main(int argc, char** argv) {
 
     GraphParams params;
     params.max_nbr_size = program.get<uint32_t>("--max-nbr-size");
-    params.reserved_nbr_size = program.is_used("--reserved-nbr-size")
-        ? program.get<uint32_t>("--reserved-nbr-size")
-        : static_cast<uint32_t>(params.max_nbr_size * 1.5);
+    params.reserved_nbr_size = static_cast<uint32_t>(params.max_nbr_size * 1.5);
     params.scale_coeffs = program.get<double>("--scale-coeffs");
     params.shifted_coeffs = program.get<double>("--shifted-coeffs");
     params.num_outer_iters = program.get<uint32_t>("--num-outer-iters");
@@ -183,7 +177,6 @@ int main(int argc, char** argv) {
     std::cout << fmt::format("  Vector dimension:       {}", dim) << std::endl;
     std::cout << "\n--- Graph Configuration ---" << std::endl;
     std::cout << fmt::format("  Max nbr size:           {}", params.max_nbr_size) << std::endl;
-    std::cout << fmt::format("  Reserved nbr size:      {}", params.reserved_nbr_size) << std::endl;
     std::cout << fmt::format("  Scale coeffs:           {:.2f}", params.scale_coeffs) << std::endl;
     std::cout << fmt::format("  Shifted coeffs:         {:.2f}", params.shifted_coeffs) << std::endl;
     std::cout << fmt::format("  Num outer iters:        {}", params.num_outer_iters) << std::endl;

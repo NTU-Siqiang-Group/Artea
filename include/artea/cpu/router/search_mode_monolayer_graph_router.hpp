@@ -13,9 +13,10 @@
 // limitations under the License.
 
 /*
- * @FilePath: /Artea/include/artea/cpu/router/monolayer_graph_router.hpp
+ * @FilePath: /Artea/include/artea/cpu/router/search_mode_monolayer_graph_router.hpp
  * @Author: Chandler (Weitang Ye) <weitang.ye@ntu.edu.sg>
- * @Description:
+ * @Description: search_mode specialization of MonolayerGraphRouter.
+ *               Operates on FlatSearchGraph (CSR vertex_id_t neighbors).
  */
 
 #pragma once
@@ -29,6 +30,7 @@
 #include <tbb/blocked_range.h>
 
 #include <artea/cpu/utils/parallel.hpp>
+#include <artea/cpu/framework/type_traits/router_traits.hpp>
 #include <artea/cpu/router/candidate_queue_concept.hpp>
 #include <artea/cpu/router/visited_table_concept.hpp>
 
@@ -36,11 +38,9 @@ namespace artea {
 namespace cpu {
 
 template <typename RouterTraitsT>
-class MonolayerGraphRouter :
-    public RouterTraitsT::template vector_router_t<MonolayerGraphRouter<RouterTraitsT>>
+class MonolayerGraphRouter<RouterTraitsT, GraphModeT::search_mode> :
+    public RouterTraitsT::template vector_router_t<MonolayerGraphRouter<RouterTraitsT, GraphModeT::search_mode>>
 {
-    // Friend declaration for HierarchicalGraphRouter to access internal methods
-    friend typename RouterTraitsT::hierarchical_graph_router_t;
 
     using vertex_num_t = typename RouterTraitsT::vertex_num_t;
     using vertex_id_t = typename RouterTraitsT::vertex_id_t;
@@ -55,7 +55,7 @@ class MonolayerGraphRouter :
     using candidate_queue_t = typename RouterTraitsT::candidate_queue_t;
     using visited_table_t = typename RouterTraitsT::visited_table_t;
     using visited_table_pool_t = typename RouterTraitsT::visited_table_pool_t;
-    using base_class_t = typename RouterTraitsT::template vector_router_t<MonolayerGraphRouter<RouterTraitsT>>;
+    using base_class_t = typename RouterTraitsT::template vector_router_t<MonolayerGraphRouter<RouterTraitsT, GraphModeT::search_mode>>;
 
 public:
 
@@ -341,7 +341,7 @@ private:
     /** @brief Thread-safe random sequence generator (internally uses thread-local MKL streams). */
     mutable random_seq_t _random_seq;
 
-};  // class MonolayerGraphRouter
+};  // class MonolayerGraphRouter<RouterTraitsT, GraphModeT::search_mode>
 
 }   // namespace cpu
 }   // namespace artea

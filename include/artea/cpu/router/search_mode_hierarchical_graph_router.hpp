@@ -13,9 +13,10 @@
 // limitations under the License.
 
 /*
- * @FilePath: /Artea/include/artea/cpu/router/hierarchical_graph_router.hpp
+ * @FilePath: /Artea/include/artea/cpu/router/search_mode_hierarchical_graph_router.hpp
  * @Author: Chandler (Weitang Ye) <weitang.ye@ntu.edu.sg>
- * @Description: Hierarchical graph router for HNSW-like search.
+ * @Description: search_mode specialization of HierarchicalGraphRouter.
+ *               Operates on HierarchicalSearchGraph (CSR vertex_id_t neighbors).
  */
 
 #pragma once
@@ -27,6 +28,7 @@
 #include <tbb/parallel_for.h>
 #include <tbb/blocked_range.h>
 
+#include <artea/cpu/framework/type_traits/router_traits.hpp>
 #include <artea/cpu/router/candidate_queue_concept.hpp>
 #include <artea/cpu/router/visited_table_concept.hpp>
 
@@ -34,8 +36,8 @@ namespace artea {
 namespace cpu {
 
 template <typename RouterTraitsT>
-class HierarchicalGraphRouter :
-    public RouterTraitsT::template vector_router_t<HierarchicalGraphRouter<RouterTraitsT>>
+class HierarchicalGraphRouter<RouterTraitsT, GraphModeT::search_mode> :
+    public RouterTraitsT::template vector_router_t<HierarchicalGraphRouter<RouterTraitsT, GraphModeT::search_mode>>
 {
 
     using vertex_num_t = typename RouterTraitsT::vertex_num_t;
@@ -54,7 +56,7 @@ class HierarchicalGraphRouter :
     using candidate_queue_t = typename RouterTraitsT::candidate_queue_t;
     using visited_table_t = typename RouterTraitsT::visited_table_t;
     using visited_table_pool_t = typename RouterTraitsT::visited_table_pool_t;
-    using base_class_t = typename RouterTraitsT::template vector_router_t<HierarchicalGraphRouter<RouterTraitsT>>;
+    using base_class_t = typename RouterTraitsT::template vector_router_t<HierarchicalGraphRouter<RouterTraitsT, GraphModeT::search_mode>>;
 
     static constexpr vertex_num_t min_num_layer_vertex = RouterTraitsT::min_num_layer_vertex;
 
@@ -264,7 +266,7 @@ private:
     /** @brief Pool of thread-local visited bitmaps. */
     mutable visited_table_pool_t _visited_table_pool;
 
-};  // class HierarchicalGraphRouter
+};  // class HierarchicalGraphRouter<RouterTraitsT, GraphModeT::search_mode>
 
 }   // namespace cpu
 }   // namespace artea

@@ -58,13 +58,8 @@ int main(int argc, char** argv) {
 
     // Bottom layer config
     program.add_argument("--bl-max-nbr-size").default_value(32u).scan<'u', uint32_t>();
-    program.add_argument("--bl-reserved-nbr-size").scan<'u', uint32_t>()
-        .help("Bottom layer reserved neighbor size (defaults to bl-max-nbr-size * 1.5)");
-
     // Upper layer config
     program.add_argument("--ul-max-nbr-size").default_value(24u).scan<'u', uint32_t>();
-    program.add_argument("--ul-reserved-nbr-size").scan<'u', uint32_t>()
-        .help("Upper layer reserved neighbor size (defaults to ul-max-nbr-size * 1.5)");
 
     // Bottom edges builder config
     program.add_argument("--bl-scale-coeffs").default_value(1.0f).scan<'g', float>();
@@ -125,14 +120,10 @@ int main(int argc, char** argv) {
 
     // Create layer configs
     uint32_t bl_max_nbr_size = program.get<uint32_t>("--bl-max-nbr-size");
-    uint32_t bl_reserved_nbr_size = program.is_used("--bl-reserved-nbr-size")
-        ? program.get<uint32_t>("--bl-reserved-nbr-size")
-        : static_cast<uint32_t>(bl_max_nbr_size * 1.5);
+    uint32_t bl_reserved_nbr_size = static_cast<uint32_t>(bl_max_nbr_size * 1.5);
 
     uint32_t ul_max_nbr_size = program.get<uint32_t>("--ul-max-nbr-size");
-    uint32_t ul_reserved_nbr_size = program.is_used("--ul-reserved-nbr-size")
-        ? program.get<uint32_t>("--ul-reserved-nbr-size")
-        : static_cast<uint32_t>(ul_max_nbr_size * 1.5);
+    uint32_t ul_reserved_nbr_size = static_cast<uint32_t>(ul_max_nbr_size * 1.5);
 
     layer_config_t bottom_layer_config(bl_max_nbr_size, bl_reserved_nbr_size);
     layer_config_t upper_layer_config(ul_max_nbr_size, ul_reserved_nbr_size);
@@ -268,14 +259,12 @@ int main(int argc, char** argv) {
     std::cout << std::endl;
     std::cout << "  Bottom layer:" << std::endl;
     std::cout << fmt::format("    Max nbr size:         {}", bl_max_nbr_size) << std::endl;
-    std::cout << fmt::format("    Reserved nbr size:    {}", bl_reserved_nbr_size) << std::endl;
     std::cout << fmt::format("    Scale coeffs:         {}", program.get<float>("--bl-scale-coeffs")) << std::endl;
     std::cout << fmt::format("    Shifted coeffs:       {}", program.get<float>("--bl-shifted-coeffs")) << std::endl;
     std::cout << fmt::format("    Num outer iters:      {}", program.get<uint32_t>("--bl-num-outer-iters")) << std::endl;
     std::cout << fmt::format("    Num inner iters:      {}", program.get<uint32_t>("--bl-num-inner-iters")) << std::endl;
     std::cout << "  Upper layers:" << std::endl;
     std::cout << fmt::format("    Max nbr size:         {}", ul_max_nbr_size) << std::endl;
-    std::cout << fmt::format("    Reserved nbr size:    {}", ul_reserved_nbr_size) << std::endl;
     std::cout << fmt::format("    Scale coeffs:         {}", program.get<float>("--ul-scale-coeffs")) << std::endl;
     std::cout << fmt::format("    Shifted coeffs:       {}", program.get<float>("--ul-shifted-coeffs")) << std::endl;
     std::cout << fmt::format("    Num outer iters:      {}", program.get<uint32_t>("--ul-num-outer-iters")) << std::endl;

@@ -26,11 +26,22 @@
 namespace artea {
 namespace cpu {
 
+/** ------ Graph Mode ------ **/
+
+/** @brief Graph mode selector for proximity graph routers.
+ *  - construct_mode: operates on FlatGraph / HierarchicalGraph (build-time, nbr_t neighbors)
+ *  - search_mode:    operates on FlatSearchGraph / HierarchicalSearchGraph (query-time, vertex_id_t CSR)
+ */
+enum class GraphModeT {
+    construct_mode,
+    search_mode
+};
+
 /** ------ Forward Declaration  ------ **/
 template <typename RouterTraitsT, typename DerivedClassT> class VectorRouter;
 template <typename RouterTraitsT> class BruteforceRouter;
-template <typename RouterTraitsT> class MonolayerGraphRouter;
-template <typename RouterTraitsT> class HierarchicalGraphRouter;
+template <typename RouterTraitsT, GraphModeT Mode = GraphModeT::search_mode> class MonolayerGraphRouter;
+template <typename RouterTraitsT, GraphModeT Mode = GraphModeT::search_mode> class HierarchicalGraphRouter;
 template <typename RouterTraitsT> struct CandidateEntry;
 template <typename RouterTraitsT> struct CandidateEntryComparator;
 template <typename RouterTraitsT> struct StatefulCandidateEntry;
@@ -98,11 +109,16 @@ struct RouterTraits : virtual public ComputerTraitsT, virtual public IndexTraits
     /** @brief Type for visited table pool (default uses thread_local_bitmap_t). */
     using visited_table_pool_t = VisitedTablePool<router_traits_t, visited_table_t>;
 
-    /** @brief Type for monolayer graph router. */
-    using monolayer_graph_router_t = MonolayerGraphRouter<router_traits_t>;
+    /** @brief Type for monolayer graph router (template on GraphModeT). */
+    template <GraphModeT Mode = GraphModeT::search_mode>
+    using monolayer_graph_router_t = MonolayerGraphRouter<router_traits_t, Mode>;
 
-    /** @brief Type for hierarchical graph router. */
-    using hierarchical_graph_router_t = HierarchicalGraphRouter<router_traits_t>;
+    /** @brief Type for hierarchical graph router (template on GraphModeT). */
+    template <GraphModeT Mode = GraphModeT::search_mode>
+    using hierarchical_graph_router_t = HierarchicalGraphRouter<router_traits_t, Mode>;
+
+    /** @brief Graph mode enum alias. */
+    using graph_mode_t = GraphModeT;
 
     /** @brief Indicates whether to enable intra-query parallelism. */
     static constexpr bool intra_query_parallel = IntraQueryParallel;

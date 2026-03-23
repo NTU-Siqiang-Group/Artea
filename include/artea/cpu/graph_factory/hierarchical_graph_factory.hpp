@@ -52,7 +52,7 @@ public:
         edges_builder_config_t upper_edges_builder_config,
         Args&&... args
     ) -> hierarchical_graph_t {
-        return construct_graph<VGPolicy, EGPolicy>(
+        return template construct_graph<VGPolicy, EGPolicy>(
             dataset.get_base_vecs(),
             bottom_layer_config,
             upper_layer_config,

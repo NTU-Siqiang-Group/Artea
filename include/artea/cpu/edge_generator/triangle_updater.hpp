@@ -138,9 +138,10 @@ public:
 
             if (passed) {
                 retained_nbrs.push_back(ori_nbr);
-                // Stop if we've reached the maximum neighbor size
+                // Do not accept because we've reached the maximum neighbor size
                 if (retained_nbrs.size() >= _max_nbr_size) {
-                    break;
+                    // break;
+                    continue;
                 }
             }
             else {

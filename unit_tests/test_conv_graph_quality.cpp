@@ -43,14 +43,12 @@ struct TestConfig {
 
 struct QueryResult {
     uint32_t candidate_queue_size;
-    double query_time_ms;
     double avg_query_time_us;
     double throughput_qps;
     float recall;
 };
 
 struct TestResults {
-    double build_time_s = 0.0;
     double conversion_time_ms = 0.0;
     uint32_t num_vertices = 0;
     uint32_t num_queries = 0;
@@ -73,58 +71,39 @@ public:
         dist_func_ = std::make_unique<dist_func_t>(dataset_->get_base_vecs().get_vec_dim());
 
         const auto& base_vecs = dataset_->get_base_vecs();
+        g_test_results.num_vertices = static_cast<uint32_t>(base_vecs.get_num_vecs());
+        g_test_results.num_queries = static_cast<uint32_t>(dataset_->get_query_vecs().get_num_vecs());
+
         if (g_config.verbose) {
             logger.info(fmt::format("Base vectors size: {}", base_vecs.get_num_vecs()));
             logger.info(fmt::format("Max nbr size: {}", g_config.layer_config.max_nbr_size()));
-            logger.info(fmt::format("Reserved nbr size: {}", g_config.layer_config.reserved_nbr_size()));
             logger.info(fmt::format("Extracted nbr size: {}", g_config.extracted_nbr_size));
             logger.info(fmt::format("Scale coeffs: {}", g_config.edges_builder_config.scale_coeffs()));
             logger.info(fmt::format("Shifted coeffs: {}", g_config.edges_builder_config.shifted_coeffs()));
             logger.info(fmt::format("Num outer iters: {}", g_config.edges_builder_config.num_outer_iters()));
             logger.info(fmt::format("Num inner iters: {}", g_config.edges_builder_config.num_inner_iters()));
             logger.info(fmt::format("Top-k: {}", g_config.topk));
-            logger.info(fmt::format("Candidate queue size range: {} to {} step {}",
-                g_config.queue_start, g_config.queue_end, g_config.queue_step));
         }
 
-        // Build convergent graph
-        logger.info("Building convergent graph...");
-        auto start_time = std::chrono::high_resolution_clock::now();
-
+        // Build convergent graph using dataset version (per-iter profiling logged inside)
+        logger.info("Building convergent graph (dataset mode, per-iter profiling)...");
         conv_graph_factory_t factory;
         flat_graph_ = std::make_unique<flat_graph_t>(factory.construct_graph(
-            base_vecs,
+            *dataset_,
             g_config.layer_config,
             g_config.edges_builder_config
         ));
 
-        auto end_time = std::chrono::high_resolution_clock::now();
-        auto duration = std::chrono::duration_cast<std::chrono::microseconds>(end_time - start_time);
-        g_test_results.build_time_s = duration.count() / 1000000.0;
-        g_test_results.num_vertices = flat_graph_->get_num_vertices();
-
-        logger.info(fmt::format("Graph built with {} vertices", g_test_results.num_vertices));
-        logger.info(fmt::format("Build time: {:.2f} s", g_test_results.build_time_s));
-
         // Convert to flat search graph
         logger.info("Converting to flat search graph...");
-        start_time = std::chrono::high_resolution_clock::now();
-
+        auto t0 = std::chrono::high_resolution_clock::now();
         flat_search_graph_ = std::make_unique<flat_search_graph_t>(
             search_graph_converter_t::from_flat_graph(*flat_graph_, g_config.extracted_nbr_size)
         );
-
-        end_time = std::chrono::high_resolution_clock::now();
-        duration = std::chrono::duration_cast<std::chrono::microseconds>(end_time - start_time);
-        g_test_results.conversion_time_ms = duration.count() / 1000.0;
-
+        auto t1 = std::chrono::high_resolution_clock::now();
+        g_test_results.conversion_time_ms =
+            std::chrono::duration_cast<std::chrono::microseconds>(t1 - t0).count() / 1000.0;
         logger.info(fmt::format("Conversion time: {:.2f} ms", g_test_results.conversion_time_ms));
-
-        // Get ground truth from dataset
-        const auto& query_vecs = dataset_->get_query_vecs();
-        g_test_results.num_queries = query_vecs.get_num_vecs();
-
-        logger.info(fmt::format("Loaded ground truth for {} queries", g_test_results.num_queries));
     }
 
     vector_dataset_t& get_dataset() { return *dataset_; }
@@ -140,9 +119,9 @@ private:
     std::unique_ptr<flat_search_graph_t> flat_search_graph_;
 };
 
-class ConvGraphTest : public ::testing::Test {};
+class ConvGraphQualityTest : public ::testing::Test {};
 
-TEST_F(ConvGraphTest, QueryRecall) {
+TEST_F(ConvGraphQualityTest, QueryRecall) {
     auto& provider = DataProvider::instance();
     auto& dataset = provider.get_dataset();
     auto& dist_func = provider.get_dist_func();
@@ -152,54 +131,34 @@ TEST_F(ConvGraphTest, QueryRecall) {
     const auto& base_vecs = dataset.get_base_vecs();
     const auto& query_vecs = dataset.get_query_vecs();
 
-    logger.info("Testing query recall...");
-
-    // Run grid search over candidate queue sizes
-    logger.info(fmt::format("\nRunning Grid Search: candidate queue size {} to {}, step {}",
-        g_config.queue_start, g_config.queue_end, g_config.queue_step));
-    logger.info("");
-
     recall_estimator_t recall_estimator;
 
+    logger.info(fmt::format("\nRunning Grid Search: candidate queue size {} to {}, step {}",
+        g_config.queue_start, g_config.queue_end, g_config.queue_step));
+
     for (uint32_t queue_size = g_config.queue_start; queue_size <= g_config.queue_end; queue_size += g_config.queue_step) {
-        // Create router with current queue size
-        monolayer_graph_router_t router(
-            base_vecs,
-            dist_func,
-            flat_search_graph,
-            g_config.topk,
-            queue_size
-        );
+        monolayer_graph_router_t<graph_mode_t::search_mode> router(base_vecs, dist_func, flat_search_graph, g_config.topk, queue_size);
         router.initialize();
 
-        // Query all vectors
-        auto start_time = std::chrono::high_resolution_clock::now();
+        auto t0 = std::chrono::high_resolution_clock::now();
         idlist_array_t results = router.batch_query(query_vecs);
-        auto end_time = std::chrono::high_resolution_clock::now();
+        auto t1 = std::chrono::high_resolution_clock::now();
+        auto us = std::chrono::duration_cast<std::chrono::microseconds>(t1 - t0).count();
 
-        auto duration = std::chrono::duration_cast<std::chrono::microseconds>(end_time - start_time);
-
-        // Compute metrics
         QueryResult result;
         result.candidate_queue_size = queue_size;
-        result.query_time_ms = duration.count() / 1000.0;
-        result.avg_query_time_us = static_cast<double>(duration.count()) / query_vecs.get_num_vecs();
-        result.throughput_qps = query_vecs.get_num_vecs() * 1000000.0 / duration.count();
+        result.avg_query_time_us = static_cast<double>(us) / query_vecs.get_num_vecs();
+        result.throughput_qps = query_vecs.get_num_vecs() * 1e6 / us;
         result.recall = recall_estimator.calculate_recall_at_k(results, groundtruth);
-
         g_test_results.query_results.push_back(result);
 
-        logger.info(fmt::format("CandidateQueue={:3}: Recall@{}={:.4f}, QPS={:8.2f}, AvgTime={:.2f}ms",
-            queue_size, g_config.topk, result.recall, result.throughput_qps, result.query_time_ms));
+        logger.info(fmt::format("CandidateQueue={:3}: Recall@{}={:.4f}, QPS={:8.2f}, AvgTime={:.2f}us",
+            queue_size, g_config.topk, result.recall, result.throughput_qps, result.avg_query_time_us));
     }
 
-    // Expect reasonable recall for at least one configuration
     bool has_good_recall = false;
-    for (const auto& result : g_test_results.query_results) {
-        if (result.recall >= 0.5f) {
-            has_good_recall = true;
-            break;
-        }
+    for (const auto& r : g_test_results.query_results) {
+        if (r.recall >= 0.5f) { has_good_recall = true; break; }
     }
     EXPECT_TRUE(has_good_recall) << "At least one configuration should achieve recall >= 50%";
 }
@@ -207,12 +166,10 @@ TEST_F(ConvGraphTest, QueryRecall) {
 int main(int argc, char** argv) {
     ::testing::InitGoogleTest(&argc, argv);
 
-    argparse::ArgumentParser program("test_conv_graph");
+    argparse::ArgumentParser program("test_conv_graph_quality");
     program.add_argument("-c", "--config").default_value(std::string("./configs/datasets.json"));
     program.add_argument("-d", "--dataset").default_value(std::string("sift-1m"));
     program.add_argument("--max-nbr-size").default_value(32u).scan<'u', uint32_t>();
-    program.add_argument("--reserved-nbr-size").scan<'u', uint32_t>()
-        .help("Reserved neighbor size (defaults to max-nbr-size * 1.5)");
     program.add_argument("--extracted-nbr-size").default_value(32u).scan<'u', uint32_t>();
     program.add_argument("--scale-coeffs").default_value(1.0f).scan<'g', float>();
     program.add_argument("--shifted-coeffs").default_value(0.0f).scan<'g', float>();
@@ -221,7 +178,7 @@ int main(int argc, char** argv) {
     program.add_argument("-k", "--topk").default_value(20u).scan<'u', uint32_t>();
     program.add_argument("--candidate-queue-config")
         .default_value(std::string("40,100,20"))
-        .help("Candidate queue size grid search: start,end,step (default: 40,100,20)");
+        .help("start,end,step");
     program.add_argument("-v", "--verbose").default_value(false).implicit_value(true);
 
     try {
@@ -236,11 +193,7 @@ int main(int argc, char** argv) {
     g_config.dataset_name = program.get<std::string>("--dataset");
 
     uint32_t max_nbr_size = program.get<uint32_t>("--max-nbr-size");
-    uint32_t reserved_nbr_size = program.is_used("--reserved-nbr-size")
-        ? program.get<uint32_t>("--reserved-nbr-size")
-        : static_cast<uint32_t>(max_nbr_size * 1.5);
-
-    g_config.layer_config = layer_config_t(max_nbr_size, reserved_nbr_size);
+    g_config.layer_config = layer_config_t(max_nbr_size, static_cast<uint32_t>(max_nbr_size * 1.5));
     g_config.edges_builder_config = conv_graph::edges_builder_config_t(
         program.get<float>("--scale-coeffs"),
         program.get<float>("--shifted-coeffs"),
@@ -249,16 +202,14 @@ int main(int argc, char** argv) {
     );
     g_config.extracted_nbr_size = program.get<uint32_t>("--extracted-nbr-size");
     g_config.topk = program.get<uint32_t>("--topk");
+    g_config.verbose = program.get<bool>("--verbose");
 
-    // Parse candidate queue config
     std::string queue_config_str = program.get<std::string>("--candidate-queue-config");
     {
         std::istringstream ss(queue_config_str);
         std::string token;
         std::vector<uint32_t> values;
-        while (std::getline(ss, token, ',')) {
-            values.push_back(std::stoul(token));
-        }
+        while (std::getline(ss, token, ',')) values.push_back(std::stoul(token));
         if (values.size() != 3) {
             fprintf(stderr, "Error: --candidate-queue-config must have 3 values: start,end,step\n");
             return 1;
@@ -268,60 +219,24 @@ int main(int argc, char** argv) {
         g_config.queue_step = values[2];
     }
 
-    g_config.verbose = program.get<bool>("--verbose");
-
-    // Print test configuration
-    std::cout << "\n=== Test Configuration ===" << std::endl;
-    std::cout << "Dataset: " << g_config.dataset_name << std::endl;
-    std::cout << "Config path: " << g_config.config_path << std::endl;
-    std::cout << "Max nbr size: " << g_config.layer_config.max_nbr_size() << std::endl;
-    std::cout << "Reserved nbr size: " << g_config.layer_config.reserved_nbr_size() << std::endl;
-    std::cout << "Extracted nbr size: " << g_config.extracted_nbr_size << std::endl;
-    std::cout << "Scale coeffs: " << g_config.edges_builder_config.scale_coeffs() << std::endl;
-    std::cout << "Shifted coeffs: " << g_config.edges_builder_config.shifted_coeffs() << std::endl;
-    std::cout << "Num outer iters: " << g_config.edges_builder_config.num_outer_iters() << std::endl;
-    std::cout << "Num inner iters: " << g_config.edges_builder_config.num_inner_iters() << std::endl;
-    std::cout << "Top-k: " << g_config.topk << std::endl;
-    std::cout << "Candidate queue config: " << g_config.queue_start << "," << g_config.queue_end << "," << g_config.queue_step << std::endl;
-    std::cout << "Verbose: " << (g_config.verbose ? "true" : "false") << std::endl;
-    std::cout << "==========================\n" << std::endl;
-
     DataProvider::instance().init();
 
     int result = RUN_ALL_TESTS();
 
-    // Print summary table
     std::cout << "\n" << std::string(80, '=') << std::endl;
-    std::cout << "                        TEST RESULTS SUMMARY" << std::endl;
+    std::cout << "                    TEST RESULTS SUMMARY" << std::endl;
     std::cout << std::string(80, '=') << std::endl;
-    std::cout << "\n--- Configuration ---" << std::endl;
-    std::cout << fmt::format("  Dataset:                {}", g_config.dataset_name) << std::endl;
-    std::cout << fmt::format("  Max Nbr Size:           {}", g_config.layer_config.max_nbr_size()) << std::endl;
-    std::cout << fmt::format("  Reserved Nbr Size:      {}", g_config.layer_config.reserved_nbr_size()) << std::endl;
-    std::cout << fmt::format("  Extracted Nbr Size:     {}", g_config.extracted_nbr_size) << std::endl;
-    std::cout << fmt::format("  Scale Coeffs:           {}", g_config.edges_builder_config.scale_coeffs()) << std::endl;
-    std::cout << fmt::format("  Shifted Coeffs:         {}", g_config.edges_builder_config.shifted_coeffs()) << std::endl;
-    std::cout << fmt::format("  Num Outer Iters:        {}", g_config.edges_builder_config.num_outer_iters()) << std::endl;
-    std::cout << fmt::format("  Num Inner Iters:        {}", g_config.edges_builder_config.num_inner_iters()) << std::endl;
-    std::cout << fmt::format("  Top-k:                  {}", g_config.topk) << std::endl;
-    std::cout << "\n--- Graph Construction ---" << std::endl;
-    std::cout << fmt::format("  Build Time:             {:.2f} s", g_test_results.build_time_s) << std::endl;
-    std::cout << fmt::format("  Num Vertices:           {}", g_test_results.num_vertices) << std::endl;
-    std::cout << fmt::format("  Conversion Time:        {:.2f} ms", g_test_results.conversion_time_ms) << std::endl;
-    std::cout << "\n--- Query Performance ---" << std::endl;
-    std::cout << fmt::format("  Num Queries:            {}", g_test_results.num_queries) << std::endl;
-    std::cout << fmt::format("  Top-k:                  {}", g_config.topk) << std::endl;
+    std::cout << fmt::format("  Dataset:            {}", g_config.dataset_name) << std::endl;
+    std::cout << fmt::format("  Num Vertices:       {}", g_test_results.num_vertices) << std::endl;
+    std::cout << fmt::format("  Num Queries:        {}", g_test_results.num_queries) << std::endl;
+    std::cout << fmt::format("  Conversion Time:    {:.2f} ms", g_test_results.conversion_time_ms) << std::endl;
     std::cout << "\n--- Grid Search Results ---" << std::endl;
     std::cout << fmt::format("{:<15} {:<12} {:<12} {:<12}",
-        "CandidateQueue", "Recall@k", "QPS", "AvgTime(ms)") << std::endl;
-    std::cout << std::string(60, '-') << std::endl;
-
-    for (const auto& result : g_test_results.query_results) {
+        "CandidateQueue", "Recall@k", "QPS", "AvgTime(us)") << std::endl;
+    std::cout << std::string(55, '-') << std::endl;
+    for (const auto& r : g_test_results.query_results) {
         std::cout << fmt::format("{:<15} {:<12.4f} {:<12.2f} {:<12.2f}",
-            result.candidate_queue_size,
-            result.recall,
-            result.throughput_qps,
-            result.query_time_ms) << std::endl;
+            r.candidate_queue_size, r.recall, r.throughput_qps, r.avg_query_time_us) << std::endl;
     }
     std::cout << std::string(80, '=') << std::endl;
 

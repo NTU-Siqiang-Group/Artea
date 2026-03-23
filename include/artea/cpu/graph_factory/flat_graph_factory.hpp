@@ -35,6 +35,8 @@ class FlatGraphFactory {
     using vector_array_t = typename GraphFactoryTraitsT::vector_array_t;
     using dist_func_t = typename GraphFactoryTraitsT::dist_func_t;
     using layer_config_t = typename GraphFactoryTraitsT::layer_config_t;
+    using query_vecs_t = typename GraphFactoryTraitsT::query_vecs_t;
+    using ground_truth_t = typename GraphFactoryTraitsT::ground_truth_t;
     // Using propagate_engine_t with no selective scheduling currently.
     using propagate_engine_t = typename GraphFactoryTraitsT::template propagate_engine_t<false>;
     using triangle_updater_t = typename GraphFactoryTraitsT::triangle_updater_t;
@@ -48,8 +50,8 @@ public:
         layer_config_t layer_config,
         Args&&... args
     ) -> flat_graph_t {
-        return construct_graph(
-            dataset.get_base_vecs(),
+        return static_cast<DerivedClassT*>(this)->construct_graph_impl(
+            dataset,
             layer_config,
             std::forward<Args>(args)...
         );
