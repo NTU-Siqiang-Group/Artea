@@ -15,32 +15,17 @@
 #include <benchmark/benchmark.h>
 #include <argparse/argparse.hpp>
 #include <artea/cpu/framework/artea.hpp>
+#include <artea/cpu/framework/type_context/default_context.hpp>
 #include <memory>
 
 using namespace artea;
 using namespace artea::cpu;
 
-using base_traits_t = BaseTraits<uint32_t, float>;
-using computer_traits_t = ComputerTraits<base_traits_t, DistanceMetricsT::EUCLIDEAN>;
-using buffer_traits_t = BufferTraits<base_traits_t, BufferPolicyT::LOCKED_BUFFER_WITH_MUTEX, /* BufCapacity = */32>;
-using index_traits_t = IndexTraits<base_traits_t>;
-using edge_generator_traits_t = EdgeGeneratorTraits<computer_traits_t, buffer_traits_t, index_traits_t>;
-
-using vec_num_t = typename base_traits_t::vec_num_t;
-using vec_dim_t = typename base_traits_t::vec_dim_t;
-using dist_func_t = typename computer_traits_t::dist_func_t;
-using vector_array_t = typename computer_traits_t::vector_array_t;
-using vector_dataset_t = typename computer_traits_t::vector_dataset_t;
-using flat_graph_t = typename index_traits_t::flat_graph_t;
-using layer_config_t = typename index_traits_t::layer_config_t;
-using edges_builder_config_t = typename index_traits_t::conv_graph::edges_builder_config_t;
-using random_eg_t = typename edge_generator_traits_t::random_eg_t;
-
 struct BenchConfig {
     std::string config_path;
     std::string dataset_name;
     layer_config_t layer_config{32, 32};
-    edges_builder_config_t edges_builder_config{1.0, 0.0, 4, 14};
+    conv_graph::edges_builder_config_t edges_builder_config{1.0, 0.0, 4, 14};
     int64_t iterations;
 };
 

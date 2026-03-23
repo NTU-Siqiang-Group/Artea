@@ -53,8 +53,7 @@ template <
 >
 struct GraphFactoryTraits :
     public VertexGeneratorTraitsT,
-    public EdgeGeneratorTraitsT,
-    public RouterTraitsT
+    public EdgeGeneratorTraitsT
 {
     using graph_factory_traits_t = GraphFactoryTraits<VertexGeneratorTraitsT, EdgeGeneratorTraitsT, RouterTraitsT>;
 
