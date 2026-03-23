@@ -65,9 +65,8 @@ namespace cpu {
  *      * Returns true if closest unexplored > worst in top candidates (and queue is full)
  *
  * 5. Result Extraction:
- *    - extract_results(k): Returns top-k (vertex_id, distance) pairs sorted by distance
- *    - extract_result_ids(k): Returns top-k vertex IDs sorted by distance
- *    - Both methods may empty internal state (implementation-dependent)
+ *    - extract_results(k): Returns top-k result entries (knn_results_t) sorted by distance.
+ *      After calling this method, the candidate queue may be in an invalid state.
  *
  * @tparam CandidateQueueImpl The candidate queue type to check.
  */
@@ -104,13 +103,9 @@ std::constructible_from<CandidateQueueImpl, std::size_t> && requires(
         typename CandidateQueueImpl::vertex_id_t,
         typename CandidateQueueImpl::distance_t
     >>;
-    { queue.extract_results(std::declval<std::size_t>()) } -> std::same_as<std::vector<std::pair<
-        typename CandidateQueueImpl::vertex_id_t,
-        typename CandidateQueueImpl::distance_t
-    >>>;
-    { queue.extract_result_ids(std::declval<std::size_t>()) } -> std::same_as<std::vector<
-        typename CandidateQueueImpl::vertex_id_t
-    >>;
+    { queue.extract_results(std::declval<std::size_t>()) } -> std::same_as<
+        typename CandidateQueueImpl::knn_results_t
+    >;
     { queue.should_terminate() } -> std::convertible_to<bool>;
 
     // Initialization operations

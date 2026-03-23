@@ -232,7 +232,7 @@ private:
             return 0;
         }
 
-        return nearest_vertices[0];
+        return nearest_vertices[0].get_id();
     }
 };
 

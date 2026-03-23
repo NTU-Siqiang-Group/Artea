@@ -15,7 +15,7 @@
 /*
  * @FilePath: /Artea/include/artea/cpu/router/candidate_entry.hpp
  * @Author: Chandler (Weitang Ye) <weitang.ye@ntu.edu.sg>
- * @Description: Candidate entry structure for routing operations.
+ * @Description: Stateful candidate entry with embedded explored/unexplored status.
  */
 
 #pragma once
@@ -27,7 +27,21 @@
 namespace artea {
 namespace cpu {
 
-/** @brief Candidate entry structure for storing vertex ID and distance during routing. */
+/**
+ * @brief Stateful candidate entry with embedded explored/unexplored status.
+ *
+ * Design Philosophy:
+ * This structure embeds the explored/unexplored state directly into the vertex ID
+ * using the highest bit (bit 31), similar to the Neighbor structure. This eliminates
+ * the need for a separate bitmap and avoids the bitmap shift overhead when inserting
+ * elements into a sorted array.
+ *
+ * Bit Layout:
+ * - Bit 31: Explored status (1 = explored, 0 = unexplored)
+ * - Bits 0-30: Vertex ID (supports up to 2^31 - 1 vertices)
+ *
+ * @tparam RouterTraitsT Traits defining vertex types and distance types.
+ */
 template <typename RouterTraitsT>
 struct alignas(8) CandidateEntry {   // 8 bytes
 
@@ -45,13 +59,29 @@ struct alignas(8) CandidateEntry {   // 8 bytes
     static_assert(std::is_unsigned<vertex_num_t>::value, "vertex_num_t must be unsigned (e.g., uint32_t).");
     static_assert(sizeof(vec_ele_t) == 4, "vec_ele_t must be 4 bytes to keep struct size 8 bytes.");
 
-    /** @brief Vertex ID (full 32 bits available). */
-    vertex_id_t entry_id;     // 4 bytes
+    // Bit masks configuration:
+    // Bit 31: Explored/Unexplored status (1 = explored, 0 = unexplored)
+    // Bit 0-30: Vertex ID
+    static constexpr vertex_id_t MASK_STATUS_EXPLORED = 0x80000000; // 1000...
+    static constexpr vertex_id_t MASK_ID              = 0x7FFFFFFF; // 0111...
+
+    /** @brief Vertex ID and explored status packed into a single 32-bit type.
+      * @note Bit 31: 1 = "explored", 0 = "unexplored".
+      * @note Bits 0-30: Vertex ID. Available range: [0, 2^31 - 1].
+      */
+    vertex_id_t entry_id_and_status;     // 4 bytes
 
     /** @brief Distance to the candidate entry. */
     distance_t distance;      // 4 bytes
 
-    constexpr CandidateEntry() : entry_id(invalid_vertex_id), distance(0.0) {}
+private:
+    /** @brief Helper function to compute entry_id_and_status value with status flag. */
+    static constexpr auto compute_id_and_status(vertex_id_t entry_id, bool is_explored) -> vertex_id_t {
+        return is_explored ? ((entry_id & MASK_ID) | MASK_STATUS_EXPLORED) : (entry_id & MASK_ID);
+    }
+
+public:
+    constexpr CandidateEntry() : entry_id_and_status(invalid_vertex_id), distance(0.0) {}
 
     constexpr CandidateEntry(const CandidateEntry&) = default;
     constexpr CandidateEntry& operator=(const CandidateEntry&) = default;
@@ -59,11 +89,18 @@ struct alignas(8) CandidateEntry {   // 8 bytes
     CandidateEntry& operator=(CandidateEntry&&) = default;
     ~CandidateEntry() = default;
 
-    /** @brief Create a new CandidateEntry with given ID and distance. */
+    /** @brief Create a new CandidateEntry with given ID and distance (unexplored by default). */
     constexpr CandidateEntry(
         const vertex_id_t entry_id,
         const distance_t distance
-    ) : entry_id(entry_id), distance(distance) {}
+    ) : entry_id_and_status(entry_id & MASK_ID), distance(distance) {}
+
+    /** @brief Create a new CandidateEntry with given ID, distance, and explored status. */
+    constexpr CandidateEntry(
+        const vertex_id_t entry_id,
+        const distance_t distance,
+        const bool is_explored
+    ) : entry_id_and_status(compute_id_and_status(entry_id, is_explored)), distance(distance) {}
 
     static constexpr auto make_invalid_entry() -> CandidateEntry {
         return CandidateEntry(invalid_vertex_id, max_distance);
@@ -74,7 +111,7 @@ struct alignas(8) CandidateEntry {   // 8 bytes
         return CandidateEntry(invalid_vertex_id, min_distance);
     }
 
-    /** @brief Create a new CandidateEntry with given ID and distance. */
+    /** @brief Create a new CandidateEntry with given ID and distance (unexplored by default). */
     __attribute__((always_inline))
     static auto make_entry(
         const vertex_id_t entry_id,
@@ -83,16 +120,41 @@ struct alignas(8) CandidateEntry {   // 8 bytes
         return CandidateEntry{entry_id, distance};
     }
 
-    /** @brief Get the entry ID. */
+    /** @brief Get the entry ID masking out status bit (Bit 31). */
     __attribute__((always_inline))
     auto get_id() const -> vertex_id_t {
-        return entry_id;
+        return static_cast<vertex_id_t>(entry_id_and_status & MASK_ID);
     }
 
-    /** @brief Set the entry ID. */
+    /** @brief Check if the entry is marked as "explored" (Bit 31 is set). */
     __attribute__((always_inline))
-    auto set_id(const vertex_id_t vid) -> void {
-        entry_id = vid;
+    auto is_explored() const -> bool {
+        return (entry_id_and_status & MASK_STATUS_EXPLORED) != 0;
+    }
+
+    /** @brief Check if the entry is marked as "unexplored" (Bit 31 is unset). */
+    __attribute__((always_inline))
+    auto is_unexplored() const -> bool {
+        return (entry_id_and_status & MASK_STATUS_EXPLORED) == 0;
+    }
+
+    /** @brief Mark the entry as "explored" by setting Bit 31. */
+    __attribute__((always_inline))
+    auto mark_as_explored() -> void {
+        entry_id_and_status |= MASK_STATUS_EXPLORED;
+    }
+
+    /** @brief Mark the entry as "unexplored" by clearing Bit 31. */
+    __attribute__((always_inline))
+    auto mark_as_unexplored() -> void {
+        entry_id_and_status &= (~MASK_STATUS_EXPLORED);
+    }
+
+    /** @brief Set the explored/unexplored status. */
+    __attribute__((always_inline))
+    auto set_explored_status(const bool is_explored) -> void {
+        if (is_explored) mark_as_explored();
+        else mark_as_unexplored();
     }
 
     /** @brief Get the distance to the candidate entry. */

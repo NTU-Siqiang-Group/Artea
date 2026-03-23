@@ -49,13 +49,11 @@ class HierarchicalGraphRouter<RouterTraitsT, GraphModeT::search_mode> :
     using dist_func_t = typename RouterTraitsT::dist_func_t;
     using vector_array_t = typename RouterTraitsT::vector_array_t;
     using query_vecs_t = typename RouterTraitsT::query_vecs_t;
-    using idlist_array_t = typename RouterTraitsT::idlist_array_t;
-    using flat_search_graph_t = typename RouterTraitsT::flat_search_graph_t;
     using hierarchical_search_graph_t = typename RouterTraitsT::hierarchical_search_graph_t;
-    using inter_layer_links_t = typename RouterTraitsT::inter_layer_links_t;
     using candidate_queue_t = typename RouterTraitsT::candidate_queue_t;
     using visited_table_t = typename RouterTraitsT::visited_table_t;
     using visited_table_pool_t = typename RouterTraitsT::visited_table_pool_t;
+    using knn_results_t = typename RouterTraitsT::knn_results_t;
     using base_class_t = typename RouterTraitsT::template vector_router_t<HierarchicalGraphRouter<RouterTraitsT, GraphModeT::search_mode>>;
 
     static constexpr vertex_num_t min_num_layer_vertex = RouterTraitsT::min_num_layer_vertex;
@@ -87,23 +85,25 @@ public:
     /**
      * @brief Query the top-k nearest vertices using hierarchical graph.
      * @param query_vec Pointer to the query vector data.
-     * @return std::vector<vertex_id_t> Vector containing the IDs of the top-k nearest vertices.
+     * @return knn_results_t Flat array of topk result entries sorted by distance.
      */
     __attribute__((always_inline))
-    auto query_impl(const vec_ele_t* query_vec) const -> std::vector<vertex_id_t> {
+    auto query_impl(const vec_ele_t* query_vec) const -> knn_results_t {
         auto& visited_table = _visited_table_pool.acquire();
-        std::vector<vertex_id_t> result_ids = _hierarchical_search(query_vec, visited_table);
-        return result_ids;
+        return _hierarchical_search(query_vec, visited_table);
     }
 
     /**
      * @brief Perform batch queries to find the top-k nearest vertices for multiple vectors.
      * @param query_vecs A VectorArray containing the query vectors.
-     * @return idlist_array_t Array with num_vecs=num_queries, dim=topk where each vector contains the top-k IDs for one query.
+     * @return knn_results_t Flat array of num_queries * topk result entries in row-major order.
      */
-    auto batch_query_impl(const query_vecs_t& query_vecs) const -> idlist_array_t {
+    auto batch_query_impl(const query_vecs_t& query_vecs) const -> knn_results_t {
         const vertex_num_t num_queries = query_vecs.get_num_vecs();
-        idlist_array_t results(num_queries, this->_topk);
+        const uint32_t K = this->_topk;
+
+        // Pre-allocate flat result array (num_queries * K entries)
+        knn_results_t results(num_queries * K);
 
         tbb::parallel_for(
             tbb::blocked_range<vertex_num_t>(0, num_queries),
@@ -112,7 +112,7 @@ public:
                 for (vertex_num_t i = r.begin(); i != r.end(); ++i) {
                     const vec_ele_t* q_vec = query_vecs.get(i);
                     auto topk_results = _hierarchical_search(q_vec, visited);
-                    results.set(i, topk_results.data());
+                    std::copy(topk_results.begin(), topk_results.end(), results.begin() + i * K);
                     visited.clear();
                 }
             }
@@ -131,7 +131,7 @@ private:
     auto _hierarchical_search(
         const vec_ele_t* query_vec,
         visited_table_t& visited_table
-    ) const -> std::vector<vertex_id_t> {
+    ) const -> knn_results_t {
         const layer_num_t num_layers = _hierarchical_search_graph.get_num_layers();
         const layer_id_t top_layer_id = num_layers - 1;
 
@@ -169,7 +169,7 @@ private:
         );
 
         // Extract top-k results
-        return candidate_queue.extract_result_ids(this->_topk);
+        return candidate_queue.extract_results(this->_topk);
     }
 
     /**

@@ -109,7 +109,7 @@ auto run_benchmark(
 ) -> BenchmarkResult {
     auto start_time = std::chrono::high_resolution_clock::now();
 
-    idlist_array_t results = router.batch_query(query_vecs);
+    knn_results_t results = router.batch_query(query_vecs);
 
     auto end_time = std::chrono::high_resolution_clock::now();
     auto duration = std::chrono::duration_cast<std::chrono::microseconds>(end_time - start_time);
@@ -122,7 +122,9 @@ auto run_benchmark(
     recall_estimator_t recall_estimator;
     result.recall = recall_estimator.calculate_recall_at_k(
         results,
-        groundtruth
+        groundtruth,
+        topk,
+        query_vecs.get_num_vecs()
     );
 
     return result;

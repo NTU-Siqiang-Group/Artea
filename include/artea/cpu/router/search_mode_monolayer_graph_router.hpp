@@ -49,12 +49,12 @@ class MonolayerGraphRouter<RouterTraitsT, GraphModeT::search_mode> :
     using dist_func_t = typename RouterTraitsT::dist_func_t;
     using vector_array_t = typename RouterTraitsT::vector_array_t;
     using query_vecs_t = typename RouterTraitsT::query_vecs_t;
-    using idlist_array_t = typename RouterTraitsT::idlist_array_t;
     using flat_search_graph_t = typename RouterTraitsT::flat_search_graph_t;
     using random_seq_t = typename RouterTraitsT::random_seq_t;
     using candidate_queue_t = typename RouterTraitsT::candidate_queue_t;
     using visited_table_t = typename RouterTraitsT::visited_table_t;
     using visited_table_pool_t = typename RouterTraitsT::visited_table_pool_t;
+    using knn_results_t = typename RouterTraitsT::knn_results_t;
     using base_class_t = typename RouterTraitsT::template vector_router_t<MonolayerGraphRouter<RouterTraitsT, GraphModeT::search_mode>>;
 
 public:
@@ -87,50 +87,40 @@ public:
     /**
      * @brief Query the top-k nearest vertices using proximity graph.
      * @param query_vec Pointer to the query vector data.
-     * @return std::vector<vertex_id_t> Vector containing the IDs of the top-k nearest vertices.
+     * @return knn_results_t Flat array of topk result entries sorted by distance.
      */
     __attribute__((always_inline))
-    auto query_impl(const vec_ele_t* query_vec) const -> std::vector<vertex_id_t> {
+    auto query_impl(const vec_ele_t* query_vec) const -> knn_results_t {
         auto& visited_table = _visited_table_pool.acquire();
-        std::vector<vertex_id_t> result_ids = _beam_search(
-            query_vec,
-            visited_table,
-            _random_seq
-        );
-        return result_ids;
+        return _beam_search(query_vec, visited_table, _random_seq);
     }
 
     /**
      * @brief Query the top-k nearest vertices using proximity graph with an entry point.
      * @param query_vec Pointer to the query vector data.
      * @param entry_point Starting vertex ID for the search.
-     * @return std::vector<vertex_id_t> Vector containing the IDs of the top-k nearest vertices.
+     * @return knn_results_t Flat array of topk result entries sorted by distance.
      */
     __attribute__((always_inline))
-    auto query_impl(const vec_ele_t* query_vec, const vertex_id_t entry_point) const -> std::vector<vertex_id_t> {
+    auto query_impl(const vec_ele_t* query_vec, const vertex_id_t entry_point) const -> knn_results_t {
         auto& visited_table = _visited_table_pool.acquire();
-        std::vector<vertex_id_t> result_ids = _beam_search(
-            query_vec,
-            visited_table,
-            entry_point
-        );
-        return result_ids;
+        return _beam_search(query_vec, visited_table, entry_point);
     }
 
     /**
      * @brief Perform batch queries to find the top-k nearest vertices for multiple vectors.
      *
      * This implementation always parallelizes the batch processing (Inter-query parallelism) using TBB.
-     * Results are stored as vectors: each query's k nearest neighbors form a single vector.
      *
      * @param query_vecs A VectorArray containing the query vectors.
-     * @return idlist_array_t Array with num_vecs=num_queries, dim=topk where each vector contains the top-k IDs for one query.
+     * @return knn_results_t Flat array of num_queries * topk result entries in row-major order.
      */
-    auto batch_query_impl(const query_vecs_t& query_vecs) const -> idlist_array_t {
+    auto batch_query_impl(const query_vecs_t& query_vecs) const -> knn_results_t {
         const vertex_num_t num_queries = query_vecs.get_num_vecs();
+        const uint32_t K = this->_topk;
 
-        // Pre-allocate the result container (num_queries vectors, each with dimension = topk)
-        idlist_array_t results(num_queries, this->_topk);
+        // Pre-allocate flat result array (num_queries * K entries)
+        knn_results_t results(num_queries * K);
 
         tbb::parallel_for(
             // Range: Iterate over all query vectors
@@ -141,10 +131,10 @@ public:
                 auto& visited = _visited_table_pool.acquire();
                 for (vertex_num_t i = r.begin(); i != r.end(); ++i) {
                     const vec_ele_t* q_vec = query_vecs.get(i);
-                    // Call query_impl to get top-k results (returns std::vector<vertex_id_t>)
+                    // Call query_impl to get top-k results
                     auto topk_results = this->query_impl(q_vec);
-                    // Store results using VectorArray's set interface
-                    results.set(i, topk_results.data());
+                    // Store results into flat array at row i
+                    std::copy(topk_results.begin(), topk_results.end(), results.begin() + i * K);
                     visited.clear();
                 }
             }
@@ -154,20 +144,20 @@ public:
     }
 
     /**
-     * @brief Perform batch queries with a shared entry point to find the top-k nearest vertices for multiple vectors.
+     * @brief Perform batch queries with a shared entry point.
      *
      * This implementation always parallelizes the batch processing (Inter-query parallelism) using TBB.
-     * Results are stored as vectors: each query's k nearest neighbors form a single vector.
      *
      * @param query_vecs A VectorArray containing the query vectors.
      * @param entry_point Shared entry point vertex ID for all queries.
-     * @return idlist_array_t Array with num_vecs=num_queries, dim=topk where each vector contains the top-k IDs for one query.
+     * @return knn_results_t Flat array of num_queries * topk result entries in row-major order.
      */
-    auto batch_query_impl(const query_vecs_t& query_vecs, const vertex_id_t entry_point) const -> idlist_array_t {
+    auto batch_query_impl(const query_vecs_t& query_vecs, const vertex_id_t entry_point) const -> knn_results_t {
         const vertex_num_t num_queries = query_vecs.get_num_vecs();
+        const uint32_t K = this->_topk;
 
-        // Pre-allocate the result container (num_queries vectors, each with dimension = topk)
-        idlist_array_t results(num_queries, this->_topk);
+        // Pre-allocate flat result array (num_queries * K entries)
+        knn_results_t results(num_queries * K);
 
         tbb::parallel_for(
             // Range: Iterate over all query vectors
@@ -180,8 +170,8 @@ public:
                     const vec_ele_t* q_vec = query_vecs.get(i);
                     // Call beam_search with shared entry point
                     auto topk_results = _beam_search(q_vec, visited, entry_point);
-                    // Store results using VectorArray's set interface
-                    results.set(i, topk_results.data());
+                    // Store results into flat array at row i
+                    std::copy(topk_results.begin(), topk_results.end(), results.begin() + i * K);
                     visited.clear();
                 }
             }
@@ -202,8 +192,7 @@ private:
         const vec_ele_t* query_vec,
         visited_table_t& visited_table,
         const vertex_id_t entry_point
-    ) const -> std::vector<vertex_id_t> {
-        using candidate_entry_t = typename RouterTraitsT::candidate_entry_t;
+    ) const -> knn_results_t {
 
         // Initialize candidate queue with capacity = max(topk, _candidate_queue_size)
         const vertex_num_t queue_capacity = std::max(this->_topk, _candidate_queue_size);
@@ -243,7 +232,7 @@ private:
         }
 
         // Extract top-k result IDs from candidate queue
-        return candidate_queue.extract_result_ids(this->_topk);
+        return candidate_queue.extract_results(this->_topk);
     }
 
     /**
@@ -259,8 +248,7 @@ private:
         const vec_ele_t* query_vec,
         visited_table_t& visited_table,
         random_seq_t& random_seq
-    ) const -> std::vector<vertex_id_t> {
-        using candidate_entry_t = typename RouterTraitsT::candidate_entry_t;
+    ) const -> knn_results_t {
 
         // Initialize candidate queue with capacity = max(topk, _candidate_queue_size)
         const vertex_num_t queue_capacity = std::max(this->_topk, _candidate_queue_size);
@@ -307,7 +295,7 @@ private:
         }
 
         // Extract top-k result IDs from candidate queue
-        return candidate_queue.extract_result_ids(this->_topk);
+        return candidate_queue.extract_results(this->_topk);
     }
 
     /**

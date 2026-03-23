@@ -57,6 +57,7 @@ class ConvGraphFactory :
     using propagate_engine_t = typename GraphFactoryTraitsT::template propagate_engine_t<false>;
     using triangle_updater_t = typename GraphFactoryTraitsT::triangle_updater_t;
     using reverse_updater_t = typename GraphFactoryTraitsT::reverse_updater_t;
+    using routing_updater_t = typename GraphFactoryTraitsT::routing_updater_t;
     using vector_array_t = typename GraphFactoryTraitsT::vector_array_t;
     using query_vecs_t = typename GraphFactoryTraitsT::query_vecs_t;
     using ground_truth_t = typename GraphFactoryTraitsT::ground_truth_t;
@@ -83,7 +84,10 @@ public:
 
         // generate random edges first
         random_eg_t random_eg(dist_func);
-        random_eg.generate(flat_graph, /* init_nbr_size = */ layer_config.max_nbr_size());
+        const vertex_num_t init_nbr_size = static_cast<vertex_num_t>(
+            layer_config.max_nbr_size() * edges_builder_config.prefill_ratio()
+        );
+        random_eg.generate(flat_graph, /* init_nbr_size = */ init_nbr_size);
         propagate_engine_t propagate_engine(num_vertices, dist_func);
         propagate_engine.set_graph(flat_graph);
         // Create triangle updater and reverse updater
@@ -92,6 +96,10 @@ public:
             edges_builder_config.shifted_coeffs()
         );
         auto reverse_updater = propagate_engine.template make_updater<reverse_updater_t>();
+        auto routing_updater = propagate_engine.template make_updater<routing_updater_t>(
+            layer_config.max_nbr_size(),
+            layer_config.max_nbr_size()
+        );
         // run propagation engine to refine the graph
         for (iter_t outer_iter = 0; outer_iter < edges_builder_config.num_outer_iters(); ++outer_iter) {
             // propagate_engine.run(1, reverse_updater);
@@ -99,6 +107,7 @@ public:
             // if (outer_iter != edges_builder_config.num_outer_iters() - 1) {
             //     propagate_engine.run(1, reverse_updater);
             // }
+            propagate_engine.run(1, routing_updater);
             propagate_engine.run(1, reverse_updater);
             if (outer_iter == edges_builder_config.num_outer_iters() - 1) {
                 propagate_engine.run(1, triangle_updater, false);
@@ -123,7 +132,9 @@ public:
         dist_func_t dist_func(base_vecs.get_vec_dim());
 
         random_eg_t random_eg(dist_func);
-        random_eg.generate(flat_graph, layer_config.max_nbr_size());
+        random_eg.generate(flat_graph, static_cast<vertex_num_t>(
+            layer_config.max_nbr_size() * edges_builder_config.prefill_ratio()
+        ));
         propagate_engine_t propagate_engine(num_vertices, dist_func);
         propagate_engine.set_graph(flat_graph);
         auto triangle_updater = propagate_engine.template make_updater<triangle_updater_t>(
@@ -131,6 +142,10 @@ public:
             edges_builder_config.shifted_coeffs()
         );
         auto reverse_updater = propagate_engine.template make_updater<reverse_updater_t>();
+        auto routing_updater = propagate_engine.template make_updater<routing_updater_t>(
+            layer_config.max_nbr_size(),
+            layer_config.max_nbr_size()
+        );
 
         recall_estimator_t recall_estimator;
         const vertex_num_t topk = groundtruth.get_vec_dim();
@@ -140,6 +155,7 @@ public:
         for (iter_t outer_iter = 0; outer_iter < edges_builder_config.num_outer_iters(); ++outer_iter) {
             propagate_engine.run(edges_builder_config.num_inner_iters(), triangle_updater);
             propagate_engine.run(1, reverse_updater);
+            propagate_engine.run(1, routing_updater);
             if (outer_iter == edges_builder_config.num_outer_iters() - 1) {
                 propagate_engine.run(1, triangle_updater, false);
             }
@@ -149,7 +165,7 @@ public:
             auto t1 = std::chrono::high_resolution_clock::now();
             double qps = query_vecs.get_num_vecs() * 1e6 /
                 std::chrono::duration_cast<std::chrono::microseconds>(t1 - t0).count();
-            double recall = recall_estimator.calculate_recall_at_k(results, groundtruth);
+            double recall = recall_estimator.calculate_recall_at_k(results, groundtruth, topk, query_vecs.get_num_vecs());
 
             ARTEA_INFO(fmt::format(
                 "OuterIter {}: Recall@{}={:.4f}, QPS={:.2f}",

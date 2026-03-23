@@ -39,7 +39,7 @@ class VectorRouter {
     using dist_func_t = typename RouterTraitsT::dist_func_t;
     using vector_array_t = typename RouterTraitsT::vector_array_t;
     using query_vecs_t = typename RouterTraitsT::query_vecs_t;
-    using idlist_array_t = typename RouterTraitsT::idlist_array_t;
+    using knn_results_t = typename RouterTraitsT::knn_results_t;
 
 public:
 
@@ -67,10 +67,10 @@ public:
      * @brief Query the top-k nearest vertices for a single vector.
      *
      * @param query_vec Pointer to the query vector data.
-     * @return std::vector<vertex_id_t> Vector containing the IDs of the top-k nearest vertices.
+     * @return knn_results_t Flat array of topk result entries sorted by distance.
      */
     __attribute__((always_inline))
-    auto query(const vec_ele_t* query_vec) const -> std::vector<vec_id_t> {
+    auto query(const vec_ele_t* query_vec) const -> knn_results_t {
         return static_cast<const DerivedClassT*>(this)->query_impl(query_vec);
     }
 
@@ -79,10 +79,10 @@ public:
      *
      * @param query_vec Pointer to the query vector data.
      * @param entry_point Starting vertex ID for the search.
-     * @return std::vector<vertex_id_t> Vector containing the IDs of the top-k nearest vertices.
+     * @return knn_results_t Flat array of topk result entries sorted by distance.
      */
     __attribute__((always_inline))
-    auto query(const vec_ele_t* query_vec, const vec_id_t entry_point) const -> std::vector<vec_id_t> {
+    auto query(const vec_ele_t* query_vec, const vec_id_t entry_point) const -> knn_results_t {
         return static_cast<const DerivedClassT*>(this)->query_impl(query_vec, entry_point);
     }
 
@@ -90,22 +90,22 @@ public:
      * @brief Perform batch queries to find the top-k nearest vertices for multiple vectors.
      *
      * @param query_vecs A VectorArray containing the query vectors.
-     * @return idlist_array_t Array with num_vecs=num_queries, dim=topk where each vector contains the top-k IDs for one query.
+     * @return knn_results_t Flat array of num_queries * topk result entries in row-major order.
      */
     __attribute__((always_inline))
-    auto batch_query(const query_vecs_t& query_vecs) const -> idlist_array_t {
+    auto batch_query(const query_vecs_t& query_vecs) const -> knn_results_t {
         return static_cast<const DerivedClassT*>(this)->batch_query_impl(query_vecs);
     }
 
     /**
-     * @brief Perform batch queries with a shared entry point to find the top-k nearest vertices for multiple vectors.
+     * @brief Perform batch queries with a shared entry point.
      *
      * @param query_vecs A VectorArray containing the query vectors.
      * @param entry_point Shared entry point vertex ID for all queries.
-     * @return idlist_array_t Array with num_vecs=num_queries, dim=topk where each vector contains the top-k IDs for one query.
+     * @return knn_results_t Flat array of num_queries * topk result entries in row-major order.
      */
     __attribute__((always_inline))
-    auto batch_query(const query_vecs_t& query_vecs, const vec_id_t entry_point) const -> idlist_array_t {
+    auto batch_query(const query_vecs_t& query_vecs, const vec_id_t entry_point) const -> knn_results_t {
         return static_cast<const DerivedClassT*>(this)->batch_query_impl(query_vecs, entry_point);
     }
 

@@ -141,7 +141,7 @@ TEST_F(ConvGraphQualityTest, QueryRecall) {
         router.initialize();
 
         auto t0 = std::chrono::high_resolution_clock::now();
-        idlist_array_t results = router.batch_query(query_vecs);
+        knn_results_t results = router.batch_query(query_vecs);
         auto t1 = std::chrono::high_resolution_clock::now();
         auto us = std::chrono::duration_cast<std::chrono::microseconds>(t1 - t0).count();
 
@@ -149,7 +149,7 @@ TEST_F(ConvGraphQualityTest, QueryRecall) {
         result.candidate_queue_size = queue_size;
         result.avg_query_time_us = static_cast<double>(us) / query_vecs.get_num_vecs();
         result.throughput_qps = query_vecs.get_num_vecs() * 1e6 / us;
-        result.recall = recall_estimator.calculate_recall_at_k(results, groundtruth);
+        result.recall = recall_estimator.calculate_recall_at_k(results, groundtruth, g_config.topk, query_vecs.get_num_vecs());
         g_test_results.query_results.push_back(result);
 
         logger.info(fmt::format("CandidateQueue={:3}: Recall@{}={:.4f}, QPS={:8.2f}, AvgTime={:.2f}us",
@@ -175,6 +175,7 @@ int main(int argc, char** argv) {
     program.add_argument("--shifted-coeffs").default_value(0.0f).scan<'g', float>();
     program.add_argument("--num-outer-iters").default_value(4u).scan<'u', uint32_t>();
     program.add_argument("--num-inner-iters").default_value(14u).scan<'u', uint32_t>();
+    program.add_argument("--prefill-ratio").default_value(0.6f).scan<'g', float>();
     program.add_argument("-k", "--topk").default_value(20u).scan<'u', uint32_t>();
     program.add_argument("--candidate-queue-config")
         .default_value(std::string("40,100,20"))
@@ -198,7 +199,8 @@ int main(int argc, char** argv) {
         program.get<float>("--scale-coeffs"),
         program.get<float>("--shifted-coeffs"),
         program.get<uint32_t>("--num-outer-iters"),
-        program.get<uint32_t>("--num-inner-iters")
+        program.get<uint32_t>("--num-inner-iters"),
+        program.get<float>("--prefill-ratio")
     );
     g_config.extracted_nbr_size = program.get<uint32_t>("--extracted-nbr-size");
     g_config.topk = program.get<uint32_t>("--topk");

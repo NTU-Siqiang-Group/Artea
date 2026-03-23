@@ -70,7 +70,6 @@
 #include <artea/cpu/router/construct_mode_monolayer_graph_router.hpp>
 #include <artea/cpu/router/construct_mode_hierarchical_graph_router.hpp>
 #include <artea/cpu/router/data_structures/candidate_entry.hpp>
-#include <artea/cpu/router/data_structures/stateful_candidate_entry.hpp>
 #include <artea/cpu/router/candidate_queue_concept.hpp>
 #include <artea/cpu/router/visited_table_concept.hpp>
 #include <artea/cpu/router/data_structures/visited_table_pool.hpp>

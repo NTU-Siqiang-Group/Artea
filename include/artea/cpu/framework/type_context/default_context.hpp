@@ -142,7 +142,8 @@ using eg_policy_t = typename graph_factory_traits_t::eg_policy_t;
 
 // Router types from RouterTraits
 using candidate_entry_t = typename router_traits_t::candidate_entry_t;
-using stateful_candidate_entry_t = typename router_traits_t::stateful_candidate_entry_t;
+using result_entry_t = typename router_traits_t::result_entry_t;
+using knn_results_t = typename router_traits_t::knn_results_t;
 using std_candidate_queue_t = typename router_traits_t::std_candidate_queue_t;
 using linear_candidate_queue_t = typename router_traits_t::linear_candidate_queue_t;
 using fh_candidate_queue_t = typename router_traits_t::fh_candidate_queue_t;

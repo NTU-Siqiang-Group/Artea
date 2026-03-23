@@ -136,6 +136,96 @@ public:
         return recall;
     }
 
+    /**
+     * @brief Calculate Recall@K from a flat knn_results_t array.
+     *
+     * @param predictions Flat array of num_queries * topk result entries in row-major order.
+     * @param gt_vecs Ground truth vector array (stores IDs).
+     * @param topk Number of nearest neighbors per query.
+     * @param num_queries Number of queries.
+     * @return double Recall@K score.
+     */
+    template <typename ResultEntryT>
+    auto calculate_recall_at_k(
+        const std::vector<ResultEntryT>& predictions,
+        const idlist_array_t& gt_vecs,
+        std::size_t topk,
+        std::size_t num_queries
+    ) const -> double {
+        const std::size_t k = topk;
+
+        if (predictions.size() != num_queries * k) {
+            ARTEA_ERROR(fmt::format(
+                "Predictions size mismatch: expected {}*{}={}, got {}",
+                num_queries, k, num_queries * k, predictions.size()
+            ));
+            return 0.0;
+        }
+
+        if (gt_vecs.get_vec_dim() < k) {
+            ARTEA_ERROR(fmt::format(
+                "Ground truth dimension {} is less than k={}",
+                gt_vecs.get_vec_dim(), k
+            ));
+            return 0.0;
+        }
+
+        // Thread-local buffers pre-allocated based on K
+        struct ThreadLocalBuffers {
+            std::vector<vertex_id_t> sorted_gt;
+            std::vector<vertex_id_t> sorted_pred;
+            std::vector<vertex_id_t> intersect_cache;
+
+            explicit ThreadLocalBuffers(std::size_t k) {
+                sorted_gt.reserve(k);
+                sorted_pred.reserve(k);
+                intersect_cache.resize(k);
+            }
+        };
+
+        tbb::enumerable_thread_specific<ThreadLocalBuffers> thread_buffers([k]() {
+            return ThreadLocalBuffers(k);
+        });
+
+        std::size_t total_matches = tbb::parallel_reduce(
+            tbb::blocked_range<std::size_t>(0, num_queries),
+            std::size_t(0),
+            [&](const tbb::blocked_range<std::size_t>& r, std::size_t local_matches) -> std::size_t {
+                auto& buffers = thread_buffers.local();
+
+                for (std::size_t i = r.begin(); i != r.end(); ++i) {
+                    const vertex_id_t* gt_vec = gt_vecs.get(i);
+                    const ResultEntryT* pred_row = predictions.data() + i * k;
+
+                    buffers.sorted_gt.assign(gt_vec, gt_vec + k);
+                    std::sort(buffers.sorted_gt.begin(), buffers.sorted_gt.end());
+
+                    buffers.sorted_pred.resize(k);
+                    for (std::size_t j = 0; j < k; ++j) {
+                        buffers.sorted_pred[j] = pred_row[j].get_id();
+                    }
+                    std::sort(buffers.sorted_pred.begin(), buffers.sorted_pred.end());
+
+                    auto pred_end = std::unique(buffers.sorted_pred.begin(), buffers.sorted_pred.end());
+
+                    auto intersect_end = std::set_intersection(
+                        buffers.sorted_gt.begin(), buffers.sorted_gt.end(),
+                        buffers.sorted_pred.begin(), pred_end,
+                        buffers.intersect_cache.begin()
+                    );
+
+                    local_matches += std::distance(buffers.intersect_cache.begin(), intersect_end);
+                }
+                return local_matches;
+            },
+            [](std::size_t a, std::size_t b) -> std::size_t {
+                return a + b;
+            }
+        );
+
+        return static_cast<double>(total_matches) / (num_queries * k);
+    }
+
 };  // class RecallEstimator
 
 }   // namespace cpu

@@ -26,8 +26,6 @@
 #include <cstdint>
 #include <vector>
 #include <utility>
-#include <numeric>
-#include <limits>
 #include <tbb/parallel_for.h>
 #include <tbb/parallel_reduce.h>
 #include <tbb/blocked_range.h>
@@ -39,13 +37,14 @@ template <typename RouterTraitsT>
 class BruteforceRouter :
     public RouterTraitsT::template vector_router_t<BruteforceRouter<RouterTraitsT>>
 {
-    using vec_num_t = typename RouterTraitsT::vec_num_t;
-    using vec_id_t = typename RouterTraitsT::vec_id_t;
+    using vertex_num_t = typename RouterTraitsT::vertex_num_t;
+    using vertex_id_t = typename RouterTraitsT::vertex_id_t;
     using vec_ele_t = typename RouterTraitsT::vec_ele_t;
     using distance_t = typename RouterTraitsT::distance_t;
     using dist_func_t = typename RouterTraitsT::dist_func_t;
     using vector_array_t = typename RouterTraitsT::vector_array_t;
-    using idlist_array_t = typename RouterTraitsT::idlist_array_t;
+    using result_entry_t = typename RouterTraitsT::result_entry_t;
+    using knn_results_t = typename RouterTraitsT::knn_results_t;
     using base_class_t = typename RouterTraitsT::template vector_router_t<BruteforceRouter<RouterTraitsT>>;
 
     static constexpr bool intra_query_parallel = RouterTraitsT::intra_query_parallel;
@@ -70,35 +69,29 @@ public:
      * @param query_vec Pointer to the query vector data.
      * @return std::vector<vec_id_t> Vector containing the IDs of the top-k nearest vertices.
      */
-    auto query_impl(const vec_ele_t* query_vec) const -> std::vector<vec_id_t> {
-        // Create a vector to store (vertex_id, distance) pairs
-        std::vector<std::pair<vec_id_t, distance_t>> id_dist_pairs;
-        id_dist_pairs.reserve(this->_num_vecs);
+    auto query_impl(const vec_ele_t* query_vec) const -> knn_results_t {
+        const uint32_t k = std::min(this->_topk, static_cast<uint32_t>(this->_num_vecs));
 
         // Compute distances for all vertices
-        for (vec_id_t vid = 0; vid < this->_num_vecs; ++vid) {
-            const vec_ele_t* vec = this->_vecs_data.get(vid);
-            distance_t dist = this->_dist_func(query_vec, vec);
-            id_dist_pairs.emplace_back(vid, dist);
+        knn_results_t all_results;
+        all_results.reserve(this->_num_vecs);
+        for (vertex_id_t vid = 0; vid < this->_num_vecs; ++vid) {
+            distance_t dist = this->_dist_func(query_vec, this->_vecs_data.get(vid));
+            all_results.emplace_back(vid, dist);
         }
 
         // Partial sort to get top-k smallest distances
-        const uint32_t k = std::min(this->_topk, static_cast<uint32_t>(this->_num_vecs));
         std::partial_sort(
-            id_dist_pairs.begin(),
-            id_dist_pairs.begin() + k,
-            id_dist_pairs.end(),
-            [](const auto& a, const auto& b) { return a.second < b.second; }
+            all_results.begin(),
+            all_results.begin() + k,
+            all_results.end(),
+            [](const result_entry_t& a, const result_entry_t& b) {
+                return a.get_distance() < b.get_distance();
+            }
         );
 
-        // Extract vertex IDs
-        std::vector<vec_id_t> results;
-        results.reserve(k);
-        for (uint32_t i = 0; i < k; ++i) {
-            results.push_back(id_dist_pairs[i].first);
-        }
-
-        return results;
+        all_results.resize(k);
+        return all_results;
     }
 
     /**
@@ -110,7 +103,7 @@ public:
      * @param entry_point Starting vertex ID (ignored for bruteforce).
      * @return std::vector<vec_id_t> Vector containing the IDs of the top-k nearest vertices.
      */
-    auto query_impl(const vec_ele_t* query_vec, const vec_id_t entry_point) const -> std::vector<vec_id_t> {
+    auto query_impl(const vec_ele_t* query_vec, const vertex_id_t entry_point) const -> knn_results_t {
         // For bruteforce, entry point doesn't matter - just delegate to standard implementation
         return query_impl(query_vec);
     }
@@ -122,27 +115,28 @@ public:
      * Results are stored as vectors: each query's k nearest neighbors form a single vector.
      *
      * @param query_vecs A VectorArray containing the query vectors.
-     * @return idlist_array_t Array with num_vecs=num_queries, dim=topk where each vector contains the top-k IDs for one query.
+     * @return knn_results_t Flat array of num_queries * topk result entries in row-major order.
      */
-    auto batch_query_impl(const typename RouterTraitsT::query_vecs_t& query_vecs) const -> idlist_array_t {
-        const vec_num_t num_queries = query_vecs.get_num_vecs();
+    auto batch_query_impl(const typename RouterTraitsT::query_vecs_t& query_vecs) const -> knn_results_t {
+        const vertex_num_t num_queries = query_vecs.get_num_vecs();
+        const uint32_t K = this->_topk;
 
-        // Pre-allocate the result container (num_queries vectors, each with dimension = topk)
-        idlist_array_t results(num_queries, this->_topk);
+        // Pre-allocate flat result array (num_queries * K entries)
+        knn_results_t results(num_queries * K);
 
         tbb::parallel_for(
             // Range: Iterate over all query vectors
-            tbb::blocked_range<vec_num_t>(0, num_queries),
+            tbb::blocked_range<vertex_num_t>(0, num_queries),
 
             // Processor for a sub-range of queries
-            [&](const tbb::blocked_range<vec_num_t>& r) {
-                for (vec_num_t i = r.begin(); i != r.end(); ++i) {
+            [&](const tbb::blocked_range<vertex_num_t>& r) {
+                for (vertex_num_t i = r.begin(); i != r.end(); ++i) {
                     // Retrieve the pointer to the current query vector
                     const vec_ele_t* current_vec = query_vecs.get(i);
-                    // Call query_impl to get top-k results (returns std::vector<vec_id_t>)
+                    // Call query_impl to get top-k results
                     auto topk_results = this->query_impl(current_vec);
-                    // Store the results using VectorArray's set interface
-                    results.set(i, topk_results.data());
+                    // Store results into flat array at row i
+                    std::copy(topk_results.begin(), topk_results.end(), results.begin() + i * K);
                 }
             }
         );
@@ -157,9 +151,9 @@ public:
      *
      * @param query_vecs A VectorArray containing the query vectors.
      * @param entry_point Shared entry point vertex ID (ignored for bruteforce).
-     * @return idlist_array_t Array with num_vecs=num_queries, dim=topk where each vector contains the top-k IDs for one query.
+     * @return knn_results_t Flat array of num_queries * topk result entries in row-major order.
      */
-    auto batch_query_impl(const typename RouterTraitsT::query_vecs_t& query_vecs, const vec_id_t entry_point) const -> idlist_array_t {
+    auto batch_query_impl(const typename RouterTraitsT::query_vecs_t& query_vecs, const vertex_id_t entry_point) const -> knn_results_t {
         // For bruteforce, entry point doesn't matter - just delegate to standard implementation
         return batch_query_impl(query_vecs);
     }

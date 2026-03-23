@@ -53,16 +53,17 @@ public:
     // Type aliases for clarity and convenience
     using vertex_id_t = typename RouterTraitsT::vertex_id_t;
     using distance_t = typename RouterTraitsT::distance_t;
-    using stateful_entry_t = typename RouterTraitsT::stateful_candidate_entry_t;
-    using entry_comp_t = typename RouterTraitsT::stateful_entry_comp_t;
+    using candidate_entry_t = typename RouterTraitsT::candidate_entry_t;
+    using entry_comp_t = typename RouterTraitsT::entry_comp_t;
+    using knn_results_t = typename RouterTraitsT::knn_results_t;
     using random_seq_t = typename RouterTraitsT::random_seq_t;
     using dist_func_t = typename RouterTraitsT::dist_func_t;
     using vec_ele_t = typename RouterTraitsT::vec_ele_t;
     using vector_array_t = typename RouterTraitsT::vector_array_t;
     using visited_table_t = typename RouterTraitsT::visited_table_t;
 
-    /** @brief Cache-aligned container for optimal SIMD performance. */
-    using container_t = cache_aligned_container_t<stateful_entry_t>;
+    /** @brief Container for candidate entries. */
+    using container_t = std::vector<candidate_entry_t>;
 
     /** @brief Maximum possible distance value (used for threshold initialization). */
     static constexpr distance_t max_distance = RouterTraitsT::max_distance;
@@ -74,7 +75,7 @@ public:
     static constexpr entry_comp_t entry_comparator = entry_comp_t();
 
     /** @brief Sentinel value representing an invalid/non-existent candidate. */
-    static constexpr stateful_entry_t invalid_candidate_entry = stateful_entry_t::make_invalid_entry();
+    static constexpr candidate_entry_t invalid_candidate_entry = candidate_entry_t::make_invalid_entry();
 
     /**
      * @brief Construct a LinearCandidateQueue with a fixed capacity.
@@ -190,7 +191,7 @@ public:
     /** @brief Get the approximate memory footprint of this queue in bytes. */
     __attribute__((always_inline))
     auto size() const -> std::size_t {
-        return _data.capacity() * sizeof(stateful_entry_t) + sizeof(*this);
+        return _data.capacity() * sizeof(candidate_entry_t) + sizeof(*this);
     }
 
     /** @brief Get the number of result candidates currently maintained. */
@@ -239,7 +240,7 @@ public:
         }
 
         // Create a new unexplored entry
-        stateful_entry_t entry(vertex_id, distance, false);
+        candidate_entry_t entry(vertex_id, distance, false);
 
         auto it = std::upper_bound(_data.begin(), _data.end(), entry, entry_comparator);
         std::size_t insert_place = it - _data.begin();
@@ -312,45 +313,18 @@ public:
     /**
      * @brief Extract the top-k results from the candidate queue.
      * @param k Number of top results to extract.
-     * @return Vector of (vertex_id, distance) pairs sorted by distance (ascending order).
+     * @return knn_results_t of result entries sorted by distance (ascending order).
      * @note The data is already sorted, so we just extract the first k entries.
+     * @note After calling this method, the candidate queue may be in an invalid state.
      */
-    auto extract_results(std::size_t k) -> std::vector<std::pair<vertex_id_t, distance_t>> {
+    auto extract_results(std::size_t k) -> knn_results_t {
         #ifndef NDEBUG
         assert(_data.size() >= k && "Not enough candidates in queue");
         #endif
 
-        std::vector<std::pair<vertex_id_t, distance_t>> results;
-        results.reserve(k);
-
-        // Extract first k (vertex_id, distance) pairs (data is already sorted by distance)
-        for (std::size_t i = 0; i < k && i < _data.size(); ++i) {
-            results.emplace_back(_data[i].get_id(), _data[i].get_distance());
-        }
-
+        knn_results_t results = std::move(_data);
+        results.resize(k);
         return results;
-    }
-
-    /**
-     * @brief Extract the top-k result IDs from the candidate queue.
-     * @param k Number of top results to extract.
-     * @return Vector of vertex IDs sorted by distance (ascending order).
-     * @note The data is already sorted, so we just extract the first k IDs.
-     */
-    auto extract_result_ids(std::size_t k) -> std::vector<vertex_id_t> {
-        #ifndef NDEBUG
-        assert(_data.size() >= k && "Not enough candidates in queue");
-        #endif
-
-        std::vector<vertex_id_t> result_ids;
-        result_ids.reserve(k);
-
-        // Extract first k vertex IDs (data is already sorted by distance)
-        for (std::size_t i = 0; i < k && i < _data.size(); ++i) {
-            result_ids.push_back(_data[i].get_id());
-        }
-
-        return result_ids;
     }
 
 private:

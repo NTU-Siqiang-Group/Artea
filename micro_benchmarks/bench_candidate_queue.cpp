@@ -22,6 +22,7 @@
 #include <benchmark/benchmark.h>
 #include <argparse/argparse.hpp>
 #include <artea/cpu/framework/artea.hpp>
+#include <artea/cpu/framework/type_context/default_context.hpp>
 
 #include <random>
 #include <vector>
@@ -30,22 +31,6 @@
 
 using namespace artea;
 using namespace artea::cpu;
-
-// --- Type Definitions ---
-using vec_num_t = uint32_t;
-using vec_ele_t = float;
-using base_traits_t = BaseTraits<vec_num_t, vec_ele_t>;
-using computer_traits_t = ComputerTraits<base_traits_t, DistanceMetricsT::EUCLIDEAN>;
-using index_traits_t = IndexTraits<base_traits_t>;
-using router_traits_t = RouterTraits<computer_traits_t, index_traits_t, false>;
-using candidate_entry_t = typename router_traits_t::candidate_entry_t;
-using vertex_id_t = typename router_traits_t::vertex_id_t;
-using distance_t = typename router_traits_t::distance_t;
-
-
-using std_queue_t = StdCandidateQueue<router_traits_t>;
-using linear_queue_t = LinearCandidateQueue<router_traits_t>;
-using fh_queue_t = FHCandidateQueue<router_traits_t>;
 
 // --- Global Configuration ---
 struct BenchConfig {
@@ -64,7 +49,6 @@ public:
     void init(uint32_t seed, std::size_t max_entries) {
         std::mt19937 rng(seed);
         std::uniform_real_distribution<distance_t> dist(0.0f, 10000.0f);
-
         vertex_ids_.reserve(max_entries);
         distances_.reserve(max_entries);
         for (std::size_t i = 0; i < max_entries; ++i) {
@@ -91,7 +75,7 @@ static void BM_TryPush_StdQueue(benchmark::State& state) {
     const auto& distances = DataProvider::instance().distances();
 
     for (auto _ : state) {
-        std_queue_t q(K);
+        std_candidate_queue_t q(K);
         for (std::size_t i = 0; i < K; ++i) {
             q.try_push(vertex_ids[i], distances[i]);
         }
@@ -108,7 +92,7 @@ static void BM_TryPush_LinearQueue(benchmark::State& state) {
     const auto& distances = DataProvider::instance().distances();
 
     for (auto _ : state) {
-        linear_queue_t q(K);
+        linear_candidate_queue_t q(K);
         for (std::size_t i = 0; i < K; ++i) {
             q.try_push(vertex_ids[i], distances[i]);
         }
@@ -125,7 +109,7 @@ static void BM_TryPush_FHQueue(benchmark::State& state) {
     const auto& distances = DataProvider::instance().distances();
 
     for (auto _ : state) {
-        fh_queue_t q(K);
+        fh_candidate_queue_t q(K);
         for (std::size_t i = 0; i < K; ++i) {
             q.try_push(vertex_ids[i], distances[i]);
         }
@@ -147,7 +131,7 @@ static void BM_TryPushEvict_StdQueue(benchmark::State& state) {
     const auto& distances = DataProvider::instance().distances();
 
     for (auto _ : state) {
-        std_queue_t q(K);
+        std_candidate_queue_t q(K);
         for (std::size_t i = 0; i < N; ++i) {
             q.try_push(vertex_ids[i], distances[i]);
         }
@@ -165,7 +149,7 @@ static void BM_TryPushEvict_LinearQueue(benchmark::State& state) {
     const auto& distances = DataProvider::instance().distances();
 
     for (auto _ : state) {
-        linear_queue_t q(K);
+        linear_candidate_queue_t q(K);
         for (std::size_t i = 0; i < N; ++i) {
             q.try_push(vertex_ids[i], distances[i]);
         }
@@ -183,7 +167,7 @@ static void BM_TryPushEvict_FHQueue(benchmark::State& state) {
     const auto& distances = DataProvider::instance().distances();
 
     for (auto _ : state) {
-        fh_queue_t q(K);
+        fh_candidate_queue_t q(K);
         for (std::size_t i = 0; i < N; ++i) {
             q.try_push(vertex_ids[i], distances[i]);
         }
@@ -210,7 +194,7 @@ static void BM_GetBest_StdQueue(benchmark::State& state) {
         }
 
     for (auto _ : state) {
-        std_queue_t q(K);
+        std_candidate_queue_t q(K);
         q.initialize(init_data);
 
         for (std::size_t i = 0; i < K; ++i) {
@@ -230,13 +214,13 @@ static void BM_GetBest_LinearQueue(benchmark::State& state) {
     const auto& distances = DataProvider::instance().distances();
 
     for (auto _ : state) {
-        // Initialize with stateful candidate entries
-        cache_aligned_container_t<typename linear_queue_t::stateful_entry_t> init_data;
+        // Initialize with candidate entries
+        std::vector<candidate_entry_t> init_data;
         init_data.reserve(K);
         for (std::size_t i = 0; i < K; ++i) {
             init_data.emplace_back(vertex_ids[i], distances[i]);
         }
-        linear_queue_t q(K);
+        linear_candidate_queue_t q(K);
         q.initialize(init_data);
 
         for (std::size_t i = 0; i < K; ++i) {
@@ -262,7 +246,7 @@ static void BM_GetBest_FHQueue(benchmark::State& state) {
         }
 
     for (auto _ : state) {
-        fh_queue_t q(K);
+        fh_candidate_queue_t q(K);
         q.initialize(init_data);
 
         for (std::size_t i = 0; i < K; ++i) {
@@ -287,7 +271,7 @@ static void BM_Mixed_StdQueue(benchmark::State& state) {
     const auto& distances = DataProvider::instance().distances();
 
     for (auto _ : state) {
-        std_queue_t q(K);
+        std_candidate_queue_t q(K);
         for (std::size_t i = 0; i < K; ++i) {
             q.try_push(vertex_ids[i], distances[i]);
         }
@@ -296,7 +280,7 @@ static void BM_Mixed_StdQueue(benchmark::State& state) {
             auto [best_id, best_dist] = q.pop_best_unexplored();
             benchmark::DoNotOptimize(best_id);
             benchmark::DoNotOptimize(best_dist);
-            if (best_dist == router_traits_t::max_distance) break;
+            if (best_dist == base_traits_t::max_distance) break;
             q.try_push(vertex_ids[push_idx], distances[push_idx]);
             push_idx++;
             if (push_idx < vertex_ids.size()) {
@@ -314,7 +298,7 @@ static void BM_Mixed_LinearQueue(benchmark::State& state) {
     const auto& distances = DataProvider::instance().distances();
 
     for (auto _ : state) {
-        linear_queue_t q(K);
+        linear_candidate_queue_t q(K);
         for (std::size_t i = 0; i < K; ++i) {
             q.try_push(vertex_ids[i], distances[i]);
         }
@@ -340,7 +324,7 @@ static void BM_Mixed_FHQueue(benchmark::State& state) {
     const auto& distances = DataProvider::instance().distances();
 
     for (auto _ : state) {
-        fh_queue_t q(K);
+        fh_candidate_queue_t q(K);
         for (std::size_t i = 0; i < K; ++i) {
             q.try_push(vertex_ids[i], distances[i]);
         }

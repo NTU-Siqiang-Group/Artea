@@ -141,8 +141,8 @@ TEST_F(CandidateQueueTest, Initialize_LinearQueue) {
     linear_queue_t q(K);
 
     // Create initial candidates with shuffled distances
-    using stateful_entry_t = typename router_traits_t::stateful_candidate_entry_t;
-    cache_aligned_container_t<stateful_entry_t> init_candidates;
+    using candidate_entry_t = typename router_traits_t::candidate_entry_t;
+    std::vector<candidate_entry_t> init_candidates;
     init_candidates.reserve(K);
 
     std::vector<distance_t> distances(K);
@@ -772,13 +772,13 @@ TEST_F(CandidateQueueTest, ExtractResults_StdQueue) {
 
     // Verify ascending order by distance
     for (std::size_t i = 1; i < results.size(); ++i) {
-        EXPECT_LE(results[i - 1].second, results[i].second)
+        EXPECT_LE(results[i - 1].get_distance(), results[i].get_distance())
             << "StdQueue extract_results: order violated at position " << i;
     }
 
     // Verify distances are [1.0, 2.0, ..., K]
     for (std::size_t i = 0; i < K; ++i) {
-        EXPECT_FLOAT_EQ(results[i].second, static_cast<distance_t>(i + 1))
+        EXPECT_FLOAT_EQ(results[i].get_distance(), static_cast<distance_t>(i + 1))
             << "StdQueue extract_results: incorrect distance at position " << i;
     }
 
@@ -804,12 +804,12 @@ TEST_F(CandidateQueueTest, ExtractResults_LinearQueue) {
     ASSERT_EQ(results.size(), K);
 
     for (std::size_t i = 1; i < results.size(); ++i) {
-        EXPECT_LE(results[i - 1].second, results[i].second)
+        EXPECT_LE(results[i - 1].get_distance(), results[i].get_distance())
             << "LinearQueue extract_results: order violated at position " << i;
     }
 
     for (std::size_t i = 0; i < K; ++i) {
-        EXPECT_FLOAT_EQ(results[i].second, static_cast<distance_t>(i + 1))
+        EXPECT_FLOAT_EQ(results[i].get_distance(), static_cast<distance_t>(i + 1))
             << "LinearQueue extract_results: incorrect distance at position " << i;
     }
 
@@ -835,12 +835,12 @@ TEST_F(CandidateQueueTest, ExtractResults_FHQueue) {
     ASSERT_EQ(results.size(), K);
 
     for (std::size_t i = 1; i < results.size(); ++i) {
-        EXPECT_LE(results[i - 1].second, results[i].second)
+        EXPECT_LE(results[i - 1].get_distance(), results[i].get_distance())
             << "FHQueue extract_results: order violated at position " << i;
     }
 
     for (std::size_t i = 0; i < K; ++i) {
-        EXPECT_FLOAT_EQ(results[i].second, static_cast<distance_t>(i + 1))
+        EXPECT_FLOAT_EQ(results[i].get_distance(), static_cast<distance_t>(i + 1))
             << "FHQueue extract_results: incorrect distance at position " << i;
     }
 
@@ -865,13 +865,13 @@ TEST_F(CandidateQueueTest, ExtractResultIds_StdQueue) {
         q.try_push(id, distances[i]);
     }
 
-    auto result_ids = q.extract_result_ids(K);
-    ASSERT_EQ(result_ids.size(), K);
+    auto results = q.extract_results(K);
+    ASSERT_EQ(results.size(), K);
 
     // Verify IDs are in ascending order (since ID == distance)
-    for (std::size_t i = 1; i < result_ids.size(); ++i) {
-        EXPECT_LE(result_ids[i - 1], result_ids[i])
-            << "StdQueue extract_result_ids: order violated at position " << i;
+    for (std::size_t i = 1; i < results.size(); ++i) {
+        EXPECT_LE(results[i - 1].get_id(), results[i].get_id())
+            << "StdQueue extract_results: order violated at position " << i;
     }
 
     logger.success(" [StdQueue] Extract Result IDs Order passed.");
@@ -893,12 +893,12 @@ TEST_F(CandidateQueueTest, ExtractResultIds_LinearQueue) {
         q.try_push(id, distances[i]);
     }
 
-    auto result_ids = q.extract_result_ids(K);
-    ASSERT_EQ(result_ids.size(), K);
+    auto results = q.extract_results(K);
+    ASSERT_EQ(results.size(), K);
 
-    for (std::size_t i = 1; i < result_ids.size(); ++i) {
-        EXPECT_LE(result_ids[i - 1], result_ids[i])
-            << "LinearQueue extract_result_ids: order violated at position " << i;
+    for (std::size_t i = 1; i < results.size(); ++i) {
+        EXPECT_LE(results[i - 1].get_id(), results[i].get_id())
+            << "LinearQueue extract_results: order violated at position " << i;
     }
 
     logger.success(" [LinearQueue] Extract Result IDs Order passed.");
@@ -920,108 +920,15 @@ TEST_F(CandidateQueueTest, ExtractResultIds_FHQueue) {
         q.try_push(id, distances[i]);
     }
 
-    auto result_ids = q.extract_result_ids(K);
-    ASSERT_EQ(result_ids.size(), K);
+    auto results = q.extract_results(K);
+    ASSERT_EQ(results.size(), K);
 
-    for (std::size_t i = 1; i < result_ids.size(); ++i) {
-        EXPECT_LE(result_ids[i - 1], result_ids[i])
-            << "FHQueue extract_result_ids: order violated at position " << i;
+    for (std::size_t i = 1; i < results.size(); ++i) {
+        EXPECT_LE(results[i - 1].get_id(), results[i].get_id())
+            << "FHQueue extract_results: order violated at position " << i;
     }
 
     logger.success(" [FHQueue] Extract Result IDs Order passed.");
-}
-
-// Test consistency between extract_results and extract_result_ids
-TEST_F(CandidateQueueTest, ExtractConsistency_StdQueue) {
-    logger.info(" -> [StdQueue] Extract Results/IDs Consistency");
-
-    const std::size_t K = 32 * g_config.scale;
-
-    // Create two identical queues
-    std_queue_t q1(K), q2(K);
-
-    std::vector<distance_t> distances(K);
-    std::iota(distances.begin(), distances.end(), 1.0f);
-    std::mt19937 rng(g_config.seed);
-    std::shuffle(distances.begin(), distances.end(), rng);
-
-    for (std::size_t i = 0; i < K; ++i) {
-        q1.try_push(static_cast<vertex_id_t>(i), distances[i]);
-        q2.try_push(static_cast<vertex_id_t>(i), distances[i]);
-    }
-
-    auto results = q1.extract_results(K);
-    auto result_ids = q2.extract_result_ids(K);
-
-    ASSERT_EQ(results.size(), result_ids.size());
-
-    // Verify IDs match
-    for (std::size_t i = 0; i < K; ++i) {
-        EXPECT_EQ(results[i].first, result_ids[i])
-            << "StdQueue: ID mismatch at position " << i;
-    }
-
-    logger.success(" [StdQueue] Extract Results/IDs Consistency passed.");
-}
-
-TEST_F(CandidateQueueTest, ExtractConsistency_LinearQueue) {
-    logger.info(" -> [LinearQueue] Extract Results/IDs Consistency");
-
-    const std::size_t K = 32 * g_config.scale;
-
-    linear_queue_t q1(K), q2(K);
-
-    std::vector<distance_t> distances(K);
-    std::iota(distances.begin(), distances.end(), 1.0f);
-    std::mt19937 rng(g_config.seed);
-    std::shuffle(distances.begin(), distances.end(), rng);
-
-    for (std::size_t i = 0; i < K; ++i) {
-        q1.try_push(static_cast<vertex_id_t>(i), distances[i]);
-        q2.try_push(static_cast<vertex_id_t>(i), distances[i]);
-    }
-
-    auto results = q1.extract_results(K);
-    auto result_ids = q2.extract_result_ids(K);
-
-    ASSERT_EQ(results.size(), result_ids.size());
-
-    for (std::size_t i = 0; i < K; ++i) {
-        EXPECT_EQ(results[i].first, result_ids[i])
-            << "LinearQueue: ID mismatch at position " << i;
-    }
-
-    logger.success(" [LinearQueue] Extract Results/IDs Consistency passed.");
-}
-
-TEST_F(CandidateQueueTest, ExtractConsistency_FHQueue) {
-    logger.info(" -> [FHQueue] Extract Results/IDs Consistency");
-
-    const std::size_t K = 32 * g_config.scale;
-
-    fh_queue_t q1(K), q2(K);
-
-    std::vector<distance_t> distances(K);
-    std::iota(distances.begin(), distances.end(), 1.0f);
-    std::mt19937 rng(g_config.seed);
-    std::shuffle(distances.begin(), distances.end(), rng);
-
-    for (std::size_t i = 0; i < K; ++i) {
-        q1.try_push(static_cast<vertex_id_t>(i), distances[i]);
-        q2.try_push(static_cast<vertex_id_t>(i), distances[i]);
-    }
-
-    auto results = q1.extract_results(K);
-    auto result_ids = q2.extract_result_ids(K);
-
-    ASSERT_EQ(results.size(), result_ids.size());
-
-    for (std::size_t i = 0; i < K; ++i) {
-        EXPECT_EQ(results[i].first, result_ids[i])
-            << "FHQueue: ID mismatch at position " << i;
-    }
-
-    logger.success(" [FHQueue] Extract Results/IDs Consistency passed.");
 }
 
 // ============================================================================

@@ -57,21 +57,23 @@ public:
 
     /**
      * @brief Constructor.
-     * @param dist_func          Distance function reference.
-     * @param vecs_data          Vector array containing all vertex data.
-     * @param log_table          Log table for recording edge operations.
-     * @param flat_graph         The flat graph to navigate during construction.
-     * @param candidate_queue_size Number of nearest neighbors to search per vertex.
+     * @param dist_func            Distance function reference.
+     * @param vecs_data            Vector array containing all vertex data.
+     * @param log_table            Log table for recording edge operations.
+     * @param flat_graph           The flat graph to navigate during construction.
+     * @param topk                 Number of nearest neighbors to retrieve per query.
+     * @param candidate_queue_size Beam width for the router's candidate queue.
      */
     RoutingUpdater(
         const dist_func_t& dist_func,
         const vector_array_t& vecs_data,
         log_table_t& log_table,
         const flat_graph_t& flat_graph,
+        const vertex_num_t topk,
         const vertex_num_t candidate_queue_size
     ) : base_class_t(dist_func, vecs_data, log_table),
-        _router(vecs_data, dist_func, flat_graph, candidate_queue_size, candidate_queue_size),
-        _candidate_queue_size(candidate_queue_size)
+        _router(vecs_data, dist_func, flat_graph, topk, candidate_queue_size),
+        _topk(topk)
     {   _router.initialize();   }
 
     /**
@@ -86,15 +88,18 @@ public:
         nbr_arr_t& origin_nbrs
     ) -> void {
         const vec_ele_t* pivot_vec = this->_vecs_data.get(pivot_vid);
-        std::vector<vertex_id_t> nn_ids = _router.query(pivot_vec);
+        auto knn_results = _router.query(pivot_vec);
 
-        std::vector<distance_t> nn_dists;
-        nn_dists.reserve(nn_ids.size());
-        for (const vertex_id_t nn_id : nn_ids) {
-            nn_dists.push_back(this->_dist_func(pivot_vec, this->_vecs_data.get(nn_id)));
+        std::vector<vertex_id_t> knn_ids;
+        std::vector<distance_t> knn_dists;
+        knn_ids.reserve(knn_results.size());
+        knn_dists.reserve(knn_results.size());
+        for (const auto& entry : knn_results) {
+            knn_ids.push_back(entry.get_id());
+            knn_dists.push_back(entry.get_distance());
         }
 
-        this->_log_table.write_logs(pivot_vid, nn_ids, nn_dists);
+        this->_log_table.write_logs(pivot_vid, knn_ids, knn_dists);
     }
 
 private:
@@ -102,7 +107,7 @@ private:
     router_t _router;
 
     /** @brief Number of nearest neighbors to retrieve per query. */
-    const vertex_num_t _candidate_queue_size;
+    const vertex_num_t _topk;
 
 };  // class RoutingUpdater
 

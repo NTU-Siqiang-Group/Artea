@@ -72,6 +72,7 @@ int main(int argc, char** argv) {
     program.add_argument("--ul-shifted-coeffs").default_value(0.0f).scan<'g', float>();
     program.add_argument("--ul-num-outer-iters").default_value(4u).scan<'u', uint32_t>();
     program.add_argument("--ul-num-inner-iters").default_value(14u).scan<'u', uint32_t>();
+    program.add_argument("--prefill-ratio").default_value(0.6f).scan<'g', float>();
 
     try {
         program.parse_args(argc, argv);
@@ -133,13 +134,15 @@ int main(int argc, char** argv) {
         program.get<float>("--bl-scale-coeffs"),
         program.get<float>("--bl-shifted-coeffs"),
         program.get<uint32_t>("--bl-num-outer-iters"),
-        program.get<uint32_t>("--bl-num-inner-iters")
+        program.get<uint32_t>("--bl-num-inner-iters"),
+        program.get<float>("--prefill-ratio")
     );
     artea_graph::edges_builder_config_t upper_edges_config(
         program.get<float>("--ul-scale-coeffs"),
         program.get<float>("--ul-shifted-coeffs"),
         program.get<uint32_t>("--ul-num-outer-iters"),
-        program.get<uint32_t>("--ul-num-inner-iters")
+        program.get<uint32_t>("--ul-num-inner-iters"),
+        program.get<float>("--prefill-ratio")
     );
 
     // Create vertices builder config

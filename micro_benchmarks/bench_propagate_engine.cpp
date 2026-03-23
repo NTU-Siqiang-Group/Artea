@@ -26,7 +26,7 @@ struct BenchConfig {
     std::string config_path;
     std::string dataset_name;
     layer_config_t layer_config{16, 32};
-    conv_graph::edges_builder_config_t edges_builder_config{1.0, 0.0, 4, 14};
+    conv_graph::edges_builder_config_t edges_builder_config{1.0, 0.0, 4, 14, 0.6};
     vec_num_t rand_gen_size;
     iter_t num_iters;
     ratio_t scale_coeffs;
@@ -67,7 +67,9 @@ public:
         );
 
         random_eg_t random_eg(*dist_func_);
-        random_eg.generate(*flat_graph_, g_config.layer_config.max_nbr_size());
+        random_eg.generate(*flat_graph_, static_cast<vec_num_t>(
+            g_config.layer_config.max_nbr_size() * g_config.edges_builder_config.prefill_ratio()
+        ));
         logger.info("Flat graph initialization complete.");
 
         // Save initial graph state for benchmark reset
@@ -393,6 +395,11 @@ int main(int argc, char** argv) {
         .scan<'g', double>()
         .help("Shifted coefficient for triangle inequality pruning");
 
+    program.add_argument("--prefill-ratio")
+        .default_value(0.6f)
+        .scan<'g', float>()
+        .help("Prefill ratio for initial random graph (init_nbr_size = max_nbr_size * prefill_ratio)");
+
     // Benchmark control
     program.add_argument("-r", "--repetitions")
         .default_value(int64_t(5))
@@ -427,6 +434,7 @@ int main(int argc, char** argv) {
     g_config.num_iters = static_cast<iter_t>(program.get<int>("--num-iters"));
     g_config.scale_coeffs = static_cast<ratio_t>(program.get<double>("--scale-coeffs"));
     g_config.shifted_coeffs = static_cast<ratio_t>(program.get<double>("--shifted-coeffs"));
+    g_config.edges_builder_config.prefill_ratio(program.get<float>("--prefill-ratio"));
     g_config.repetitions = program.get<int64_t>("--repetitions");
 
     logger.info(fmt::format("Benchmark Configuration:"));

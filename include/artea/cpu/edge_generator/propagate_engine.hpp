@@ -291,12 +291,14 @@ public:
       *   - triangle_updater_t: Requires scale_coeffs and optional shifted_coeffs
       *   - reverse_updater_t: No additional parameters required
       *   - random_updater_t: Requires rand_gen_size (num_vertices is auto-provided)
+      *   - routing_updater_t: Requires topk, candidate_queue_size (flat_graph is auto-provided from internal state)
       */
     template <typename UpdaterT, typename... Args>
     auto make_updater(Args&&... args) -> UpdaterT {
         using triangle_updater_t = typename EdgeGeneratorTraitsT::triangle_updater_t;
         using reverse_updater_t = typename EdgeGeneratorTraitsT::reverse_updater_t;
         using random_updater_t = typename EdgeGeneratorTraitsT::random_updater_t;
+        using routing_updater_t = typename EdgeGeneratorTraitsT::routing_updater_t;
 
         const auto& vecs_arr = _flat_graph->get_vecs_data();
         auto& log_table = _log_table;
@@ -315,6 +317,10 @@ public:
             // RandomUpdater constructor signature:
             // RandomUpdater(dist_func, vecs_arr, log_table, num_vertices, rand_gen_size)
             return UpdaterT(_dist_func, vecs_arr, log_table, num_vertices, std::forward<Args>(args)...);
+        } else if constexpr (std::is_same_v<UpdaterT, routing_updater_t>) {
+            // RoutingUpdater constructor signature:
+            // RoutingUpdater(dist_func, vecs_arr, log_table, flat_graph, candidate_queue_size)
+            return UpdaterT(_dist_func, vecs_arr, log_table, *_flat_graph, std::forward<Args>(args)...);
         } else {
             ARTEA_ERROR("Unsupported updater type");
         }

@@ -29,7 +29,6 @@ using namespace artea;
 using namespace artea::cpu;
 
 struct VerticesBuilderConfigParams {
-    float min_radius;
     float beta;
     float coverage_ratio;
     float confidence;
@@ -47,6 +46,7 @@ struct EdgesBuilderConfigParams {
     float shifted_coeffs;
     uint32_t num_outer_iters;
     uint32_t num_inner_iters;
+    float prefill_ratio;
 };
 
 struct TestConfig {
@@ -121,6 +121,13 @@ public:
         const auto& base_vecs = dataset_->get_base_vecs();
         g_results.total_base_vecs = base_vecs.get_num_vecs();
 
+        // Probe min_radius from dataset
+        logger.info("Probing min_radius from dataset...");
+        radius_prober_t prober(*dist_func_);
+        auto probe_result = prober.probe(base_vecs, 0.001f, 0.95f, 0.05f);
+        _min_radius = probe_result.radius;
+        logger.info(fmt::format("Probed min_radius: {:.6f}", _min_radius));
+
         if (g_config.verbose) {
             logger.info(fmt::format("Base vectors size: {}", base_vecs.get_num_vecs()));
         }
@@ -128,6 +135,7 @@ public:
 
     vector_dataset_t& get_dataset() { return *dataset_; }
     dist_func_t& get_dist_func() { return *dist_func_; }
+    float get_min_radius() const { return _min_radius; }
     hierarchical_graph_t& get_hierarchical_graph() { return *hierarchical_graph_; }
     hierarchical_vecs_manager_t& get_hier_vecs_manager() { return hierarchical_graph_->get_hier_vecs_manager(); }
 
@@ -146,6 +154,7 @@ private:
     std::unique_ptr<vector_dataset_t> dataset_;
     std::unique_ptr<dist_func_t> dist_func_;
     std::unique_ptr<hierarchical_graph_t> hierarchical_graph_;
+    float _min_radius = 0.0f;
 };
 
 class ArteaGraphConstructTest : public ::testing::Test {
@@ -179,18 +188,20 @@ protected:
             g_config.bottom_edges_config.scale_coeffs,
             g_config.bottom_edges_config.shifted_coeffs,
             g_config.bottom_edges_config.num_outer_iters,
-            g_config.bottom_edges_config.num_inner_iters
+            g_config.bottom_edges_config.num_inner_iters,
+            g_config.bottom_edges_config.prefill_ratio
         );
         artea_graph::edges_builder_config_t upper_edges_config(
             g_config.upper_edges_config.scale_coeffs,
             g_config.upper_edges_config.shifted_coeffs,
             g_config.upper_edges_config.num_outer_iters,
-            g_config.upper_edges_config.num_inner_iters
+            g_config.upper_edges_config.num_inner_iters,
+            g_config.upper_edges_config.prefill_ratio
         );
 
         // Create vertices builder config
         greedy_vertices_builder_config_t vertices_builder_config(
-            g_config.vertices_config.min_radius,
+            provider.get_min_radius(),
             g_config.vertices_config.beta,
             g_config.vertices_config.coverage_ratio,
             g_config.vertices_config.confidence,
@@ -415,7 +426,7 @@ TEST_F(ArteaGraphConstructTest, QueryRecall) {
 
         // Query all vectors
         start_time = std::chrono::high_resolution_clock::now();
-        idlist_array_t results = router.batch_query(query_vecs);
+        knn_results_t results = router.batch_query(query_vecs);
         end_time = std::chrono::high_resolution_clock::now();
 
         duration = std::chrono::duration_cast<std::chrono::microseconds>(end_time - start_time);
@@ -426,7 +437,7 @@ TEST_F(ArteaGraphConstructTest, QueryRecall) {
         result.query_time_ms = duration.count() / 1000.0;
         result.avg_query_time_us = static_cast<double>(duration.count()) / query_vecs.get_num_vecs();
         result.throughput_qps = query_vecs.get_num_vecs() * 1000000.0 / duration.count();
-        result.recall = recall_estimator.calculate_recall_at_k(results, groundtruth);
+        result.recall = recall_estimator.calculate_recall_at_k(results, groundtruth, g_config.topk, query_vecs.get_num_vecs());
 
         g_results.query_results.push_back(result);
 
@@ -453,10 +464,9 @@ int main(int argc, char** argv) {
     program.add_argument("-d", "--dataset").default_value(std::string("sift-1m"));
 
     // Vertices builder parameters
-    program.add_argument("--min-radius").default_value(34875.0f).scan<'g', float>();
-    program.add_argument("--beta").default_value(2.56f).scan<'g', float>();
-    program.add_argument("--coverage-ratio").default_value(0.96f).scan<'g', float>();
-    program.add_argument("--confidence").default_value(0.99f).scan<'g', float>();
+    program.add_argument("--beta").default_value(1.69f).scan<'g', float>();
+    program.add_argument("--coverage-ratio").default_value(0.999f).scan<'g', float>();
+    program.add_argument("--confidence").default_value(0.950f).scan<'g', float>();
     program.add_argument("--max-result-ratio").default_value(0.2f).scan<'g', float>();
     program.add_argument("--sampling-batch-size").default_value(2048u).scan<'u', uint32_t>();
 
@@ -476,6 +486,7 @@ int main(int argc, char** argv) {
     program.add_argument("--ul-shifted-coeffs").default_value(0.0f).scan<'g', float>();
     program.add_argument("--ul-num-outer-iters").default_value(4u).scan<'u', uint32_t>();
     program.add_argument("--ul-num-inner-iters").default_value(14u).scan<'u', uint32_t>();
+    program.add_argument("--prefill-ratio").default_value(0.6f).scan<'g', float>();
 
     // Router parameters
     program.add_argument("-k", "--topk").default_value(20u).scan<'u', uint32_t>();
@@ -500,7 +511,6 @@ int main(int argc, char** argv) {
     g_config.config_path = program.get<std::string>("--config");
     g_config.dataset_name = program.get<std::string>("--dataset");
 
-    g_config.vertices_config.min_radius = program.get<float>("--min-radius");
     g_config.vertices_config.beta = program.get<float>("--beta");
     g_config.vertices_config.coverage_ratio = program.get<float>("--coverage-ratio");
     g_config.vertices_config.confidence = program.get<float>("--confidence");
@@ -519,11 +529,14 @@ int main(int argc, char** argv) {
     g_config.bottom_edges_config.shifted_coeffs = program.get<float>("--bl-shifted-coeffs");
     g_config.bottom_edges_config.num_outer_iters = program.get<uint32_t>("--bl-num-outer-iters");
     g_config.bottom_edges_config.num_inner_iters = program.get<uint32_t>("--bl-num-inner-iters");
+    g_config.bottom_edges_config.prefill_ratio = program.get<float>("--prefill-ratio");
+    g_config.bottom_edges_config.prefill_ratio = program.get<float>("--bl-prefill-ratio");
 
     g_config.upper_edges_config.scale_coeffs = program.get<float>("--ul-scale-coeffs");
     g_config.upper_edges_config.shifted_coeffs = program.get<float>("--ul-shifted-coeffs");
     g_config.upper_edges_config.num_outer_iters = program.get<uint32_t>("--ul-num-outer-iters");
     g_config.upper_edges_config.num_inner_iters = program.get<uint32_t>("--ul-num-inner-iters");
+    g_config.upper_edges_config.prefill_ratio = program.get<float>("--prefill-ratio");
 
     g_config.topk = program.get<uint32_t>("--topk");
 
@@ -559,7 +572,6 @@ int main(int argc, char** argv) {
     std::cout << "Dataset: " << g_config.dataset_name << std::endl;
     std::cout << "Config path: " << g_config.config_path << std::endl;
     std::cout << "\n--- Vertices Builder Parameters ---" << std::endl;
-    std::cout << "Min radius: " << g_config.vertices_config.min_radius << std::endl;
     std::cout << "Beta: " << g_config.vertices_config.beta << std::endl;
     std::cout << "Coverage ratio: " << g_config.vertices_config.coverage_ratio << std::endl;
     std::cout << "Confidence: " << g_config.vertices_config.confidence << std::endl;

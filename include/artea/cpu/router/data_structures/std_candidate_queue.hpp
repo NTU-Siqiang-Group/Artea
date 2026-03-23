@@ -68,6 +68,7 @@ public:
     using vertex_id_t = typename RouterTraitsT::vertex_id_t;
     using distance_t = typename RouterTraitsT::distance_t;
     using candidate_entry_t = typename RouterTraitsT::candidate_entry_t;
+    using knn_results_t = typename RouterTraitsT::knn_results_t;
     using random_seq_t = typename RouterTraitsT::random_seq_t;
     using dist_func_t = typename RouterTraitsT::dist_func_t;
     using vec_ele_t = typename RouterTraitsT::vec_ele_t;
@@ -369,67 +370,28 @@ public:
     /**
      * @brief Extract the top-k results from the candidate queue.
      * @param k Number of top results to extract.
-     * @return Vector of (vertex_id, distance) pairs sorted by distance (ascending order).
+     * @return knn_results_t of result entries sorted by distance (ascending order).
      * @note This method empties the top_candidates heap.
      */
-    auto extract_results(std::size_t k) -> std::vector<std::pair<vertex_id_t, distance_t>> {
+    auto extract_results(std::size_t k) -> knn_results_t {
         #ifndef NDEBUG
         assert(_top_candidates.size() >= k && "Not enough candidates in queue");
         #endif
 
-        std::vector<candidate_entry_t> result_candidates;
-        result_candidates.reserve(k);
+        knn_results_t results;
+        results.reserve(k);
 
         // Extract all candidates from max-heap (they come out in descending order)
         while (!_top_candidates.empty()) {
-            result_candidates.push_back(_top_candidates.top());
+            results.push_back(_top_candidates.top());
             _top_candidates.pop();
         }
 
         // Reverse to get ascending order (O(n) instead of O(n log n) sort)
-        std::reverse(result_candidates.begin(), result_candidates.end());
-
-        // Extract (vertex_id, distance) pairs
-        std::vector<std::pair<vertex_id_t, distance_t>> results;
-        results.reserve(k);
-        for (std::size_t i = 0; i < k && i < result_candidates.size(); ++i) {
-            results.emplace_back(result_candidates[i].get_id(), result_candidates[i].get_distance());
-        }
+        std::reverse(results.begin(), results.end());
+        results.resize(k);
 
         return results;
-    }
-
-    /**
-     * @brief Extract the top-k result IDs from the candidate queue.
-     * @param k Number of top results to extract.
-     * @return Vector of vertex IDs sorted by distance (ascending order).
-     * @note This method empties the top_candidates heap.
-     */
-    auto extract_result_ids(std::size_t k) -> std::vector<vertex_id_t> {
-        #ifndef NDEBUG
-        assert(_top_candidates.size() >= k && "Not enough candidates in queue");
-        #endif
-
-        std::vector<candidate_entry_t> result_candidates;
-        result_candidates.reserve(k);
-
-        // Extract all candidates from max-heap (they come out in descending order)
-        while (!_top_candidates.empty()) {
-            result_candidates.push_back(_top_candidates.top());
-            _top_candidates.pop();
-        }
-
-        // Reverse to get ascending order (O(n) instead of O(n log n) sort)
-        std::reverse(result_candidates.begin(), result_candidates.end());
-
-        // Extract vertex IDs
-        std::vector<vertex_id_t> result_ids;
-        result_ids.reserve(k);
-        for (std::size_t i = 0; i < k && i < result_candidates.size(); ++i) {
-            result_ids.push_back(result_candidates[i].get_id());
-        }
-
-        return result_ids;
     }
 
 private:

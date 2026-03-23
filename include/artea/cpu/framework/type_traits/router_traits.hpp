@@ -44,8 +44,6 @@ template <typename RouterTraitsT, GraphModeT Mode = GraphModeT::search_mode> cla
 template <typename RouterTraitsT, GraphModeT Mode = GraphModeT::search_mode> class HierarchicalGraphRouter;
 template <typename RouterTraitsT> struct CandidateEntry;
 template <typename RouterTraitsT> struct CandidateEntryComparator;
-template <typename RouterTraitsT> struct StatefulCandidateEntry;
-template <typename RouterTraitsT> struct StatefulCandidateEntryComparator;
 template <typename RouterTraitsT> class StdCandidateQueue;
 template <typename RouterTraitsT> class LinearCandidateQueue;
 template <typename RouterTraitsT> class FHCandidateQueue;
@@ -61,6 +59,12 @@ struct RouterTraits : virtual public ComputerTraitsT, virtual public IndexTraits
     /** @brief Type for candidate entry. */
     using candidate_entry_t = CandidateEntry<router_traits_t>;
 
+    /** @brief Type for result entry (alias for candidate_entry_t). */
+    using result_entry_t = candidate_entry_t;
+
+    /** @brief Flat KNN results: num_queries * topk result entries in row-major order. */
+    using knn_results_t = std::vector<result_entry_t>;
+
     /** @brief Type for candidate vector. */
     using candidate_vec_t = std::vector<candidate_entry_t>;
 
@@ -74,12 +78,6 @@ struct RouterTraits : virtual public ComputerTraitsT, virtual public IndexTraits
 
     /** @brief Type for candidate entry comparator. */
     using entry_comp_t = CandidateEntryComparator<router_traits_t>;
-
-    /** @brief Type for stateful candidate entry (with embedded explored status). */
-    using stateful_candidate_entry_t = StatefulCandidateEntry<router_traits_t>;
-
-    /** @brief Type for stateful candidate entry comparator. */
-    using stateful_entry_comp_t = StatefulCandidateEntryComparator<router_traits_t>;
 
     /** @brief 4-ary heap type for candidate entries, parameterized by comparator. */
     template <typename Compare>

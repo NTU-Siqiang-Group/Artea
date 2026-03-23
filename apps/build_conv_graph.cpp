@@ -38,6 +38,7 @@ struct GraphParams {
     ratio_t shifted_coeffs = 0.00;
     iter_t num_outer_iters = 4;
     iter_t num_inner_iters = 14;
+    ratio_t prefill_ratio = 0.6;
 };
 
 int main(int argc, char** argv) {
@@ -83,6 +84,11 @@ int main(int argc, char** argv) {
         .scan<'u', uint32_t>()
         .help("Number of inner iterations");
 
+    program.add_argument("--prefill-ratio")
+        .default_value(0.6f)
+        .scan<'g', float>()
+        .help("Prefill ratio for initial random graph (init_nbr_size = max_nbr_size * prefill_ratio)");
+
     try {
         program.parse_args(argc, argv);
     } catch (const std::exception& err) {
@@ -103,6 +109,7 @@ int main(int argc, char** argv) {
     params.shifted_coeffs = program.get<double>("--shifted-coeffs");
     params.num_outer_iters = program.get<uint32_t>("--num-outer-iters");
     params.num_inner_iters = program.get<uint32_t>("--num-inner-iters");
+    params.prefill_ratio = program.get<float>("--prefill-ratio");
 
     logger.info(fmt::format("Graph Construction Configuration:"));
     logger.info(fmt::format("  Dataset: {}", dataset_name));
@@ -135,7 +142,8 @@ int main(int argc, char** argv) {
         params.scale_coeffs,
         params.shifted_coeffs,
         params.num_outer_iters,
-        params.num_inner_iters
+        params.num_inner_iters,
+        params.prefill_ratio
     );
 
     conv_graph_factory_t conv_graph_factory;
