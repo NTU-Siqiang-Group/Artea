@@ -86,33 +86,24 @@ public:
         const vertex_id_t pivot_vid,
         nbr_arr_t& origin_nbrs
     ) -> void {
-        // Create a local buffer for storing generated random IDs
         std::vector<vertex_id_t> rand_ids_buffer(_rand_gen_size);
-
-        // Generate rand_gen_size random vertex IDs
         _random_seq.generate(rand_ids_buffer, _rand_gen_size);
 
-        // Get the pivot vertex vector
         const vec_ele_t* pivot_vec = this->_vecs_data.get(pivot_vid);
 
-        // For each random neighbor, compute distance and write to log table
+        std::vector<vertex_id_t> nbr_ids;
+        std::vector<distance_t> nbr_dists;
+        nbr_ids.reserve(_rand_gen_size);
+        nbr_dists.reserve(_rand_gen_size);
+
         for (vertex_num_t i = 0; i < _rand_gen_size; ++i) {
-            vertex_id_t rand_nbr_id = rand_ids_buffer[i];
-
-            // Skip if the random ID is the pivot itself
+            const vertex_id_t rand_nbr_id = rand_ids_buffer[i];
             if (rand_nbr_id == pivot_vid) { continue; }
-
-            // Get the random neighbor vector and compute distance
-            const vec_ele_t* rand_nbr_vec = this->_vecs_data.get(rand_nbr_id);
-            distance_t rand_nbr_dist = this->_dist_func(pivot_vec, rand_nbr_vec);
-
-            // Write the random edge to the log table
-            this->_log_table.write_log(
-                /* executor_vid = */pivot_vid,
-                /* nbr_id = */rand_nbr_id,
-                /* new_edge_dist = */rand_nbr_dist
-            );
+            nbr_ids.push_back(rand_nbr_id);
+            nbr_dists.push_back(this->_dist_func(pivot_vec, this->_vecs_data.get(rand_nbr_id)));
         }
+
+        this->_log_table.write_logs(pivot_vid, nbr_ids, nbr_dists);
     }
 
 private:

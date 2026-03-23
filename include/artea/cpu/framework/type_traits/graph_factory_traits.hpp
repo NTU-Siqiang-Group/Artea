@@ -44,6 +44,7 @@ template <typename GraphFactoryTraitsT, typename DerivedClassT> class FlatGraphF
 template <typename GraphFactoryTraitsT> class ConvGraphFactory;
 template <typename GraphFactoryTraitsT> class HierarchicalVerticesBuilder;
 template <typename GraphFactoryTraitsT> class HierarchicalEdgesBuilder;
+template <typename GraphFactoryTraitsT> class RoutingUpdater;
 
 template <
     typename VertexGeneratorTraitsT,

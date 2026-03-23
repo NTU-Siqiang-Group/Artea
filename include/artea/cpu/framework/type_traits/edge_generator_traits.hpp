@@ -36,19 +36,21 @@ template <typename EdgeGeneratorTraitsT, typename DerivedClassT> class NeighborU
 template <typename EdgeGeneratorTraitsT> class TriangleUpdater;
 template <typename EdgeGeneratorTraitsT> class ReverseUpdater;
 template <typename EdgeGeneratorTraitsT> class RandomUpdater;
+template <typename EdgeGeneratorTraitsT> class RoutingUpdater;
 template <typename EdgeGeneratorTraitsT> class RandomEG;
 template <typename EdgeGeneratorTraitsT, bool SelectiveSchedule> class PropagateEngine;
 template <typename EdgeGeneratorTraitsT> class IVFPartitions;
 
-template <typename ComputerTraitsT, typename BufferTraitsT, typename IndexTraitsT>
+template <typename ComputerTraitsT, typename BufferTraitsT, typename IndexTraitsT, typename RouterTraitsT>
 struct EdgeGeneratorTraits :
     virtual public ComputerTraitsT,
     virtual public BufferTraitsT,
-    virtual public IndexTraitsT
+    virtual public IndexTraitsT,
+    virtual public RouterTraitsT
 {
 
     /** ------ Self Traits ------ **/
-    using edge_generator_traits_t = EdgeGeneratorTraits<ComputerTraitsT, BufferTraitsT, IndexTraitsT>;
+    using edge_generator_traits_t = EdgeGeneratorTraits<ComputerTraitsT, BufferTraitsT, IndexTraitsT, RouterTraitsT>;
 
     /** @brief IVF construction policy type. */
     using ivf_construct_policy_t = IVFConstructPolicyT;
@@ -64,6 +66,9 @@ struct EdgeGeneratorTraits :
 
     /** @brief Random neighbor updater. */
     using random_updater_t = RandomUpdater<edge_generator_traits_t>;
+
+    /** @brief Routing-based neighbor updater (uses construct-mode router). */
+    using routing_updater_t = RoutingUpdater<edge_generator_traits_t>;
 
     /** @brief Random edge generator. */
     using random_eg_t = RandomEG<edge_generator_traits_t>;

@@ -72,6 +72,26 @@ public:
         _nbr_logs[executor_vid].append(nbr_id, new_edge_dist, true); // is_new = true
     }
 
+    /** @brief Batch-append multiple neighbor logs for a single executor vertex.
+     *  @param executor_vid   The vertex executing the operation.
+     *  @param nbr_ids        Container of neighbor vertex IDs.
+     *  @param new_edge_dists Container of corresponding distances (same length).
+     */
+    template <typename NbrIdContainerT, typename DistContainerT>
+    __attribute__((always_inline))
+    auto write_logs(
+        const vertex_id_t executor_vid,
+        const NbrIdContainerT& nbr_ids,
+        const DistContainerT& new_edge_dists
+    ) -> void {
+        auto& container = get_log_container(executor_vid);
+        const size_t count = nbr_ids.size();
+        container.reserve(container.size() + count);
+        for (size_t i = 0; i < count; ++i) {
+            container.emplace_back(nbr_ids[i], new_edge_dists[i], true); // is_new = true
+        }
+    }
+
     __attribute__((always_inline))
     auto clear_logs(const vertex_id_t executor_vid) -> void {
         _nbr_logs[executor_vid].clear();

@@ -63,6 +63,21 @@
 #include <artea/cpu/graph_factory/hierarchical_vertices_builder.hpp>
 #include <artea/cpu/graph_factory/hierarchical_edges_builder.hpp>
 
+#include <artea/cpu/router/vector_router.hpp>
+#include <artea/cpu/router/bruteforce_router.hpp>
+#include <artea/cpu/router/search_mode_monolayer_graph_router.hpp>
+#include <artea/cpu/router/search_mode_hierarchical_graph_router.hpp>
+#include <artea/cpu/router/construct_mode_monolayer_graph_router.hpp>
+#include <artea/cpu/router/construct_mode_hierarchical_graph_router.hpp>
+#include <artea/cpu/router/data_structures/candidate_entry.hpp>
+#include <artea/cpu/router/data_structures/stateful_candidate_entry.hpp>
+#include <artea/cpu/router/candidate_queue_concept.hpp>
+#include <artea/cpu/router/visited_table_concept.hpp>
+#include <artea/cpu/router/data_structures/visited_table_pool.hpp>
+#include <artea/cpu/router/data_structures/std_candidate_queue.hpp>
+#include <artea/cpu/router/data_structures/fh_candidate_queue.hpp>
+#include <artea/cpu/router/data_structures/linear_candidate_queue.hpp>
+
 #include <artea/cpu/vertex_generator/vertex_generator.hpp>
 #include <artea/cpu/vertex_generator/lsh_table.hpp>
 #include <artea/cpu/vertex_generator/pstable_lsh_generator.hpp>
@@ -79,21 +94,7 @@
 #include <artea/cpu/edge_generator/random_eg.hpp>
 #include <artea/cpu/edge_generator/propagate_engine.hpp>
 #include <artea/cpu/edge_generator/ivf_partitions.hpp>
-
-#include <artea/cpu/router/vector_router.hpp>
-#include <artea/cpu/router/bruteforce_router.hpp>
-#include <artea/cpu/router/search_mode_monolayer_graph_router.hpp>
-#include <artea/cpu/router/search_mode_hierarchical_graph_router.hpp>
-#include <artea/cpu/router/construct_mode_monolayer_graph_router.hpp>
-#include <artea/cpu/router/construct_mode_hierarchical_graph_router.hpp>
-#include <artea/cpu/router/data_structures/candidate_entry.hpp>
-#include <artea/cpu/router/data_structures/stateful_candidate_entry.hpp>
-#include <artea/cpu/router/candidate_queue_concept.hpp>
-#include <artea/cpu/router/visited_table_concept.hpp>
-#include <artea/cpu/router/data_structures/visited_table_pool.hpp>
-#include <artea/cpu/router/data_structures/std_candidate_queue.hpp>
-#include <artea/cpu/router/data_structures/fh_candidate_queue.hpp>
-#include <artea/cpu/router/data_structures/linear_candidate_queue.hpp>
+#include <artea/cpu/edge_generator/routing_updater.hpp>
 
 #include <artea/cpu/utils/bit_ops.hpp>
 #include <artea/cpu/utils/centroid_computer.hpp>

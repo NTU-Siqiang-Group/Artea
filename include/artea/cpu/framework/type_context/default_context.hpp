@@ -25,9 +25,9 @@ using base_traits_t = BaseTraits<vec_num_t, vec_ele_t>;
 using computer_traits_t = ComputerTraits<base_traits_t, DistanceMetricsT::EUCLIDEAN>;
 using buffer_traits_t = BufferTraits<base_traits_t, BufferPolicyT::LOCKED_BUFFER_WITH_MUTEX, 32>;
 using index_traits_t = IndexTraits<base_traits_t>;
-using edge_generator_traits_t = EdgeGeneratorTraits<computer_traits_t, buffer_traits_t, index_traits_t>;
 using vertex_generator_traits_t = VertexGeneratorTraits<computer_traits_t>;
 using router_traits_t = RouterTraits<computer_traits_t, index_traits_t, false>;
+using edge_generator_traits_t = EdgeGeneratorTraits<computer_traits_t, buffer_traits_t, index_traits_t, router_traits_t>;
 using graph_factory_traits_t = GraphFactoryTraits<
     vertex_generator_traits_t,
     edge_generator_traits_t,
@@ -119,6 +119,7 @@ using index_size_calculator_t = typename index_traits_t::index_size_calculator_t
 using triangle_updater_t = typename edge_generator_traits_t::triangle_updater_t;
 using reverse_updater_t = typename edge_generator_traits_t::reverse_updater_t;
 using random_updater_t = typename edge_generator_traits_t::random_updater_t;
+using routing_updater_t = typename edge_generator_traits_t::routing_updater_t;
 using random_eg_t = typename edge_generator_traits_t::random_eg_t;
 using ivf_partitions_t = typename edge_generator_traits_t::ivf_partitions_t;
 using ivf_construct_policy_t = typename edge_generator_traits_t::ivf_construct_policy_t;
