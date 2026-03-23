@@ -126,6 +126,12 @@ public:
         return static_cast<vertex_id_t>(entry_id_and_status & MASK_ID);
     }
 
+    /** @brief Check if this entry is an invalid/padding sentinel (stored ID == MASK_ID). */
+    __attribute__((always_inline))
+    auto is_invalid() const -> bool {
+        return (entry_id_and_status & MASK_ID) == MASK_ID;
+    }
+
     /** @brief Check if the entry is marked as "explored" (Bit 31 is set). */
     __attribute__((always_inline))
     auto is_explored() const -> bool {

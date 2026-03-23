@@ -95,6 +95,7 @@ public:
         knn_ids.reserve(knn_results.size());
         knn_dists.reserve(knn_results.size());
         for (const auto& entry : knn_results) {
+            if (entry.is_invalid()) { continue; }
             knn_ids.push_back(entry.get_id());
             knn_dists.push_back(entry.get_distance());
         }

@@ -90,7 +90,9 @@ public:
     __attribute__((always_inline))
     auto query_impl(const vec_ele_t* query_vec) const -> knn_results_t {
         auto& visited_table = _visited_table_pool.acquire();
-        return _hierarchical_search(query_vec, visited_table);
+        auto results = _hierarchical_search(query_vec, visited_table);
+        visited_table.clear();
+        return results;
     }
 
     /**

@@ -92,7 +92,9 @@ public:
     __attribute__((always_inline))
     auto query_impl(const vec_ele_t* query_vec) const -> knn_results_t {
         auto& visited_table = _visited_table_pool.acquire();
-        return _beam_search(query_vec, visited_table, _random_seq);
+        auto results = _beam_search(query_vec, visited_table, _random_seq);
+        visited_table.clear();
+        return results;
     }
 
     /**
@@ -104,7 +106,9 @@ public:
     __attribute__((always_inline))
     auto query_impl(const vec_ele_t* query_vec, const vertex_id_t entry_point) const -> knn_results_t {
         auto& visited_table = _visited_table_pool.acquire();
-        return _beam_search(query_vec, visited_table, entry_point);
+        auto results = _beam_search(query_vec, visited_table, entry_point);
+        visited_table.clear();
+        return results;
     }
 
     /**
