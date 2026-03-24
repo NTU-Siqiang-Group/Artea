@@ -81,7 +81,7 @@ public:
             logger.info(fmt::format("Scale coeffs: {}", g_config.edges_builder_config.scale_coeffs()));
             logger.info(fmt::format("Shifted coeffs: {}", g_config.edges_builder_config.shifted_coeffs()));
             logger.info(fmt::format("Num outer iters: {}", g_config.edges_builder_config.num_outer_iters()));
-            logger.info(fmt::format("Num inner iters: {}", g_config.edges_builder_config.num_inner_iters()));
+            logger.info(fmt::format("Num inner iters: {}", g_config.edges_builder_config.num_triu_iters()));
             logger.info(fmt::format("Top-k: {}", g_config.topk));
         }
 
@@ -174,7 +174,7 @@ int main(int argc, char** argv) {
     program.add_argument("--scale-coeffs").default_value(1.0f).scan<'g', float>();
     program.add_argument("--shifted-coeffs").default_value(0.0f).scan<'g', float>();
     program.add_argument("--num-outer-iters").default_value(4u).scan<'u', uint32_t>();
-    program.add_argument("--num-inner-iters").default_value(14u).scan<'u', uint32_t>();
+    program.add_argument("--num-triu-iters").default_value(14u).scan<'u', uint32_t>();
     program.add_argument("--prefill-ratio").default_value(0.6f).scan<'g', float>();
     program.add_argument("-k", "--topk").default_value(20u).scan<'u', uint32_t>();
     program.add_argument("--candidate-queue-config")
@@ -199,7 +199,7 @@ int main(int argc, char** argv) {
         program.get<float>("--scale-coeffs"),
         program.get<float>("--shifted-coeffs"),
         program.get<uint32_t>("--num-outer-iters"),
-        program.get<uint32_t>("--num-inner-iters"),
+        program.get<uint32_t>("--num-triu-iters"),
         program.get<float>("--prefill-ratio")
     );
     g_config.extracted_nbr_size = program.get<uint32_t>("--extracted-nbr-size");

@@ -81,7 +81,7 @@ public:
             {"scale_coeffs", flat_graph.edges_builder_config().scale_coeffs()},
             {"shifted_coeffs", flat_graph.edges_builder_config().shifted_coeffs()},
             {"num_outer_iters", flat_graph.edges_builder_config().num_outer_iters()},
-            {"num_inner_iters", flat_graph.edges_builder_config().num_inner_iters()}
+            {"num_triu_iters", flat_graph.edges_builder_config().num_triu_iters()}
         };
 
         std::string metadata_path = index_dir + "/metadata.json";
@@ -200,7 +200,7 @@ public:
             meta["edges_builder_config"]["scale_coeffs"].get<typename edges_builder_config_t::ratio_t>(),
             meta["edges_builder_config"]["shifted_coeffs"].get<typename edges_builder_config_t::ratio_t>(),
             meta["edges_builder_config"]["num_outer_iters"].get<typename edges_builder_config_t::iter_t>(),
-            meta["edges_builder_config"]["num_inner_iters"].get<typename edges_builder_config_t::iter_t>()
+            meta["edges_builder_config"]["num_triu_iters"].get<typename edges_builder_config_t::iter_t>()
         );
 
         flat_graph_t flat_graph(vecs_data, layer_config, edges_builder_config);

@@ -299,6 +299,7 @@ public:
         using reverse_updater_t = typename EdgeGeneratorTraitsT::reverse_updater_t;
         using random_updater_t = typename EdgeGeneratorTraitsT::random_updater_t;
         using routing_updater_t = typename EdgeGeneratorTraitsT::routing_updater_t;
+        using truncate_updater_t = typename EdgeGeneratorTraitsT::truncate_updater_t;
 
         const auto& vecs_arr = _flat_graph->get_vecs_data();
         auto& log_table = _log_table;
@@ -321,6 +322,10 @@ public:
             // RoutingUpdater constructor signature:
             // RoutingUpdater(dist_func, vecs_arr, log_table, flat_graph, candidate_queue_size)
             return UpdaterT(_dist_func, vecs_arr, log_table, *_flat_graph, std::forward<Args>(args)...);
+        } else if constexpr (std::is_same_v<UpdaterT, truncate_updater_t>) {
+            // TruncateUpdater constructor signature:
+            // TruncateUpdater(dist_func, vecs_arr, log_table, flat_graph)
+            return UpdaterT(_dist_func, vecs_arr, log_table, *_flat_graph);
         } else {
             ARTEA_ERROR("Unsupported updater type");
         }

@@ -188,7 +188,7 @@ int main(int argc, char** argv) {
                 params.layer_config.max_nbr_size(),
                 params.layer_config.reserved_nbr_size(),
                 params.edges_builder_config.num_outer_iters(),
-                params.edges_builder_config.num_inner_iters(),
+                params.edges_builder_config.num_triu_iters(),
                 params.edges_builder_config.scale_coeffs(),
                 params.edges_builder_config.shifted_coeffs()
             ));

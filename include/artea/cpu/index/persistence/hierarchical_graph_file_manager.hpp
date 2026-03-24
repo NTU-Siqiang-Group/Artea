@@ -88,13 +88,13 @@ public:
             {"scale_coeffs", hierarchical_graph.bottom_edges_builder_config().scale_coeffs()},
             {"shifted_coeffs", hierarchical_graph.bottom_edges_builder_config().shifted_coeffs()},
             {"num_outer_iters", hierarchical_graph.bottom_edges_builder_config().num_outer_iters()},
-            {"num_inner_iters", hierarchical_graph.bottom_edges_builder_config().num_inner_iters()}
+            {"num_triu_iters", hierarchical_graph.bottom_edges_builder_config().num_triu_iters()}
         };
         meta["upper_edges_builder_config"] = {
             {"scale_coeffs", hierarchical_graph.upper_edges_builder_config().scale_coeffs()},
             {"shifted_coeffs", hierarchical_graph.upper_edges_builder_config().shifted_coeffs()},
             {"num_outer_iters", hierarchical_graph.upper_edges_builder_config().num_outer_iters()},
-            {"num_inner_iters", hierarchical_graph.upper_edges_builder_config().num_inner_iters()}
+            {"num_triu_iters", hierarchical_graph.upper_edges_builder_config().num_triu_iters()}
         };
 
         // Save vertices_builder_config based on which variant is active
@@ -222,13 +222,13 @@ public:
             meta["bottom_edges_builder_config"]["scale_coeffs"].get<typename edges_builder_config_t::ratio_t>(),
             meta["bottom_edges_builder_config"]["shifted_coeffs"].get<typename edges_builder_config_t::ratio_t>(),
             meta["bottom_edges_builder_config"]["num_outer_iters"].get<typename edges_builder_config_t::iter_t>(),
-            meta["bottom_edges_builder_config"]["num_inner_iters"].get<typename edges_builder_config_t::iter_t>()
+            meta["bottom_edges_builder_config"]["num_triu_iters"].get<typename edges_builder_config_t::iter_t>()
         );
         edges_builder_config_t upper_edges_builder_config(
             meta["upper_edges_builder_config"]["scale_coeffs"].get<typename edges_builder_config_t::ratio_t>(),
             meta["upper_edges_builder_config"]["shifted_coeffs"].get<typename edges_builder_config_t::ratio_t>(),
             meta["upper_edges_builder_config"]["num_outer_iters"].get<typename edges_builder_config_t::iter_t>(),
-            meta["upper_edges_builder_config"]["num_inner_iters"].get<typename edges_builder_config_t::iter_t>()
+            meta["upper_edges_builder_config"]["num_triu_iters"].get<typename edges_builder_config_t::iter_t>()
         );
 
         // Restore vertices_builder_config based on type

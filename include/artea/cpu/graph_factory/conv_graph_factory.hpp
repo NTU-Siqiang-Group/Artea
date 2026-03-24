@@ -27,6 +27,7 @@
 #include <memory>
 #include <utility>
 #include <chrono>
+#include <functional>
 #include <fmt/format.h>
 #include <tbb/parallel_for.h>
 #include <tbb/blocked_range.h>
@@ -58,6 +59,7 @@ class ConvGraphFactory :
     using triangle_updater_t = typename GraphFactoryTraitsT::triangle_updater_t;
     using reverse_updater_t = typename GraphFactoryTraitsT::reverse_updater_t;
     using routing_updater_t = typename GraphFactoryTraitsT::routing_updater_t;
+    using truncate_updater_t = typename GraphFactoryTraitsT::truncate_updater_t;
     using vector_array_t = typename GraphFactoryTraitsT::vector_array_t;
     using query_vecs_t = typename GraphFactoryTraitsT::query_vecs_t;
     using ground_truth_t = typename GraphFactoryTraitsT::ground_truth_t;
@@ -74,43 +76,9 @@ public:
         layer_config_t layer_config,
         edges_builder_config_t edges_builder_config
     ) -> flat_graph_t {
-        const vertex_num_t num_vertices = static_cast<vertex_num_t>(base_vecs.get_num_vecs());
-        flat_graph_t flat_graph(
-            /* vecs_data =          */ base_vecs,
-            /* layer_config =       */ layer_config,
-            /* edges_builder_config = */ edges_builder_config
-        );
+        flat_graph_t flat_graph(base_vecs, layer_config, edges_builder_config);
         dist_func_t dist_func(base_vecs.get_vec_dim());
-
-        // generate random edges first
-        random_eg_t random_eg(dist_func);
-        const vertex_num_t init_nbr_size = static_cast<vertex_num_t>(
-            layer_config.max_nbr_size() * edges_builder_config.prefill_ratio()
-        );
-        random_eg.generate(flat_graph, /* init_nbr_size = */ init_nbr_size);
-        propagate_engine_t propagate_engine(num_vertices, dist_func);
-        propagate_engine.set_graph(flat_graph);
-        // Create triangle updater and reverse updater
-        auto triangle_updater = propagate_engine.template make_updater<triangle_updater_t>(
-            edges_builder_config.scale_coeffs(),
-            edges_builder_config.shifted_coeffs()
-        );
-        auto reverse_updater = propagate_engine.template make_updater<reverse_updater_t>();
-        auto routing_updater = propagate_engine.template make_updater<routing_updater_t>(init_nbr_size, init_nbr_size);
-        // run propagation engine to refine the graph
-        for (iter_t outer_iter = 0; outer_iter < edges_builder_config.num_outer_iters(); ++outer_iter) {
-            // propagate_engine.run(1, reverse_updater);
-            propagate_engine.run(edges_builder_config.num_inner_iters(), triangle_updater);
-            // if (outer_iter != edges_builder_config.num_outer_iters() - 1) {
-            //     propagate_engine.run(1, reverse_updater);
-            // }
-            propagate_engine.run(1, routing_updater);
-            propagate_engine.run(1, reverse_updater);
-            if (outer_iter == edges_builder_config.num_outer_iters() - 1) {
-                propagate_engine.run(1, triangle_updater, false);
-            }
-        }
-
+        _build_loop(flat_graph, dist_func, edges_builder_config);
         return flat_graph;
     }
 
@@ -123,52 +91,81 @@ public:
         const vector_array_t& base_vecs = dataset.get_base_vecs();
         const query_vecs_t& query_vecs = dataset.get_query_vecs();
         const ground_truth_t& groundtruth = dataset.get_gt_vecs();
-        const vertex_num_t num_vertices = static_cast<vertex_num_t>(base_vecs.get_num_vecs());
 
         flat_graph_t flat_graph(base_vecs, layer_config, edges_builder_config);
         dist_func_t dist_func(base_vecs.get_vec_dim());
-
-        random_eg_t random_eg(dist_func);
-        const vertex_num_t init_nbr_size = static_cast<vertex_num_t>(
-            layer_config.max_nbr_size() * edges_builder_config.prefill_ratio()
-        );
-        random_eg.generate(flat_graph, init_nbr_size);
-        propagate_engine_t propagate_engine(num_vertices, dist_func);
-        propagate_engine.set_graph(flat_graph);
-        auto triangle_updater = propagate_engine.template make_updater<triangle_updater_t>(
-            edges_builder_config.scale_coeffs(),
-            edges_builder_config.shifted_coeffs()
-        );
-        auto reverse_updater = propagate_engine.template make_updater<reverse_updater_t>();
-        auto routing_updater = propagate_engine.template make_updater<routing_updater_t>(init_nbr_size, init_nbr_size);
 
         recall_estimator_t recall_estimator;
         const vertex_num_t topk = groundtruth.get_vec_dim();
         monolayer_graph_router_t router(base_vecs, dist_func, flat_graph, topk, topk);
         router.initialize();
 
-        for (iter_t outer_iter = 0; outer_iter < edges_builder_config.num_outer_iters(); ++outer_iter) {
-            propagate_engine.run(edges_builder_config.num_inner_iters(), triangle_updater);
-            propagate_engine.run(1, reverse_updater);
-            propagate_engine.run(1, routing_updater);
-            if (outer_iter == edges_builder_config.num_outer_iters() - 1) {
-                propagate_engine.run(1, triangle_updater, false);
+        _build_loop(flat_graph, dist_func, edges_builder_config,
+            [&](iter_t outer_iter) {
+                auto t0 = std::chrono::high_resolution_clock::now();
+                auto results = router.batch_query(query_vecs);
+                auto t1 = std::chrono::high_resolution_clock::now();
+                double qps = query_vecs.get_num_vecs() * 1e6 /
+                    std::chrono::duration_cast<std::chrono::microseconds>(t1 - t0).count();
+                double recall = recall_estimator.calculate_recall_at_k(
+                    results, groundtruth, topk, query_vecs.get_num_vecs());
+                ARTEA_INFO(fmt::format(
+                    "OuterIter {}: Recall@{}={:.4f}, QPS={:.2f}",
+                    outer_iter, topk, recall, qps
+                ));
             }
-
-            auto t0 = std::chrono::high_resolution_clock::now();
-            auto results = router.batch_query(query_vecs);
-            auto t1 = std::chrono::high_resolution_clock::now();
-            double qps = query_vecs.get_num_vecs() * 1e6 /
-                std::chrono::duration_cast<std::chrono::microseconds>(t1 - t0).count();
-            double recall = recall_estimator.calculate_recall_at_k(results, groundtruth, topk, query_vecs.get_num_vecs());
-
-            ARTEA_INFO(fmt::format(
-                "OuterIter {}: Recall@{}={:.4f}, QPS={:.2f}",
-                outer_iter, topk, recall, qps
-            ));
-        }
+        );
 
         return flat_graph;
+    }
+
+private:
+
+    /**
+     * @brief Core build loop shared by all construct_graph_impl overloads.
+     *
+     * Initializes random edges, creates all updaters, then runs the outer/inner
+     * iteration schedule. An optional per-iter callback is invoked at the end of
+     * each outer iteration (e.g. for recall/QPS profiling in the dataset overload).
+     *
+     * @param flat_graph       The graph being constructed (modified in-place).
+     * @param dist_func        Distance function for this graph.
+     * @param config           Edge builder configuration (iters, coeffs, prefill_ratio, …).
+     * @param on_iter_end      Optional callback called after each outer iteration with
+     *                         the current outer iteration index. Pass nullptr to skip.
+     */
+    auto _build_loop(
+        flat_graph_t& flat_graph,
+        const dist_func_t& dist_func,
+        const edges_builder_config_t& config,
+        std::function<void(iter_t)> on_iter_end = nullptr
+    ) -> void {
+        const vertex_num_t num_vertices = flat_graph.get_num_vertices();
+        const vertex_num_t init_nbr_size = static_cast<vertex_num_t>(
+            flat_graph.layer_config().max_nbr_size() * config.prefill_ratio()
+        );
+
+        random_eg_t random_eg(dist_func);
+        random_eg.generate(flat_graph, init_nbr_size);
+
+        propagate_engine_t propagate_engine(num_vertices, dist_func);
+        propagate_engine.set_graph(flat_graph);
+
+        auto triangle_updater  = propagate_engine.template make_updater<triangle_updater_t>(
+            config.scale_coeffs(), config.shifted_coeffs());
+        auto reverse_updater   = propagate_engine.template make_updater<reverse_updater_t>();
+        auto routing_updater   = propagate_engine.template make_updater<routing_updater_t>(init_nbr_size, init_nbr_size);
+        auto truncate_updater  = propagate_engine.template make_updater<truncate_updater_t>();
+
+        for (iter_t outer_iter = 0; outer_iter < config.num_outer_iters(); ++outer_iter) {
+            propagate_engine.run(config.num_triu_iters(), triangle_updater);
+            propagate_engine.run(1, routing_updater);
+            propagate_engine.run(1, reverse_updater);
+            if (outer_iter == config.num_outer_iters() - 1) {
+                propagate_engine.run(1, triangle_updater, false);
+            }
+            if (on_iter_end) { on_iter_end(outer_iter); }
+        }
     }
 
 };  // class ConvGraphFactory

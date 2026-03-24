@@ -37,6 +37,7 @@ template <typename EdgeGeneratorTraitsT> class TriangleUpdater;
 template <typename EdgeGeneratorTraitsT> class ReverseUpdater;
 template <typename EdgeGeneratorTraitsT> class RandomUpdater;
 template <typename EdgeGeneratorTraitsT> class RoutingUpdater;
+template <typename EdgeGeneratorTraitsT> class TruncateUpdater;
 template <typename EdgeGeneratorTraitsT> class RandomEG;
 template <typename EdgeGeneratorTraitsT, bool SelectiveSchedule> class PropagateEngine;
 template <typename EdgeGeneratorTraitsT> class IVFPartitions;
@@ -69,6 +70,9 @@ struct EdgeGeneratorTraits :
 
     /** @brief Routing-based neighbor updater (uses construct-mode router). */
     using routing_updater_t = RoutingUpdater<edge_generator_traits_t>;
+
+    /** @brief Truncate updater: trims neighbor arrays to max_nbr_size. */
+    using truncate_updater_t = TruncateUpdater<edge_generator_traits_t>;
 
     /** @brief Random edge generator. */
     using random_eg_t = RandomEG<edge_generator_traits_t>;

@@ -45,7 +45,7 @@ struct EdgesBuilderConfigParams {
     float scale_coeffs;
     float shifted_coeffs;
     uint32_t num_outer_iters;
-    uint32_t num_inner_iters;
+    uint32_t num_triu_iters;
     float prefill_ratio;
 };
 
@@ -188,14 +188,14 @@ protected:
             g_config.bottom_edges_config.scale_coeffs,
             g_config.bottom_edges_config.shifted_coeffs,
             g_config.bottom_edges_config.num_outer_iters,
-            g_config.bottom_edges_config.num_inner_iters,
+            g_config.bottom_edges_config.num_triu_iters,
             g_config.bottom_edges_config.prefill_ratio
         );
         artea_graph::edges_builder_config_t upper_edges_config(
             g_config.upper_edges_config.scale_coeffs,
             g_config.upper_edges_config.shifted_coeffs,
             g_config.upper_edges_config.num_outer_iters,
-            g_config.upper_edges_config.num_inner_iters,
+            g_config.upper_edges_config.num_triu_iters,
             g_config.upper_edges_config.prefill_ratio
         );
 
@@ -528,14 +528,14 @@ int main(int argc, char** argv) {
     g_config.bottom_edges_config.scale_coeffs = program.get<float>("--bl-scale-coeffs");
     g_config.bottom_edges_config.shifted_coeffs = program.get<float>("--bl-shifted-coeffs");
     g_config.bottom_edges_config.num_outer_iters = program.get<uint32_t>("--bl-num-outer-iters");
-    g_config.bottom_edges_config.num_inner_iters = program.get<uint32_t>("--bl-num-inner-iters");
+    g_config.bottom_edges_config.num_triu_iters = program.get<uint32_t>("--bl-num-inner-iters");
     g_config.bottom_edges_config.prefill_ratio = program.get<float>("--prefill-ratio");
     g_config.bottom_edges_config.prefill_ratio = program.get<float>("--bl-prefill-ratio");
 
     g_config.upper_edges_config.scale_coeffs = program.get<float>("--ul-scale-coeffs");
     g_config.upper_edges_config.shifted_coeffs = program.get<float>("--ul-shifted-coeffs");
     g_config.upper_edges_config.num_outer_iters = program.get<uint32_t>("--ul-num-outer-iters");
-    g_config.upper_edges_config.num_inner_iters = program.get<uint32_t>("--ul-num-inner-iters");
+    g_config.upper_edges_config.num_triu_iters = program.get<uint32_t>("--ul-num-inner-iters");
     g_config.upper_edges_config.prefill_ratio = program.get<float>("--prefill-ratio");
 
     g_config.topk = program.get<uint32_t>("--topk");
@@ -584,11 +584,11 @@ int main(int argc, char** argv) {
     std::cout << "Bottom edges scale coeffs: " << g_config.bottom_edges_config.scale_coeffs << std::endl;
     std::cout << "Bottom edges shifted coeffs: " << g_config.bottom_edges_config.shifted_coeffs << std::endl;
     std::cout << "Bottom edges num outer iters: " << g_config.bottom_edges_config.num_outer_iters << std::endl;
-    std::cout << "Bottom edges num inner iters: " << g_config.bottom_edges_config.num_inner_iters << std::endl;
+    std::cout << "Bottom edges num inner iters: " << g_config.bottom_edges_config.num_triu_iters << std::endl;
     std::cout << "Upper edges scale coeffs: " << g_config.upper_edges_config.scale_coeffs << std::endl;
     std::cout << "Upper edges shifted coeffs: " << g_config.upper_edges_config.shifted_coeffs << std::endl;
     std::cout << "Upper edges num outer iters: " << g_config.upper_edges_config.num_outer_iters << std::endl;
-    std::cout << "Upper edges num inner iters: " << g_config.upper_edges_config.num_inner_iters << std::endl;
+    std::cout << "Upper edges num inner iters: " << g_config.upper_edges_config.num_triu_iters << std::endl;
     std::cout << "\n--- Router Configuration ---" << std::endl;
     std::cout << "Top-k: " << g_config.topk << std::endl;
     std::cout << "Candidate queue config: " << g_config.queue_start << "," << g_config.queue_end << "," << g_config.queue_step << std::endl;

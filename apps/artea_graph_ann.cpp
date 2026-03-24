@@ -283,14 +283,14 @@ int main(int argc, char** argv) {
     std::cout << fmt::format("    Scale coeffs:         {}", hierarchical_graph.bottom_edges_builder_config().scale_coeffs()) << std::endl;
     std::cout << fmt::format("    Shifted coeffs:       {}", hierarchical_graph.bottom_edges_builder_config().shifted_coeffs()) << std::endl;
     std::cout << fmt::format("    Num outer iters:      {}", hierarchical_graph.bottom_edges_builder_config().num_outer_iters()) << std::endl;
-    std::cout << fmt::format("    Num inner iters:      {}", hierarchical_graph.bottom_edges_builder_config().num_inner_iters()) << std::endl;
+    std::cout << fmt::format("    Num inner iters:      {}", hierarchical_graph.bottom_edges_builder_config().num_triu_iters()) << std::endl;
     std::cout << "  Upper layers:" << std::endl;
     std::cout << fmt::format("    Max nbr size:         {}", hierarchical_graph.upper_layer_config().max_nbr_size()) << std::endl;
     std::cout << fmt::format("    Reserved nbr size:    {}", hierarchical_graph.upper_layer_config().reserved_nbr_size()) << std::endl;
     std::cout << fmt::format("    Scale coeffs:         {}", hierarchical_graph.upper_edges_builder_config().scale_coeffs()) << std::endl;
     std::cout << fmt::format("    Shifted coeffs:       {}", hierarchical_graph.upper_edges_builder_config().shifted_coeffs()) << std::endl;
     std::cout << fmt::format("    Num outer iters:      {}", hierarchical_graph.upper_edges_builder_config().num_outer_iters()) << std::endl;
-    std::cout << fmt::format("    Num inner iters:      {}", hierarchical_graph.upper_edges_builder_config().num_inner_iters()) << std::endl;
+    std::cout << fmt::format("    Num inner iters:      {}", hierarchical_graph.upper_edges_builder_config().num_triu_iters()) << std::endl;
     std::cout << "\n--- Query Config ---" << std::endl;
     std::cout << fmt::format("  Top-k:                  {}", topk) << std::endl;
     std::cout << fmt::format("  Candidate queue size:   {}", candidate_queue_size) << std::endl;

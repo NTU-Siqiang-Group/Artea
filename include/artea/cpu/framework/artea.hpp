@@ -94,6 +94,7 @@
 #include <artea/cpu/edge_generator/propagate_engine.hpp>
 #include <artea/cpu/edge_generator/ivf_partitions.hpp>
 #include <artea/cpu/edge_generator/routing_updater.hpp>
+#include <artea/cpu/edge_generator/truncate_updater.hpp>
 
 #include <artea/cpu/utils/bit_ops.hpp>
 #include <artea/cpu/utils/centroid_computer.hpp>

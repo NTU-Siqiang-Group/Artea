@@ -138,7 +138,7 @@ TEST_F(FlatGraphPersistenceTest, FlatGraphSnapshotRestore) {
     EXPECT_EQ(original_graph.edges_builder_config().num_outer_iters(), restored_graph.edges_builder_config().num_outer_iters())
         << "Number of outer iterations should match";
 
-    EXPECT_EQ(original_graph.edges_builder_config().num_inner_iters(), restored_graph.edges_builder_config().num_inner_iters())
+    EXPECT_EQ(original_graph.edges_builder_config().num_triu_iters(), restored_graph.edges_builder_config().num_triu_iters())
         << "Number of inner iterations should match";
 
     // Check neighbor arrays

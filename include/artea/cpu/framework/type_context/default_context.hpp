@@ -120,6 +120,7 @@ using triangle_updater_t = typename edge_generator_traits_t::triangle_updater_t;
 using reverse_updater_t = typename edge_generator_traits_t::reverse_updater_t;
 using random_updater_t = typename edge_generator_traits_t::random_updater_t;
 using routing_updater_t = typename edge_generator_traits_t::routing_updater_t;
+using truncate_updater_t = typename edge_generator_traits_t::truncate_updater_t;
 using random_eg_t = typename edge_generator_traits_t::random_eg_t;
 using ivf_partitions_t = typename edge_generator_traits_t::ivf_partitions_t;
 using ivf_construct_policy_t = typename edge_generator_traits_t::ivf_construct_policy_t;

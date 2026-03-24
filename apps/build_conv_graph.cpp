@@ -37,7 +37,7 @@ struct GraphParams {
     ratio_t scale_coeffs = 1.00;
     ratio_t shifted_coeffs = 0.00;
     iter_t num_outer_iters = 4;
-    iter_t num_inner_iters = 14;
+    iter_t num_triu_iters = 14;
     ratio_t prefill_ratio = 0.6;
 };
 
@@ -79,7 +79,7 @@ int main(int argc, char** argv) {
         .scan<'u', uint32_t>()
         .help("Number of outer iterations");
 
-    program.add_argument("--num-inner-iters")
+    program.add_argument("--num-triu-iters")
         .default_value(uint32_t(14))
         .scan<'u', uint32_t>()
         .help("Number of inner iterations");
@@ -108,7 +108,7 @@ int main(int argc, char** argv) {
     params.scale_coeffs = program.get<double>("--scale-coeffs");
     params.shifted_coeffs = program.get<double>("--shifted-coeffs");
     params.num_outer_iters = program.get<uint32_t>("--num-outer-iters");
-    params.num_inner_iters = program.get<uint32_t>("--num-inner-iters");
+    params.num_triu_iters = program.get<uint32_t>("--num-triu-iters");
     params.prefill_ratio = program.get<float>("--prefill-ratio");
 
     logger.info(fmt::format("Graph Construction Configuration:"));
@@ -120,7 +120,7 @@ int main(int argc, char** argv) {
     logger.info(fmt::format("  Scale coefficient: {:.2f}", params.scale_coeffs));
     logger.info(fmt::format("  Shifted coefficient: {:.2f}", params.shifted_coeffs));
     logger.info(fmt::format("  Outer iterations: {}", params.num_outer_iters));
-    logger.info(fmt::format("  Inner iterations: {}", params.num_inner_iters));
+    logger.info(fmt::format("  Inner iterations: {}", params.num_triu_iters));
 
     // Load dataset
     logger.info("Loading dataset...");
@@ -142,7 +142,7 @@ int main(int argc, char** argv) {
         params.scale_coeffs,
         params.shifted_coeffs,
         params.num_outer_iters,
-        params.num_inner_iters,
+        params.num_triu_iters,
         params.prefill_ratio
     );
 
@@ -188,7 +188,7 @@ int main(int argc, char** argv) {
     std::cout << fmt::format("  Scale coeffs:           {:.2f}", params.scale_coeffs) << std::endl;
     std::cout << fmt::format("  Shifted coeffs:         {:.2f}", params.shifted_coeffs) << std::endl;
     std::cout << fmt::format("  Num outer iters:        {}", params.num_outer_iters) << std::endl;
-    std::cout << fmt::format("  Num inner iters:        {}", params.num_inner_iters) << std::endl;
+    std::cout << fmt::format("  Num inner iters:        {}", params.num_triu_iters) << std::endl;
     std::cout << "\n--- Build Results ---" << std::endl;
     std::cout << fmt::format("  Num vertices:           {}", flat_graph.get_num_vertices()) << std::endl;
     std::cout << fmt::format("  Index size:             {:.2f} MB ({} bytes)", index_size_info.total_mb, index_size_info.total_bytes) << std::endl;
@@ -210,7 +210,7 @@ int main(int argc, char** argv) {
         {"scale_coeffs", params.scale_coeffs},
         {"shifted_coeffs", params.shifted_coeffs},
         {"num_outer_iters", params.num_outer_iters},
-        {"num_inner_iters", params.num_inner_iters}
+        {"num_triu_iters", params.num_triu_iters}
     };
 
     // Get current timestamp in ISO format
@@ -232,7 +232,7 @@ int main(int argc, char** argv) {
     index_params["scale_coeffs"] = params.scale_coeffs;
     index_params["shifted_coeffs"] = params.shifted_coeffs;
     index_params["num_outer_iters"] = params.num_outer_iters;
-    index_params["num_inner_iters"] = params.num_inner_iters;
+    index_params["num_triu_iters"] = params.num_triu_iters;
 
     // Use relative path from project root: output_dir/subdir/dirname
     std::filesystem::path relative_index_path = std::filesystem::path(output_dir) / subdir / dirname;

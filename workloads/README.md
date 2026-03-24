@@ -15,7 +15,7 @@ Workload files use JSON format with the following structure:
       "dataset": "sift-1m",
       "extracted_nbr_size": 20,
       "max_nbr_size": 32,
-      "num_inner_iters": 14,
+      "num_triu_iters": 14,
       "num_outer_iters": 4,
       "scale_coeffs": 1.0,
       "shifted_coeffs": 0.0

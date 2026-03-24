@@ -193,7 +193,7 @@ int main(int argc, char** argv) {
     std::cout << fmt::format("  Scale coeffs:           {}", flat_graph.edges_builder_config().scale_coeffs()) << std::endl;
     std::cout << fmt::format("  Shifted coeffs:         {}", flat_graph.edges_builder_config().shifted_coeffs()) << std::endl;
     std::cout << fmt::format("  Num outer iters:        {}", flat_graph.edges_builder_config().num_outer_iters()) << std::endl;
-    std::cout << fmt::format("  Num inner iters:        {}", flat_graph.edges_builder_config().num_inner_iters()) << std::endl;
+    std::cout << fmt::format("  Num inner iters:        {}", flat_graph.edges_builder_config().num_triu_iters()) << std::endl;
     std::cout << "\n--- Query Config ---" << std::endl;
     std::cout << fmt::format("  Top-k:                  {}", topk) << std::endl;
     std::cout << fmt::format("  Candidate queue size:   {}", candidate_queue_size) << std::endl;

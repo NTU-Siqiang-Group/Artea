@@ -40,19 +40,19 @@ struct EdgesBuilderConfig {
      * @param scale_coeffs Scale coefficient for RNG pruning.
      * @param shifted_coeffs Shift coefficient for RNG pruning.
      * @param num_outer_iters Number of outer iterations (recommend: 4).
-     * @param num_inner_iters Number of inner iterations (recommend: 14).
+     * @param num_triu_iters Number of inner iterations (recommend: 14).
      */
     EdgesBuilderConfig(
         ratio_t scale_coeffs,
         ratio_t shifted_coeffs,
         iter_t num_outer_iters,
-        iter_t num_inner_iters,
+        iter_t num_triu_iters,
         ratio_t prefill_ratio = ratio_t(1)
     ) :
         _scale_coeffs(scale_coeffs),
         _shifted_coeffs(shifted_coeffs),
         _num_outer_iters(num_outer_iters),
-        _num_inner_iters(num_inner_iters),
+        _num_triu_iters(num_triu_iters),
         _prefill_ratio(prefill_ratio)
     {}
 
@@ -60,14 +60,14 @@ struct EdgesBuilderConfig {
     auto scale_coeffs(ratio_t value) -> EdgesBuilderConfig& { _scale_coeffs = value; return *this; }
     auto shifted_coeffs(ratio_t value) -> EdgesBuilderConfig& { _shifted_coeffs = value; return *this; }
     auto num_outer_iters(iter_t value) -> EdgesBuilderConfig& { _num_outer_iters = value; return *this; }
-    auto num_inner_iters(iter_t value) -> EdgesBuilderConfig& { _num_inner_iters = value; return *this; }
+    auto num_triu_iters(iter_t value) -> EdgesBuilderConfig& { _num_triu_iters = value; return *this; }
     auto prefill_ratio(ratio_t value) -> EdgesBuilderConfig& { _prefill_ratio = value; return *this; }
 
     // Const getters
     auto scale_coeffs() const -> ratio_t { return _scale_coeffs; }
     auto shifted_coeffs() const -> ratio_t { return _shifted_coeffs; }
     auto num_outer_iters() const -> iter_t { return _num_outer_iters; }
-    auto num_inner_iters() const -> iter_t { return _num_inner_iters; }
+    auto num_triu_iters() const -> iter_t { return _num_triu_iters; }
     auto prefill_ratio() const -> ratio_t { return _prefill_ratio; }
 
 private:
@@ -81,7 +81,7 @@ private:
     iter_t _num_outer_iters;
 
     /** @brief Number of inner iterations (recommend: 14). */
-    iter_t _num_inner_iters;
+    iter_t _num_triu_iters;
 
     /** @brief Prefill ratio for initial random graph (init_nbr_size = max_nbr_size * prefill_ratio). */
     ratio_t _prefill_ratio = ratio_t(1);
