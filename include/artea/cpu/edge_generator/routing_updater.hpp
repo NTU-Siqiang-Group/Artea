@@ -71,7 +71,7 @@ public:
         const flat_graph_t& flat_graph,
         const vertex_num_t topk,
         const vertex_num_t candidate_queue_size
-    ) : base_class_t(dist_func, vecs_data, log_table),
+    ) : base_class_t(dist_func, vecs_data, log_table, flat_graph),
         _router(vecs_data, dist_func, flat_graph, topk, candidate_queue_size),
         _topk(topk)
     {   _router.initialize();   }
@@ -94,8 +94,14 @@ public:
         std::vector<distance_t> knn_dists;
         knn_ids.reserve(knn_results.size());
         knn_dists.reserve(knn_results.size());
+        const vertex_num_t max_sz = this->_flat_graph.layer_config().max_nbr_size();
         for (const auto& entry : knn_results) {
             if (entry.is_invalid()) { continue; }
+            const nbr_arr_t& target_nbrs = this->_flat_graph.fetch_nbrs(pivot_vid);
+            if (target_nbrs.size() >= max_sz &&
+                target_nbrs[max_sz - 1].get_distance() <= entry.get_distance()) {
+                continue;
+            }
             knn_ids.push_back(entry.get_id());
             knn_dists.push_back(entry.get_distance());
         }

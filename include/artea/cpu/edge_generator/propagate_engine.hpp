@@ -307,16 +307,16 @@ public:
 
         if constexpr (std::is_same_v<UpdaterT, triangle_updater_t>) {
             // TriangleUpdater constructor signature:
-            // TriangleUpdater(dist_func, vecs_arr, log_table, max_nbr_size, scale_coeffs, shifted_coeffs)
-            return UpdaterT(_dist_func, vecs_arr, log_table, max_nbr_size, std::forward<Args>(args)...);
+            // TriangleUpdater(dist_func, vecs_arr, log_table, flat_graph, scale_coeffs, shifted_coeffs)
+            return UpdaterT(_dist_func, vecs_arr, log_table, *_flat_graph, std::forward<Args>(args)...);
         } else if constexpr (std::is_same_v<UpdaterT, reverse_updater_t>) {
             // ReverseUpdater constructor signature:
-            // ReverseUpdater(dist_func, vecs_arr, log_table)
-            return UpdaterT(_dist_func, vecs_arr, log_table);
+            // ReverseUpdater(dist_func, vecs_arr, log_table, flat_graph)
+            return UpdaterT(_dist_func, vecs_arr, log_table, *_flat_graph);
         } else if constexpr (std::is_same_v<UpdaterT, random_updater_t>) {
             // RandomUpdater constructor signature:
-            // RandomUpdater(dist_func, vecs_arr, log_table, num_vertices, rand_gen_size)
-            return UpdaterT(_dist_func, vecs_arr, log_table, num_vertices, std::forward<Args>(args)...);
+            // RandomUpdater(dist_func, vecs_arr, log_table, flat_graph, num_vertices, rand_gen_size)
+            return UpdaterT(_dist_func, vecs_arr, log_table, *_flat_graph, num_vertices, std::forward<Args>(args)...);
         } else if constexpr (std::is_same_v<UpdaterT, routing_updater_t>) {
             // RoutingUpdater constructor signature:
             // RoutingUpdater(dist_func, vecs_arr, log_table, flat_graph, candidate_queue_size)

@@ -51,8 +51,8 @@ class TriangleUpdater :
     using nbr_arr_t = typename EdgeGeneratorTraitsT::nbr_arr_t;
     using log_table_t = typename EdgeGeneratorTraitsT::log_table_t;
     using dist_func_t = typename EdgeGeneratorTraitsT::dist_func_t;
+    using flat_graph_t = typename EdgeGeneratorTraitsT::flat_graph_t;
     using base_class_t = typename EdgeGeneratorTraitsT::template neighbor_updater_t<TriangleUpdater<EdgeGeneratorTraitsT>>;
-
     static constexpr vertex_id_t invalid_vertex_id = EdgeGeneratorTraitsT::invalid_vertex_id;
     static constexpr distance_t nan_distance = EdgeGeneratorTraitsT::nan_distance;
     static constexpr distance_t max_distance = EdgeGeneratorTraitsT::max_distance;
@@ -66,22 +66,16 @@ public:
         const dist_func_t& dist_func,
         const vector_array_t& vecs_data,
         log_table_t& log_table,
-        const vertex_num_t max_nbr_size,
+        const flat_graph_t& flat_graph,
         const ratio_t scale_coeffs,
         const ratio_t shifted_coeffs = 0.0
-    ) : base_class_t(dist_func, vecs_data, log_table),
+    ) : base_class_t(dist_func, vecs_data, log_table, flat_graph),
         _inv_scale_coeffs(static_cast<ratio_t>(1.0) / scale_coeffs),
-        _shifted_coeffs(shifted_coeffs),
-        _max_nbr_size(max_nbr_size) {}
+        _shifted_coeffs(shifted_coeffs) {}
 
     __attribute__((always_inline))
     auto get_max_nbr_size() const -> vertex_num_t {
-        return _max_nbr_size;
-    }
-
-    __attribute__((always_inline))
-    auto set_max_nbr_size(const vertex_num_t max_nbr_size) -> void {
-        _max_nbr_size = max_nbr_size;
+        return this->_flat_graph.layer_config().max_nbr_size();
     }
 
     /**
@@ -128,6 +122,7 @@ public:
 
         nbr_arr_t retained_nbrs;
         retained_nbrs.reserve(origin_nbrs.capacity());
+        const vertex_num_t max_sz = this->_flat_graph.layer_config().max_nbr_size();
 
         // The first neighbor is always the closest to pivot_vid and cannot conflict with any existing neighbor
         retained_nbrs.push_back(origin_nbrs[0]);
@@ -139,7 +134,7 @@ public:
             if (passed) {
                 retained_nbrs.push_back(ori_nbr);
                 // Do not accept because we've reached the maximum neighbor size
-                if (retained_nbrs.size() >= _max_nbr_size) {
+                if (retained_nbrs.size() >= max_sz) {
                     // break;
                     continue;
                 }
@@ -150,11 +145,15 @@ public:
                 /** @brief add append operation
                   * append edge [conflict_vid -- sacrificed_vid]
                   */
-                this->_log_table.write_log(
-                    /* executor_vid = */conflict_vid,
-                    /* nbr_id = */sacrificed_vid,
-                    /* new_edge_dist = */conflict_dist
-                );
+                const nbr_arr_t& conflict_vertex_nbrs = this->_flat_graph.fetch_nbrs(conflict_vid);
+                if (conflict_vertex_nbrs.size() < max_sz ||
+                    conflict_vertex_nbrs[max_sz - 1].get_distance() > conflict_dist) {
+                    this->_log_table.write_log(
+                        /* executor_vid = */conflict_vid,
+                        /* nbr_id = */sacrificed_vid,
+                        /* new_edge_dist = */conflict_dist
+                    );
+                }
             }
         }
 
@@ -173,9 +172,6 @@ private:
 
     /** @brief Shifted coefficient for RNG Triangle Inequality. */
     const ratio_t _shifted_coeffs;
-
-    /** @brief Maximum number of neighbors (for overflow control). */
-    vertex_num_t _max_nbr_size;
 
     /**
      * @brief Compute the pruning threshold based on the pruning condition type.

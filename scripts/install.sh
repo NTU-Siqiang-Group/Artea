@@ -42,7 +42,7 @@ while [[ $# -gt 0 ]]; do
             ;;
         --debug)
             BUILD_TYPE="Debug"
-            PROFILING_DEFS=""
+            PROFILING_DEFS="-DARTEA_PROFILING"
             shift
             ;;
         --profile)

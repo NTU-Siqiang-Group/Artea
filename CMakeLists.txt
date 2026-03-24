@@ -36,6 +36,8 @@ find_package(OpenMP REQUIRED)
 # --- Find Intel TBB ---
 find_package(TBB REQUIRED)
 message(STATUS "TBB_DIR: ${TBB_DIR}")
+# libtbb_debug.so is not available on most distros; always use the release TBB library
+set_target_properties(TBB::tbb PROPERTIES MAP_IMPORTED_CONFIG_DEBUG "RELEASE")
 
 # --- Find Intel MKL ---
 find_package(MKL REQUIRED)
@@ -154,6 +156,7 @@ target_compile_definitions(artea INTERFACE
 	FMT_USE_CONSTEVAL=0
 	# tells Eigen to redirect QR, LU, Cholesky, etc. to MKL routines
 	EIGEN_USE_MKL_ALL
+
 )
 
 target_link_libraries(artea INTERFACE

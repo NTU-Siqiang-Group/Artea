@@ -44,6 +44,7 @@ class RandomUpdater :
     using nbr_arr_t = typename EdgeGeneratorTraitsT::nbr_arr_t;
     using log_table_t = typename EdgeGeneratorTraitsT::log_table_t;
     using dist_func_t = typename EdgeGeneratorTraitsT::dist_func_t;
+    using flat_graph_t = typename EdgeGeneratorTraitsT::flat_graph_t;
     using base_class_t = typename EdgeGeneratorTraitsT::template neighbor_updater_t<RandomUpdater<EdgeGeneratorTraitsT>>;
     using base_traits_t = typename EdgeGeneratorTraitsT::base_traits_t;
 
@@ -62,9 +63,10 @@ public:
         const dist_func_t& dist_func,
         const vector_array_t& vecs_data,
         log_table_t& log_table,
+        const flat_graph_t& flat_graph,
         const vertex_num_t num_vertices,
         const vertex_num_t rand_gen_size
-    ) : base_class_t(dist_func, vecs_data, log_table),
+    ) : base_class_t(dist_func, vecs_data, log_table, flat_graph),
         _rand_gen_size(rand_gen_size),
         _random_seq(num_vertices) {}
 
@@ -90,6 +92,7 @@ public:
         _random_seq.generate(rand_ids_buffer, _rand_gen_size);
 
         const vec_ele_t* pivot_vec = this->_vecs_data.get(pivot_vid);
+        const vertex_num_t max_sz = this->_flat_graph.layer_config().max_nbr_size();
 
         std::vector<vertex_id_t> nbr_ids;
         std::vector<distance_t> nbr_dists;
@@ -99,8 +102,15 @@ public:
         for (vertex_num_t i = 0; i < _rand_gen_size; ++i) {
             const vertex_id_t rand_nbr_id = rand_ids_buffer[i];
             if (rand_nbr_id == pivot_vid) { continue; }
+            const distance_t dist = this->_dist_func(pivot_vec, this->_vecs_data.get(rand_nbr_id));
+
+            const nbr_arr_t& pivot_nbrs = this->_flat_graph.fetch_nbrs(pivot_vid);
+            if (pivot_nbrs.size() >= max_sz &&
+                pivot_nbrs[max_sz - 1].get_distance() <= dist) {
+                continue;
+            }
             nbr_ids.push_back(rand_nbr_id);
-            nbr_dists.push_back(this->_dist_func(pivot_vec, this->_vecs_data.get(rand_nbr_id)));
+            nbr_dists.push_back(dist);
         }
 
         this->_log_table.write_logs(pivot_vid, nbr_ids, nbr_dists);

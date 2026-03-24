@@ -41,14 +41,16 @@ class NeighborUpdater {
     using log_table_t = typename EdgeGeneratorTraitsT::log_table_t;
     using dist_func_t = typename EdgeGeneratorTraitsT::dist_func_t;
     using nbr_arr_checker_t = typename EdgeGeneratorTraitsT::nbr_arr_checker_t;
+    using flat_graph_t = typename EdgeGeneratorTraitsT::flat_graph_t;
 
 public:
 
     NeighborUpdater(
         const dist_func_t& dist_func,
         const vector_array_t& vecs_data,
-        log_table_t& log_table
-    ) : _dist_func(dist_func), _vecs_data(vecs_data), _log_table(log_table) {}
+        log_table_t& log_table,
+        const flat_graph_t& flat_graph
+    ) : _dist_func(dist_func), _vecs_data(vecs_data), _log_table(log_table), _flat_graph(flat_graph) {}
 
     /**
      * @brief Operator that delegates to the derived class's update_impl.
@@ -84,6 +86,9 @@ protected:
 
     /** @brief Reference to the operation log table. */
     log_table_t& _log_table;
+
+    /** @brief Reference to the flat graph for neighbor overflow check. */
+    const flat_graph_t& _flat_graph;
 
 };  //  class NeighborUpdater
 
