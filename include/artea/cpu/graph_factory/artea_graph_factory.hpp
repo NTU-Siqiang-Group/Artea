@@ -19,7 +19,7 @@ namespace cpu {
 
 template <typename GraphFactoryTraitsT>
 class ArteaGraphFactory :
-    public HierarchicalGraphFactory<GraphFactoryTraitsT, ArteaGraphFactory<GraphFactoryTraitsT>>
+    public GraphFactoryTraitsT::template hierarchical_graph_factory_t<ArteaGraphFactory<GraphFactoryTraitsT>>
 {
     using dist_func_t = typename GraphFactoryTraitsT::dist_func_t;
     using flat_graph_t = typename GraphFactoryTraitsT::flat_graph_t;

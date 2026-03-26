@@ -41,6 +41,7 @@ enum class EGPolicyT {
 
 /** ------ Forward Declaration  ------ **/
 template <typename GraphFactoryTraitsT, typename DerivedClassT> class FlatGraphFactory;
+template <typename GraphFactoryTraitsT, typename DerivedClassT> class HierarchicalGraphFactory;
 template <typename GraphFactoryTraitsT> class ConvGraphFactory;
 template <typename GraphFactoryTraitsT> class HierarchicalVerticesBuilder;
 template <typename GraphFactoryTraitsT> class HierarchicalEdgesBuilder;
@@ -67,6 +68,9 @@ struct GraphFactoryTraits :
     /** @brief Type for graph factory. */
     template <typename DerivedClassT>
     using flat_graph_factory_t = FlatGraphFactory<graph_factory_traits_t, DerivedClassT>;
+
+    template <typename DerivedClassT>
+    using hierarchical_graph_factory_t = HierarchicalGraphFactory<graph_factory_traits_t, DerivedClassT>;
 
     using conv_graph_factory_t = ConvGraphFactory<graph_factory_traits_t>;
 
