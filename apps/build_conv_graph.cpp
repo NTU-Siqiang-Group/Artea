@@ -39,6 +39,7 @@ struct GraphParams {
     iter_t num_build_loops = 4;
     iter_t num_triu_iters = 14;
     ratio_t prefill_ratio = 0.6;
+    iter_t num_routing_loops = 1;
 };
 
 int main(int argc, char** argv) {
@@ -89,6 +90,11 @@ int main(int argc, char** argv) {
         .scan<'g', float>()
         .help("Prefill ratio for initial random graph (init_nbr_size = max_nbr_size * prefill_ratio)");
 
+    program.add_argument("--num-routing-loops")
+        .default_value(uint32_t(1))
+        .scan<'u', uint32_t>()
+        .help("Number of routing updater iterations applied at the end of the final build loop");
+
     try {
         program.parse_args(argc, argv);
     } catch (const std::exception& err) {
@@ -110,6 +116,7 @@ int main(int argc, char** argv) {
     params.num_build_loops = program.get<uint32_t>("--num-build-loops");
     params.num_triu_iters = program.get<uint32_t>("--num-triu-iters");
     params.prefill_ratio = program.get<float>("--prefill-ratio");
+    params.num_routing_loops = program.get<uint32_t>("--num-routing-loops");
 
     logger.info(fmt::format("Graph Construction Configuration:"));
     logger.info(fmt::format("  Dataset: {}", dataset_name));
@@ -145,7 +152,8 @@ int main(int argc, char** argv) {
     conv_graph::propagate_config_t propagate_config(
         params.num_build_loops,
         params.num_triu_iters,
-        params.prefill_ratio
+        params.prefill_ratio,
+        params.num_routing_loops
     );
 
     conv_graph_factory_t conv_graph_factory;
@@ -192,6 +200,7 @@ int main(int argc, char** argv) {
     std::cout << fmt::format("  Shifted coeffs:         {:.2f}", params.shifted_coeffs) << std::endl;
     std::cout << fmt::format("  Build loops:            {}", params.num_build_loops) << std::endl;
     std::cout << fmt::format("  Triangle updater iters: {}", params.num_triu_iters) << std::endl;
+    std::cout << fmt::format("  Routing loops:          {}", params.num_routing_loops) << std::endl;
     std::cout << "\n--- Build Results ---" << std::endl;
     std::cout << fmt::format("  Num vertices:           {}", flat_graph.get_num_vertices()) << std::endl;
     std::cout << fmt::format("  Index size:             {:.2f} MB ({} bytes)", index_size_info.total_mb, index_size_info.total_bytes) << std::endl;

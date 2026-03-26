@@ -73,6 +73,8 @@ int main(int argc, char** argv) {
     program.add_argument("--num-build-loops").default_value(4u).scan<'u', uint32_t>();
     program.add_argument("--num-triu-iters").default_value(14u).scan<'u', uint32_t>();
     program.add_argument("--prefill-ratio").default_value(0.6f).scan<'g', float>();
+    program.add_argument("--num-routing-loops").default_value(1u).scan<'u', uint32_t>()
+        .help("Number of routing updater iterations applied at the end of the final build loop");
 
     try {
         program.parse_args(argc, argv);
@@ -143,7 +145,8 @@ int main(int argc, char** argv) {
     artea_graph::propagate_config_t propagate_config(
         program.get<uint32_t>("--num-build-loops"),
         program.get<uint32_t>("--num-triu-iters"),
-        program.get<float>("--prefill-ratio")
+        program.get<float>("--prefill-ratio"),
+        program.get<uint32_t>("--num-routing-loops")
     );
 
     // Create vertices builder config
@@ -256,6 +259,7 @@ int main(int argc, char** argv) {
     std::cout << fmt::format("  Build loops:            {}", program.get<uint32_t>("--num-build-loops")) << std::endl;
     std::cout << fmt::format("  Triangle updater iters: {}", program.get<uint32_t>("--num-triu-iters")) << std::endl;
     std::cout << fmt::format("  Prefill ratio:          {}", program.get<float>("--prefill-ratio")) << std::endl;
+    std::cout << fmt::format("  Routing loops:          {}", program.get<uint32_t>("--num-routing-loops")) << std::endl;
     std::cout << "--- Vertices Builder Config ---" << std::endl;
     std::cout << fmt::format("  Min radius:             {:.6f} (auto-probed)", min_radius) << std::endl;
     std::cout << fmt::format("  Beta:                   {}", program.get<float>("--beta")) << std::endl;

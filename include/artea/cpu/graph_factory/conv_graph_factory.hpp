@@ -166,10 +166,12 @@ private:
                             .next(reverse_updater).next(truncate_updater);
 
             if (build_loop == propagate_config.num_build_loops() - 1) {
-                propagate_engine.next(routing_updater)
-                                .next(triangle_updater)
-                                .next(reverse_updater)
-                                .next(truncate_updater);
+                for (iter_t routing_loop = 0; routing_loop < propagate_config.num_routing_loops(); ++routing_loop) {
+                    propagate_engine.next(routing_updater)
+                                    .next(triangle_updater)
+                                    .next(reverse_updater)
+                                    .next(truncate_updater);
+                }
             }
             // propagate_engine.next(triangle_updater).next(truncate_updater)
             //                 .next(reverse_updater).next(truncate_updater)

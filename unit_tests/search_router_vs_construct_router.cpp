@@ -49,6 +49,7 @@ struct TestConfig {
     uint32_t num_build_loops    = 4;
     uint32_t num_triu_iters     = 14;
     float prefill_ratio         = 0.6f;
+    uint32_t num_routing_loops  = 1;
     uint32_t extracted_nbr_size = 64;
     uint32_t topk               = 20;
     uint32_t queue_size         = 80;
@@ -96,7 +97,8 @@ public:
         layer_config_t layer_cfg(g_config.max_nbr_size, reserved_nbr_size);
         conv_graph::pruning_config_t pruning_cfg(g_config.scale_coeffs, g_config.shifted_coeffs);
         conv_graph::propagate_config_t propagate_cfg(
-            g_config.num_build_loops, g_config.num_triu_iters, g_config.prefill_ratio);
+            g_config.num_build_loops, g_config.num_triu_iters, g_config.prefill_ratio,
+            g_config.num_routing_loops);
 
         logger.info("Building convergent graph...");
         auto t0 = std::chrono::high_resolution_clock::now();
@@ -220,6 +222,7 @@ int main(int argc, char** argv) {
     program.add_argument("--num-build-loops").default_value(4u).scan<'u', uint32_t>();
     program.add_argument("--num-triu-iters").default_value(14u).scan<'u', uint32_t>();
     program.add_argument("--prefill-ratio").default_value(0.6f).scan<'g', float>();
+    program.add_argument("--num-routing-loops").default_value(1u).scan<'u', uint32_t>();
     program.add_argument("--extracted-nbr-size").scan<'u', uint32_t>()
         .help("Extracted neighbor size for search graph (defaults to max-nbr-size)");
     program.add_argument("-k", "--topk").default_value(20u).scan<'u', uint32_t>();
@@ -234,9 +237,10 @@ int main(int argc, char** argv) {
     g_config.max_nbr_size    = program.get<uint32_t>("--max-nbr-size");
     g_config.scale_coeffs    = program.get<float>("--scale-coeffs");
     g_config.shifted_coeffs  = program.get<float>("--shifted-coeffs");
-    g_config.num_build_loops = program.get<uint32_t>("--num-build-loops");
-    g_config.num_triu_iters  = program.get<uint32_t>("--num-triu-iters");
-    g_config.prefill_ratio   = program.get<float>("--prefill-ratio");
+    g_config.num_build_loops    = program.get<uint32_t>("--num-build-loops");
+    g_config.num_triu_iters     = program.get<uint32_t>("--num-triu-iters");
+    g_config.prefill_ratio      = program.get<float>("--prefill-ratio");
+    g_config.num_routing_loops  = program.get<uint32_t>("--num-routing-loops");
     g_config.extracted_nbr_size = program.is_used("--extracted-nbr-size")
         ? program.get<uint32_t>("--extracted-nbr-size")
         : g_config.max_nbr_size;
@@ -252,6 +256,7 @@ int main(int argc, char** argv) {
     std::cout << fmt::format("  Build loops:          {}\n", g_config.num_build_loops);
     std::cout << fmt::format("  Triangle updater iters: {}\n", g_config.num_triu_iters);
     std::cout << fmt::format("  Prefill ratio:        {}\n", g_config.prefill_ratio);
+    std::cout << fmt::format("  Routing loops:        {}\n", g_config.num_routing_loops);
     std::cout << fmt::format("  Extracted nbr size:   {}\n", g_config.extracted_nbr_size);
     std::cout << fmt::format("  Top-k:                {}\n", g_config.topk);
     std::cout << fmt::format("  Candidate queue size: {}\n", g_config.queue_size);

@@ -178,6 +178,7 @@ int main(int argc, char** argv) {
     program.add_argument("--num-build-loops").default_value(4u).scan<'u', uint32_t>();
     program.add_argument("--num-triu-iters").default_value(14u).scan<'u', uint32_t>();
     program.add_argument("--prefill-ratio").default_value(0.6f).scan<'g', float>();
+    program.add_argument("--num-routing-loops").default_value(1u).scan<'u', uint32_t>();
     program.add_argument("-k", "--topk").default_value(20u).scan<'u', uint32_t>();
     program.add_argument("--candidate-queue-config")
         .default_value(std::string("40,100,20"))
@@ -204,7 +205,8 @@ int main(int argc, char** argv) {
     g_config.propagate_config = conv_graph::propagate_config_t(
         program.get<uint32_t>("--num-build-loops"),
         program.get<uint32_t>("--num-triu-iters"),
-        program.get<float>("--prefill-ratio")
+        program.get<float>("--prefill-ratio"),
+        program.get<uint32_t>("--num-routing-loops")
     );
     g_config.extracted_nbr_size = program.get<uint32_t>("--extracted-nbr-size");
     g_config.topk = program.get<uint32_t>("--topk");

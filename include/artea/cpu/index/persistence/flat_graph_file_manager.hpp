@@ -87,7 +87,8 @@ public:
         meta["propagate_config"] = {
             {"num_build_loops", flat_graph.propagate_config().num_build_loops()},
             {"num_triu_iters", flat_graph.propagate_config().num_triu_iters()},
-            {"prefill_ratio", flat_graph.propagate_config().prefill_ratio()}
+            {"prefill_ratio", flat_graph.propagate_config().prefill_ratio()},
+            {"num_routing_loops", flat_graph.propagate_config().num_routing_loops()}
         };
 
         std::string metadata_path = index_dir + "/metadata.json";
@@ -209,7 +210,8 @@ public:
         propagate_config_t propagate_config(
             meta["propagate_config"]["num_build_loops"].get<iter_t>(),
             meta["propagate_config"]["num_triu_iters"].get<iter_t>(),
-            meta["propagate_config"]["prefill_ratio"].get<ratio_t>()
+            meta["propagate_config"]["prefill_ratio"].get<ratio_t>(),
+            meta["propagate_config"]["num_routing_loops"].get<iter_t>()
         );
 
         flat_graph_t flat_graph(vecs_data, layer_config, pruning_config, propagate_config);

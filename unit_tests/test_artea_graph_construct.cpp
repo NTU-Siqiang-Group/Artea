@@ -50,6 +50,7 @@ struct PropagateConfigParams {
     uint32_t num_build_loops;
     uint32_t num_triu_iters;
     float prefill_ratio;
+    uint32_t num_routing_loops;
 };
 
 struct TestConfig {
@@ -198,7 +199,8 @@ protected:
         artea_graph::propagate_config_t propagate_config(
             g_config.propagate_config.num_build_loops,
             g_config.propagate_config.num_triu_iters,
-            g_config.propagate_config.prefill_ratio
+            g_config.propagate_config.prefill_ratio,
+            g_config.propagate_config.num_routing_loops
         );
 
         // Create vertices builder config
@@ -468,6 +470,7 @@ int main(int argc, char** argv) {
     program.add_argument("--num-build-loops").default_value(4u).scan<'u', uint32_t>();
     program.add_argument("--num-triu-iters").default_value(14u).scan<'u', uint32_t>();
     program.add_argument("--prefill-ratio").default_value(0.6f).scan<'g', float>();
+    program.add_argument("--num-routing-loops").default_value(1u).scan<'u', uint32_t>();
 
     // Router parameters
     program.add_argument("-k", "--topk").default_value(20u).scan<'u', uint32_t>();
@@ -515,6 +518,7 @@ int main(int argc, char** argv) {
     g_config.propagate_config.num_build_loops = program.get<uint32_t>("--num-build-loops");
     g_config.propagate_config.num_triu_iters = program.get<uint32_t>("--num-triu-iters");
     g_config.propagate_config.prefill_ratio = program.get<float>("--prefill-ratio");
+    g_config.propagate_config.num_routing_loops = program.get<uint32_t>("--num-routing-loops");
 
     g_config.topk = program.get<uint32_t>("--topk");
 
@@ -567,6 +571,7 @@ int main(int argc, char** argv) {
     std::cout << "Build loops: " << g_config.propagate_config.num_build_loops << std::endl;
     std::cout << "Triangle updater iterations: " << g_config.propagate_config.num_triu_iters << std::endl;
     std::cout << "Prefill ratio: " << g_config.propagate_config.prefill_ratio << std::endl;
+    std::cout << "Routing loops: " << g_config.propagate_config.num_routing_loops << std::endl;
     std::cout << "\n--- Router Configuration ---" << std::endl;
     std::cout << "Top-k: " << g_config.topk << std::endl;
     std::cout << "Candidate queue config: " << g_config.queue_start << "," << g_config.queue_end << "," << g_config.queue_step << std::endl;

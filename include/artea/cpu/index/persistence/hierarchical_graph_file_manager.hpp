@@ -98,7 +98,8 @@ public:
         meta["propagate_config"] = {
             {"num_build_loops", hierarchical_graph.propagate_config().num_build_loops()},
             {"num_triu_iters", hierarchical_graph.propagate_config().num_triu_iters()},
-            {"prefill_ratio", hierarchical_graph.propagate_config().prefill_ratio()}
+            {"prefill_ratio", hierarchical_graph.propagate_config().prefill_ratio()},
+            {"num_routing_loops", hierarchical_graph.propagate_config().num_routing_loops()}
         };
 
         // Save vertices_builder_config based on which variant is active
@@ -233,7 +234,8 @@ public:
         propagate_config_t propagate_config(
             meta["propagate_config"]["num_build_loops"].get<iter_t>(),
             meta["propagate_config"]["num_triu_iters"].get<iter_t>(),
-            meta["propagate_config"]["prefill_ratio"].get<ratio_t>()
+            meta["propagate_config"]["prefill_ratio"].get<ratio_t>(),
+            meta["propagate_config"]["num_routing_loops"].get<iter_t>()
         );
 
         // Restore vertices_builder_config based on type
