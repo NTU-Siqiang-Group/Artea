@@ -156,8 +156,14 @@ int main(int argc, char** argv) {
         program.get<uint32_t>("--sampling-batch-size")
     );
 
-    // Create hierarchical graph
-    hierarchical_graph_t hierarchical_graph(
+    // Construct hierarchical graph via factory
+    logger.info("Constructing hierarchical Artea graph...");
+    auto construction_start = std::chrono::high_resolution_clock::now();
+
+    auto hierarchical_graph = artea_graph_factory_t::template construct_graph<
+        VGPolicyT::rnet_selection,
+        EGPolicyT::conv_graph_descent
+    >(
         base_vecs,
         bottom_layer_config,
         upper_layer_config,
@@ -167,41 +173,17 @@ int main(int argc, char** argv) {
         vertices_builder_config
     );
 
-    // Step 1: Construct vertices
-    logger.info("Step 1: Constructing hierarchical vertices...");
-    auto vertices_start = std::chrono::high_resolution_clock::now();
+    auto construction_end = std::chrono::high_resolution_clock::now();
+    auto construction_duration = std::chrono::duration_cast<std::chrono::milliseconds>(construction_end - construction_start);
 
-    hierarchical_vertices_builder_t::template construct<VGPolicyT::rnet_selection>(
-        dist_func,
-        hierarchical_graph,
-        vertices_builder_config
-    );
-
-    auto vertices_end = std::chrono::high_resolution_clock::now();
-    auto vertices_duration = std::chrono::duration_cast<std::chrono::milliseconds>(vertices_end - vertices_start);
-
-    logger.info(fmt::format("Vertices construction completed: {} layers in {:.2f} s",
-        hierarchical_graph.get_num_layers(), vertices_duration.count() / 1000.0));
+    logger.info(fmt::format("Graph construction completed: {} layers in {:.2f} s",
+        hierarchical_graph.get_num_layers(), construction_duration.count() / 1000.0));
 
     // Output layer vertices information
     for (uint32_t layer_id = 0; layer_id < hierarchical_graph.get_num_layers(); ++layer_id) {
         const auto& layer_vecs = hierarchical_graph.get_hier_vecs_manager().get_layer_vecs(layer_id);
         logger.info(fmt::format("  Layer {}: {} vertices", layer_id, layer_vecs.get_num_vecs()));
     }
-
-    // Step 2: Construct edges
-    logger.info("Step 2: Constructing hierarchical edges...");
-    auto edges_start = std::chrono::high_resolution_clock::now();
-
-    hierarchical_edges_builder_t::template construct<EGPolicyT::conv_graph_descent>(
-        dist_func,
-        hierarchical_graph
-    );
-
-    auto edges_end = std::chrono::high_resolution_clock::now();
-    auto edges_duration = std::chrono::duration_cast<std::chrono::milliseconds>(edges_end - edges_start);
-
-    logger.info(fmt::format("Edges construction completed in {:.2f} s", edges_duration.count() / 1000.0));
 
     // Calculate and output index size
     index_size_calculator_t index_size_calc;
@@ -221,7 +203,7 @@ int main(int argc, char** argv) {
     std::filesystem::path output_path = std::filesystem::path(output_dir) / subdir / dirname;
 
     // Print construction summary
-    double total_time_s = (vertices_duration.count() + edges_duration.count()) / 1000.0;
+    double total_time_s = construction_duration.count() / 1000.0;
     std::cout << "\n" << std::string(80, '=') << std::endl;
     std::cout << "                    ARTEA HIERARCHICAL GRAPH BUILD SUMMARY" << std::endl;
     std::cout << std::string(80, '=') << std::endl;
@@ -282,9 +264,7 @@ int main(int argc, char** argv) {
     std::cout << fmt::format("  Max result ratio:       {}", program.get<float>("--max-result-ratio")) << std::endl;
     std::cout << fmt::format("  Sampling batch size:    {}", program.get<uint32_t>("--sampling-batch-size")) << std::endl;
     std::cout << "\n--- Construction Time ---" << std::endl;
-    std::cout << fmt::format("  Vertices construction:  {:.2f} s", vertices_duration.count() / 1000.0) << std::endl;
-    std::cout << fmt::format("  Edges construction:     {:.2f} s", edges_duration.count() / 1000.0) << std::endl;
-    std::cout << fmt::format("  Total time:             {:.2f} s", total_time_s) << std::endl;
+    std::cout << fmt::format("  Graph construction:     {:.2f} s", total_time_s) << std::endl;
     std::cout << "\n--- Output ---" << std::endl;
     std::cout << fmt::format("  Index path:             {}", output_path.string()) << std::endl;
     std::cout << std::string(80, '=') << std::endl << std::endl;

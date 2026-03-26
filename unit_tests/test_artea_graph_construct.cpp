@@ -90,8 +90,6 @@ struct LayerMetrics {
 };
 
 struct TestResults {
-    double vertices_construction_time_ms = 0.0;
-    double edges_construction_time_ms = 0.0;
     double total_construction_time_ms = 0.0;
     uint32_t num_layers = 0;
     uint32_t total_base_vecs = 0;
@@ -172,7 +170,6 @@ protected:
         }
 
         auto& dataset = provider.get_dataset();
-        auto& dist_func = provider.get_dist_func();
         const auto& base_vecs = dataset.get_base_vecs();
 
         logger.info("Starting Artea graph construction test with conv_graph_descent policy");
@@ -214,8 +211,14 @@ protected:
             g_config.vertices_config.sampling_batch_size
         );
 
-        // Create hierarchical graph
-        auto hierarchical_graph = std::make_unique<hierarchical_graph_t>(
+        // Construct hierarchical graph via factory
+        logger.info("Constructing hierarchical Artea graph...");
+        auto construction_start = std::chrono::high_resolution_clock::now();
+
+        auto graph = artea_graph_factory_t::template construct_graph<
+            VGPolicyT::rnet_selection,
+            EGPolicyT::conv_graph_descent
+        >(
             base_vecs,
             bottom_layer_config,
             upper_layer_config,
@@ -224,24 +227,15 @@ protected:
             propagate_config,
             vertices_builder_config
         );
+        auto hierarchical_graph = std::make_unique<hierarchical_graph_t>(std::move(graph));
 
-        // Step 1: Construct vertices
-        logger.info("Step 1: Constructing hierarchical vertices...");
-        auto vertices_start = std::chrono::high_resolution_clock::now();
-
-        hierarchical_vertices_builder_t::template construct<VGPolicyT::rnet_selection>(
-            dist_func,
-            *hierarchical_graph,
-            vertices_builder_config
-        );
-
-        auto vertices_end = std::chrono::high_resolution_clock::now();
-        auto vertices_duration = std::chrono::duration_cast<std::chrono::microseconds>(vertices_end - vertices_start);
-        g_results.vertices_construction_time_ms = vertices_duration.count() / 1000.0;
+        auto construction_end = std::chrono::high_resolution_clock::now();
+        auto construction_duration = std::chrono::duration_cast<std::chrono::microseconds>(construction_end - construction_start);
+        g_results.total_construction_time_ms = construction_duration.count() / 1000.0;
         g_results.num_layers = hierarchical_graph->get_num_layers();
 
-        logger.info(fmt::format("Vertices construction completed: {} layers in {:.2f} ms",
-            g_results.num_layers, g_results.vertices_construction_time_ms));
+        logger.info(fmt::format("Graph construction completed: {} layers in {:.2f} ms",
+            g_results.num_layers, g_results.total_construction_time_ms));
 
         // Output layer vertices information
         logger.info("Layer vertices information:");
@@ -252,25 +246,6 @@ protected:
             logger.info(fmt::format("  Layer {}: {} vertices ({:.2f}%)",
                 layer_id, num_vertices, layer_ratio));
         }
-
-        // Step 2: Construct edges
-        logger.info("Step 2: Constructing hierarchical edges...");
-        auto edges_start = std::chrono::high_resolution_clock::now();
-
-        hierarchical_edges_builder_t::template construct<EGPolicyT::conv_graph_descent>(
-            dist_func,
-            *hierarchical_graph
-        );
-
-        auto edges_end = std::chrono::high_resolution_clock::now();
-        auto edges_duration = std::chrono::duration_cast<std::chrono::microseconds>(edges_end - edges_start);
-        g_results.edges_construction_time_ms = edges_duration.count() / 1000.0;
-
-        logger.info(fmt::format("Edges construction completed in {:.2f} ms",
-            g_results.edges_construction_time_ms));
-
-        g_results.total_construction_time_ms = g_results.vertices_construction_time_ms +
-                                                g_results.edges_construction_time_ms;
 
         // Collect layer metrics
         for (uint32_t layer_id = 0; layer_id < g_results.num_layers; ++layer_id) {
@@ -610,9 +585,7 @@ int main(int argc, char** argv) {
     std::cout << std::string(100, '=') << std::endl;
 
     std::cout << "\n=== Construction Timing ===" << std::endl;
-    std::cout << fmt::format("  Vertices Construction:  {:.2f} ms", g_results.vertices_construction_time_ms) << std::endl;
-    std::cout << fmt::format("  Edges Construction:     {:.2f} ms", g_results.edges_construction_time_ms) << std::endl;
-    std::cout << fmt::format("  Total Construction:     {:.2f} ms", g_results.total_construction_time_ms) << std::endl;
+    std::cout << fmt::format("  Graph Construction:     {:.2f} ms", g_results.total_construction_time_ms) << std::endl;
 
     std::cout << "\n=== Graph Structure ===" << std::endl;
     std::cout << fmt::format("  Total Layers:           {}", g_results.num_layers) << std::endl;

@@ -45,6 +45,7 @@ template <typename GraphFactoryTraitsT> class ConvGraphFactory;
 template <typename GraphFactoryTraitsT> class HierarchicalVerticesBuilder;
 template <typename GraphFactoryTraitsT> class HierarchicalEdgesBuilder;
 template <typename GraphFactoryTraitsT> class RoutingUpdater;
+template <typename GraphFactoryTraitsT> class ArteaGraphFactory;
 
 template <
     typename VertexGeneratorTraitsT,
@@ -72,6 +73,8 @@ struct GraphFactoryTraits :
     using hierarchical_vertices_builder_t = HierarchicalVerticesBuilder<graph_factory_traits_t>;
 
     using hierarchical_edges_builder_t = HierarchicalEdgesBuilder<graph_factory_traits_t>;
+
+    using artea_graph_factory_t = ArteaGraphFactory<graph_factory_traits_t>;
 
 };  // struct GraphFactoryTraits
 

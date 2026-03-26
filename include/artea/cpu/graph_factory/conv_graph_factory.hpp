@@ -127,9 +127,9 @@ private:
     /**
      * @brief Core build loop shared by all construct_graph_impl overloads.
      *
-     * Initializes random edges, creates all updaters, then runs the outer/inner
-     * iteration schedule. An optional per-iter callback is invoked at the end of
-     * each build loop (e.g. for recall/QPS profiling in the dataset overload).
+     * Initializes random edges, creates all updaters, then runs the iteration
+     * schedule. An optional per-iter callback is invoked at the end of each
+     * build loop (e.g. for recall/QPS profiling in the dataset overload).
      *
      * @param flat_graph       The graph being constructed (modified in-place).
      * @param dist_func        Distance function for this graph.
