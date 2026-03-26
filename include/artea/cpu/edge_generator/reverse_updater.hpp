@@ -82,10 +82,10 @@ public:
 
             // Check if nbr_id's neighbor array is already full with closer neighbors
             const nbr_arr_t& nbr_vertex_nbrs = this->_flat_graph.fetch_nbrs(nbr_id);
-            if (nbr_vertex_nbrs.size() >= max_sz &&
-                nbr_vertex_nbrs[max_sz - 1].get_distance() <= dist) {
-                continue;
-            }
+            // if (nbr_vertex_nbrs.size() >= max_sz &&
+            //     nbr_vertex_nbrs[max_sz - 1].get_distance() <= dist) {
+            //     continue;
+            // }
 
             // Add reverse edge: from nbr_id to pivot_vid with the same distance
             // This effectively adds pivot_vid as an incoming edge to nbr_id

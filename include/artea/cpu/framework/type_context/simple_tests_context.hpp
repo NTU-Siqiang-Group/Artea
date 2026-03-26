@@ -139,13 +139,15 @@ using propagate_engine_noss_t = typename edge_generator_traits_t::propagate_engi
 // Currently, NO SELECTIVE SCHEDULING is faster
 using propagate_engine_t = propagate_engine_noss_t;
 
-// Edges builder config types in namespaces
+// Propagate and pruning config types in namespaces
 namespace conv_graph {
-    using edges_builder_config_t = typename index_traits_t::conv_graph::edges_builder_config_t;
+    using propagate_config_t = typename index_traits_t::conv_graph::propagate_config_t;
+    using pruning_config_t = typename index_traits_t::conv_graph::pruning_config_t;
 }
 
 namespace artea_graph {
-    using edges_builder_config_t = typename index_traits_t::artea_graph::edges_builder_config_t;
+    using propagate_config_t = typename index_traits_t::artea_graph::propagate_config_t;
+    using pruning_config_t = typename index_traits_t::artea_graph::pruning_config_t;
 }
 
 }   // namespace cpu

@@ -26,7 +26,8 @@ struct BenchConfig {
     std::string config_path;
     std::string dataset_name;
     layer_config_t layer_config{16, 32};
-    conv_graph::edges_builder_config_t edges_builder_config{1.0, 0.0, 4, 14, 0.6};
+    conv_graph::pruning_config_t pruning_config{1.0, 0.0};
+    conv_graph::propagate_config_t propagate_config{4, 14, 0.6};
     vec_num_t rand_gen_size;
     iter_t num_iters;
     ratio_t scale_coeffs;
@@ -63,12 +64,13 @@ public:
         flat_graph_ = std::make_unique<flat_graph_t>(
             base_vecs_,
             g_config.layer_config,
-            g_config.edges_builder_config
+            g_config.pruning_config,
+            g_config.propagate_config
         );
 
         random_eg_t random_eg(*dist_func_);
         random_eg.generate(*flat_graph_, static_cast<vec_num_t>(
-            g_config.layer_config.max_nbr_size() * g_config.edges_builder_config.prefill_ratio()
+            g_config.layer_config.max_nbr_size() * g_config.propagate_config.prefill_ratio()
         ));
         logger.info("Flat graph initialization complete.");
 
@@ -434,7 +436,7 @@ int main(int argc, char** argv) {
     g_config.num_iters = static_cast<iter_t>(program.get<int>("--num-iters"));
     g_config.scale_coeffs = static_cast<ratio_t>(program.get<double>("--scale-coeffs"));
     g_config.shifted_coeffs = static_cast<ratio_t>(program.get<double>("--shifted-coeffs"));
-    g_config.edges_builder_config.prefill_ratio(program.get<float>("--prefill-ratio"));
+    g_config.propagate_config.prefill_ratio(program.get<float>("--prefill-ratio"));
     g_config.repetitions = program.get<int64_t>("--repetitions");
 
     logger.info(fmt::format("Benchmark Configuration:"));

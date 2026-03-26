@@ -53,7 +53,8 @@ public:
         auto bottom_graph = conv_factory.construct_graph(
             base_vecs,
             hierarchical_graph.bottom_layer_config(),
-            hierarchical_graph.bottom_edges_builder_config()
+            hierarchical_graph.bottom_pruning_config(),
+            hierarchical_graph.propagate_config()
         );
         hierarchical_graph.set_layer_graph(0, std::move(bottom_graph));
 
@@ -63,7 +64,8 @@ public:
             auto upper_graph = conv_factory.construct_graph(
                 layer_vecs,
                 hierarchical_graph.upper_layer_config(),
-                hierarchical_graph.upper_edges_builder_config()
+                hierarchical_graph.upper_pruning_config(),
+                hierarchical_graph.propagate_config()
             );
             hierarchical_graph.set_layer_graph(layer_id, std::move(upper_graph));
         }

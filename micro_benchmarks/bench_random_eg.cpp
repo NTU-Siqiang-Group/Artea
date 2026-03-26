@@ -25,7 +25,8 @@ struct BenchConfig {
     std::string config_path;
     std::string dataset_name;
     layer_config_t layer_config{32, 32};
-    conv_graph::edges_builder_config_t edges_builder_config{1.0, 0.0, 4, 14};
+    conv_graph::pruning_config_t pruning_config{1.0, 0.0};
+    conv_graph::propagate_config_t propagate_config{4, 14};
     int64_t iterations;
 };
 
@@ -81,7 +82,8 @@ static void BM_RandomEG(benchmark::State& state) {
         flat_graph_t flat_graph(
             base_vecs,
             g_config.layer_config,
-            g_config.edges_builder_config
+            g_config.pruning_config,
+            g_config.propagate_config
         );
 
         // Perform the random edge generation

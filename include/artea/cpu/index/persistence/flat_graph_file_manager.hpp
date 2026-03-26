@@ -45,8 +45,11 @@ class FlatGraphFileManager {
     using nbr_arr_t = typename IndexTraitsT::nbr_arr_t;
     using vector_array_t = typename IndexTraitsT::vector_array_t;
     using flat_graph_t = typename IndexTraitsT::flat_graph_t;
+    using iter_t = typename IndexTraitsT::iter_t;
+    using ratio_t = typename IndexTraitsT::ratio_t;
     using layer_config_t = typename IndexTraitsT::layer_config_t;
-    using edges_builder_config_t = typename IndexTraitsT::conv_graph::edges_builder_config_t;
+    using propagate_config_t = typename IndexTraitsT::conv_graph::propagate_config_t;
+    using pruning_config_t = typename IndexTraitsT::conv_graph::pruning_config_t;
 
 public:
     /**
@@ -77,11 +80,14 @@ public:
             {"max_nbr_size", flat_graph.layer_config().max_nbr_size()},
             {"reserved_nbr_size", flat_graph.layer_config().reserved_nbr_size()}
         };
-        meta["edges_builder_config"] = {
-            {"scale_coeffs", flat_graph.edges_builder_config().scale_coeffs()},
-            {"shifted_coeffs", flat_graph.edges_builder_config().shifted_coeffs()},
-            {"num_outer_iters", flat_graph.edges_builder_config().num_outer_iters()},
-            {"num_triu_iters", flat_graph.edges_builder_config().num_triu_iters()}
+        meta["pruning_config"] = {
+            {"scale_coeffs", flat_graph.pruning_config().scale_coeffs()},
+            {"shifted_coeffs", flat_graph.pruning_config().shifted_coeffs()}
+        };
+        meta["propagate_config"] = {
+            {"num_build_loops", flat_graph.propagate_config().num_build_loops()},
+            {"num_triu_iters", flat_graph.propagate_config().num_triu_iters()},
+            {"prefill_ratio", flat_graph.propagate_config().prefill_ratio()}
         };
 
         std::string metadata_path = index_dir + "/metadata.json";
@@ -195,15 +201,18 @@ public:
 
         layer_config_t layer_config(max_nbr_size, reserved_nbr_size);
 
-        // Read edges_builder_config from metadata
-        edges_builder_config_t edges_builder_config(
-            meta["edges_builder_config"]["scale_coeffs"].get<typename edges_builder_config_t::ratio_t>(),
-            meta["edges_builder_config"]["shifted_coeffs"].get<typename edges_builder_config_t::ratio_t>(),
-            meta["edges_builder_config"]["num_outer_iters"].get<typename edges_builder_config_t::iter_t>(),
-            meta["edges_builder_config"]["num_triu_iters"].get<typename edges_builder_config_t::iter_t>()
+        // Read pruning_config and propagate_config from metadata
+        pruning_config_t pruning_config(
+            meta["pruning_config"]["scale_coeffs"].get<ratio_t>(),
+            meta["pruning_config"]["shifted_coeffs"].get<ratio_t>()
+        );
+        propagate_config_t propagate_config(
+            meta["propagate_config"]["num_build_loops"].get<iter_t>(),
+            meta["propagate_config"]["num_triu_iters"].get<iter_t>(),
+            meta["propagate_config"]["prefill_ratio"].get<ratio_t>()
         );
 
-        flat_graph_t flat_graph(vecs_data, layer_config, edges_builder_config);
+        flat_graph_t flat_graph(vecs_data, layer_config, pruning_config, propagate_config);
 
         // Check if the number of vertices matches
         if (flat_graph.get_num_vertices() != num_vertices) {

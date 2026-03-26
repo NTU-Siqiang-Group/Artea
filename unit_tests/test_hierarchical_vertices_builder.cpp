@@ -154,7 +154,8 @@ protected:
         layer_config_t dummy_config(32, 32);
 
         // Create hierarchical graph with reference to the stored manager
-        artea_graph::edges_builder_config_t dummy_edges_config(1.0, 0.0, 4, 14);
+        artea_graph::pruning_config_t dummy_pruning_config(1.0, 0.0);
+        artea_graph::propagate_config_t dummy_propagate_config(4, 14);
 
         // Create vertices_builder_config based on VGPolicy
         if constexpr (VGPolicy == VGPolicyT::rnet_selection) {
@@ -170,8 +171,9 @@ protected:
                 base_vecs,
                 dummy_config,
                 dummy_config,
-                dummy_edges_config,
-                dummy_edges_config,
+                dummy_pruning_config,
+                dummy_pruning_config,
+                dummy_propagate_config,
                 vertices_builder_config
             );
 
@@ -201,8 +203,9 @@ protected:
                 base_vecs,
                 dummy_config,
                 dummy_config,
-                dummy_edges_config,
-                dummy_edges_config,
+                dummy_pruning_config,
+                dummy_pruning_config,
+                dummy_propagate_config,
                 vertices_builder_config
             );
 

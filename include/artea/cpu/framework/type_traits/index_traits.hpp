@@ -31,11 +31,13 @@ template <typename IndexTraitsT> struct GreedyVerticesBuilderConfig;
 template <typename IndexTraitsT> struct RandomVerticesBuilderConfig;
 
 namespace conv_graph {
-    template <typename IndexTraitsT> struct EdgesBuilderConfig;
+    template <typename IndexTraitsT> struct PropagateConfig;
+    template <typename IndexTraitsT> struct PruningConfig;
 }
 
 namespace artea_graph {
-    template <typename IndexTraitsT> using EdgesBuilderConfig = conv_graph::EdgesBuilderConfig<IndexTraitsT>;
+    template <typename IndexTraitsT> using PropagateConfig = conv_graph::PropagateConfig<IndexTraitsT>;
+    template <typename IndexTraitsT> using PruningConfig = conv_graph::PruningConfig<IndexTraitsT>;
 }
 template <typename IndexTraitsT> class FlatGraph;
 template <typename IndexTraitsT> class FlatSearchGraph;
@@ -72,13 +74,15 @@ struct IndexTraits : virtual public BaseTraitsT {
     /** @brief Namespace-specific type aliases for conv_graph. */
     struct conv_graph {
         conv_graph() = delete;
-        using edges_builder_config_t = cpu::conv_graph::EdgesBuilderConfig<index_traits_t>;
+        using propagate_config_t = cpu::conv_graph::PropagateConfig<index_traits_t>;
+        using pruning_config_t = cpu::conv_graph::PruningConfig<index_traits_t>;
     };
 
     /** @brief Namespace-specific type aliases for artea_graph. */
     struct artea_graph {
         artea_graph() = delete;
-        using edges_builder_config_t = cpu::artea_graph::EdgesBuilderConfig<index_traits_t>;
+        using propagate_config_t = cpu::artea_graph::PropagateConfig<index_traits_t>;
+        using pruning_config_t = cpu::artea_graph::PruningConfig<index_traits_t>;
     };
 
     /** @brief Flat graph type. */

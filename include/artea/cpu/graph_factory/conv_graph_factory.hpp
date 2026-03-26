@@ -52,7 +52,8 @@ class ConvGraphFactory :
     using vector_dataset_t = typename GraphFactoryTraitsT::vector_dataset_t;
     using dist_func_t = typename GraphFactoryTraitsT::dist_func_t;
     using layer_config_t = typename GraphFactoryTraitsT::layer_config_t;
-    using edges_builder_config_t = typename GraphFactoryTraitsT::conv_graph::edges_builder_config_t;
+    using propagate_config_t = typename GraphFactoryTraitsT::conv_graph::propagate_config_t;
+    using pruning_config_t = typename GraphFactoryTraitsT::conv_graph::pruning_config_t;
     // Using propagate_engine_t with no selective scheduling currently.
     using random_eg_t = typename GraphFactoryTraitsT::random_eg_t;
     using propagate_engine_t = typename GraphFactoryTraitsT::template propagate_engine_t<false>;
@@ -73,26 +74,28 @@ public:
     /** @brief construct a new convergent graph from vector array */
     auto construct_graph_impl(
         const vector_array_t& base_vecs,
-        layer_config_t layer_config,
-        edges_builder_config_t edges_builder_config
+        const layer_config_t layer_config,
+        const pruning_config_t pruning_config,
+        const propagate_config_t propagate_config
     ) -> flat_graph_t {
-        flat_graph_t flat_graph(base_vecs, layer_config, edges_builder_config);
+        flat_graph_t flat_graph(base_vecs, layer_config, pruning_config, propagate_config);
         dist_func_t dist_func(base_vecs.get_vec_dim());
-        _build_loop(flat_graph, dist_func, edges_builder_config);
+        _build_loop(flat_graph, dist_func, pruning_config, propagate_config);
         return flat_graph;
     }
 
-    /** @brief construct a new convergent graph from dataset, with per-outer-iter recall/throughput profiling */
+    /** @brief construct a new convergent graph from dataset, with per-build-loop recall/throughput profiling */
     auto construct_graph_impl(
         const vector_dataset_t& dataset,
-        layer_config_t layer_config,
-        edges_builder_config_t edges_builder_config
+        const layer_config_t layer_config,
+        const pruning_config_t pruning_config,
+        const propagate_config_t propagate_config
     ) -> flat_graph_t {
         const vector_array_t& base_vecs = dataset.get_base_vecs();
         const query_vecs_t& query_vecs = dataset.get_query_vecs();
         const ground_truth_t& groundtruth = dataset.get_gt_vecs();
 
-        flat_graph_t flat_graph(base_vecs, layer_config, edges_builder_config);
+        flat_graph_t flat_graph(base_vecs, layer_config, pruning_config, propagate_config);
         dist_func_t dist_func(base_vecs.get_vec_dim());
 
         recall_estimator_t recall_estimator;
@@ -100,8 +103,8 @@ public:
         monolayer_graph_router_t router(base_vecs, dist_func, flat_graph, topk, topk);
         router.initialize();
 
-        _build_loop(flat_graph, dist_func, edges_builder_config,
-            [&](iter_t outer_iter) {
+        _build_loop(flat_graph, dist_func, pruning_config, propagate_config,
+            [&](iter_t build_loop) {
                 auto t0 = std::chrono::high_resolution_clock::now();
                 auto results = router.batch_query(query_vecs);
                 auto t1 = std::chrono::high_resolution_clock::now();
@@ -110,8 +113,8 @@ public:
                 double recall = recall_estimator.calculate_recall_at_k(
                     results, groundtruth, topk, query_vecs.get_num_vecs());
                 ARTEA_INFO(fmt::format(
-                    "OuterIter {}: Recall@{}={:.4f}, QPS={:.2f}",
-                    outer_iter, topk, recall, qps
+                    "BuildLoop {}: Recall@{}={:.4f}, QPS={:.2f}",
+                    build_loop, topk, recall, qps
                 ));
             }
         );
@@ -126,23 +129,25 @@ private:
      *
      * Initializes random edges, creates all updaters, then runs the outer/inner
      * iteration schedule. An optional per-iter callback is invoked at the end of
-     * each outer iteration (e.g. for recall/QPS profiling in the dataset overload).
+     * each build loop (e.g. for recall/QPS profiling in the dataset overload).
      *
      * @param flat_graph       The graph being constructed (modified in-place).
      * @param dist_func        Distance function for this graph.
-     * @param config           Edge builder configuration (iters, coeffs, prefill_ratio, …).
-     * @param on_iter_end      Optional callback called after each outer iteration with
-     *                         the current outer iteration index. Pass nullptr to skip.
+     * @param pruning_config   Pruning configuration (scale_coeffs, shifted_coeffs).
+     * @param propagate_config Propagation configuration (num_build_loops, num_triangle_updater_iters, prefill_ratio).
+     * @param on_iter_end      Optional callback called after each build loop with
+     *                         the current build loop index. Pass nullptr to skip.
      */
     auto _build_loop(
         flat_graph_t& flat_graph,
         const dist_func_t& dist_func,
-        const edges_builder_config_t& config,
+        const pruning_config_t& pruning_config,
+        const propagate_config_t& propagate_config,
         std::function<void(iter_t)> on_iter_end = nullptr
     ) -> void {
         const vertex_num_t num_vertices = flat_graph.get_num_vertices();
         const vertex_num_t init_nbr_size = static_cast<vertex_num_t>(
-            flat_graph.layer_config().max_nbr_size() * config.prefill_ratio()
+            flat_graph.layer_config().max_nbr_size() * propagate_config.prefill_ratio()
         );
 
         random_eg_t random_eg(dist_func);
@@ -152,19 +157,21 @@ private:
         propagate_engine.set_graph(flat_graph);
 
         auto triangle_updater  = propagate_engine.template make_updater<triangle_updater_t>(
-            config.scale_coeffs(), config.shifted_coeffs());
+            pruning_config.scale_coeffs(), pruning_config.shifted_coeffs());
         auto reverse_updater   = propagate_engine.template make_updater<reverse_updater_t>();
-        auto routing_updater   = propagate_engine.template make_updater<routing_updater_t>(init_nbr_size, init_nbr_size);
+        auto routing_updater   = propagate_engine.template make_updater<routing_updater_t>(init_nbr_size, init_nbr_size * 2);
         auto truncate_updater  = propagate_engine.template make_updater<truncate_updater_t>();
 
-        for (iter_t outer_iter = 0; outer_iter < config.num_outer_iters(); ++outer_iter) {
-            propagate_engine.run(config.num_triu_iters(), triangle_updater);
-            propagate_engine.run(1, routing_updater);
-            propagate_engine.run(1, reverse_updater);
-            if (outer_iter == config.num_outer_iters() - 1) {
-                propagate_engine.run(1, triangle_updater, false);
+        for (iter_t build_loop = 0; build_loop < propagate_config.num_build_loops(); ++build_loop) {
+            propagate_engine.run(propagate_config.num_triu_iters(), triangle_updater)
+                            .next(reverse_updater).next(truncate_updater)
+                            .next(routing_updater).next(truncate_updater);
+            if (build_loop == propagate_config.num_build_loops() - 1) {
+                propagate_engine.next(triangle_updater)
+                                .next(reverse_updater)
+                                .next(truncate_updater);
             }
-            if (on_iter_end) { on_iter_end(outer_iter); }
+            if (on_iter_end) { on_iter_end(build_loop); }
         }
     }
 

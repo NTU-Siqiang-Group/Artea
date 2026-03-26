@@ -28,23 +28,27 @@ class FlatGraph {
     using nbr_arr_t = typename IndexTraitsT::nbr_arr_t;
     using vector_array_t = typename IndexTraitsT::vector_array_t;
     using layer_config_t = typename IndexTraitsT::layer_config_t;
-    using edges_builder_config_t = typename IndexTraitsT::conv_graph::edges_builder_config_t;
+    using propagate_config_t = typename IndexTraitsT::conv_graph::propagate_config_t;
+    using pruning_config_t = typename IndexTraitsT::conv_graph::pruning_config_t;
 
 public:
     /**
      * @brief Construct a new Flat Graph object.
      * @param vecs_data Reference to the vector data for this layer.
      * @param layer_config Layer configuration (max_nbr_size and reserved_nbr_size).
-     * @param edges_builder_config Edge builder configuration.
+     * @param pruning_config Pruning configuration (scale_coeffs and shifted_coeffs).
+     * @param propagate_config Propagation configuration (num_build_loops, num_triangle_updater_iters, prefill_ratio).
      */
     FlatGraph(
         const vector_array_t& vecs_data,
-        layer_config_t layer_config,
-        edges_builder_config_t edges_builder_config
+        const layer_config_t layer_config,
+        const pruning_config_t pruning_config,
+        const propagate_config_t propagate_config
     ) :
         _num_vertices(vecs_data.get_num_vecs()),
         _layer_config(layer_config),
-        _edges_builder_config(edges_builder_config),
+        _pruning_config(pruning_config),
+        _propagate_config(propagate_config),
         _vecs_data(vecs_data)
     {
         _nbrs_arr.resize(_num_vertices);
@@ -79,13 +83,23 @@ public:
     }
 
     __attribute__((always_inline))
-    auto edges_builder_config() const -> const edges_builder_config_t& {
-        return _edges_builder_config;
+    auto pruning_config() const -> const pruning_config_t& {
+        return _pruning_config;
     }
 
     __attribute__((always_inline))
-    auto edges_builder_config() -> edges_builder_config_t& {
-        return _edges_builder_config;
+    auto pruning_config() -> pruning_config_t& {
+        return _pruning_config;
+    }
+
+    __attribute__((always_inline))
+    auto propagate_config() const -> const propagate_config_t& {
+        return _propagate_config;
+    }
+
+    __attribute__((always_inline))
+    auto propagate_config() -> propagate_config_t& {
+        return _propagate_config;
     }
 
     __attribute__((always_inline))
@@ -120,8 +134,11 @@ protected:
     /** @brief Layer configuration (max_nbr_size and reserved_nbr_size). */
     layer_config_t _layer_config;
 
-    /** @brief Edge builder configuration. */
-    edges_builder_config_t _edges_builder_config;
+    /** @brief Pruning configuration. */
+    pruning_config_t _pruning_config;
+
+    /** @brief Propagation configuration. */
+    propagate_config_t _propagate_config;
 
     /** @brief Array of neighbors for each vertex. */
     std::vector<nbr_arr_t> _nbrs_arr;

@@ -32,7 +32,8 @@ struct TestConfig {
     std::string config_path;
     std::string dataset_name;
     layer_config_t layer_config{16, 32};
-    conv_graph::edges_builder_config_t edges_builder_config{1.0f, 0.0f, 4, 14};
+    conv_graph::pruning_config_t pruning_config{1.0f, 0.0f};
+    conv_graph::propagate_config_t propagate_config{4, 14};
     uint32_t extracted_nbr_size;
     uint32_t topk;
     uint32_t queue_start;
@@ -78,10 +79,10 @@ public:
             logger.info(fmt::format("Max nbr size: {}", g_config.layer_config.max_nbr_size()));
             logger.info(fmt::format("Reserved nbr size: {}", g_config.layer_config.reserved_nbr_size()));
             logger.info(fmt::format("Extracted nbr size: {}", g_config.extracted_nbr_size));
-            logger.info(fmt::format("Scale coeffs: {}", g_config.edges_builder_config.scale_coeffs()));
-            logger.info(fmt::format("Shifted coeffs: {}", g_config.edges_builder_config.shifted_coeffs()));
-            logger.info(fmt::format("Num outer iters: {}", g_config.edges_builder_config.num_outer_iters()));
-            logger.info(fmt::format("Num inner iters: {}", g_config.edges_builder_config.num_triu_iters()));
+            logger.info(fmt::format("Scale coeffs: {}", g_config.pruning_config.scale_coeffs()));
+            logger.info(fmt::format("Shifted coeffs: {}", g_config.pruning_config.shifted_coeffs()));
+            logger.info(fmt::format("Build loops: {}", g_config.propagate_config.num_build_loops()));
+            logger.info(fmt::format("Triangle updater iterations: {}", g_config.propagate_config.num_triu_iters()));
             logger.info(fmt::format("Top-k: {}", g_config.topk));
             logger.info(fmt::format("Candidate queue size range: {} to {} step {}",
                 g_config.queue_start, g_config.queue_end, g_config.queue_step));
@@ -95,7 +96,8 @@ public:
         flat_graph_ = std::make_unique<flat_graph_t>(factory.construct_graph(
             base_vecs,
             g_config.layer_config,
-            g_config.edges_builder_config
+            g_config.pruning_config,
+            g_config.propagate_config
         ));
 
         auto end_time = std::chrono::high_resolution_clock::now();
@@ -214,7 +216,7 @@ int main(int argc, char** argv) {
     program.add_argument("--extracted-nbr-size").default_value(32u).scan<'u', uint32_t>();
     program.add_argument("--scale-coeffs").default_value(1.0f).scan<'g', float>();
     program.add_argument("--shifted-coeffs").default_value(0.0f).scan<'g', float>();
-    program.add_argument("--num-outer-iters").default_value(4u).scan<'u', uint32_t>();
+    program.add_argument("--num-build-loops").default_value(4u).scan<'u', uint32_t>();
     program.add_argument("--num-triu-iters").default_value(14u).scan<'u', uint32_t>();
     program.add_argument("--prefill-ratio").default_value(0.6f).scan<'g', float>();
     program.add_argument("-k", "--topk").default_value(20u).scan<'u', uint32_t>();
@@ -238,10 +240,12 @@ int main(int argc, char** argv) {
     uint32_t reserved_nbr_size = static_cast<uint32_t>(max_nbr_size * 1.5);
 
     g_config.layer_config = layer_config_t(max_nbr_size, reserved_nbr_size);
-    g_config.edges_builder_config = conv_graph::edges_builder_config_t(
+    g_config.pruning_config = conv_graph::pruning_config_t(
         program.get<float>("--scale-coeffs"),
-        program.get<float>("--shifted-coeffs"),
-        program.get<uint32_t>("--num-outer-iters"),
+        program.get<float>("--shifted-coeffs")
+    );
+    g_config.propagate_config = conv_graph::propagate_config_t(
+        program.get<uint32_t>("--num-build-loops"),
         program.get<uint32_t>("--num-triu-iters"),
         program.get<float>("--prefill-ratio")
     );
@@ -274,10 +278,10 @@ int main(int argc, char** argv) {
     std::cout << "Config path: " << g_config.config_path << std::endl;
     std::cout << "Max nbr size: " << g_config.layer_config.max_nbr_size() << std::endl;
     std::cout << "Extracted nbr size: " << g_config.extracted_nbr_size << std::endl;
-    std::cout << "Scale coeffs: " << g_config.edges_builder_config.scale_coeffs() << std::endl;
-    std::cout << "Shifted coeffs: " << g_config.edges_builder_config.shifted_coeffs() << std::endl;
-    std::cout << "Num outer iters: " << g_config.edges_builder_config.num_outer_iters() << std::endl;
-    std::cout << "Num inner iters: " << g_config.edges_builder_config.num_triu_iters() << std::endl;
+    std::cout << "Scale coeffs: " << g_config.pruning_config.scale_coeffs() << std::endl;
+    std::cout << "Shifted coeffs: " << g_config.pruning_config.shifted_coeffs() << std::endl;
+    std::cout << "Build loops: " << g_config.propagate_config.num_build_loops() << std::endl;
+    std::cout << "Triangle updater iterations: " << g_config.propagate_config.num_triu_iters() << std::endl;
     std::cout << "Top-k: " << g_config.topk << std::endl;
     std::cout << "Candidate queue config: " << g_config.queue_start << "," << g_config.queue_end << "," << g_config.queue_step << std::endl;
     std::cout << "Verbose: " << (g_config.verbose ? "true" : "false") << std::endl;
@@ -295,10 +299,10 @@ int main(int argc, char** argv) {
     std::cout << fmt::format("  Dataset:                {}", g_config.dataset_name) << std::endl;
     std::cout << fmt::format("  Max Nbr Size:           {}", g_config.layer_config.max_nbr_size()) << std::endl;
     std::cout << fmt::format("  Extracted Nbr Size:     {}", g_config.extracted_nbr_size) << std::endl;
-    std::cout << fmt::format("  Scale Coeffs:           {}", g_config.edges_builder_config.scale_coeffs()) << std::endl;
-    std::cout << fmt::format("  Shifted Coeffs:         {}", g_config.edges_builder_config.shifted_coeffs()) << std::endl;
-    std::cout << fmt::format("  Num Outer Iters:        {}", g_config.edges_builder_config.num_outer_iters()) << std::endl;
-    std::cout << fmt::format("  Num Inner Iters:        {}", g_config.edges_builder_config.num_triu_iters()) << std::endl;
+    std::cout << fmt::format("  Scale Coeffs:           {}", g_config.pruning_config.scale_coeffs()) << std::endl;
+    std::cout << fmt::format("  Shifted Coeffs:         {}", g_config.pruning_config.shifted_coeffs()) << std::endl;
+    std::cout << fmt::format("  Build Loops:            {}", g_config.propagate_config.num_build_loops()) << std::endl;
+    std::cout << fmt::format("  Triangle Updater Iters: {}", g_config.propagate_config.num_triu_iters()) << std::endl;
     std::cout << fmt::format("  Top-k:                  {}", g_config.topk) << std::endl;
     std::cout << "\n--- Graph Construction ---" << std::endl;
     std::cout << fmt::format("  Build Time:             {:.2f} s", g_test_results.build_time_s) << std::endl;

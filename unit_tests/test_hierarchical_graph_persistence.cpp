@@ -64,9 +64,10 @@ TEST_F(HierarchicalGraphPersistenceTest, SnapshotAndRestore) {
     layer_config_t bottom_layer_config(32, 48);
     layer_config_t upper_layer_config(24, 40);
 
-    // Create edges builder configs
-    artea_graph::edges_builder_config_t bottom_edges_config(1.0f, 0.0f, 4, 14);
-    artea_graph::edges_builder_config_t upper_edges_config(1.0f, 0.0f, 4, 14);
+    // Create pruning configs
+    artea_graph::pruning_config_t bottom_pruning_config(1.0f, 0.0f);
+    artea_graph::pruning_config_t upper_pruning_config(1.0f, 0.0f);
+    artea_graph::propagate_config_t propagate_config(4, 14);
 
     // Create vertices builder config
     greedy_vertices_builder_config_t vertices_builder_config(
@@ -81,8 +82,9 @@ TEST_F(HierarchicalGraphPersistenceTest, SnapshotAndRestore) {
         base_vecs,
         bottom_layer_config,
         upper_layer_config,
-        bottom_edges_config,
-        upper_edges_config,
+        bottom_pruning_config,
+        upper_pruning_config,
+        propagate_config,
         vertices_builder_config
     );
 

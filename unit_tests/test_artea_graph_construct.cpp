@@ -41,10 +41,13 @@ struct LayerConfigParams {
     uint32_t reserved_nbr_size;
 };
 
-struct EdgesBuilderConfigParams {
+struct PruningConfigParams {
     float scale_coeffs;
     float shifted_coeffs;
-    uint32_t num_outer_iters;
+};
+
+struct PropagateConfigParams {
+    uint32_t num_build_loops;
     uint32_t num_triu_iters;
     float prefill_ratio;
 };
@@ -56,8 +59,9 @@ struct TestConfig {
     VerticesBuilderConfigParams vertices_config;
     LayerConfigParams bottom_layer_config;
     LayerConfigParams upper_layer_config;
-    EdgesBuilderConfigParams bottom_edges_config;
-    EdgesBuilderConfigParams upper_edges_config;
+    PruningConfigParams bottom_pruning_config;
+    PruningConfigParams upper_pruning_config;
+    PropagateConfigParams propagate_config;
 
     uint32_t topk;
     uint32_t queue_start;
@@ -183,20 +187,21 @@ protected:
             g_config.upper_layer_config.reserved_nbr_size
         );
 
-        // Create edges builder configs
-        artea_graph::edges_builder_config_t bottom_edges_config(
-            g_config.bottom_edges_config.scale_coeffs,
-            g_config.bottom_edges_config.shifted_coeffs,
-            g_config.bottom_edges_config.num_outer_iters,
-            g_config.bottom_edges_config.num_triu_iters,
-            g_config.bottom_edges_config.prefill_ratio
+        // Create pruning configs (per layer)
+        artea_graph::pruning_config_t bottom_pruning_config(
+            g_config.bottom_pruning_config.scale_coeffs,
+            g_config.bottom_pruning_config.shifted_coeffs
         );
-        artea_graph::edges_builder_config_t upper_edges_config(
-            g_config.upper_edges_config.scale_coeffs,
-            g_config.upper_edges_config.shifted_coeffs,
-            g_config.upper_edges_config.num_outer_iters,
-            g_config.upper_edges_config.num_triu_iters,
-            g_config.upper_edges_config.prefill_ratio
+        artea_graph::pruning_config_t upper_pruning_config(
+            g_config.upper_pruning_config.scale_coeffs,
+            g_config.upper_pruning_config.shifted_coeffs
+        );
+
+        // Create propagate config (shared between layers)
+        artea_graph::propagate_config_t propagate_config(
+            g_config.propagate_config.num_build_loops,
+            g_config.propagate_config.num_triu_iters,
+            g_config.propagate_config.prefill_ratio
         );
 
         // Create vertices builder config
@@ -214,8 +219,9 @@ protected:
             base_vecs,
             bottom_layer_config,
             upper_layer_config,
-            bottom_edges_config,
-            upper_edges_config,
+            bottom_pruning_config,
+            upper_pruning_config,
+            propagate_config,
             vertices_builder_config
         );
 
@@ -475,17 +481,17 @@ int main(int argc, char** argv) {
     // Upper layer config
     program.add_argument("--ul-max-nbr-size").default_value(24u).scan<'u', uint32_t>();
 
-    // Bottom edges builder config
+    // Bottom layer pruning config
     program.add_argument("--bl-scale-coeffs").default_value(1.0f).scan<'g', float>();
     program.add_argument("--bl-shifted-coeffs").default_value(0.0f).scan<'g', float>();
-    program.add_argument("--bl-num-outer-iters").default_value(4u).scan<'u', uint32_t>();
-    program.add_argument("--bl-num-inner-iters").default_value(14u).scan<'u', uint32_t>();
 
-    // Upper edges builder config
+    // Upper layer pruning config
     program.add_argument("--ul-scale-coeffs").default_value(1.0f).scan<'g', float>();
     program.add_argument("--ul-shifted-coeffs").default_value(0.0f).scan<'g', float>();
-    program.add_argument("--ul-num-outer-iters").default_value(4u).scan<'u', uint32_t>();
-    program.add_argument("--ul-num-inner-iters").default_value(14u).scan<'u', uint32_t>();
+
+    // Propagate config (shared between layers)
+    program.add_argument("--num-build-loops").default_value(4u).scan<'u', uint32_t>();
+    program.add_argument("--num-triu-iters").default_value(14u).scan<'u', uint32_t>();
     program.add_argument("--prefill-ratio").default_value(0.6f).scan<'g', float>();
 
     // Router parameters
@@ -525,18 +531,15 @@ int main(int argc, char** argv) {
     g_config.upper_layer_config.reserved_nbr_size =
         static_cast<uint32_t>(g_config.upper_layer_config.max_nbr_size * 1.5);
 
-    g_config.bottom_edges_config.scale_coeffs = program.get<float>("--bl-scale-coeffs");
-    g_config.bottom_edges_config.shifted_coeffs = program.get<float>("--bl-shifted-coeffs");
-    g_config.bottom_edges_config.num_outer_iters = program.get<uint32_t>("--bl-num-outer-iters");
-    g_config.bottom_edges_config.num_triu_iters = program.get<uint32_t>("--bl-num-inner-iters");
-    g_config.bottom_edges_config.prefill_ratio = program.get<float>("--prefill-ratio");
-    g_config.bottom_edges_config.prefill_ratio = program.get<float>("--bl-prefill-ratio");
+    g_config.bottom_pruning_config.scale_coeffs = program.get<float>("--bl-scale-coeffs");
+    g_config.bottom_pruning_config.shifted_coeffs = program.get<float>("--bl-shifted-coeffs");
 
-    g_config.upper_edges_config.scale_coeffs = program.get<float>("--ul-scale-coeffs");
-    g_config.upper_edges_config.shifted_coeffs = program.get<float>("--ul-shifted-coeffs");
-    g_config.upper_edges_config.num_outer_iters = program.get<uint32_t>("--ul-num-outer-iters");
-    g_config.upper_edges_config.num_triu_iters = program.get<uint32_t>("--ul-num-inner-iters");
-    g_config.upper_edges_config.prefill_ratio = program.get<float>("--prefill-ratio");
+    g_config.upper_pruning_config.scale_coeffs = program.get<float>("--ul-scale-coeffs");
+    g_config.upper_pruning_config.shifted_coeffs = program.get<float>("--ul-shifted-coeffs");
+
+    g_config.propagate_config.num_build_loops = program.get<uint32_t>("--num-build-loops");
+    g_config.propagate_config.num_triu_iters = program.get<uint32_t>("--num-triu-iters");
+    g_config.propagate_config.prefill_ratio = program.get<float>("--prefill-ratio");
 
     g_config.topk = program.get<uint32_t>("--topk");
 
@@ -580,15 +583,15 @@ int main(int argc, char** argv) {
     std::cout << "\n--- Layer Configuration ---" << std::endl;
     std::cout << "Bottom layer max nbr size: " << g_config.bottom_layer_config.max_nbr_size << std::endl;
     std::cout << "Upper layer max nbr size: " << g_config.upper_layer_config.max_nbr_size << std::endl;
-    std::cout << "\n--- Edges Builder Configuration ---" << std::endl;
-    std::cout << "Bottom edges scale coeffs: " << g_config.bottom_edges_config.scale_coeffs << std::endl;
-    std::cout << "Bottom edges shifted coeffs: " << g_config.bottom_edges_config.shifted_coeffs << std::endl;
-    std::cout << "Bottom edges num outer iters: " << g_config.bottom_edges_config.num_outer_iters << std::endl;
-    std::cout << "Bottom edges num inner iters: " << g_config.bottom_edges_config.num_triu_iters << std::endl;
-    std::cout << "Upper edges scale coeffs: " << g_config.upper_edges_config.scale_coeffs << std::endl;
-    std::cout << "Upper edges shifted coeffs: " << g_config.upper_edges_config.shifted_coeffs << std::endl;
-    std::cout << "Upper edges num outer iters: " << g_config.upper_edges_config.num_outer_iters << std::endl;
-    std::cout << "Upper edges num inner iters: " << g_config.upper_edges_config.num_triu_iters << std::endl;
+    std::cout << "\n--- Pruning Configuration ---" << std::endl;
+    std::cout << "Bottom layer scale coeffs: " << g_config.bottom_pruning_config.scale_coeffs << std::endl;
+    std::cout << "Bottom layer shifted coeffs: " << g_config.bottom_pruning_config.shifted_coeffs << std::endl;
+    std::cout << "Upper layer scale coeffs: " << g_config.upper_pruning_config.scale_coeffs << std::endl;
+    std::cout << "Upper layer shifted coeffs: " << g_config.upper_pruning_config.shifted_coeffs << std::endl;
+    std::cout << "\n--- Propagate Configuration ---" << std::endl;
+    std::cout << "Build loops: " << g_config.propagate_config.num_build_loops << std::endl;
+    std::cout << "Triangle updater iterations: " << g_config.propagate_config.num_triu_iters << std::endl;
+    std::cout << "Prefill ratio: " << g_config.propagate_config.prefill_ratio << std::endl;
     std::cout << "\n--- Router Configuration ---" << std::endl;
     std::cout << "Top-k: " << g_config.topk << std::endl;
     std::cout << "Candidate queue config: " << g_config.queue_start << "," << g_config.queue_end << "," << g_config.queue_step << std::endl;

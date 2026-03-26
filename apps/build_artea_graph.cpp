@@ -61,17 +61,17 @@ int main(int argc, char** argv) {
     // Upper layer config
     program.add_argument("--ul-max-nbr-size").default_value(24u).scan<'u', uint32_t>();
 
-    // Bottom edges builder config
+    // Bottom layer pruning config
     program.add_argument("--bl-scale-coeffs").default_value(1.0f).scan<'g', float>();
     program.add_argument("--bl-shifted-coeffs").default_value(0.0f).scan<'g', float>();
-    program.add_argument("--bl-num-outer-iters").default_value(4u).scan<'u', uint32_t>();
-    program.add_argument("--bl-num-inner-iters").default_value(14u).scan<'u', uint32_t>();
 
-    // Upper edges builder config
+    // Upper layer pruning config
     program.add_argument("--ul-scale-coeffs").default_value(1.0f).scan<'g', float>();
     program.add_argument("--ul-shifted-coeffs").default_value(0.0f).scan<'g', float>();
-    program.add_argument("--ul-num-outer-iters").default_value(4u).scan<'u', uint32_t>();
-    program.add_argument("--ul-num-inner-iters").default_value(14u).scan<'u', uint32_t>();
+
+    // Propagate config (shared between layers)
+    program.add_argument("--num-build-loops").default_value(4u).scan<'u', uint32_t>();
+    program.add_argument("--num-triu-iters").default_value(14u).scan<'u', uint32_t>();
     program.add_argument("--prefill-ratio").default_value(0.6f).scan<'g', float>();
 
     try {
@@ -129,19 +129,20 @@ int main(int argc, char** argv) {
     layer_config_t bottom_layer_config(bl_max_nbr_size, bl_reserved_nbr_size);
     layer_config_t upper_layer_config(ul_max_nbr_size, ul_reserved_nbr_size);
 
-    // Create edges builder configs
-    artea_graph::edges_builder_config_t bottom_edges_config(
+    // Create pruning configs (per layer)
+    artea_graph::pruning_config_t bottom_pruning_config(
         program.get<float>("--bl-scale-coeffs"),
-        program.get<float>("--bl-shifted-coeffs"),
-        program.get<uint32_t>("--bl-num-outer-iters"),
-        program.get<uint32_t>("--bl-num-inner-iters"),
-        program.get<float>("--prefill-ratio")
+        program.get<float>("--bl-shifted-coeffs")
     );
-    artea_graph::edges_builder_config_t upper_edges_config(
+    artea_graph::pruning_config_t upper_pruning_config(
         program.get<float>("--ul-scale-coeffs"),
-        program.get<float>("--ul-shifted-coeffs"),
-        program.get<uint32_t>("--ul-num-outer-iters"),
-        program.get<uint32_t>("--ul-num-inner-iters"),
+        program.get<float>("--ul-shifted-coeffs")
+    );
+
+    // Create propagate config (shared between layers)
+    artea_graph::propagate_config_t propagate_config(
+        program.get<uint32_t>("--num-build-loops"),
+        program.get<uint32_t>("--num-triu-iters"),
         program.get<float>("--prefill-ratio")
     );
 
@@ -160,8 +161,9 @@ int main(int argc, char** argv) {
         base_vecs,
         bottom_layer_config,
         upper_layer_config,
-        bottom_edges_config,
-        upper_edges_config,
+        bottom_pruning_config,
+        upper_pruning_config,
+        propagate_config,
         vertices_builder_config
     );
 
@@ -260,18 +262,18 @@ int main(int argc, char** argv) {
         }
     }
     std::cout << std::endl;
-    std::cout << "  Bottom layer:" << std::endl;
+    std::cout << "  Bottom layer pruning:" << std::endl;
     std::cout << fmt::format("    Max nbr size:         {}", bl_max_nbr_size) << std::endl;
     std::cout << fmt::format("    Scale coeffs:         {}", program.get<float>("--bl-scale-coeffs")) << std::endl;
     std::cout << fmt::format("    Shifted coeffs:       {}", program.get<float>("--bl-shifted-coeffs")) << std::endl;
-    std::cout << fmt::format("    Num outer iters:      {}", program.get<uint32_t>("--bl-num-outer-iters")) << std::endl;
-    std::cout << fmt::format("    Num inner iters:      {}", program.get<uint32_t>("--bl-num-inner-iters")) << std::endl;
-    std::cout << "  Upper layers:" << std::endl;
+    std::cout << "  Upper layer pruning:" << std::endl;
     std::cout << fmt::format("    Max nbr size:         {}", ul_max_nbr_size) << std::endl;
     std::cout << fmt::format("    Scale coeffs:         {}", program.get<float>("--ul-scale-coeffs")) << std::endl;
     std::cout << fmt::format("    Shifted coeffs:       {}", program.get<float>("--ul-shifted-coeffs")) << std::endl;
-    std::cout << fmt::format("    Num outer iters:      {}", program.get<uint32_t>("--ul-num-outer-iters")) << std::endl;
-    std::cout << fmt::format("    Num inner iters:      {}", program.get<uint32_t>("--ul-num-inner-iters")) << std::endl;
+    std::cout << "--- Propagate Config ---" << std::endl;
+    std::cout << fmt::format("  Build loops:            {}", program.get<uint32_t>("--num-build-loops")) << std::endl;
+    std::cout << fmt::format("  Triangle updater iters: {}", program.get<uint32_t>("--num-triu-iters")) << std::endl;
+    std::cout << fmt::format("  Prefill ratio:          {}", program.get<float>("--prefill-ratio")) << std::endl;
     std::cout << "--- Vertices Builder Config ---" << std::endl;
     std::cout << fmt::format("  Min radius:             {:.6f} (auto-probed)", min_radius) << std::endl;
     std::cout << fmt::format("  Beta:                   {}", program.get<float>("--beta")) << std::endl;

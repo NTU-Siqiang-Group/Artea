@@ -223,14 +223,19 @@ public:
 
     template <typename UdfUpdaterT>
         requires std::derived_from<UdfUpdaterT, neighbor_updater_t<UdfUpdaterT>>
-    auto next(UdfUpdaterT& udf_updater) -> void {
+    auto next(UdfUpdaterT& udf_updater) -> PropagateEngine& {
         propagate<UdfUpdaterT>(udf_updater);
         merge_logs();
+        return *this;
     }
 
     template <typename UdfUpdaterT>
         requires std::derived_from<UdfUpdaterT, neighbor_updater_t<UdfUpdaterT>>
-    auto run(const iter_t num_iters, UdfUpdaterT& udf_updater, const bool do_merge_logs = true) -> void {
+    auto run(
+        const iter_t num_iters,
+        UdfUpdaterT& udf_updater,
+        const bool do_merge_logs = true
+    ) -> PropagateEngine& {
         for (iter_t iter = 0; iter < num_iters; ++iter) {
             propagate<UdfUpdaterT>(udf_updater);
             if (do_merge_logs) { merge_logs(); }
@@ -238,20 +243,21 @@ public:
             if constexpr (profiling_mode) {
                 if (do_merge_logs) {
                     ARTEA_INFO(fmt::format(
-                        "Inner Iter {} ({}): Merged {} logs",
+                        "Triangle Updater Iter {} ({}): Merged {} logs",
                         iter,
                         UdfUpdaterT::updater_name,
                         _merged_logs_count
                     ));
                 } else {
                     ARTEA_INFO(fmt::format(
-                        "Inner Iter {} ({}): do_merge_logs = false, no logs merged",
+                        "Triangle Updater Iter {} ({}): do_merge_logs = false, no logs merged",
                         iter,
                         UdfUpdaterT::updater_name
                     ));
                 }
             }
         }
+        return *this;
     }
 
     /** @brief Accessor for the internal DelegateTable. */

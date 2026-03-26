@@ -36,7 +36,7 @@ struct GraphParams {
     vertex_num_t reserved_nbr_size = 64;
     ratio_t scale_coeffs = 1.00;
     ratio_t shifted_coeffs = 0.00;
-    iter_t num_outer_iters = 4;
+    iter_t num_build_loops = 4;
     iter_t num_triu_iters = 14;
     ratio_t prefill_ratio = 0.6;
 };
@@ -74,15 +74,15 @@ int main(int argc, char** argv) {
         .scan<'g', double>()
         .help("Shifted coefficient for triangle updater");
 
-    program.add_argument("--num-outer-iters")
+    program.add_argument("--num-build-loops")
         .default_value(uint32_t(4))
         .scan<'u', uint32_t>()
-        .help("Number of outer iterations");
+        .help("Number of build loops");
 
     program.add_argument("--num-triu-iters")
         .default_value(uint32_t(14))
         .scan<'u', uint32_t>()
-        .help("Number of inner iterations");
+        .help("Number of triangle updater iterations per build loop");
 
     program.add_argument("--prefill-ratio")
         .default_value(0.6f)
@@ -107,7 +107,7 @@ int main(int argc, char** argv) {
     params.reserved_nbr_size = static_cast<uint32_t>(params.max_nbr_size * 1.5);
     params.scale_coeffs = program.get<double>("--scale-coeffs");
     params.shifted_coeffs = program.get<double>("--shifted-coeffs");
-    params.num_outer_iters = program.get<uint32_t>("--num-outer-iters");
+    params.num_build_loops = program.get<uint32_t>("--num-build-loops");
     params.num_triu_iters = program.get<uint32_t>("--num-triu-iters");
     params.prefill_ratio = program.get<float>("--prefill-ratio");
 
@@ -119,8 +119,8 @@ int main(int argc, char** argv) {
     logger.info(fmt::format("  Reserved neighbors: {}", params.reserved_nbr_size));
     logger.info(fmt::format("  Scale coefficient: {:.2f}", params.scale_coeffs));
     logger.info(fmt::format("  Shifted coefficient: {:.2f}", params.shifted_coeffs));
-    logger.info(fmt::format("  Outer iterations: {}", params.num_outer_iters));
-    logger.info(fmt::format("  Inner iterations: {}", params.num_triu_iters));
+    logger.info(fmt::format("  Build loops: {}", params.num_build_loops));
+    logger.info(fmt::format("  Triangle updater iterations: {}", params.num_triu_iters));
 
     // Load dataset
     logger.info("Loading dataset...");
@@ -138,10 +138,12 @@ int main(int argc, char** argv) {
     auto start_time = std::chrono::high_resolution_clock::now();
 
     layer_config_t layer_config(params.max_nbr_size, params.reserved_nbr_size);
-    conv_graph::edges_builder_config_t edges_builder_config(
+    conv_graph::pruning_config_t pruning_config(
         params.scale_coeffs,
-        params.shifted_coeffs,
-        params.num_outer_iters,
+        params.shifted_coeffs
+    );
+    conv_graph::propagate_config_t propagate_config(
+        params.num_build_loops,
         params.num_triu_iters,
         params.prefill_ratio
     );
@@ -150,7 +152,8 @@ int main(int argc, char** argv) {
     flat_graph_t flat_graph = conv_graph_factory.construct_graph(
         dataset,
         layer_config,
-        edges_builder_config
+        pruning_config,
+        propagate_config
     );
 
     auto end_time = std::chrono::high_resolution_clock::now();
@@ -187,8 +190,8 @@ int main(int argc, char** argv) {
     std::cout << fmt::format("  Max nbr size:           {}", params.max_nbr_size) << std::endl;
     std::cout << fmt::format("  Scale coeffs:           {:.2f}", params.scale_coeffs) << std::endl;
     std::cout << fmt::format("  Shifted coeffs:         {:.2f}", params.shifted_coeffs) << std::endl;
-    std::cout << fmt::format("  Num outer iters:        {}", params.num_outer_iters) << std::endl;
-    std::cout << fmt::format("  Num inner iters:        {}", params.num_triu_iters) << std::endl;
+    std::cout << fmt::format("  Build loops:            {}", params.num_build_loops) << std::endl;
+    std::cout << fmt::format("  Triangle updater iters: {}", params.num_triu_iters) << std::endl;
     std::cout << "\n--- Build Results ---" << std::endl;
     std::cout << fmt::format("  Num vertices:           {}", flat_graph.get_num_vertices()) << std::endl;
     std::cout << fmt::format("  Index size:             {:.2f} MB ({} bytes)", index_size_info.total_mb, index_size_info.total_bytes) << std::endl;
@@ -209,7 +212,7 @@ int main(int argc, char** argv) {
     metadata["build_params"] = {
         {"scale_coeffs", params.scale_coeffs},
         {"shifted_coeffs", params.shifted_coeffs},
-        {"num_outer_iters", params.num_outer_iters},
+        {"num_build_loops", params.num_build_loops},
         {"num_triu_iters", params.num_triu_iters}
     };
 
@@ -231,7 +234,7 @@ int main(int argc, char** argv) {
     index_params["max_nbr_size"] = params.max_nbr_size;
     index_params["scale_coeffs"] = params.scale_coeffs;
     index_params["shifted_coeffs"] = params.shifted_coeffs;
-    index_params["num_outer_iters"] = params.num_outer_iters;
+    index_params["num_build_loops"] = params.num_build_loops;
     index_params["num_triu_iters"] = params.num_triu_iters;
 
     // Use relative path from project root: output_dir/subdir/dirname

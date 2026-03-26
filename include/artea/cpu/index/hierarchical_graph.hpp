@@ -55,7 +55,8 @@ class HierarchicalGraph {
     using inter_layer_links_t = typename IndexTraitsT::inter_layer_links_t;
     using hierarchical_vecs_manager_t = typename IndexTraitsT::hierarchical_vecs_manager_t;
     using layer_config_t = typename IndexTraitsT::layer_config_t;
-    using edges_builder_config_t = typename IndexTraitsT::artea_graph::edges_builder_config_t;
+    using propagate_config_t = typename IndexTraitsT::artea_graph::propagate_config_t;
+    using pruning_config_t = typename IndexTraitsT::artea_graph::pruning_config_t;
     using greedy_vertices_builder_config_t = typename IndexTraitsT::greedy_vertices_builder_config_t;
     using random_vertices_builder_config_t = typename IndexTraitsT::random_vertices_builder_config_t;
     using vertices_builder_config_t = typename IndexTraitsT::vertices_builder_config_t;
@@ -66,22 +67,25 @@ public:
      * @param base_vecs Reference to the base layer vector data.
      * @param bottom_layer_config Configuration for bottom layer.
      * @param upper_layer_config Configuration for upper layers.
-     * @param bottom_edges_builder_config Edge builder configuration for bottom layer.
-     * @param upper_edges_builder_config Edge builder configuration for upper layers.
+     * @param bottom_pruning_config Pruning configuration for bottom layer.
+     * @param upper_pruning_config Pruning configuration for upper layers.
+     * @param propagate_config Propagation configuration (shared between layers).
      * @param vertices_builder_config Configuration for vertices builder (greedy or random).
      */
     HierarchicalGraph(
         const vector_array_t& base_vecs,
-        layer_config_t bottom_layer_config,
-        layer_config_t upper_layer_config,
-        edges_builder_config_t bottom_edges_builder_config,
-        edges_builder_config_t upper_edges_builder_config,
-        vertices_builder_config_t vertices_builder_config
+        const layer_config_t bottom_layer_config,
+        const layer_config_t upper_layer_config,
+        const pruning_config_t bottom_pruning_config,
+        const pruning_config_t upper_pruning_config,
+        const propagate_config_t propagate_config,
+        const vertices_builder_config_t vertices_builder_config
     ) : _num_vertices(base_vecs.get_num_vecs()),
         _bottom_layer_config(bottom_layer_config),
         _upper_layer_config(upper_layer_config),
-        _bottom_edges_builder_config(bottom_edges_builder_config),
-        _upper_edges_builder_config(upper_edges_builder_config),
+        _bottom_pruning_config(bottom_pruning_config),
+        _upper_pruning_config(upper_pruning_config),
+        _propagate_config(propagate_config),
         _vertices_builder_config(vertices_builder_config),
         _hier_vecs_manager(base_vecs),
         _inter_layer_links(inter_layer_links_t(_num_vertices))
@@ -149,23 +153,33 @@ public:
     }
 
     __attribute__((always_inline))
-    auto bottom_edges_builder_config() const -> const edges_builder_config_t& {
-        return _bottom_edges_builder_config;
+    auto bottom_pruning_config() const -> const pruning_config_t& {
+        return _bottom_pruning_config;
     }
 
     __attribute__((always_inline))
-    auto bottom_edges_builder_config() -> edges_builder_config_t& {
-        return _bottom_edges_builder_config;
+    auto bottom_pruning_config() -> pruning_config_t& {
+        return _bottom_pruning_config;
     }
 
     __attribute__((always_inline))
-    auto upper_edges_builder_config() const -> const edges_builder_config_t& {
-        return _upper_edges_builder_config;
+    auto upper_pruning_config() const -> const pruning_config_t& {
+        return _upper_pruning_config;
     }
 
     __attribute__((always_inline))
-    auto upper_edges_builder_config() -> edges_builder_config_t& {
-        return _upper_edges_builder_config;
+    auto upper_pruning_config() -> pruning_config_t& {
+        return _upper_pruning_config;
+    }
+
+    __attribute__((always_inline))
+    auto propagate_config() const -> const propagate_config_t& {
+        return _propagate_config;
+    }
+
+    __attribute__((always_inline))
+    auto propagate_config() -> propagate_config_t& {
+        return _propagate_config;
     }
 
     __attribute__((always_inline))
@@ -276,11 +290,14 @@ protected:
     /** @brief Configuration for upper layers. */
     layer_config_t _upper_layer_config;
 
-    /** @brief Edge builder configuration for bottom layer. */
-    edges_builder_config_t _bottom_edges_builder_config;
+    /** @brief Pruning configuration for bottom layer. */
+    pruning_config_t _bottom_pruning_config;
 
-    /** @brief Edge builder configuration for upper layers. */
-    edges_builder_config_t _upper_edges_builder_config;
+    /** @brief Pruning configuration for upper layers. */
+    pruning_config_t _upper_pruning_config;
+
+    /** @brief Propagation configuration (shared between layers). */
+    propagate_config_t _propagate_config;
 
     /** @brief Vertices builder configuration (greedy or random). */
     vertices_builder_config_t _vertices_builder_config;

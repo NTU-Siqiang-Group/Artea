@@ -16,7 +16,7 @@ Workload files use JSON format with the following structure:
       "extracted_nbr_size": 20,
       "max_nbr_size": 32,
       "num_triu_iters": 14,
-      "num_outer_iters": 4,
+      "num_build_loops": 4,
       "scale_coeffs": 1.0,
       "shifted_coeffs": 0.0
     }

@@ -26,7 +26,8 @@ using namespace arena_benchmark;
 
 struct GraphParams {
     layer_config_t layer_config;
-    conv_graph::edges_builder_config_t edges_builder_config;
+    conv_graph::pruning_config_t pruning_config;
+    conv_graph::propagate_config_t propagate_config;
 };
 
 struct BenchConfig {
@@ -84,7 +85,8 @@ auto make_benchmark_func(const GraphParams& params) {
             flat_graph_t flat_graph = conv_graph_factory.construct_graph(
                 dataset,
                 params.layer_config,
-                params.edges_builder_config
+                params.pruning_config,
+                params.propagate_config
             );
 
             // Prevent optimization from removing the work
@@ -150,10 +152,10 @@ int main(int argc, char** argv) {
 
     // Initialize parameter sets
     g_config.param_sets = {
-        // Set 1: max_nbrs=32, reserved=64, outer_iters=4, inner_iters=14, scale=1.10, shift=0.00
-        {layer_config_t(32, 64), conv_graph::edges_builder_config_t(1.10, 0.00, 4, 14)},
-        // Set 2: max_nbrs=64, reserved=128, outer_iters=4, inner_iters=14, scale=1.00, shift=0.00
-        {layer_config_t(64, 128), conv_graph::edges_builder_config_t(1.00, 0.00, 4, 14)}
+        // Set 1: max_nbrs=32, reserved=64, build_loops=4, triangle_updater_iters=14, scale=1.10, shift=0.00
+        {layer_config_t(32, 64), conv_graph::pruning_config_t(1.10, 0.00), conv_graph::propagate_config_t(4, 14)},
+        // Set 2: max_nbrs=64, reserved=128, build_loops=4, triangle_updater_iters=14, scale=1.00, shift=0.00
+        {layer_config_t(64, 128), conv_graph::pruning_config_t(1.00, 0.00), conv_graph::propagate_config_t(4, 14)}
     };
 
     logger.info(fmt::format("Benchmark Configuration:"));
@@ -183,14 +185,14 @@ int main(int argc, char** argv) {
             .workload_scale(num_vertices)
             .time_unit(benchmark::kMillisecond)
             .extra_info(fmt::format(
-                "vertices={}, max_nbrs={}, reserved_nbrs={}, outer_iters={}, inner_iters={}, scale={:.2f}, shift={:.2f}",
+                "vertices={}, max_nbrs={}, reserved_nbrs={}, build_loops={}, triu_iters={}, scale={:.2f}, shift={:.2f}",
                 num_vertices,
                 params.layer_config.max_nbr_size(),
                 params.layer_config.reserved_nbr_size(),
-                params.edges_builder_config.num_outer_iters(),
-                params.edges_builder_config.num_triu_iters(),
-                params.edges_builder_config.scale_coeffs(),
-                params.edges_builder_config.shifted_coeffs()
+                params.propagate_config.num_build_loops(),
+                params.propagate_config.num_triu_iters(),
+                params.pruning_config.scale_coeffs(),
+                params.pruning_config.shifted_coeffs()
             ));
     }
 

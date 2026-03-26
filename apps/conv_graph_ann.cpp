@@ -190,10 +190,10 @@ int main(int argc, char** argv) {
     std::cout << fmt::format("  Index size:             {:.2f} MB ({} bytes)", index_size_info.total_mb, index_size_info.total_bytes) << std::endl;
     std::cout << fmt::format("  Max nbr size:           {}", flat_graph.layer_config().max_nbr_size()) << std::endl;
     std::cout << fmt::format("  Reserved nbr size:      {}", flat_graph.layer_config().reserved_nbr_size()) << std::endl;
-    std::cout << fmt::format("  Scale coeffs:           {}", flat_graph.edges_builder_config().scale_coeffs()) << std::endl;
-    std::cout << fmt::format("  Shifted coeffs:         {}", flat_graph.edges_builder_config().shifted_coeffs()) << std::endl;
-    std::cout << fmt::format("  Num outer iters:        {}", flat_graph.edges_builder_config().num_outer_iters()) << std::endl;
-    std::cout << fmt::format("  Num inner iters:        {}", flat_graph.edges_builder_config().num_triu_iters()) << std::endl;
+    std::cout << fmt::format("  Scale coeffs:           {}", flat_graph.pruning_config().scale_coeffs()) << std::endl;
+    std::cout << fmt::format("  Shifted coeffs:         {}", flat_graph.pruning_config().shifted_coeffs()) << std::endl;
+    std::cout << fmt::format("  Build loops:            {}", flat_graph.propagate_config().num_build_loops()) << std::endl;
+    std::cout << fmt::format("  Triangle updater iters: {}", flat_graph.propagate_config().num_triu_iters()) << std::endl;
     std::cout << "\n--- Query Config ---" << std::endl;
     std::cout << fmt::format("  Top-k:                  {}", topk) << std::endl;
     std::cout << fmt::format("  Candidate queue size:   {}", candidate_queue_size) << std::endl;

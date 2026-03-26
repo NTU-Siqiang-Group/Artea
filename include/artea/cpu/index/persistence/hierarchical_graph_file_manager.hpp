@@ -47,8 +47,11 @@ class HierarchicalGraphFileManager {
     using hierarchical_vecs_manager_t = typename IndexTraitsT::hierarchical_vecs_manager_t;
     using flat_graph_t = typename IndexTraitsT::flat_graph_t;
     using flat_graph_file_manager_t = typename IndexTraitsT::flat_graph_file_manager_t;
+    using iter_t = typename IndexTraitsT::iter_t;
+    using ratio_t = typename IndexTraitsT::ratio_t;
     using layer_config_t = typename IndexTraitsT::layer_config_t;
-    using edges_builder_config_t = typename IndexTraitsT::artea_graph::edges_builder_config_t;
+    using propagate_config_t = typename IndexTraitsT::artea_graph::propagate_config_t;
+    using pruning_config_t = typename IndexTraitsT::artea_graph::pruning_config_t;
     using greedy_vertices_builder_config_t = typename IndexTraitsT::greedy_vertices_builder_config_t;
     using random_vertices_builder_config_t = typename IndexTraitsT::random_vertices_builder_config_t;
     using vertices_builder_config_t = typename IndexTraitsT::vertices_builder_config_t;
@@ -84,17 +87,18 @@ public:
             {"max_nbr_size", hierarchical_graph.upper_layer_config().max_nbr_size()},
             {"reserved_nbr_size", hierarchical_graph.upper_layer_config().reserved_nbr_size()}
         };
-        meta["bottom_edges_builder_config"] = {
-            {"scale_coeffs", hierarchical_graph.bottom_edges_builder_config().scale_coeffs()},
-            {"shifted_coeffs", hierarchical_graph.bottom_edges_builder_config().shifted_coeffs()},
-            {"num_outer_iters", hierarchical_graph.bottom_edges_builder_config().num_outer_iters()},
-            {"num_triu_iters", hierarchical_graph.bottom_edges_builder_config().num_triu_iters()}
+        meta["bottom_pruning_config"] = {
+            {"scale_coeffs", hierarchical_graph.bottom_pruning_config().scale_coeffs()},
+            {"shifted_coeffs", hierarchical_graph.bottom_pruning_config().shifted_coeffs()}
         };
-        meta["upper_edges_builder_config"] = {
-            {"scale_coeffs", hierarchical_graph.upper_edges_builder_config().scale_coeffs()},
-            {"shifted_coeffs", hierarchical_graph.upper_edges_builder_config().shifted_coeffs()},
-            {"num_outer_iters", hierarchical_graph.upper_edges_builder_config().num_outer_iters()},
-            {"num_triu_iters", hierarchical_graph.upper_edges_builder_config().num_triu_iters()}
+        meta["upper_pruning_config"] = {
+            {"scale_coeffs", hierarchical_graph.upper_pruning_config().scale_coeffs()},
+            {"shifted_coeffs", hierarchical_graph.upper_pruning_config().shifted_coeffs()}
+        };
+        meta["propagate_config"] = {
+            {"num_build_loops", hierarchical_graph.propagate_config().num_build_loops()},
+            {"num_triu_iters", hierarchical_graph.propagate_config().num_triu_iters()},
+            {"prefill_ratio", hierarchical_graph.propagate_config().prefill_ratio()}
         };
 
         // Save vertices_builder_config based on which variant is active
@@ -217,18 +221,19 @@ public:
             meta["upper_layer_config"]["reserved_nbr_size"].get<vertex_num_t>()
         );
 
-        // Extract edge builder configurations
-        edges_builder_config_t bottom_edges_builder_config(
-            meta["bottom_edges_builder_config"]["scale_coeffs"].get<typename edges_builder_config_t::ratio_t>(),
-            meta["bottom_edges_builder_config"]["shifted_coeffs"].get<typename edges_builder_config_t::ratio_t>(),
-            meta["bottom_edges_builder_config"]["num_outer_iters"].get<typename edges_builder_config_t::iter_t>(),
-            meta["bottom_edges_builder_config"]["num_triu_iters"].get<typename edges_builder_config_t::iter_t>()
+        // Extract pruning and propagate configurations
+        pruning_config_t bottom_pruning_config(
+            meta["bottom_pruning_config"]["scale_coeffs"].get<ratio_t>(),
+            meta["bottom_pruning_config"]["shifted_coeffs"].get<ratio_t>()
         );
-        edges_builder_config_t upper_edges_builder_config(
-            meta["upper_edges_builder_config"]["scale_coeffs"].get<typename edges_builder_config_t::ratio_t>(),
-            meta["upper_edges_builder_config"]["shifted_coeffs"].get<typename edges_builder_config_t::ratio_t>(),
-            meta["upper_edges_builder_config"]["num_outer_iters"].get<typename edges_builder_config_t::iter_t>(),
-            meta["upper_edges_builder_config"]["num_triu_iters"].get<typename edges_builder_config_t::iter_t>()
+        pruning_config_t upper_pruning_config(
+            meta["upper_pruning_config"]["scale_coeffs"].get<ratio_t>(),
+            meta["upper_pruning_config"]["shifted_coeffs"].get<ratio_t>()
+        );
+        propagate_config_t propagate_config(
+            meta["propagate_config"]["num_build_loops"].get<iter_t>(),
+            meta["propagate_config"]["num_triu_iters"].get<iter_t>(),
+            meta["propagate_config"]["prefill_ratio"].get<ratio_t>()
         );
 
         // Restore vertices_builder_config based on type
@@ -258,8 +263,9 @@ public:
             base_vecs,
             bottom_layer_config,
             upper_layer_config,
-            bottom_edges_builder_config,
-            upper_edges_builder_config,
+            bottom_pruning_config,
+            upper_pruning_config,
+            propagate_config,
             vertices_builder_config
         );
 

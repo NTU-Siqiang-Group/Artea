@@ -31,8 +31,9 @@ struct TestConfig {
     std::string config_path;
     std::string dataset_name;
     std::string temp_dir;
-    layer_config_t flat_layer_config{16, 32};
-    conv_graph::edges_builder_config_t flat_edges_builder_config{1.0f, 0.0f, 4, 14};
+    layer_config_t layer_config{16, 32};
+    conv_graph::pruning_config_t pruning_config{1.0f, 0.0f};
+    conv_graph::propagate_config_t propagate_config{4, 14};
     bool verbose;
 } g_config;
 
@@ -97,8 +98,9 @@ TEST_F(FlatGraphPersistenceTest, FlatGraphSnapshotRestore) {
     conv_graph_factory_t factory;
     flat_graph_t original_graph = factory.construct_graph(
         base_vecs,
-        g_config.flat_layer_config,
-        g_config.flat_edges_builder_config
+        g_config.layer_config,
+        g_config.pruning_config,
+        g_config.propagate_config
     );
 
     logger.info(fmt::format("Original graph built with {} vertices", original_graph.get_num_vertices()));
@@ -129,17 +131,17 @@ TEST_F(FlatGraphPersistenceTest, FlatGraphSnapshotRestore) {
     EXPECT_EQ(original_graph.layer_config().reserved_nbr_size(), restored_graph.layer_config().reserved_nbr_size())
         << "Reserved neighbor size should match";
 
-    EXPECT_FLOAT_EQ(original_graph.edges_builder_config().scale_coeffs(), restored_graph.edges_builder_config().scale_coeffs())
+    EXPECT_FLOAT_EQ(original_graph.pruning_config().scale_coeffs(), restored_graph.pruning_config().scale_coeffs())
         << "Scale coefficients should match";
 
-    EXPECT_FLOAT_EQ(original_graph.edges_builder_config().shifted_coeffs(), restored_graph.edges_builder_config().shifted_coeffs())
+    EXPECT_FLOAT_EQ(original_graph.pruning_config().shifted_coeffs(), restored_graph.pruning_config().shifted_coeffs())
         << "Shifted coefficients should match";
 
-    EXPECT_EQ(original_graph.edges_builder_config().num_outer_iters(), restored_graph.edges_builder_config().num_outer_iters())
-        << "Number of outer iterations should match";
+    EXPECT_EQ(original_graph.propagate_config().num_build_loops(), restored_graph.propagate_config().num_build_loops())
+        << "Number of build loops should match";
 
-    EXPECT_EQ(original_graph.edges_builder_config().num_triu_iters(), restored_graph.edges_builder_config().num_triu_iters())
-        << "Number of inner iterations should match";
+    EXPECT_EQ(original_graph.propagate_config().num_triu_iters(), restored_graph.propagate_config().num_triu_iters())
+        << "Number of triangle updater iterations should match";
 
     // Check neighbor arrays
     const auto& original_nbrs = original_graph.get_nbrs_arr();
