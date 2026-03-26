@@ -85,7 +85,7 @@ public:
     }
 
     /** @brief construct a new convergent graph from dataset, with per-build-loop recall/throughput profiling */
-    auto construct_graph_impl(
+    auto profile_search_quality_impl(
         const vector_dataset_t& dataset,
         const layer_config_t layer_config,
         const pruning_config_t pruning_config,
@@ -146,9 +146,8 @@ private:
         std::function<void(iter_t)> on_iter_end = nullptr
     ) -> void {
         const vertex_num_t num_vertices = flat_graph.get_num_vertices();
-        const vertex_num_t init_nbr_size = static_cast<vertex_num_t>(
-            flat_graph.layer_config().max_nbr_size() * propagate_config.prefill_ratio()
-        );
+        const vertex_num_t max_nbr_size = flat_graph.layer_config().max_nbr_size();
+        const vertex_num_t init_nbr_size = static_cast<vertex_num_t>(max_nbr_size * propagate_config.prefill_ratio());
 
         random_eg_t random_eg(dist_func);
         random_eg.generate(flat_graph, init_nbr_size);
@@ -159,18 +158,26 @@ private:
         auto triangle_updater  = propagate_engine.template make_updater<triangle_updater_t>(
             pruning_config.scale_coeffs(), pruning_config.shifted_coeffs());
         auto reverse_updater   = propagate_engine.template make_updater<reverse_updater_t>();
-        auto routing_updater   = propagate_engine.template make_updater<routing_updater_t>(init_nbr_size, init_nbr_size * 2);
+        auto routing_updater   = propagate_engine.template make_updater<routing_updater_t>(32, 32);
         auto truncate_updater  = propagate_engine.template make_updater<truncate_updater_t>();
 
         for (iter_t build_loop = 0; build_loop < propagate_config.num_build_loops(); ++build_loop) {
             propagate_engine.run(propagate_config.num_triu_iters(), triangle_updater)
-                            .next(reverse_updater).next(truncate_updater)
-                            .next(routing_updater).next(truncate_updater);
+                            .next(reverse_updater).next(truncate_updater);
+
             if (build_loop == propagate_config.num_build_loops() - 1) {
-                propagate_engine.next(triangle_updater)
+                propagate_engine.next(routing_updater)
+                                .next(triangle_updater)
                                 .next(reverse_updater)
                                 .next(truncate_updater);
             }
+            // propagate_engine.next(triangle_updater).next(truncate_updater)
+            //                 .next(reverse_updater).next(truncate_updater)
+            //                 .next(routing_updater).next(truncate_updater);
+            // if (build_loop == propagate_config.num_build_loops() - 1) {
+            //     propagate_engine.next(triangle_updater).next(reverse_updater)
+            //                     .next(truncate_updater);
+            // }
             if (on_iter_end) { on_iter_end(build_loop); }
         }
     }

@@ -45,12 +45,12 @@ public:
     FlatGraphFactory() = default;
 
     template <typename... Args>
-    auto construct_graph(
+    auto profile_search_quality(
         const vector_dataset_t& dataset,
         layer_config_t layer_config,
         Args&&... args
     ) -> flat_graph_t {
-        return static_cast<DerivedClassT*>(this)->construct_graph_impl(
+        return static_cast<DerivedClassT*>(this)->profile_search_quality_impl(
             dataset,
             layer_config,
             std::forward<Args>(args)...

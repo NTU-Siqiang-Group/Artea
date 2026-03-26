@@ -82,7 +82,7 @@ auto make_benchmark_func(const GraphParams& params) {
 
         for (auto _ : state) {
             // Construct the graph
-            flat_graph_t flat_graph = conv_graph_factory.construct_graph(
+            flat_graph_t flat_graph = conv_graph_factory.profile_search_quality(
                 dataset,
                 params.layer_config,
                 params.pruning_config,

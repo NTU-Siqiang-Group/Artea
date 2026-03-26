@@ -149,7 +149,7 @@ int main(int argc, char** argv) {
     );
 
     conv_graph_factory_t conv_graph_factory;
-    flat_graph_t flat_graph = conv_graph_factory.construct_graph(
+    flat_graph_t flat_graph = conv_graph_factory.profile_search_quality(
         dataset,
         layer_config,
         pruning_config,
