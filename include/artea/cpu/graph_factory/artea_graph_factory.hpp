@@ -68,21 +68,7 @@ public:
             vertices_builder_config
         );
 
-        _construct_vertices(dist_func, hierarchical_graph, vertices_builder_config);
-        _construct_edges(dist_func, hierarchical_graph);
-
-        return hierarchical_graph;
-    }
-
-private:
-
-    /** @brief Construct hierarchical vertices using r-net based greedy selection. */
-    static auto _construct_vertices(
-        const dist_func_t& dist_func,
-        hierarchical_graph_t& hierarchical_graph,
-        greedy_vertices_builder_config_t vertices_builder_config
-    ) -> void {
-        const auto& base_vecs = hierarchical_graph.get_base_vecs();
+        // ---- Construct hierarchical vertices (r-net greedy selection) ----
         auto& hier_vecs_manager = hierarchical_graph.get_hier_vecs_manager();
         auto& inter_layer_links = hierarchical_graph.get_inter_layer_links();
 
@@ -118,18 +104,32 @@ private:
             current_radius *= vertices_builder_config.beta();
         }
 
-        vertex_id_t entry_point = _find_entry_point(hierarchical_graph, dist_func);
-        hierarchical_graph.set_entry_point(entry_point);
-    }
+        // Find entry point: vertex closest to centroid in top layer
+        {
+            const layer_num_t num_layers = hier_vecs_manager.get_num_layers();
+            if (num_layers == 0) {
+                ARTEA_ERROR("Cannot find entry point: no layers in hierarchical graph");
+            } else {
+                const layer_id_t top_layer_id = num_layers - 1;
+                const auto& top_layer_vecs = hier_vecs_manager.get_layer_vecs(top_layer_id);
+                if (top_layer_vecs.get_num_vecs() == 0) {
+                    ARTEA_ERROR("Cannot find entry point: top layer is empty");
+                } else {
+                    auto centroid = centroid_computer_t::compute(top_layer_vecs);
+                    bruteforce_router_t bf_router(top_layer_vecs, dist_func, 1);
+                    bf_router.initialize();
+                    auto nearest_vertices = bf_router.query(centroid.data());
+                    if (nearest_vertices.empty()) {
+                        ARTEA_ERROR("Cannot find entry point: bruteforce router returned empty result");
+                    } else {
+                        hierarchical_graph.set_entry_point(nearest_vertices[0].get_id());
+                    }
+                }
+            }
+        }
 
-    /** @brief Construct edges for all layers using convergent graph descent. */
-    static auto _construct_edges(
-        const dist_func_t& dist_func,
-        hierarchical_graph_t& hierarchical_graph
-    ) -> void {
-        const auto& base_vecs = hierarchical_graph.get_base_vecs();
+        // ---- Construct edges (convergent graph descent) ----
         const auto num_layers = hierarchical_graph.get_num_layers();
-
         hierarchical_graph.resize(num_layers);
 
         conv_graph_factory_t conv_factory;
@@ -143,7 +143,7 @@ private:
         hierarchical_graph.set_layer_graph(0, std::move(bottom_graph));
 
         for (layer_id_t layer_id = 1; layer_id < num_layers; ++layer_id) {
-            const auto& layer_vecs = hierarchical_graph.get_hier_vecs_manager().get_layer_vecs(layer_id);
+            const auto& layer_vecs = hier_vecs_manager.get_layer_vecs(layer_id);
             auto upper_graph = conv_factory.construct_graph(
                 layer_vecs,
                 hierarchical_graph.upper_layer_config(),
@@ -152,42 +152,8 @@ private:
             );
             hierarchical_graph.set_layer_graph(layer_id, std::move(upper_graph));
         }
-    }
 
-    /** @brief Find the entry point as the vertex closest to the centroid in the top layer. */
-    static auto _find_entry_point(
-        const hierarchical_graph_t& hierarchical_graph,
-        const dist_func_t& dist_func
-    ) -> vertex_id_t {
-        const auto& hier_vecs_manager = hierarchical_graph.get_hier_vecs_manager();
-        const layer_num_t num_layers = hier_vecs_manager.get_num_layers();
-
-        if (num_layers == 0) {
-            ARTEA_ERROR("Cannot find entry point: no layers in hierarchical graph");
-            return 0;
-        }
-
-        const layer_id_t top_layer_id = num_layers - 1;
-        const auto& top_layer_vecs = hier_vecs_manager.get_layer_vecs(top_layer_id);
-        const vertex_num_t top_layer_num_vecs = top_layer_vecs.get_num_vecs();
-
-        if (top_layer_num_vecs == 0) {
-            ARTEA_ERROR("Cannot find entry point: top layer is empty");
-            return 0;
-        }
-
-        auto centroid = centroid_computer_t::compute(top_layer_vecs);
-
-        bruteforce_router_t bf_router(top_layer_vecs, dist_func, 1);
-        bf_router.initialize();
-        auto nearest_vertices = bf_router.query(centroid.data());
-
-        if (nearest_vertices.empty()) {
-            ARTEA_ERROR("Cannot find entry point: bruteforce router returned empty result");
-            return 0;
-        }
-
-        return nearest_vertices[0].get_id();
+        return hierarchical_graph;
     }
 };
 
