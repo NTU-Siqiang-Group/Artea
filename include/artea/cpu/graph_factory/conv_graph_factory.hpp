@@ -164,23 +164,14 @@ private:
         for (iter_t build_loop = 0; build_loop < propagate_config.num_build_loops(); ++build_loop) {
             propagate_engine.run(propagate_config.num_triu_iters(), triangle_updater)
                             .next(reverse_updater).next(truncate_updater);
-
-            if (build_loop == propagate_config.num_build_loops() - 1) {
-                for (iter_t routing_loop = 0; routing_loop < propagate_config.num_routing_loops(); ++routing_loop) {
-                    propagate_engine.next(routing_updater)
-                                    .next(triangle_updater)
-                                    .next(reverse_updater)
-                                    .next(truncate_updater);
-                }
-            }
-            // propagate_engine.next(triangle_updater).next(truncate_updater)
-            //                 .next(reverse_updater).next(truncate_updater)
-            //                 .next(routing_updater).next(truncate_updater);
-            // if (build_loop == propagate_config.num_build_loops() - 1) {
-            //     propagate_engine.next(triangle_updater).next(reverse_updater)
-            //                     .next(truncate_updater);
-            // }
             if (on_iter_end) { on_iter_end(build_loop); }
+        }
+
+        for (iter_t routing_loop = 0; routing_loop < propagate_config.num_routing_loops(); ++routing_loop) {
+            propagate_engine.next(routing_updater).next(truncate_updater)
+                            .next(triangle_updater).next(truncate_updater)
+                            .next(reverse_updater).next(truncate_updater);
+            if (on_iter_end) { on_iter_end(propagate_config.num_build_loops() + routing_loop); }
         }
     }
 

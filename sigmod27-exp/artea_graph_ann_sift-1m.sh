@@ -15,7 +15,7 @@
 ./bin/artea_graph_ann \
     --ul-extracted-nbr-size 16 \
     --bl-extracted-nbr-size 32 \
-    --candidate-queue-size 48 \
+    --candidate-queue-size 100 \
     --dataset sift-1m \
     --topk 20
 

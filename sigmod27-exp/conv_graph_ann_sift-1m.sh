@@ -12,19 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-./build/apps/build_conv_graph \
-    --max-nbr-size 32 \
-    --reserved-nbr-size 64 \
-    --extracted-nbr-size 20 \
-    --scale-coeffs 1.00 \
-    --shifted-coeffs 0.00
-
-echo "--------------------------------------------------------------------"
-
-./build/apps/build_conv_graph \
-    --max-nbr-size 64 \
-    --reserved-nbr-size 96 \
-    --extracted-nbr-size 20 \
-    --scale-coeffs 1.00 \
-    --shifted-coeffs 0.00
-
+./build/apps/conv_graph_ann \
+    --extracted-nbr-size 32 \
+    --topk 20 \
+    --candidate-queue-size 100

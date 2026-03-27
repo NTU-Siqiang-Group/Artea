@@ -12,16 +12,12 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-./bin/build_artea_graph \
-    --beta 1.44 \
-    --ul-max-nbr-size 96 \
-    --bl-max-nbr-size 96 \
+./build/apps/build_conv_graph \
+    --max-nbr-size 96 \
     --prefill-ratio 0.33 \
-    --ul-scale-coeffs 1.10 \
-    --bl-scale-coeffs 1.10 \
-    --ul-shifted-coeffs 0.10 \
-    --bl-shifted-coeffs 0.10 \
+    --scale-coeffs 1.00 \
+    --shifted-coeffs 0.00 \
     --num-build-loops 4 \
     --num-triu-iters 12 \
-    --num-routing-loops 2 \
-    --dataset sift-1m
+    --num-routing-loops 2
+
