@@ -13,13 +13,13 @@
 # limitations under the License.
 
 ./bin/build_artea_graph \
-    --beta 1.69 \
+    --beta 1.44 \
     --ul-max-nbr-size 96 \
     --bl-max-nbr-size 96 \
     --prefill-ratio 0.34 \
     --ul-scale-coeffs 1.10 \
     --bl-scale-coeffs 1.10 \
-    --ul-shifted-coeffs 0.10 \
+    --ul-shifted-coeffs 0.00 \
     --bl-shifted-coeffs 0.10 \
     --num-build-loops 5 \
     --num-triu-iters 12 \
