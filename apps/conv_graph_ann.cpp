@@ -149,11 +149,11 @@ int main(int argc, char** argv) {
     } else {
         std::string index_base_dir = program.get<std::string>("--index-base-dir");
         index_path = find_latest_index(index_base_dir, dataset_name);
-        logger.info(fmt::format("Using latest index: {}", index_path));
+        ARTEA_INFO(fmt::format("Using latest index: {}", index_path));
     }
 
     // Load dataset
-    logger.info(fmt::format("Loading dataset: {} from {}", dataset_name, config_path));
+    ARTEA_INFO(fmt::format("Loading dataset: {} from {}", dataset_name, config_path));
     vector_dataset_t dataset(config_path, dataset_name);
     dist_func_t dist_func(dataset.get_base_vecs().get_vec_dim());
 
@@ -161,11 +161,11 @@ int main(int argc, char** argv) {
     const auto& query_vecs = dataset.get_query_vecs();
     const auto& groundtruth = dataset.get_gt_vecs();
 
-    logger.info(fmt::format("Dataset: {} base vectors, {} query vectors",
+    ARTEA_INFO(fmt::format("Dataset: {} base vectors, {} query vectors",
         base_vecs.get_num_vecs(), query_vecs.get_num_vecs()));
 
     // Load flat graph
-    logger.info(fmt::format("Loading flat graph from {}...", index_path));
+    ARTEA_INFO(fmt::format("Loading flat graph from {}...", index_path));
     flat_graph_t flat_graph = flat_graph_file_manager_t::restore(index_path, base_vecs);
 
     // Calculate and output index size
@@ -200,10 +200,10 @@ int main(int argc, char** argv) {
     std::cout << fmt::format("  Extracted nbr size:     {}", extracted_nbr_size) << std::endl;
     std::cout << std::string(80, '=') << std::endl << std::endl;
 
-    logger.info(fmt::format("Using extracted neighbor size: {}", extracted_nbr_size));
+    ARTEA_INFO(fmt::format("Using extracted neighbor size: {}", extracted_nbr_size));
 
     // Convert to flat search graph
-    logger.info("Converting to flat search graph...");
+    ARTEA_INFO("Converting to flat search graph...");
     flat_search_graph_t flat_search_graph = search_graph_converter_t::from_flat_graph(
         flat_graph,
         extracted_nbr_size
@@ -219,7 +219,7 @@ int main(int argc, char** argv) {
     );
     router.initialize();
 
-    logger.info(fmt::format("Router initialized: topk={}, candidate_queue_size={}",
+    ARTEA_INFO(fmt::format("Router initialized: topk={}, candidate_queue_size={}",
         topk, candidate_queue_size));
 
     // Run benchmark iterations (200 total, use last 100 for statistics)
@@ -230,7 +230,7 @@ int main(int argc, char** argv) {
     for (uint32_t i = 0; i < total_iterations; ++i) {
         auto result = run_benchmark(router, query_vecs, groundtruth, base_vecs, dist_func, topk);
 
-        logger.info(fmt::format("Iter {}: {:.2f} ms, {:.2f} QPS, Recall@{}={:.4f}",
+        ARTEA_INFO(fmt::format("Iter {}: {:.2f} ms, {:.2f} QPS, Recall@{}={:.4f}",
             i + 1, result.query_time_ms, result.throughput_qps, topk, result.recall));
 
         // Only collect statistics for last 100 iterations

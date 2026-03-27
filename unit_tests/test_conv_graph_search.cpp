@@ -77,7 +77,7 @@ public:
         if (!std::filesystem::exists(g_config.config_path)) {
             throw std::runtime_error("Config file not found: " + g_config.config_path);
         }
-        logger.info(fmt::format("Loading dataset '{}' from {}", g_config.dataset_name, g_config.config_path));
+        ARTEA_INFO(fmt::format("Loading dataset '{}' from {}", g_config.dataset_name, g_config.config_path));
         dataset_   = std::make_unique<vector_dataset_t>(g_config.config_path, g_config.dataset_name);
         dist_func_ = std::make_unique<dist_func_t>(dataset_->get_base_vecs().get_vec_dim());
 
@@ -88,7 +88,7 @@ public:
         g_results.vec_dim      = base_vecs.get_vec_dim();
 
         // Build convergent graph
-        logger.info("Building convergent graph...");
+        ARTEA_INFO("Building convergent graph...");
         layer_config_t layer_cfg(16, 24);
         conv_graph::pruning_config_t pruning_cfg(1.0f, 0.0f);
         conv_graph::propagate_config_t propagate_cfg(4, 14, 0.6f);
@@ -101,7 +101,7 @@ public:
             search_graph_converter_t::from_flat_graph(*flat_graph_, g_config.extracted_nbr_size)
         );
 
-        logger.info("DataProvider ready.");
+        ARTEA_INFO("DataProvider ready.");
     }
 
     vector_dataset_t&    get_dataset()          { return *dataset_; }

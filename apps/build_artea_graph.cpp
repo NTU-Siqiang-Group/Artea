@@ -90,23 +90,23 @@ int main(int argc, char** argv) {
     std::string output_dir = program.get<std::string>("--output");
 
     // Load dataset
-    logger.info(fmt::format("Loading dataset: {} from {}", dataset_name, config_path));
+    ARTEA_INFO(fmt::format("Loading dataset: {} from {}", dataset_name, config_path));
     vector_dataset_t dataset(config_path, dataset_name);
     dist_func_t dist_func(dataset.get_base_vecs().get_vec_dim());
 
     const auto& base_vecs = dataset.get_base_vecs();
-    logger.info(fmt::format("Dataset loaded: {} vectors, {} dims",
+    ARTEA_INFO(fmt::format("Dataset loaded: {} vectors, {} dims",
         base_vecs.get_num_vecs(), base_vecs.get_vec_dim()));
 
     // Shuffle dataset (always enabled)
-    logger.info("Shuffling dataset...");
+    ARTEA_INFO("Shuffling dataset...");
     uint32_t shuffle_seed = program.is_used("--shuffle-seed")
         ? program.get<uint32_t>("--shuffle-seed")
         : std::random_device{}();
     shuffle_seed = dataset.shuffle_in_place(shuffle_seed);
 
     // Probe min_radius using radius prober
-    logger.info("Probing min_radius from dataset...");
+    ARTEA_INFO("Probing min_radius from dataset...");
     constexpr float QUANTILE = 0.001f;
     constexpr float CONFIDENCE = 0.95f;
     constexpr float RELATIVE_ERR = 0.05f;
@@ -118,7 +118,7 @@ int main(int argc, char** argv) {
     auto probe_duration = std::chrono::duration_cast<std::chrono::milliseconds>(probe_end - probe_start);
 
     float min_radius = probe_result.radius;
-    logger.info(fmt::format("Probed min_radius: {:.6f} (quantile: {:.4f}, samples: {}, time: {:.2f}s)",
+    ARTEA_INFO(fmt::format("Probed min_radius: {:.6f} (quantile: {:.4f}, samples: {}, time: {:.2f}s)",
         min_radius, probe_result.quantile, probe_result.num_dists_sampled, probe_duration.count() / 1000.0));
 
     // Create layer configs
@@ -160,7 +160,7 @@ int main(int argc, char** argv) {
     );
 
     // Construct hierarchical graph via factory
-    logger.info("Constructing hierarchical Artea graph...");
+    ARTEA_INFO("Constructing hierarchical Artea graph...");
     auto construction_start = std::chrono::high_resolution_clock::now();
 
     auto hierarchical_graph = artea_graph_factory_t::construct_graph(
@@ -176,20 +176,20 @@ int main(int argc, char** argv) {
     auto construction_end = std::chrono::high_resolution_clock::now();
     auto construction_duration = std::chrono::duration_cast<std::chrono::milliseconds>(construction_end - construction_start);
 
-    logger.info(fmt::format("Graph construction completed: {} layers in {:.2f} s",
+    ARTEA_INFO(fmt::format("Graph construction completed: {} layers in {:.2f} s",
         hierarchical_graph.get_num_layers(), construction_duration.count() / 1000.0));
 
     // Output layer vertices information
     for (uint32_t layer_id = 0; layer_id < hierarchical_graph.get_num_layers(); ++layer_id) {
         const auto& layer_vecs = hierarchical_graph.get_hier_vecs_manager().get_layer_vecs(layer_id);
-        logger.info(fmt::format("  Layer {}: {} vertices", layer_id, layer_vecs.get_num_vecs()));
+        ARTEA_INFO(fmt::format("  Layer {}: {} vertices", layer_id, layer_vecs.get_num_vecs()));
     }
 
     // Calculate and output index size
     index_size_calculator_t index_size_calc;
     auto index_size_info = index_size_calc.calculate_size(hierarchical_graph);
 
-    logger.info(fmt::format("Index size: {:.2f} MB ({} bytes)",
+    ARTEA_INFO(fmt::format("Index size: {:.2f} MB ({} bytes)",
         index_size_info.total_mb, index_size_info.total_bytes));
 
     // Generate directory name with timestamp
@@ -270,7 +270,7 @@ int main(int argc, char** argv) {
     std::cout << fmt::format("  Index path:             {}", output_path.string()) << std::endl;
     std::cout << std::string(80, '=') << std::endl << std::endl;
 
-    logger.info(fmt::format("Saving hierarchical graph to {}...", output_path.string()));
+    ARTEA_INFO(fmt::format("Saving hierarchical graph to {}...", output_path.string()));
     std::filesystem::create_directories(output_path);
 
     // Prepare metadata
@@ -287,7 +287,7 @@ int main(int argc, char** argv) {
     // Save hierarchical graph
     hierarchical_graph_file_manager_t::snapshot(hierarchical_graph, output_path.string(), metadata);
 
-    logger.info("Graph saved successfully");
+    ARTEA_INFO("Graph saved successfully");
 
     // Update index registry
     std::filesystem::path registry_path = std::filesystem::path(output_dir) / "index_registry.json";

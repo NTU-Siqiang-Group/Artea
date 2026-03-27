@@ -40,7 +40,7 @@ auto find_latest_index(const std::string& base_dir, const std::string& dataset_n
     std::filesystem::path search_path = std::filesystem::path(base_dir) / subdir;
 
     if (!std::filesystem::exists(search_path)) {
-        logger.error(fmt::format("Index directory not found: {}", search_path.string()));
+        ARTEA_ERROR(fmt::format("Index directory not found: {}", search_path.string()));
     }
 
     std::filesystem::path latest_path;
@@ -52,14 +52,14 @@ auto find_latest_index(const std::string& base_dir, const std::string& dataset_n
             // Verify metadata exists and matches dataset
             std::filesystem::path metadata_path = entry.path() / "metadata.json";
             if (!std::filesystem::exists(metadata_path)) {
-                logger.warn(fmt::format("Skipping {}: no metadata.json found", entry.path().filename().string()));
+                ARTEA_WARN(fmt::format("Skipping {}: no metadata.json found", entry.path().filename().string()));
                 continue;
             }
 
             // Read and verify metadata
             std::ifstream metadata_file(metadata_path);
             if (!metadata_file.is_open()) {
-                logger.warn(fmt::format("Skipping {}: cannot open metadata.json", entry.path().filename().string()));
+                ARTEA_WARN(fmt::format("Skipping {}: cannot open metadata.json", entry.path().filename().string()));
                 continue;
             }
 
@@ -67,7 +67,7 @@ auto find_latest_index(const std::string& base_dir, const std::string& dataset_n
             try {
                 metadata = nlohmann::json::parse(metadata_file);
             } catch (const std::exception& e) {
-                logger.warn(fmt::format("Skipping {}: invalid metadata.json", entry.path().filename().string()));
+                ARTEA_WARN(fmt::format("Skipping {}: invalid metadata.json", entry.path().filename().string()));
                 metadata_file.close();
                 continue;
             }
@@ -75,7 +75,7 @@ auto find_latest_index(const std::string& base_dir, const std::string& dataset_n
 
             // Verify dataset name matches
             if (!metadata.contains("dataset") || metadata["dataset"] != dataset_name) {
-                logger.warn(fmt::format("Skipping {}: dataset mismatch (expected: {}, found: {})",
+                ARTEA_WARN(fmt::format("Skipping {}: dataset mismatch (expected: {}, found: {})",
                     entry.path().filename().string(), dataset_name,
                     metadata.contains("dataset") ? metadata["dataset"].get<std::string>() : "none"));
                 continue;
@@ -92,8 +92,7 @@ auto find_latest_index(const std::string& base_dir, const std::string& dataset_n
     }
 
     if (!found) {
-        logger.error(fmt::format("No valid index found for dataset '{}' in {}", dataset_name, search_path.string()));
-        return "";
+        ARTEA_ERROR(fmt::format("No valid index found for dataset '{}' in {}", dataset_name, search_path.string()));
     }
 
     return latest_path.string();
@@ -189,11 +188,11 @@ int main(int argc, char** argv) {
     } else {
         std::string index_base_dir = program.get<std::string>("--index-base-dir");
         index_path = find_latest_index(index_base_dir, dataset_name);
-        logger.info(fmt::format("Using latest index: {}", index_path));
+        ARTEA_INFO(fmt::format("Using latest index: {}", index_path));
     }
 
     // Load dataset
-    logger.info(fmt::format("Loading dataset: {} from {}", dataset_name, config_path));
+    ARTEA_INFO(fmt::format("Loading dataset: {} from {}", dataset_name, config_path));
     vector_dataset_t dataset(config_path, dataset_name);
     dist_func_t dist_func(dataset.get_base_vecs().get_vec_dim());
 
@@ -201,36 +200,34 @@ int main(int argc, char** argv) {
     const auto& query_vecs = dataset.get_query_vecs();
     const auto& groundtruth = dataset.get_gt_vecs();
 
-    logger.info(fmt::format("Dataset: {} base vectors, {} query vectors",
+    ARTEA_INFO(fmt::format("Dataset: {} base vectors, {} query vectors",
         base_vecs.get_num_vecs(), query_vecs.get_num_vecs()));
 
     // Load hierarchical graph
-    logger.info(fmt::format("Loading hierarchical graph from {}...", index_path));
+    ARTEA_INFO(fmt::format("Loading hierarchical graph from {}...", index_path));
 
     hierarchical_graph_t hierarchical_graph = hierarchical_graph_file_manager_t::restore(
         index_path,
         base_vecs
     );
 
-    logger.info(fmt::format("Loaded hierarchical graph with {} layers", hierarchical_graph.get_num_layers()));
+    ARTEA_INFO(fmt::format("Loaded hierarchical graph with {} layers", hierarchical_graph.get_num_layers()));
 
     // Load shuffle seed from metadata and shuffle dataset
     std::string metadata_path = index_path + "/metadata.json";
     std::ifstream metadata_file(metadata_path);
     if (!metadata_file.is_open()) {
-        logger.error(fmt::format("Failed to open metadata file: {}", metadata_path));
-        return 1;
+        ARTEA_ERROR(fmt::format("Failed to open metadata file: {}", metadata_path));
     }
     nlohmann::json metadata = nlohmann::json::parse(metadata_file);
     metadata_file.close();
 
     if (!metadata.contains("shuffle_seed")) {
-        logger.error("No shuffle_seed found in metadata. Please rebuild the index with the latest version.");
-        return 1;
+        ARTEA_ERROR("No shuffle_seed found in metadata. Please rebuild the index with the latest version.");
     }
 
     uint32_t shuffle_seed = metadata["shuffle_seed"];
-    logger.info(fmt::format("Shuffling dataset with seed from metadata: {}", shuffle_seed));
+    ARTEA_INFO(fmt::format("Shuffling dataset with seed from metadata: {}", shuffle_seed));
     dataset.shuffle_in_place(shuffle_seed);
 
     // Calculate and output index size
@@ -294,11 +291,11 @@ int main(int argc, char** argv) {
     std::cout << fmt::format("  UL extracted nbr size:  {}", ul_extracted_nbr_size) << std::endl;
     std::cout << std::string(80, '=') << std::endl << std::endl;
 
-    logger.info(fmt::format("Using extracted neighbor sizes: bottom={}, upper={}",
+    ARTEA_INFO(fmt::format("Using extracted neighbor sizes: bottom={}, upper={}",
         bl_extracted_nbr_size, ul_extracted_nbr_size));
 
     // Convert to hierarchical search graph
-    logger.info("Converting to hierarchical search graph...");
+    ARTEA_INFO("Converting to hierarchical search graph...");
     auto hierarchical_search_graph = search_graph_converter_t::from_hierarchical_graph(
         hierarchical_graph,
         bl_extracted_nbr_size,
@@ -315,7 +312,7 @@ int main(int argc, char** argv) {
     );
     router.initialize();
 
-    logger.info(fmt::format("Router initialized: topk={}, candidate_queue_size={}",
+    ARTEA_INFO(fmt::format("Router initialized: topk={}, candidate_queue_size={}",
         topk, candidate_queue_size));
 
     // Run benchmark iterations (200 total, use last 100 for statistics)
@@ -326,7 +323,7 @@ int main(int argc, char** argv) {
     for (uint32_t i = 0; i < total_iterations; ++i) {
         auto result = run_benchmark(router, query_vecs, groundtruth, base_vecs, dist_func, topk);
 
-        logger.info(fmt::format("Iter {}: {:.2f} ms, {:.2f} QPS, Recall@{}={:.4f}",
+        ARTEA_INFO(fmt::format("Iter {}: {:.2f} ms, {:.2f} QPS, Recall@{}={:.4f}",
             i + 1, result.query_time_ms, result.throughput_qps, topk, result.recall));
 
         // Only collect statistics for last 100 iterations

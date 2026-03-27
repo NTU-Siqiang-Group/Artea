@@ -295,7 +295,7 @@ TEST_F(FlatSearchGraphTest, PerformanceTest) {
 
     auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(end - start);
 
-    logger.info(fmt::format("Conversion of {} vertices with extracted_nbr_size={} took {} ms",
+    ARTEA_INFO(fmt::format("Conversion of {} vertices with extracted_nbr_size={} took {} ms",
         num_vertices_, extracted_nbr_size, duration.count()));
 
     EXPECT_EQ(flat_search_graph.get_num_vertices(), num_vertices_);

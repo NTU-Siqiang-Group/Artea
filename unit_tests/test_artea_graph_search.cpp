@@ -78,7 +78,7 @@ public:
         if (!std::filesystem::exists(g_config.config_path)) {
             throw std::runtime_error("Config file not found: " + g_config.config_path);
         }
-        logger.info(fmt::format("Loading dataset '{}' from {}", g_config.dataset_name, g_config.config_path));
+        ARTEA_INFO(fmt::format("Loading dataset '{}' from {}", g_config.dataset_name, g_config.config_path));
         dataset_   = std::make_unique<vector_dataset_t>(g_config.config_path, g_config.dataset_name);
         dist_func_ = std::make_unique<dist_func_t>(dataset_->get_base_vecs().get_vec_dim());
 
@@ -89,14 +89,14 @@ public:
         g_results.vec_dim      = base_vecs.get_vec_dim();
 
         // Build hierarchical graph
-        logger.info("Building Artea hierarchical graph...");
+        ARTEA_INFO("Building Artea hierarchical graph...");
         layer_config_t bottom_cfg(96, 144);
         layer_config_t upper_cfg(96, 144);
         artea_graph::pruning_config_t bottom_pruning(1.10f, 0.10f);
         artea_graph::pruning_config_t upper_pruning(1.10f, 0.10f);
         artea_graph::propagate_config_t propagate_cfg(5, 12, 0.34f);
 
-        logger.info("Probing min_radius...");
+        ARTEA_INFO("Probing min_radius...");
         radius_prober_t prober(*dist_func_);
         auto probe = prober.probe(base_vecs, 0.001f, 0.95f, 0.05f);
         greedy_vertices_builder_config_t vb_cfg(probe.radius, 1.44f, 0.999f, 0.95f, 0.2f, 2048);
@@ -113,7 +113,7 @@ public:
                 *hgraph_, g_config.bl_extracted_nbr_size, g_config.ul_extracted_nbr_size)
         );
 
-        logger.info("DataProvider ready.");
+        ARTEA_INFO("DataProvider ready.");
     }
 
     vector_dataset_t&            get_dataset()        { return *dataset_; }

@@ -57,9 +57,9 @@ public:
         dim_ = dataset_->get_vec_dim();
         num_base_vecs_ = dataset_->get_num_base_vecs();
 
-        logger.info(fmt::format("Dataset loaded:"));
-        logger.info(fmt::format("  Dimension: {}", dim_));
-        logger.info(fmt::format("  Base vectors: {}", num_base_vecs_));
+        ARTEA_INFO(fmt::format("Dataset loaded:"));
+        ARTEA_INFO(fmt::format("  Dimension: {}", dim_));
+        ARTEA_INFO(fmt::format("  Base vectors: {}", num_base_vecs_));
     }
 
     vec_dim_t get_dim() const { return dim_; }
@@ -156,13 +156,13 @@ int main(int argc, char** argv) {
         {layer_config_t(64, 128), conv_graph::pruning_config_t(1.00, 0.00), conv_graph::propagate_config_t(4, 14)}
     };
 
-    logger.info(fmt::format("Benchmark Configuration:"));
-    logger.info(fmt::format("  Dataset: {}", g_config.dataset_name));
-    logger.info(fmt::format("  Config path: {}", g_config.config_path));
-    logger.info(fmt::format("  Export path: {}", g_config.export_path));
-    logger.info(fmt::format("  Benchmark repetitions: {}", g_config.repetitions));
-    logger.info(fmt::format("  Warm-up repetitions: {}", g_config.warm_up));
-    logger.info(fmt::format("  Number of parameter sets: {}", g_config.param_sets.size()));
+    ARTEA_INFO(fmt::format("Benchmark Configuration:"));
+    ARTEA_INFO(fmt::format("  Dataset: {}", g_config.dataset_name));
+    ARTEA_INFO(fmt::format("  Config path: {}", g_config.config_path));
+    ARTEA_INFO(fmt::format("  Export path: {}", g_config.export_path));
+    ARTEA_INFO(fmt::format("  Benchmark repetitions: {}", g_config.repetitions));
+    ARTEA_INFO(fmt::format("  Warm-up repetitions: {}", g_config.warm_up));
+    ARTEA_INFO(fmt::format("  Number of parameter sets: {}", g_config.param_sets.size()));
 
     DataProvider::instance().init();
 
@@ -202,9 +202,9 @@ int main(int argc, char** argv) {
     const auto logs_dir = std::filesystem::path(g_config.export_path) / "benchmark_logs";
     const auto results_dir = std::filesystem::path(g_config.export_path) / "benchmark_results";
 
-    logger.info(fmt::format("\nExport completed:"));
-    logger.info(fmt::format("  Repetition logs: {}", logs_dir.string()));
-    logger.info(fmt::format("  Summary results: {}", results_dir.string()));
+    ARTEA_INFO(fmt::format("\nExport completed:"));
+    ARTEA_INFO(fmt::format("  Repetition logs: {}", logs_dir.string()));
+    ARTEA_INFO(fmt::format("  Summary results: {}", results_dir.string()));
 
     return 0;
 }

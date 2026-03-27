@@ -81,7 +81,7 @@ public:
         if (!std::filesystem::exists(g_config.config_path)) {
             throw std::runtime_error("Config file not found: " + g_config.config_path);
         }
-        logger.info(fmt::format("Loading dataset '{}' from {}",
+        ARTEA_INFO(fmt::format("Loading dataset '{}' from {}",
             g_config.dataset_name, g_config.config_path));
         dataset_   = std::make_unique<vector_dataset_t>(g_config.config_path, g_config.dataset_name);
         dist_func_ = std::make_unique<dist_func_t>(dataset_->get_base_vecs().get_vec_dim());
@@ -100,7 +100,7 @@ public:
             g_config.num_build_loops, g_config.num_triu_iters, g_config.prefill_ratio,
             g_config.num_routing_loops);
 
-        logger.info("Building convergent graph...");
+        ARTEA_INFO("Building convergent graph...");
         auto t0 = std::chrono::high_resolution_clock::now();
         flat_graph_ = std::make_unique<flat_graph_t>(
             conv_graph_factory_t::construct_graph(base_vecs, layer_cfg, pruning_cfg, propagate_cfg)
@@ -108,11 +108,11 @@ public:
         auto t1 = std::chrono::high_resolution_clock::now();
         g_results.build_time_s =
             std::chrono::duration_cast<std::chrono::microseconds>(t1 - t0).count() / 1e6;
-        logger.info(fmt::format("Graph built: {} vertices in {:.2f} s",
+        ARTEA_INFO(fmt::format("Graph built: {} vertices in {:.2f} s",
             flat_graph_->get_num_vertices(), g_results.build_time_s));
 
         // Convert to flat search graph
-        logger.info("Converting to flat search graph...");
+        ARTEA_INFO("Converting to flat search graph...");
         auto tc0 = std::chrono::high_resolution_clock::now();
         flat_search_graph_ = std::make_unique<flat_search_graph_t>(
             search_graph_converter_t::from_flat_graph(*flat_graph_, g_config.extracted_nbr_size)
@@ -120,9 +120,9 @@ public:
         auto tc1 = std::chrono::high_resolution_clock::now();
         g_results.conversion_time_ms =
             std::chrono::duration_cast<std::chrono::microseconds>(tc1 - tc0).count() / 1e3;
-        logger.info(fmt::format("Conversion done in {:.2f} ms", g_results.conversion_time_ms));
+        ARTEA_INFO(fmt::format("Conversion done in {:.2f} ms", g_results.conversion_time_ms));
 
-        logger.info("DataProvider ready.");
+        ARTEA_INFO("DataProvider ready.");
     }
 
     vector_dataset_t&    get_dataset()           { return *dataset_; }

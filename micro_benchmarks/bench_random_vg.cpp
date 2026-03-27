@@ -206,14 +206,14 @@ int main(int argc, char** argv) {
         return 1;
     }
 
-    logger.info(fmt::format("Loading Dataset: {} from {}", g_config.dataset_name, g_config.config_path));
+    ARTEA_INFO(fmt::format("Loading Dataset: {} from {}", g_config.dataset_name, g_config.config_path));
     g_dataset = std::make_unique<vector_dataset_t>(g_config.config_path, g_config.dataset_name);
 
     g_vecs_data = &g_dataset->get_base_vecs();
     g_num_vecs = g_vecs_data->get_num_vecs();
     g_vec_dim = g_vecs_data->get_vec_dim();
 
-    logger.info(fmt::format("Dataset loaded: {} vectors, {} dimensions", g_num_vecs, g_vec_dim));
+    ARTEA_INFO(fmt::format("Dataset loaded: {} vectors, {} dimensions", g_num_vecs, g_vec_dim));
 
     // Run benchmarks
     ::benchmark::Initialize(&argc, argv);

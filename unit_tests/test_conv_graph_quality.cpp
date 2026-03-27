@@ -67,7 +67,7 @@ public:
         if (!std::filesystem::exists(g_config.config_path)) {
             throw std::runtime_error("Config file not found: " + g_config.config_path);
         }
-        logger.info(fmt::format("Loading Dataset: {} from {}", g_config.dataset_name, g_config.config_path));
+        ARTEA_INFO(fmt::format("Loading Dataset: {} from {}", g_config.dataset_name, g_config.config_path));
         dataset_ = std::make_unique<vector_dataset_t>(g_config.config_path, g_config.dataset_name);
         dist_func_ = std::make_unique<dist_func_t>(dataset_->get_base_vecs().get_vec_dim());
 
@@ -76,18 +76,18 @@ public:
         g_test_results.num_queries = static_cast<uint32_t>(dataset_->get_query_vecs().get_num_vecs());
 
         if (g_config.verbose) {
-            logger.info(fmt::format("Base vectors size: {}", base_vecs.get_num_vecs()));
-            logger.info(fmt::format("Max nbr size: {}", g_config.layer_config.max_nbr_size()));
-            logger.info(fmt::format("Extracted nbr size: {}", g_config.extracted_nbr_size));
-            logger.info(fmt::format("Scale coeffs: {}", g_config.pruning_config.scale_coeffs()));
-            logger.info(fmt::format("Shifted coeffs: {}", g_config.pruning_config.shifted_coeffs()));
-            logger.info(fmt::format("Build loops: {}", g_config.propagate_config.num_build_loops()));
-            logger.info(fmt::format("Triangle updater iterations: {}", g_config.propagate_config.num_triu_iters()));
-            logger.info(fmt::format("Top-k: {}", g_config.topk));
+            ARTEA_INFO(fmt::format("Base vectors size: {}", base_vecs.get_num_vecs()));
+            ARTEA_INFO(fmt::format("Max nbr size: {}", g_config.layer_config.max_nbr_size()));
+            ARTEA_INFO(fmt::format("Extracted nbr size: {}", g_config.extracted_nbr_size));
+            ARTEA_INFO(fmt::format("Scale coeffs: {}", g_config.pruning_config.scale_coeffs()));
+            ARTEA_INFO(fmt::format("Shifted coeffs: {}", g_config.pruning_config.shifted_coeffs()));
+            ARTEA_INFO(fmt::format("Build loops: {}", g_config.propagate_config.num_build_loops()));
+            ARTEA_INFO(fmt::format("Triangle updater iterations: {}", g_config.propagate_config.num_triu_iters()));
+            ARTEA_INFO(fmt::format("Top-k: {}", g_config.topk));
         }
 
         // Build convergent graph using dataset version (per-iter profiling logged inside)
-        logger.info("Building convergent graph (dataset mode, per-iter profiling)...");
+        ARTEA_INFO("Building convergent graph (dataset mode, per-iter profiling)...");
         flat_graph_ = std::make_unique<flat_graph_t>(conv_graph_factory_t::profile_search_quality(
             *dataset_,
             g_config.layer_config,
@@ -96,7 +96,7 @@ public:
         ));
 
         // Convert to flat search graph
-        logger.info("Converting to flat search graph...");
+        ARTEA_INFO("Converting to flat search graph...");
         auto t0 = std::chrono::high_resolution_clock::now();
         flat_search_graph_ = std::make_unique<flat_search_graph_t>(
             search_graph_converter_t::from_flat_graph(*flat_graph_, g_config.extracted_nbr_size)
@@ -104,7 +104,7 @@ public:
         auto t1 = std::chrono::high_resolution_clock::now();
         g_test_results.conversion_time_ms =
             std::chrono::duration_cast<std::chrono::microseconds>(t1 - t0).count() / 1000.0;
-        logger.info(fmt::format("Conversion time: {:.2f} ms", g_test_results.conversion_time_ms));
+        ARTEA_INFO(fmt::format("Conversion time: {:.2f} ms", g_test_results.conversion_time_ms));
     }
 
     vector_dataset_t& get_dataset() { return *dataset_; }
@@ -134,7 +134,7 @@ TEST_F(ConvGraphQualityTest, QueryRecall) {
 
     recall_estimator_t recall_estimator;
 
-    logger.info(fmt::format("\nRunning Grid Search: candidate queue size {} to {}, step {}",
+    ARTEA_INFO(fmt::format("\nRunning Grid Search: candidate queue size {} to {}, step {}",
         g_config.queue_start, g_config.queue_end, g_config.queue_step));
 
     for (uint32_t queue_size = g_config.queue_start; queue_size <= g_config.queue_end; queue_size += g_config.queue_step) {
@@ -153,7 +153,7 @@ TEST_F(ConvGraphQualityTest, QueryRecall) {
         result.recall = recall_estimator.calculate_recall_at_k(results, groundtruth, g_config.topk, query_vecs.get_num_vecs());
         g_test_results.query_results.push_back(result);
 
-        logger.info(fmt::format("CandidateQueue={:3}: Recall@{}={:.4f}, QPS={:8.2f}, AvgTime={:.2f}us",
+        ARTEA_INFO(fmt::format("CandidateQueue={:3}: Recall@{}={:.4f}, QPS={:8.2f}, AvgTime={:.2f}us",
             queue_size, g_config.topk, result.recall, result.throughput_qps, result.avg_query_time_us));
     }
 

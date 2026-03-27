@@ -57,10 +57,10 @@ struct TestConfig {
 class VisitedTableTest : public ::testing::Test {
 protected:
     void SetUp() override {
-        logger.info("----------------------------------------------------------");
+        ARTEA_INFO("----------------------------------------------------------");
     }
     void TearDown() override {
-        logger.info("----------------------------------------------------------");
+        ARTEA_INFO("----------------------------------------------------------");
     }
 };
 
@@ -69,7 +69,7 @@ protected:
 // ============================================================================
 
 TEST_F(VisitedTableTest, Bitmap_SetAndTest) {
-    logger.info(" -> [ThreadLocalBitmap] Set and Test");
+    ARTEA_INFO(" -> [ThreadLocalBitmap] Set and Test");
 
     const size_t N = g_config.num_elements;
     ThreadLocalBitmap bitmap(N);
@@ -93,11 +93,11 @@ TEST_F(VisitedTableTest, Bitmap_SetAndTest) {
         }
     }
 
-    logger.success(" [ThreadLocalBitmap] Set and Test passed.");
+    ARTEA_SUCCESS(" [ThreadLocalBitmap] Set and Test passed.");
 }
 
 TEST_F(VisitedTableTest, Bitmap_Clear) {
-    logger.info(" -> [ThreadLocalBitmap] Clear");
+    ARTEA_INFO(" -> [ThreadLocalBitmap] Clear");
 
     const size_t N = g_config.num_elements;
     ThreadLocalBitmap bitmap(N);
@@ -115,11 +115,11 @@ TEST_F(VisitedTableTest, Bitmap_Clear) {
         EXPECT_FALSE(bitmap.test(i)) << "Bit " << i << " should be unset after clear";
     }
 
-    logger.success(" [ThreadLocalBitmap] Clear passed.");
+    ARTEA_SUCCESS(" [ThreadLocalBitmap] Clear passed.");
 }
 
 TEST_F(VisitedTableTest, Bitmap_RandomPattern) {
-    logger.info(" -> [ThreadLocalBitmap] Random Pattern");
+    ARTEA_INFO(" -> [ThreadLocalBitmap] Random Pattern");
 
     const size_t N = g_config.num_elements;
     ThreadLocalBitmap bitmap(N);
@@ -142,11 +142,11 @@ TEST_F(VisitedTableTest, Bitmap_RandomPattern) {
             << "Mismatch at index " << i;
     }
 
-    logger.success(" [ThreadLocalBitmap] Random Pattern passed.");
+    ARTEA_SUCCESS(" [ThreadLocalBitmap] Random Pattern passed.");
 }
 
 TEST_F(VisitedTableTest, Bitmap_RepeatedClearAndReuse) {
-    logger.info(" -> [ThreadLocalBitmap] Repeated Clear and Reuse");
+    ARTEA_INFO(" -> [ThreadLocalBitmap] Repeated Clear and Reuse");
 
     const size_t N = g_config.num_elements;
     ThreadLocalBitmap bitmap(N);
@@ -167,7 +167,7 @@ TEST_F(VisitedTableTest, Bitmap_RepeatedClearAndReuse) {
         }
     }
 
-    logger.success(" [ThreadLocalBitmap] Repeated Clear and Reuse passed.");
+    ARTEA_SUCCESS(" [ThreadLocalBitmap] Repeated Clear and Reuse passed.");
 }
 
 // ============================================================================
@@ -175,7 +175,7 @@ TEST_F(VisitedTableTest, Bitmap_RepeatedClearAndReuse) {
 // ============================================================================
 
 TEST_F(VisitedTableTest, VersionTag_SetAndTest) {
-    logger.info(" -> [VersionTagTable] Set and Test");
+    ARTEA_INFO(" -> [VersionTagTable] Set and Test");
 
     const size_t N = g_config.num_elements;
     VersionTagTable table(N);
@@ -199,11 +199,11 @@ TEST_F(VisitedTableTest, VersionTag_SetAndTest) {
         }
     }
 
-    logger.success(" [VersionTagTable] Set and Test passed.");
+    ARTEA_SUCCESS(" [VersionTagTable] Set and Test passed.");
 }
 
 TEST_F(VisitedTableTest, VersionTag_Clear) {
-    logger.info(" -> [VersionTagTable] Clear (version bump)");
+    ARTEA_INFO(" -> [VersionTagTable] Clear (version bump)");
 
     const size_t N = g_config.num_elements;
     VersionTagTable table(N);
@@ -221,11 +221,11 @@ TEST_F(VisitedTableTest, VersionTag_Clear) {
         EXPECT_FALSE(table.test(i)) << "Element " << i << " should be unvisited after clear";
     }
 
-    logger.success(" [VersionTagTable] Clear passed.");
+    ARTEA_SUCCESS(" [VersionTagTable] Clear passed.");
 }
 
 TEST_F(VisitedTableTest, VersionTag_RepeatedClearAndReuse) {
-    logger.info(" -> [VersionTagTable] Repeated Clear and Reuse");
+    ARTEA_INFO(" -> [VersionTagTable] Repeated Clear and Reuse");
 
     const size_t N = g_config.num_elements;
     VersionTagTable table(N);
@@ -246,11 +246,11 @@ TEST_F(VisitedTableTest, VersionTag_RepeatedClearAndReuse) {
         }
     }
 
-    logger.success(" [VersionTagTable] Repeated Clear and Reuse passed.");
+    ARTEA_SUCCESS(" [VersionTagTable] Repeated Clear and Reuse passed.");
 }
 
 TEST_F(VisitedTableTest, VersionTag_CrossVersionIsolation) {
-    logger.info(" -> [VersionTagTable] Cross-Version Isolation");
+    ARTEA_INFO(" -> [VersionTagTable] Cross-Version Isolation");
 
     const size_t N = g_config.num_elements;
     VersionTagTable table(N);
@@ -279,11 +279,11 @@ TEST_F(VisitedTableTest, VersionTag_CrossVersionIsolation) {
         }
     }
 
-    logger.success(" [VersionTagTable] Cross-Version Isolation passed.");
+    ARTEA_SUCCESS(" [VersionTagTable] Cross-Version Isolation passed.");
 }
 
 TEST_F(VisitedTableTest, VersionTag_WrapAround) {
-    logger.info(" -> [VersionTagTable] Version Wrap-Around");
+    ARTEA_INFO(" -> [VersionTagTable] Version Wrap-Around");
 
     const size_t N = 1024;
     VersionTagTable table(N);
@@ -314,11 +314,11 @@ TEST_F(VisitedTableTest, VersionTag_WrapAround) {
     table.clear();
     EXPECT_FALSE(table.test(42));
 
-    logger.success(" [VersionTagTable] Version Wrap-Around passed.");
+    ARTEA_SUCCESS(" [VersionTagTable] Version Wrap-Around passed.");
 }
 
 TEST_F(VisitedTableTest, VersionTag_RandomPattern) {
-    logger.info(" -> [VersionTagTable] Random Pattern");
+    ARTEA_INFO(" -> [VersionTagTable] Random Pattern");
 
     const size_t N = g_config.num_elements;
     VersionTagTable table(N);
@@ -339,7 +339,7 @@ TEST_F(VisitedTableTest, VersionTag_RandomPattern) {
             << "Mismatch at index " << i;
     }
 
-    logger.success(" [VersionTagTable] Random Pattern passed.");
+    ARTEA_SUCCESS(" [VersionTagTable] Random Pattern passed.");
 }
 
 // ============================================================================
@@ -347,7 +347,7 @@ TEST_F(VisitedTableTest, VersionTag_RandomPattern) {
 // ============================================================================
 
 TEST_F(VisitedTableTest, Pool_Bitmap_ThreadIsolation) {
-    logger.info(" -> [VisitedTablePool<ThreadLocalBitmap>] Thread Isolation");
+    ARTEA_INFO(" -> [VisitedTablePool<ThreadLocalBitmap>] Thread Isolation");
 
     const vec_num_t N = g_config.num_elements;
     VisitedTablePool<router_traits_t, ThreadLocalBitmap> pool(N);
@@ -390,11 +390,11 @@ TEST_F(VisitedTableTest, Pool_Bitmap_ThreadIsolation) {
 
     EXPECT_EQ(failures.load(), 0) << "Thread isolation or clear failures detected";
 
-    logger.success(" [VisitedTablePool<ThreadLocalBitmap>] Thread Isolation passed.");
+    ARTEA_SUCCESS(" [VisitedTablePool<ThreadLocalBitmap>] Thread Isolation passed.");
 }
 
 TEST_F(VisitedTableTest, Pool_Bitmap_RepeatedAcquire) {
-    logger.info(" -> [VisitedTablePool<ThreadLocalBitmap>] Repeated Acquire returns same table");
+    ARTEA_INFO(" -> [VisitedTablePool<ThreadLocalBitmap>] Repeated Acquire returns same table");
 
     const vec_num_t N = g_config.num_elements;
     VisitedTablePool<router_traits_t, ThreadLocalBitmap> pool(N);
@@ -417,11 +417,11 @@ TEST_F(VisitedTableTest, Pool_Bitmap_RepeatedAcquire) {
 
     EXPECT_EQ(failures.load(), 0) << "acquire() returned different tables for the same thread";
 
-    logger.success(" [VisitedTablePool<ThreadLocalBitmap>] Repeated Acquire passed.");
+    ARTEA_SUCCESS(" [VisitedTablePool<ThreadLocalBitmap>] Repeated Acquire passed.");
 }
 
 TEST_F(VisitedTableTest, Pool_Bitmap_BatchQuerySimulation) {
-    logger.info(" -> [VisitedTablePool<ThreadLocalBitmap>] Batch Query Simulation");
+    ARTEA_INFO(" -> [VisitedTablePool<ThreadLocalBitmap>] Batch Query Simulation");
 
     const vec_num_t N = g_config.num_elements;
     const vec_num_t num_queries = 256;
@@ -467,7 +467,7 @@ TEST_F(VisitedTableTest, Pool_Bitmap_BatchQuerySimulation) {
 
     EXPECT_EQ(failures.load(), 0) << "Batch query simulation failures detected";
 
-    logger.success(" [VisitedTablePool<ThreadLocalBitmap>] Batch Query Simulation passed.");
+    ARTEA_SUCCESS(" [VisitedTablePool<ThreadLocalBitmap>] Batch Query Simulation passed.");
 }
 
 // ============================================================================
@@ -475,7 +475,7 @@ TEST_F(VisitedTableTest, Pool_Bitmap_BatchQuerySimulation) {
 // ============================================================================
 
 TEST_F(VisitedTableTest, Pool_VersionTag_ThreadIsolation) {
-    logger.info(" -> [VisitedTablePool<VersionTagTable>] Thread Isolation");
+    ARTEA_INFO(" -> [VisitedTablePool<VersionTagTable>] Thread Isolation");
 
     const vec_num_t N = g_config.num_elements;
     VisitedTablePool<router_traits_t, VersionTagTable> pool(N);
@@ -515,11 +515,11 @@ TEST_F(VisitedTableTest, Pool_VersionTag_ThreadIsolation) {
 
     EXPECT_EQ(failures.load(), 0) << "Thread isolation or clear failures detected";
 
-    logger.success(" [VisitedTablePool<VersionTagTable>] Thread Isolation passed.");
+    ARTEA_SUCCESS(" [VisitedTablePool<VersionTagTable>] Thread Isolation passed.");
 }
 
 TEST_F(VisitedTableTest, Pool_VersionTag_RepeatedAcquire) {
-    logger.info(" -> [VisitedTablePool<VersionTagTable>] Repeated Acquire returns same table");
+    ARTEA_INFO(" -> [VisitedTablePool<VersionTagTable>] Repeated Acquire returns same table");
 
     const vec_num_t N = g_config.num_elements;
     VisitedTablePool<router_traits_t, VersionTagTable> pool(N);
@@ -541,11 +541,11 @@ TEST_F(VisitedTableTest, Pool_VersionTag_RepeatedAcquire) {
 
     EXPECT_EQ(failures.load(), 0) << "acquire() returned different tables for the same thread";
 
-    logger.success(" [VisitedTablePool<VersionTagTable>] Repeated Acquire passed.");
+    ARTEA_SUCCESS(" [VisitedTablePool<VersionTagTable>] Repeated Acquire passed.");
 }
 
 TEST_F(VisitedTableTest, Pool_VersionTag_BatchQuerySimulation) {
-    logger.info(" -> [VisitedTablePool<VersionTagTable>] Batch Query Simulation");
+    ARTEA_INFO(" -> [VisitedTablePool<VersionTagTable>] Batch Query Simulation");
 
     const vec_num_t N = g_config.num_elements;
     const vec_num_t num_queries = 256;
@@ -589,11 +589,11 @@ TEST_F(VisitedTableTest, Pool_VersionTag_BatchQuerySimulation) {
 
     EXPECT_EQ(failures.load(), 0) << "Batch query simulation failures detected";
 
-    logger.success(" [VisitedTablePool<VersionTagTable>] Batch Query Simulation passed.");
+    ARTEA_SUCCESS(" [VisitedTablePool<VersionTagTable>] Batch Query Simulation passed.");
 }
 
 TEST_F(VisitedTableTest, Pool_VersionTag_ManyClears) {
-    logger.info(" -> [VisitedTablePool<VersionTagTable>] Many Clears (version stress)");
+    ARTEA_INFO(" -> [VisitedTablePool<VersionTagTable>] Many Clears (version stress)");
 
     const vec_num_t N = 1024;
     const vec_num_t num_queries = 1000;
@@ -635,7 +635,7 @@ TEST_F(VisitedTableTest, Pool_VersionTag_ManyClears) {
 
     EXPECT_EQ(failures.load(), 0) << "Many-clears stress test failures detected";
 
-    logger.success(" [VisitedTablePool<VersionTagTable>] Many Clears passed.");
+    ARTEA_SUCCESS(" [VisitedTablePool<VersionTagTable>] Many Clears passed.");
 }
 
 // ============================================================================
@@ -668,11 +668,11 @@ int main(int argc, char* argv[]) {
     g_config.num_elements = program.get<uint32_t>("--num_elements");
     g_config.seed = program.get<uint32_t>("--seed");
 
-    logger.info("==========================================================");
-    logger.info("      Starting VisitedTable Correctness Suite");
-    logger.info(fmt::format("      Config: Elements={}, Seed={}",
+    ARTEA_INFO("==========================================================");
+    ARTEA_INFO("      Starting VisitedTable Correctness Suite");
+    ARTEA_INFO(fmt::format("      Config: Elements={}, Seed={}",
                            g_config.num_elements, g_config.seed));
-    logger.info("==========================================================");
+    ARTEA_INFO("==========================================================");
 
     return RUN_ALL_TESTS();
 }

@@ -694,15 +694,15 @@ int main(int argc, char** argv) {
 
     int64_t max_size = *std::max_element(g_config.table_sizes.begin(), g_config.table_sizes.end());
 
-    logger.info("==========================================================");
-    logger.info("      VisitedTable Micro-Benchmark");
-    logger.info(fmt::format("      Seed: {}", g_config.seed));
-    logger.info(fmt::format("      Queries: {}, Visits/query: {}",
+    ARTEA_INFO("==========================================================");
+    ARTEA_INFO("      VisitedTable Micro-Benchmark");
+    ARTEA_INFO(fmt::format("      Seed: {}", g_config.seed));
+    ARTEA_INFO(fmt::format("      Queries: {}, Visits/query: {}",
                            g_config.num_queries, g_config.visit_count));
-    logger.info(fmt::format("      Table sizes: {}",
+    ARTEA_INFO(fmt::format("      Table sizes: {}",
                            program.get<std::string>("--table_sizes")));
-    logger.info(fmt::format("      TBB threads: {}", tbb_max_num_threads()));
-    logger.info("==========================================================");
+    ARTEA_INFO(fmt::format("      TBB threads: {}", tbb_max_num_threads()));
+    ARTEA_INFO("==========================================================");
 
     DataProvider::instance().init(
         g_config.seed, g_config.num_queries, g_config.visit_count,

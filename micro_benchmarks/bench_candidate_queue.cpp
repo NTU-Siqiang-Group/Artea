@@ -429,12 +429,12 @@ int main(int argc, char** argv) {
     int64_t max_cap = *std::max_element(g_config.capacities.begin(), g_config.capacities.end());
     std::size_t max_entries = static_cast<std::size_t>(max_cap) * 4;
 
-    logger.info("==========================================================");
-    logger.info("      CandidateQueue Micro-Benchmark");
-    logger.info(fmt::format("      Seed: {}", g_config.seed));
-    logger.info(fmt::format("      Capacities: {}", program.get<std::string>("--capacities")));
-    logger.info(fmt::format("      Max pre-generated entries: {}", max_entries));
-    logger.info("==========================================================");
+    ARTEA_INFO("==========================================================");
+    ARTEA_INFO("      CandidateQueue Micro-Benchmark");
+    ARTEA_INFO(fmt::format("      Seed: {}", g_config.seed));
+    ARTEA_INFO(fmt::format("      Capacities: {}", program.get<std::string>("--capacities")));
+    ARTEA_INFO(fmt::format("      Max pre-generated entries: {}", max_entries));
+    ARTEA_INFO("==========================================================");
 
     DataProvider::instance().init(g_config.seed, max_entries);
 

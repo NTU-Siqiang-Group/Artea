@@ -60,7 +60,7 @@ public:
         dist_func_ = std::make_unique<dist_func_t>(dim_);
 
         // Initialize flat graph with random edges
-        logger.info("Initializing flat graph with random edges...");
+        ARTEA_INFO("Initializing flat graph with random edges...");
         flat_graph_ = std::make_unique<flat_graph_t>(
             base_vecs_,
             g_config.layer_config,
@@ -72,7 +72,7 @@ public:
         random_eg.generate(*flat_graph_, static_cast<vec_num_t>(
             g_config.layer_config.max_nbr_size() * g_config.propagate_config.prefill_ratio()
         ));
-        logger.info("Flat graph initialization complete.");
+        ARTEA_INFO("Flat graph initialization complete.");
 
         // Save initial graph state for benchmark reset
         save_initial_state();
@@ -439,22 +439,22 @@ int main(int argc, char** argv) {
     g_config.propagate_config.prefill_ratio(program.get<float>("--prefill-ratio"));
     g_config.repetitions = program.get<int64_t>("--repetitions");
 
-    logger.info(fmt::format("Benchmark Configuration:"));
-    logger.info(fmt::format("  Dataset: {}", g_config.dataset_name));
-    logger.info(fmt::format("  Config path: {}", g_config.config_path));
-    logger.info(fmt::format("  Reserved neighbors: {}", g_config.layer_config.reserved_nbr_size()));
-    logger.info(fmt::format("  Max neighbors: {}", g_config.layer_config.max_nbr_size()));
-    logger.info(fmt::format("  Random gen size: {}", g_config.rand_gen_size));
-    logger.info(fmt::format("  Propagation iterations: {}", g_config.num_iters));
-    logger.info(fmt::format("  Scale coeffs: {}", g_config.scale_coeffs));
-    logger.info(fmt::format("  Shifted coeffs: {}", g_config.shifted_coeffs));
-    logger.info(fmt::format("  Benchmark repetitions: {}", g_config.repetitions));
+    ARTEA_INFO(fmt::format("Benchmark Configuration:"));
+    ARTEA_INFO(fmt::format("  Dataset: {}", g_config.dataset_name));
+    ARTEA_INFO(fmt::format("  Config path: {}", g_config.config_path));
+    ARTEA_INFO(fmt::format("  Reserved neighbors: {}", g_config.layer_config.reserved_nbr_size()));
+    ARTEA_INFO(fmt::format("  Max neighbors: {}", g_config.layer_config.max_nbr_size()));
+    ARTEA_INFO(fmt::format("  Random gen size: {}", g_config.rand_gen_size));
+    ARTEA_INFO(fmt::format("  Propagation iterations: {}", g_config.num_iters));
+    ARTEA_INFO(fmt::format("  Scale coeffs: {}", g_config.scale_coeffs));
+    ARTEA_INFO(fmt::format("  Shifted coeffs: {}", g_config.shifted_coeffs));
+    ARTEA_INFO(fmt::format("  Benchmark repetitions: {}", g_config.repetitions));
 
     DataProvider::instance().init();
 
-    logger.info(fmt::format("Dataset loaded:"));
-    logger.info(fmt::format("  Dimension: {}", DataProvider::instance().get_dim()));
-    logger.info(fmt::format("  Base vectors: {}", DataProvider::instance().get_num_base_vecs()));
+    ARTEA_INFO(fmt::format("Dataset loaded:"));
+    ARTEA_INFO(fmt::format("  Dimension: {}", DataProvider::instance().get_dim()));
+    ARTEA_INFO(fmt::format("  Base vectors: {}", DataProvider::instance().get_num_base_vecs()));
 
     // Register benchmarks
     benchmark::RegisterBenchmark("BM_TriangleUpdater_NoSS", BM_TriangleUpdater_NoSS)

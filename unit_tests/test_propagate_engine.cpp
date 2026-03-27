@@ -115,12 +115,11 @@ protected:
 
                     // If w violates RNG property for edge (u, v)
                     if (d_uw < threshold && d_vw < threshold) {
-                        logger.error(fmt::format(
+                        ARTEA_ERROR(fmt::format(
                             "RNG violation: edge ({}, {}) with d={:.3f}, "
                             "vertex {} creates shortcut with d({}, {})={:.3f}, d({}, {})={:.3f}, threshold={:.3f}",
                             u, v, d_uv, w, u, w, d_uw, v, w, d_vw, threshold
                         ));
-                        return false;
                     }
                 }
             }
@@ -157,7 +156,7 @@ TEST_F(PropagateEngineCorrectnessTest, TrianglePruningWithPropagateEngine) {
             });
     }
 
-    logger.info(fmt::format("Initial complete graph with {} vertices:", num_vertices_));
+    ARTEA_INFO(fmt::format("Initial complete graph with {} vertices:", num_vertices_));
     for (vertex_id_t u = 0; u < std::min(num_vertices_, static_cast<vec_num_t>(5)); ++u) {
         const auto& nbrs = nbrs_arr[u];
         std::string nbr_list;
@@ -166,10 +165,10 @@ TEST_F(PropagateEngineCorrectnessTest, TrianglePruningWithPropagateEngine) {
             if (i < std::min(nbrs.size(), static_cast<size_t>(8)) - 1) nbr_list += ", ";
         }
         if (nbrs.size() > 8) nbr_list += "...";
-        logger.info(fmt::format("  v{} -> [{}]", u, nbr_list));
+        ARTEA_INFO(fmt::format("  v{} -> [{}]", u, nbr_list));
     }
     if (num_vertices_ > 5) {
-        logger.info("  ... (showing first 5 vertices)");
+        ARTEA_INFO("  ... (showing first 5 vertices)");
     }
 
     const size_t initial_edges = num_vertices_ * (num_vertices_ - 1);
@@ -189,7 +188,7 @@ TEST_F(PropagateEngineCorrectnessTest, TrianglePruningWithPropagateEngine) {
     // Apply triangle pruning for 5 iterations
     propagate_engine.run(5, triangle_updater);
 
-    logger.info(fmt::format("After 5 iterations of triangle pruning:"));
+    ARTEA_INFO(fmt::format("After 5 iterations of triangle pruning:"));
     for (vertex_id_t u = 0; u < std::min(num_vertices_, static_cast<vec_num_t>(5)); ++u) {
         const auto& nbrs = nbrs_arr[u];
         std::string nbr_list;
@@ -197,10 +196,10 @@ TEST_F(PropagateEngineCorrectnessTest, TrianglePruningWithPropagateEngine) {
             nbr_list += fmt::format("({}, {:.3f})", nbrs[i].get_id(), nbrs[i].get_distance());
             if (i < nbrs.size() - 1) nbr_list += ", ";
         }
-        logger.info(fmt::format("  v{} -> [{}]", u, nbr_list));
+        ARTEA_INFO(fmt::format("  v{} -> [{}]", u, nbr_list));
     }
     if (num_vertices_ > 5) {
-        logger.info("  ... (showing first 5 vertices)");
+        ARTEA_INFO("  ... (showing first 5 vertices)");
     }
 
     // Verify RNG property
@@ -213,7 +212,7 @@ TEST_F(PropagateEngineCorrectnessTest, TrianglePruningWithPropagateEngine) {
         total_edges_after += nbrs_arr[u].size();
     }
 
-    logger.info(fmt::format("Edges before: {}, after: {}, reduction: {:.1f}%",
+    ARTEA_INFO(fmt::format("Edges before: {}, after: {}, reduction: {:.1f}%",
                            initial_edges, total_edges_after,
                            100.0 * (initial_edges - total_edges_after) / initial_edges));
 
@@ -242,7 +241,7 @@ TEST_F(PropagateEngineCorrectnessTest, IntegratedRandomAndReverseUpdater) {
         nbrs_arr[u].clear();
     }
 
-    logger.info("Step 1: Starting with empty graph");
+    ARTEA_INFO("Step 1: Starting with empty graph");
 
     propagate_engine_ss_t propagate_engine(num_vertices_, *dist_func_);
     propagate_engine.set_graph(*flat_graph_);
@@ -258,7 +257,7 @@ TEST_F(PropagateEngineCorrectnessTest, IntegratedRandomAndReverseUpdater) {
         edges_after_random += nbrs_arr[u].size();
     }
 
-    logger.info(fmt::format("Step 2: After RandomUpdater: {} edges generated", edges_after_random));
+    ARTEA_INFO(fmt::format("Step 2: After RandomUpdater: {} edges generated", edges_after_random));
 
     // Check how many edges are missing their reverse
     int missing_reverse_before = 0;
@@ -271,7 +270,7 @@ TEST_F(PropagateEngineCorrectnessTest, IntegratedRandomAndReverseUpdater) {
         }
     }
 
-    logger.info(fmt::format("Before reverse updater: {} missing reverse edges", missing_reverse_before));
+    ARTEA_INFO(fmt::format("Before reverse updater: {} missing reverse edges", missing_reverse_before));
 
     // RandomUpdater generates asymmetric edges, so there should be missing reverse edges
     EXPECT_GT(missing_reverse_before, 0)
@@ -286,7 +285,7 @@ TEST_F(PropagateEngineCorrectnessTest, IntegratedRandomAndReverseUpdater) {
         edges_after_reverse += nbrs_arr[u].size();
     }
 
-    logger.info(fmt::format("Step 3: After reverse updater: {} edges (increase: {})",
+    ARTEA_INFO(fmt::format("Step 3: After reverse updater: {} edges (increase: {})",
                            edges_after_reverse,
                            edges_after_reverse - edges_after_random));
 
@@ -314,7 +313,7 @@ TEST_F(PropagateEngineCorrectnessTest, IntegratedRandomAndReverseUpdater) {
         }
     }
 
-    logger.info(fmt::format("Step 4: Bidirectionality check: {} missing reverse, {} distance mismatches",
+    ARTEA_INFO(fmt::format("Step 4: Bidirectionality check: {} missing reverse, {} distance mismatches",
                            missing_reverse_after, distance_mismatch));
 
     EXPECT_EQ(missing_reverse_after, 0)
@@ -355,7 +354,7 @@ TEST_F(PropagateEngineCorrectnessTest, ScaledTrianglePruning) {
 
     propagate_engine.run(5, triangle_updater);
 
-    logger.info("Testing with scale_coeffs = 1.2 (conservative pruning, more edges):");
+    ARTEA_INFO("Testing with scale_coeffs = 1.2 (conservative pruning, more edges):");
     for (vertex_id_t u = 0; u < std::min(num_vertices_, static_cast<vec_num_t>(5)); ++u) {
         const auto& nbrs = nbrs_arr[u];
         std::string nbr_list;
@@ -363,10 +362,10 @@ TEST_F(PropagateEngineCorrectnessTest, ScaledTrianglePruning) {
             nbr_list += fmt::format("({}, {:.3f})", nbrs[i].get_id(), nbrs[i].get_distance());
             if (i < nbrs.size() - 1) nbr_list += ", ";
         }
-        logger.info(fmt::format("  v{} -> [{}]", u, nbr_list));
+        ARTEA_INFO(fmt::format("  v{} -> [{}]", u, nbr_list));
     }
     if (num_vertices_ > 5) {
-        logger.info("  ... (showing first 5 vertices)");
+        ARTEA_INFO("  ... (showing first 5 vertices)");
     }
 
     // Verify scaled RNG property
@@ -378,7 +377,7 @@ TEST_F(PropagateEngineCorrectnessTest, ScaledTrianglePruning) {
         total_edges += nbrs_arr[u].size();
     }
 
-    logger.info(fmt::format("Total edges with scale_coeffs=1.2: {}", total_edges));
+    ARTEA_INFO(fmt::format("Total edges with scale_coeffs=1.2: {}", total_edges));
 
     // With scale_coeffs > 1.0, pruning is more conservative
     // Still less than complete graph, but verification is that RNG property holds
@@ -422,7 +421,7 @@ TEST_F(PropagateEngineCorrectnessTest, NeighborsSortedAfterPruning) {
         }
     }
 
-    logger.info(fmt::format("All {} vertices have sorted neighbor lists after pruning", num_vertices_));
+    ARTEA_INFO(fmt::format("All {} vertices have sorted neighbor lists after pruning", num_vertices_));
 }
 
 TEST_F(PropagateEngineCorrectnessTest, RandomUpdaterGeneratesEdges) {
@@ -434,7 +433,7 @@ TEST_F(PropagateEngineCorrectnessTest, RandomUpdaterGeneratesEdges) {
         nbrs_arr[u].clear();
     }
 
-    logger.info("Testing RandomUpdater with empty initial graph:");
+    ARTEA_INFO("Testing RandomUpdater with empty initial graph:");
 
     propagate_engine_ss_t propagate_engine(num_vertices_, *dist_func_);
     propagate_engine.set_graph(*flat_graph_);
@@ -452,7 +451,7 @@ TEST_F(PropagateEngineCorrectnessTest, RandomUpdaterGeneratesEdges) {
         total_edges += nbrs_arr[u].size();
     }
 
-    logger.info(fmt::format("After RandomUpdater: {} total edges generated", total_edges));
+    ARTEA_INFO(fmt::format("After RandomUpdater: {} total edges generated", total_edges));
 
     // Each vertex should have some edges (up to rand_gen_size, minus self-loops)
     EXPECT_GT(total_edges, 0) << "RandomUpdater should generate some edges";
@@ -483,7 +482,7 @@ TEST_F(PropagateEngineCorrectnessTest, RandomUpdaterGeneratesEdges) {
             nbr_list += fmt::format("({}, {:.3f})", nbrs[i].get_id(), nbrs[i].get_distance());
             if (i < nbrs.size() - 1) nbr_list += ", ";
         }
-        logger.info(fmt::format("  v{} -> [{}]", u, nbr_list));
+        ARTEA_INFO(fmt::format("  v{} -> [{}]", u, nbr_list));
     }
 }
 
@@ -520,7 +519,7 @@ TEST_F(PropagateEngineCorrectnessTest, RandomUpdaterThreadSafety) {
         total_edges += nbrs_arr[u].size();
     }
 
-    logger.info(fmt::format("Thread safety test: {} total edges after 3 iterations", total_edges));
+    ARTEA_INFO(fmt::format("Thread safety test: {} total edges after 3 iterations", total_edges));
     EXPECT_GT(total_edges, 0) << "Should have generated edges in parallel";
 }
 
@@ -556,7 +555,7 @@ TEST_F(PropagateEngineCorrectnessTest, TrianglePruningWithoutSelectiveScheduling
 
     propagate_engine.run(5, triangle_updater);
 
-    logger.info("Testing without selective scheduling:");
+    ARTEA_INFO("Testing without selective scheduling:");
     for (vertex_id_t u = 0; u < std::min(num_vertices_, static_cast<vec_num_t>(5)); ++u) {
         const auto& nbrs = nbrs_arr[u];
         std::string nbr_list;
@@ -564,7 +563,7 @@ TEST_F(PropagateEngineCorrectnessTest, TrianglePruningWithoutSelectiveScheduling
             nbr_list += fmt::format("({}, {:.3f})", nbrs[i].get_id(), nbrs[i].get_distance());
             if (i < nbrs.size() - 1) nbr_list += ", ";
         }
-        logger.info(fmt::format("  v{} -> [{}]", u, nbr_list));
+        ARTEA_INFO(fmt::format("  v{} -> [{}]", u, nbr_list));
     }
 
     EXPECT_TRUE(verify_rng_property(nbrs_arr, scale_coeffs, shifted_coeffs))

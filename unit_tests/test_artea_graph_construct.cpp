@@ -112,11 +112,11 @@ public:
         if (!std::filesystem::exists(g_config.config_path)) {
             throw std::runtime_error("Config file not found: " + g_config.config_path);
         }
-        logger.info(fmt::format("Loading Dataset: {} from {}", g_config.dataset_name, g_config.config_path));
+        ARTEA_INFO(fmt::format("Loading Dataset: {} from {}", g_config.dataset_name, g_config.config_path));
         dataset_ = std::make_unique<vector_dataset_t>(g_config.config_path, g_config.dataset_name);
 
         // Always shuffle dataset
-        logger.info("Shuffling dataset...");
+        ARTEA_INFO("Shuffling dataset...");
         dataset_->shuffle_in_place();
 
         dist_func_ = std::make_unique<dist_func_t>(dataset_->get_base_vecs().get_vec_dim());
@@ -125,14 +125,14 @@ public:
         g_results.total_base_vecs = base_vecs.get_num_vecs();
 
         // Probe min_radius from dataset
-        logger.info("Probing min_radius from dataset...");
+        ARTEA_INFO("Probing min_radius from dataset...");
         radius_prober_t prober(*dist_func_);
         auto probe_result = prober.probe(base_vecs, 0.001f, 0.95f, 0.05f);
         _min_radius = probe_result.radius;
-        logger.info(fmt::format("Probed min_radius: {:.6f}", _min_radius));
+        ARTEA_INFO(fmt::format("Probed min_radius: {:.6f}", _min_radius));
 
         if (g_config.verbose) {
-            logger.info(fmt::format("Base vectors size: {}", base_vecs.get_num_vecs()));
+            ARTEA_INFO(fmt::format("Base vectors size: {}", base_vecs.get_num_vecs()));
         }
     }
 
@@ -173,7 +173,7 @@ protected:
         auto& dataset = provider.get_dataset();
         const auto& base_vecs = dataset.get_base_vecs();
 
-        logger.info("Starting Artea graph construction test with conv_graph_descent policy");
+        ARTEA_INFO("Starting Artea graph construction test with conv_graph_descent policy");
 
         // Create layer configs
         layer_config_t bottom_layer_config(
@@ -214,7 +214,7 @@ protected:
         );
 
         // Construct hierarchical graph via factory
-        logger.info("Constructing hierarchical Artea graph...");
+        ARTEA_INFO("Constructing hierarchical Artea graph...");
         auto construction_start = std::chrono::high_resolution_clock::now();
 
         auto graph = artea_graph_factory_t::construct_graph(
@@ -233,16 +233,16 @@ protected:
         g_results.total_construction_time_ms = construction_duration.count() / 1000.0;
         g_results.num_layers = hierarchical_graph->get_num_layers();
 
-        logger.info(fmt::format("Graph construction completed: {} layers in {:.2f} ms",
+        ARTEA_INFO(fmt::format("Graph construction completed: {} layers in {:.2f} ms",
             g_results.num_layers, g_results.total_construction_time_ms));
 
         // Output layer vertices information
-        logger.info("Layer vertices information:");
+        ARTEA_INFO("Layer vertices information:");
         for (uint32_t layer_id = 0; layer_id < g_results.num_layers; ++layer_id) {
             const auto& layer_vecs = hierarchical_graph->get_hier_vecs_manager().get_layer_vecs(layer_id);
             uint32_t num_vertices = layer_vecs.get_num_vecs();
             float layer_ratio = 100.0f * num_vertices / g_results.total_base_vecs;
-            logger.info(fmt::format("  Layer {}: {} vertices ({:.2f}%)",
+            ARTEA_INFO(fmt::format("  Layer {}: {} vertices ({:.2f}%)",
                 layer_id, num_vertices, layer_ratio));
         }
 
@@ -269,7 +269,7 @@ protected:
             g_results.layer_metrics.push_back(metrics);
 
             if (g_config.verbose) {
-                logger.info(fmt::format("Layer {}: {} vertices, {} edges ({:.2f}%)",
+                ARTEA_INFO(fmt::format("Layer {}: {} vertices, {} edges ({:.2f}%)",
                     layer_id, metrics.num_vertices, metrics.num_edges, metrics.layer_ratio));
             }
         }
@@ -282,7 +282,7 @@ TEST_F(ArteaGraphConstructTest, VerifyGraphConstruction) {
     auto& provider = DataProvider::instance();
     auto& hierarchical_graph = provider.get_hierarchical_graph();
 
-    logger.info("Verifying graph construction...");
+    ARTEA_INFO("Verifying graph construction...");
 
     // Test 1: Should have at least 1 layer
     EXPECT_GE(g_results.num_layers, 1) << "Should have at least 1 layer (bottom layer)";
@@ -315,14 +315,14 @@ TEST_F(ArteaGraphConstructTest, VerifyGraphConstruction) {
     EXPECT_GT(g_results.total_construction_time_ms, 0.0)
         << "Total construction time should be positive";
 
-    logger.info("Graph construction verification passed");
+    ARTEA_INFO("Graph construction verification passed");
 }
 
 TEST_F(ArteaGraphConstructTest, VerifyGraphConnectivity) {
     auto& provider = DataProvider::instance();
     auto& hierarchical_graph = provider.get_hierarchical_graph();
 
-    logger.info("Verifying graph connectivity...");
+    ARTEA_INFO("Verifying graph connectivity...");
 
     // Test each layer's graph connectivity
     for (uint32_t layer_id = 0; layer_id < g_results.num_layers; ++layer_id) {
@@ -338,7 +338,7 @@ TEST_F(ArteaGraphConstructTest, VerifyGraphConnectivity) {
                 if (neighbors.empty()) {
                     isolated_vertices++;
                     if (g_config.verbose && isolated_vertices <= 5) {
-                        logger.warn(fmt::format("Layer {} vertex {} has no neighbors", layer_id, v));
+                        ARTEA_WARN(fmt::format("Layer {} vertex {} has no neighbors", layer_id, v));
                     }
                 }
             }
@@ -346,7 +346,7 @@ TEST_F(ArteaGraphConstructTest, VerifyGraphConnectivity) {
             // Allow a small number of isolated vertices in upper layers
             float isolation_ratio = static_cast<float>(isolated_vertices) / metrics.num_vertices;
 
-            logger.info(fmt::format("Layer {} connectivity: {}/{} isolated vertices ({:.2f}%)",
+            ARTEA_INFO(fmt::format("Layer {} connectivity: {}/{} isolated vertices ({:.2f}%)",
                 layer_id, isolated_vertices, metrics.num_vertices, isolation_ratio * 100.0f));
 
             EXPECT_LT(isolation_ratio, 0.1f)
@@ -355,7 +355,7 @@ TEST_F(ArteaGraphConstructTest, VerifyGraphConnectivity) {
         }
     }
 
-    logger.info("Graph connectivity verification passed");
+    ARTEA_INFO("Graph connectivity verification passed");
 }
 
 TEST_F(ArteaGraphConstructTest, QueryRecall) {
@@ -369,10 +369,10 @@ TEST_F(ArteaGraphConstructTest, QueryRecall) {
     const auto& query_vecs = dataset.get_query_vecs();
     g_results.num_queries = query_vecs.get_num_vecs();
 
-    logger.info("Testing hierarchical graph router query recall...");
+    ARTEA_INFO("Testing hierarchical graph router query recall...");
 
     // Convert hierarchical_graph to hierarchical_search_graph
-    logger.info("Converting to hierarchical search graph...");
+    ARTEA_INFO("Converting to hierarchical search graph...");
     auto start_time = std::chrono::high_resolution_clock::now();
 
     auto hierarchical_search_graph = search_graph_converter_t::from_hierarchical_graph(
@@ -384,12 +384,12 @@ TEST_F(ArteaGraphConstructTest, QueryRecall) {
     auto end_time = std::chrono::high_resolution_clock::now();
     auto duration = std::chrono::duration_cast<std::chrono::microseconds>(end_time - start_time);
     double conversion_time_ms = duration.count() / 1000.0;
-    logger.info(fmt::format("Conversion time: {:.2f} ms", conversion_time_ms));
+    ARTEA_INFO(fmt::format("Conversion time: {:.2f} ms", conversion_time_ms));
 
     // Run grid search over candidate queue sizes
-    logger.info(fmt::format("\nRunning Grid Search: candidate queue size {} to {}, step {}",
+    ARTEA_INFO(fmt::format("\nRunning Grid Search: candidate queue size {} to {}, step {}",
         g_config.queue_start, g_config.queue_end, g_config.queue_step));
-    logger.info("");
+    ARTEA_INFO("");
 
     recall_estimator_t recall_estimator;
 
@@ -421,7 +421,7 @@ TEST_F(ArteaGraphConstructTest, QueryRecall) {
 
         g_results.query_results.push_back(result);
 
-        logger.info(fmt::format("CandidateQueue={:3}: Recall@{}={:.4f}, QPS={:8.2f}, AvgTime={:.2f}ms",
+        ARTEA_INFO(fmt::format("CandidateQueue={:3}: Recall@{}={:.4f}, QPS={:8.2f}, AvgTime={:.2f}ms",
             queue_size, g_config.topk, result.recall, result.throughput_qps, result.query_time_ms));
     }
 

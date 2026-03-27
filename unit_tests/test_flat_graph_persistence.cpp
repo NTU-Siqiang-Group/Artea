@@ -48,14 +48,14 @@ public:
         if (!std::filesystem::exists(g_config.config_path)) {
             throw std::runtime_error("Config file not found: " + g_config.config_path);
         }
-        logger.info(fmt::format("Loading Dataset: {} from {}", g_config.dataset_name, g_config.config_path));
+        ARTEA_INFO(fmt::format("Loading Dataset: {} from {}", g_config.dataset_name, g_config.config_path));
         dataset_ = std::make_unique<vector_dataset_t>(g_config.config_path, g_config.dataset_name);
         dist_func_ = std::make_unique<dist_func_t>(dataset_->get_base_vecs().get_vec_dim());
 
         const auto& base_vecs = dataset_->get_base_vecs();
         if (g_config.verbose) {
-            logger.info(fmt::format("Base vectors size: {}", base_vecs.get_num_vecs()));
-            logger.info(fmt::format("Vector dimension: {}", base_vecs.get_vec_dim()));
+            ARTEA_INFO(fmt::format("Base vectors size: {}", base_vecs.get_num_vecs()));
+            ARTEA_INFO(fmt::format("Vector dimension: {}", base_vecs.get_vec_dim()));
         }
 
         // Create temp directory for snapshots
@@ -92,7 +92,7 @@ protected:
 TEST_F(FlatGraphPersistenceTest, FlatGraphSnapshotRestore) {
     const auto& base_vecs = dataset_->get_base_vecs();
 
-    logger.info("Building flat graph for persistence test...");
+    ARTEA_INFO("Building flat graph for persistence test...");
 
     // Build original flat graph
     flat_graph_t original_graph = conv_graph_factory_t::construct_graph(
@@ -102,7 +102,7 @@ TEST_F(FlatGraphPersistenceTest, FlatGraphSnapshotRestore) {
         g_config.propagate_config
     );
 
-    logger.info(fmt::format("Original graph built with {} vertices", original_graph.get_num_vertices()));
+    ARTEA_INFO(fmt::format("Original graph built with {} vertices", original_graph.get_num_vertices()));
 
     // Snapshot the graph
     std::string snapshot_dir = g_config.temp_dir + "/flat_graph_snapshot";
@@ -110,15 +110,15 @@ TEST_F(FlatGraphPersistenceTest, FlatGraphSnapshotRestore) {
     metadata["test_name"] = "FlatGraphSnapshotRestore";
     metadata["dataset"] = g_config.dataset_name;
 
-    logger.info(fmt::format("Snapshotting graph to {}", snapshot_dir));
+    ARTEA_INFO(fmt::format("Snapshotting graph to {}", snapshot_dir));
     flat_graph_file_manager_t::snapshot(original_graph, snapshot_dir, metadata);
 
     // Restore the graph
-    logger.info("Restoring graph from snapshot...");
+    ARTEA_INFO("Restoring graph from snapshot...");
     flat_graph_t restored_graph = flat_graph_file_manager_t::restore(snapshot_dir, base_vecs);
 
     // Verify consistency
-    logger.info("Verifying graph consistency...");
+    ARTEA_INFO("Verifying graph consistency...");
 
     // Check basic properties
     EXPECT_EQ(original_graph.get_num_vertices(), restored_graph.get_num_vertices())
@@ -154,7 +154,7 @@ TEST_F(FlatGraphPersistenceTest, FlatGraphSnapshotRestore) {
         if (original_nbrs[i].size() != restored_nbrs[i].size()) {
             mismatch_count++;
             if (mismatch_count <= 5 && g_config.verbose) {
-                logger.warn(fmt::format("Vertex {} neighbor count mismatch: {} vs {}",
+                ARTEA_WARN(fmt::format("Vertex {} neighbor count mismatch: {} vs {}",
                     i, original_nbrs[i].size(), restored_nbrs[i].size()));
             }
         } else {
@@ -170,7 +170,7 @@ TEST_F(FlatGraphPersistenceTest, FlatGraphSnapshotRestore) {
 
     EXPECT_EQ(mismatch_count, 0) << "All neighbor arrays should match exactly";
 
-    logger.info("Flat graph snapshot/restore test passed!");
+    ARTEA_INFO("Flat graph snapshot/restore test passed!");
 }
 
 int main(int argc, char** argv) {

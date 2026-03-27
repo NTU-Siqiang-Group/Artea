@@ -62,7 +62,7 @@ public:
         );
 
         // Always shuffle dataset
-        logger.info("Shuffling dataset...");
+        ARTEA_INFO("Shuffling dataset...");
         dataset->shuffle_in_place();
 
         dim_ = dataset->get_base_vecs().get_vec_dim();

@@ -118,30 +118,30 @@ int main(int argc, char** argv) {
     params.prefill_ratio = program.get<float>("--prefill-ratio");
     params.num_routing_loops = program.get<uint32_t>("--num-routing-loops");
 
-    logger.info(fmt::format("Graph Construction Configuration:"));
-    logger.info(fmt::format("  Dataset: {}", dataset_name));
-    logger.info(fmt::format("  Config path: {}", config_path));
-    logger.info(fmt::format("  Output directory: {}", output_dir));
-    logger.info(fmt::format("  Max neighbors: {}", params.max_nbr_size));
-    logger.info(fmt::format("  Reserved neighbors: {}", params.reserved_nbr_size));
-    logger.info(fmt::format("  Scale coefficient: {:.2f}", params.scale_coeffs));
-    logger.info(fmt::format("  Shifted coefficient: {:.2f}", params.shifted_coeffs));
-    logger.info(fmt::format("  Build loops: {}", params.num_build_loops));
-    logger.info(fmt::format("  Triangle updater iterations: {}", params.num_triu_iters));
+    ARTEA_INFO(fmt::format("Graph Construction Configuration:"));
+    ARTEA_INFO(fmt::format("  Dataset: {}", dataset_name));
+    ARTEA_INFO(fmt::format("  Config path: {}", config_path));
+    ARTEA_INFO(fmt::format("  Output directory: {}", output_dir));
+    ARTEA_INFO(fmt::format("  Max neighbors: {}", params.max_nbr_size));
+    ARTEA_INFO(fmt::format("  Reserved neighbors: {}", params.reserved_nbr_size));
+    ARTEA_INFO(fmt::format("  Scale coefficient: {:.2f}", params.scale_coeffs));
+    ARTEA_INFO(fmt::format("  Shifted coefficient: {:.2f}", params.shifted_coeffs));
+    ARTEA_INFO(fmt::format("  Build loops: {}", params.num_build_loops));
+    ARTEA_INFO(fmt::format("  Triangle updater iterations: {}", params.num_triu_iters));
 
     // Load dataset
-    logger.info("Loading dataset...");
+    ARTEA_INFO("Loading dataset...");
     vector_dataset_t dataset(config_path, dataset_name);
 
     vec_dim_t dim = dataset.get_vec_dim();
     vertex_num_t num_base_vecs = dataset.get_num_base_vecs();
 
-    logger.info(fmt::format("Dataset loaded:"));
-    logger.info(fmt::format("  Dimension: {}", dim));
-    logger.info(fmt::format("  Base vectors: {}", num_base_vecs));
+    ARTEA_INFO(fmt::format("Dataset loaded:"));
+    ARTEA_INFO(fmt::format("  Dimension: {}", dim));
+    ARTEA_INFO(fmt::format("  Base vectors: {}", num_base_vecs));
 
     // Construct graph
-    logger.info("Constructing convergent graph...");
+    ARTEA_INFO("Constructing convergent graph...");
     auto start_time = std::chrono::high_resolution_clock::now();
 
     layer_config_t layer_config(params.max_nbr_size, params.reserved_nbr_size);
@@ -166,13 +166,13 @@ int main(int argc, char** argv) {
     auto end_time = std::chrono::high_resolution_clock::now();
     auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(end_time - start_time);
 
-    logger.info(fmt::format("Graph construction completed in {:.2f} seconds", duration.count() / 1000.0));
+    ARTEA_INFO(fmt::format("Graph construction completed in {:.2f} seconds", duration.count() / 1000.0));
 
     // Calculate and output index size
     index_size_calculator_t index_size_calc;
     auto index_size_info = index_size_calc.calculate_size(flat_graph);
 
-    logger.info(fmt::format("Index size: {:.2f} MB ({} bytes)",
+    ARTEA_INFO(fmt::format("Index size: {:.2f} MB ({} bytes)",
         index_size_info.total_mb, index_size_info.total_bytes));
 
     // Generate directory name with timestamp
@@ -208,7 +208,7 @@ int main(int argc, char** argv) {
     std::cout << fmt::format("  Index path:             {}", output_path.string()) << std::endl;
     std::cout << std::string(80, '=') << std::endl << std::endl;
 
-    logger.info(fmt::format("Saving flat graph to {}...", output_path.string()));
+    ARTEA_INFO(fmt::format("Saving flat graph to {}...", output_path.string()));
 
     // Create output directory if it doesn't exist
     std::filesystem::create_directories(output_path);
@@ -231,7 +231,7 @@ int main(int argc, char** argv) {
 
     flat_graph_file_manager_t::snapshot(flat_graph, output_path.string(), metadata);
 
-    logger.info("Graph saved successfully");
+    ARTEA_INFO("Graph saved successfully");
 
     // Update index registry JSON
     std::filesystem::path registry_path = std::filesystem::path(output_dir) / "index_registry.json";

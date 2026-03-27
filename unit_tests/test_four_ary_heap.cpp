@@ -85,18 +85,18 @@ std::vector<candidate_entry_t> generate_random_entries(uint32_t count, uint32_t 
 class FourAryHeapTest : public ::testing::Test {
 protected:
     void SetUp() override {
-        logger.info("----------------------------------------------------------");
+        ARTEA_INFO("----------------------------------------------------------");
     }
 
     void TearDown() override {
-        logger.info("----------------------------------------------------------");
+        ARTEA_INFO("----------------------------------------------------------");
     }
 };
 
 // --- Tests for Max-Heap (std::less) ---
 
 TEST_F(FourAryHeapTest, MaxHeapBasicOperations) {
-    logger.info(" -> Testing Max-Heap Basic Operations...");
+    ARTEA_INFO(" -> Testing Max-Heap Basic Operations...");
 
     max_heap_t heap(candidate_entry_t::make_min_entry());
 
@@ -140,11 +140,11 @@ TEST_F(FourAryHeapTest, MaxHeapBasicOperations) {
 
     EXPECT_TRUE(heap.empty());
 
-    logger.success("Max-Heap Basic Operations passed.");
+    ARTEA_SUCCESS("Max-Heap Basic Operations passed.");
 }
 
 TEST_F(FourAryHeapTest, MaxHeapVsStdPriorityQueue) {
-    logger.info(fmt::format(" -> Testing Max-Heap vs std::priority_queue with {} operations...",
+    ARTEA_INFO(fmt::format(" -> Testing Max-Heap vs std::priority_queue with {} operations...",
                             g_config.num_operations));
 
     auto entries = generate_random_entries(g_config.num_operations, g_config.seed);
@@ -180,11 +180,11 @@ TEST_F(FourAryHeapTest, MaxHeapVsStdPriorityQueue) {
     EXPECT_TRUE(std_heap.empty());
     EXPECT_EQ(compared, g_config.num_operations);
 
-    logger.success(fmt::format("Max-Heap matched std::priority_queue for {} operations.", compared));
+    ARTEA_SUCCESS(fmt::format("Max-Heap matched std::priority_queue for {} operations.", compared));
 }
 
 TEST_F(FourAryHeapTest, MaxHeapInitialize) {
-    logger.info(" -> Testing Max-Heap Initialize (Floyd's construction)...");
+    ARTEA_INFO(" -> Testing Max-Heap Initialize (Floyd's construction)...");
 
     auto entries = generate_random_entries(g_config.num_operations, g_config.seed);
 
@@ -213,13 +213,13 @@ TEST_F(FourAryHeapTest, MaxHeapInitialize) {
 
     EXPECT_EQ(compared, g_config.num_operations);
 
-    logger.success("Max-Heap Initialize passed.");
+    ARTEA_SUCCESS("Max-Heap Initialize passed.");
 }
 
 // --- Tests for Min-Heap (std::greater) ---
 
 TEST_F(FourAryHeapTest, MinHeapBasicOperations) {
-    logger.info(" -> Testing Min-Heap Basic Operations...");
+    ARTEA_INFO(" -> Testing Min-Heap Basic Operations...");
 
     min_heap_t heap(candidate_entry_t::make_invalid_entry());
 
@@ -263,11 +263,11 @@ TEST_F(FourAryHeapTest, MinHeapBasicOperations) {
 
     EXPECT_TRUE(heap.empty());
 
-    logger.success("Min-Heap Basic Operations passed.");
+    ARTEA_SUCCESS("Min-Heap Basic Operations passed.");
 }
 
 TEST_F(FourAryHeapTest, MinHeapVsStdPriorityQueue) {
-    logger.info(fmt::format(" -> Testing Min-Heap vs std::priority_queue with {} operations...",
+    ARTEA_INFO(fmt::format(" -> Testing Min-Heap vs std::priority_queue with {} operations...",
                             g_config.num_operations));
 
     auto entries = generate_random_entries(g_config.num_operations, g_config.seed);
@@ -303,11 +303,11 @@ TEST_F(FourAryHeapTest, MinHeapVsStdPriorityQueue) {
     EXPECT_TRUE(std_heap.empty());
     EXPECT_EQ(compared, g_config.num_operations);
 
-    logger.success(fmt::format("Min-Heap matched std::priority_queue for {} operations.", compared));
+    ARTEA_SUCCESS(fmt::format("Min-Heap matched std::priority_queue for {} operations.", compared));
 }
 
 TEST_F(FourAryHeapTest, MinHeapInitialize) {
-    logger.info(" -> Testing Min-Heap Initialize (Floyd's construction)...");
+    ARTEA_INFO(" -> Testing Min-Heap Initialize (Floyd's construction)...");
 
     auto entries = generate_random_entries(g_config.num_operations, g_config.seed);
 
@@ -336,13 +336,13 @@ TEST_F(FourAryHeapTest, MinHeapInitialize) {
 
     EXPECT_EQ(compared, g_config.num_operations);
 
-    logger.success("Min-Heap Initialize passed.");
+    ARTEA_SUCCESS("Min-Heap Initialize passed.");
 }
 
 // --- Edge Cases ---
 
 TEST_F(FourAryHeapTest, EdgeCaseSingleElement) {
-    logger.info(" -> Testing Edge Case: Single Element...");
+    ARTEA_INFO(" -> Testing Edge Case: Single Element...");
 
     max_heap_t heap(candidate_entry_t::make_min_entry());
 
@@ -356,11 +356,11 @@ TEST_F(FourAryHeapTest, EdgeCaseSingleElement) {
     heap.pop();
     EXPECT_TRUE(heap.empty());
 
-    logger.success("Single Element test passed.");
+    ARTEA_SUCCESS("Single Element test passed.");
 }
 
 TEST_F(FourAryHeapTest, EdgeCaseDuplicateDistances) {
-    logger.info(" -> Testing Edge Case: Duplicate Distances...");
+    ARTEA_INFO(" -> Testing Edge Case: Duplicate Distances...");
 
     max_heap_t heap(candidate_entry_t::make_min_entry());
 
@@ -410,11 +410,11 @@ TEST_F(FourAryHeapTest, EdgeCaseDuplicateDistances) {
     // Should have collected 20 IDs
     EXPECT_EQ(ids.size(), 20);
 
-    logger.success("Duplicate Distances test passed.");
+    ARTEA_SUCCESS("Duplicate Distances test passed.");
 }
 
 TEST_F(FourAryHeapTest, EdgeCaseClearAndReuse) {
-    logger.info(" -> Testing Edge Case: Clear and Reuse...");
+    ARTEA_INFO(" -> Testing Edge Case: Clear and Reuse...");
 
     max_heap_t heap(candidate_entry_t::make_min_entry());
 
@@ -450,11 +450,11 @@ TEST_F(FourAryHeapTest, EdgeCaseClearAndReuse) {
         EXPECT_GE(distances[i-1], distances[i]);
     }
 
-    logger.success("Clear and Reuse test passed.");
+    ARTEA_SUCCESS("Clear and Reuse test passed.");
 }
 
 TEST_F(FourAryHeapTest, StressTestMixedOperations) {
-    logger.info(fmt::format(" -> Stress Test: Mixed Push/Pop Operations with {} ops...",
+    ARTEA_INFO(fmt::format(" -> Stress Test: Mixed Push/Pop Operations with {} ops...",
                             g_config.num_operations));
 
     std::mt19937 rng(g_config.seed);
@@ -487,7 +487,7 @@ TEST_F(FourAryHeapTest, StressTestMixedOperations) {
         EXPECT_EQ(four_ary_heap.size(), std_heap.size());
     }
 
-    logger.success(fmt::format("Stress Test passed with {} operations.", g_config.num_operations));
+    ARTEA_SUCCESS(fmt::format("Stress Test passed with {} operations.", g_config.num_operations));
 }
 
 // --- Main ---
@@ -520,11 +520,11 @@ int main(int argc, char* argv[]) {
     g_config.num_operations = program.get<uint32_t>("--num_operations");
     g_config.seed = program.get<uint32_t>("--seed");
 
-    logger.info("==========================================================");
-    logger.info("      Starting FourAryHeap Correctness Suite");
-    logger.info(fmt::format("      Config: Operations={}, Seed={}",
+    ARTEA_INFO("==========================================================");
+    ARTEA_INFO("      Starting FourAryHeap Correctness Suite");
+    ARTEA_INFO(fmt::format("      Config: Operations={}, Seed={}",
                            g_config.num_operations, g_config.seed));
-    logger.info("==========================================================");
+    ARTEA_INFO("==========================================================");
 
     return RUN_ALL_TESTS();
 }

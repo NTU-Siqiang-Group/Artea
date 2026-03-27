@@ -83,18 +83,18 @@ public:
         if (!std::filesystem::exists(g_config.config_path)) {
             throw std::runtime_error("Config file not found: " + g_config.config_path);
         }
-        logger.info(fmt::format("Loading Dataset: {} from {}", g_config.dataset_name, g_config.config_path));
+        ARTEA_INFO(fmt::format("Loading Dataset: {} from {}", g_config.dataset_name, g_config.config_path));
         dataset_ = std::make_unique<vector_dataset_t>(g_config.config_path, g_config.dataset_name);
 
         // Always shuffle dataset for randomness
-        logger.info("Shuffling dataset...");
+        ARTEA_INFO("Shuffling dataset...");
         dataset_->shuffle_in_place();
 
         dist_func_ = std::make_unique<dist_func_t>(dataset_->get_base_vecs().get_vec_dim());
 
         // Probe min_radius using radius prober
         const auto& base_vecs = dataset_->get_base_vecs();
-        logger.info("Probing min_radius from dataset...");
+        ARTEA_INFO("Probing min_radius from dataset...");
 
         constexpr float QUANTILE = 0.001f;
         constexpr float CONFIDENCE = 0.99f;
@@ -110,17 +110,17 @@ public:
         g_test_results.min_radius = probe_result.radius;
         g_test_results.rnet_radius = probe_result.radius * g_config.beta;
 
-        logger.info(fmt::format("Probed min radius: {:.6f} (quantile: {:.4f}, samples: {}, time: {:.2f}ms)",
+        ARTEA_INFO(fmt::format("Probed min radius: {:.6f} (quantile: {:.4f}, samples: {}, time: {:.2f}ms)",
             probe_result.radius, probe_result.quantile, probe_result.num_dists_sampled, g_test_results.probe_time_ms));
-        logger.info(fmt::format("R-net radius (beta={:.2f}): {:.6f}", g_config.beta, g_test_results.rnet_radius));
+        ARTEA_INFO(fmt::format("R-net radius (beta={:.2f}): {:.6f}", g_config.beta, g_test_results.rnet_radius));
 
         // Generate r-net once for all tests
         if (g_config.verbose) {
-            logger.info(fmt::format("Base vectors size: {}", base_vecs.get_num_vecs()));
-            logger.info(fmt::format("R-net radius: {}", g_test_results.rnet_radius));
-            logger.info(fmt::format("Coverage ratio: {}", g_config.coverage_ratio));
-            logger.info(fmt::format("Confidence: {}", g_config.confidence));
-            logger.info(fmt::format("Batch size: {}", g_config.batch_size));
+            ARTEA_INFO(fmt::format("Base vectors size: {}", base_vecs.get_num_vecs()));
+            ARTEA_INFO(fmt::format("R-net radius: {}", g_test_results.rnet_radius));
+            ARTEA_INFO(fmt::format("Coverage ratio: {}", g_config.coverage_ratio));
+            ARTEA_INFO(fmt::format("Confidence: {}", g_config.confidence));
+            ARTEA_INFO(fmt::format("Batch size: {}", g_config.batch_size));
         }
 
         // Time the generation
@@ -144,9 +144,9 @@ public:
         g_test_results.total_base_vecs = base_vecs.get_num_vecs();
         g_test_results.rnet_ratio = 100.0f * approx_rnet_->get_num_vecs() / base_vecs.get_num_vecs();
 
-        logger.info(fmt::format("Generated r-net with {} vertices", approx_rnet_->get_num_vecs()));
-        logger.info(fmt::format("R-net ratio: {:.2f}%", g_test_results.rnet_ratio));
-        logger.info(fmt::format("Generation time: {:.2f} ms", g_test_results.generation_time_ms));
+        ARTEA_INFO(fmt::format("Generated r-net with {} vertices", approx_rnet_->get_num_vecs()));
+        ARTEA_INFO(fmt::format("R-net ratio: {:.2f}%", g_test_results.rnet_ratio));
+        ARTEA_INFO(fmt::format("Generation time: {:.2f} ms", g_test_results.generation_time_ms));
     }
 
     vector_dataset_t& get_dataset() { return *dataset_; }
@@ -171,7 +171,7 @@ TEST_F(LBGreedyVGTest, VerifyRNetDataConsistency) {
     uint32_t vec_dim = base_vecs.get_vec_dim();
 
     // Test 2: Verify vecs_data matches original vectors
-    logger.info("Verifying vecs_data matches original vectors...");
+    ARTEA_INFO("Verifying vecs_data matches original vectors...");
     uint32_t mismatch_count = 0;
 
     for (size_t i = 0; i < approx_rnet.get_num_vecs(); ++i) {
@@ -184,7 +184,7 @@ TEST_F(LBGreedyVGTest, VerifyRNetDataConsistency) {
             if (std::abs(original_vec[d] - rnet_vec[d]) > 1e-6f) {
                 mismatch_count++;
                 if (g_config.verbose && mismatch_count <= 10) {
-                    logger.warn(fmt::format("Data mismatch at index {}, dim {}: original={:.6f}, rnet={:.6f}",
+                    ARTEA_WARN(fmt::format("Data mismatch at index {}, dim {}: original={:.6f}, rnet={:.6f}",
                         i, d, original_vec[d], rnet_vec[d]));
                 }
                 break;  // Only count once per vector
@@ -197,9 +197,9 @@ TEST_F(LBGreedyVGTest, VerifyRNetDataConsistency) {
     g_test_results.data_consistency_passed = (mismatch_count == 0);
 
     if (mismatch_count == 0) {
-        logger.success("All vectors match original data");
+        ARTEA_SUCCESS("All vectors match original data");
     } else {
-        logger.error(fmt::format("{} vectors have mismatched data", mismatch_count));
+        ARTEA_ERROR(fmt::format("{} vectors have mismatched data", mismatch_count));
     }
 }
 
@@ -208,16 +208,16 @@ TEST_F(LBGreedyVGTest, VerifyRNetUniqueness) {
     auto& approx_rnet = provider.get_approx_rnet();
 
     // Test 3: Verify all vec_ids are unique
-    logger.info("Verifying vec_ids are unique...");
+    ARTEA_INFO("Verifying vec_ids are unique...");
     std::unordered_set<vec_id_t> unique_ids(approx_rnet.vec_ids.begin(), approx_rnet.vec_ids.end());
     EXPECT_EQ(unique_ids.size(), approx_rnet.vec_ids.size()) << "All vec_ids should be unique";
 
     g_test_results.uniqueness_passed = (unique_ids.size() == approx_rnet.vec_ids.size());
 
     if (unique_ids.size() == approx_rnet.vec_ids.size()) {
-        logger.success("All vec_ids are unique");
+        ARTEA_SUCCESS("All vec_ids are unique");
     } else {
-        logger.error(fmt::format("Found {} duplicates in vec_ids",
+        ARTEA_ERROR(fmt::format("Found {} duplicates in vec_ids",
             approx_rnet.vec_ids.size() - unique_ids.size()));
     }
 }
@@ -232,7 +232,7 @@ TEST_F(LBGreedyVGTest, VerifyRNetSeparation) {
     uint32_t num_rnet_vecs = approx_rnet.get_num_vecs();
     uint32_t actual_samples = std::min(NUM_SAMPLE_POINTS, num_rnet_vecs);
 
-    logger.info(fmt::format("Testing r-net separation property with {} sampled points...", actual_samples));
+    ARTEA_INFO(fmt::format("Testing r-net separation property with {} sampled points...", actual_samples));
 
     std::random_device rd;
     std::mt19937 gen(rd());
@@ -256,16 +256,16 @@ TEST_F(LBGreedyVGTest, VerifyRNetSeparation) {
             if (dist < g_test_results.rnet_radius) {
                 violation_count++;
                 if (g_config.verbose && violation_count <= 10) {
-                    logger.warn(fmt::format("Separation violation: rnet[{}] and rnet[{}] have distance {:.4f} < {:.4f}",
+                    ARTEA_WARN(fmt::format("Separation violation: rnet[{}] and rnet[{}] have distance {:.4f} < {:.4f}",
                         i, j, dist, g_test_results.rnet_radius));
                 }
             }
         }
     }
 
-    logger.info(fmt::format("Separation test: {} violations out of {} pairs checked",
+    ARTEA_INFO(fmt::format("Separation test: {} violations out of {} pairs checked",
         violation_count, total_pairs_checked));
-    logger.info(fmt::format("Minimum pairwise distance: {:.4f}", min_pairwise_dist));
+    ARTEA_INFO(fmt::format("Minimum pairwise distance: {:.4f}", min_pairwise_dist));
 
     g_test_results.min_pairwise_dist = min_pairwise_dist;
     g_test_results.separation_violations = violation_count;
@@ -283,7 +283,7 @@ TEST_F(LBGreedyVGTest, VerifyRNetCoverage) {
     const auto& base_vecs = dataset.get_base_vecs();
 
     // Test: Verify coverage property by sampling random points
-    logger.info(fmt::format("Testing r-net coverage property with {} random samples...", g_config.num_test_samples));
+    ARTEA_INFO(fmt::format("Testing r-net coverage property with {} random samples...", g_config.num_test_samples));
 
     std::random_device rd;
     std::mt19937 gen(rd());
@@ -311,7 +311,7 @@ TEST_F(LBGreedyVGTest, VerifyRNetCoverage) {
         if (min_dist_to_rnet >= g_test_results.rnet_radius) {
             uncovered_count++;
             if (g_config.verbose && uncovered_count <= 10) {
-                logger.warn(fmt::format("Uncovered sample: vec[{}] has min distance {:.4f} >= {:.4f}",
+                ARTEA_WARN(fmt::format("Uncovered sample: vec[{}] has min distance {:.4f} >= {:.4f}",
                     sample_id, min_dist_to_rnet, g_test_results.rnet_radius));
             }
         }
@@ -320,10 +320,10 @@ TEST_F(LBGreedyVGTest, VerifyRNetCoverage) {
     float empirical_coverage = 1.0f - (float)uncovered_count / g_config.num_test_samples;
     g_test_results.empirical_coverage = empirical_coverage;
 
-    logger.info(fmt::format("Coverage test: {}/{} samples covered ({:.2f}%)",
+    ARTEA_INFO(fmt::format("Coverage test: {}/{} samples covered ({:.2f}%)",
         g_config.num_test_samples - uncovered_count, g_config.num_test_samples, empirical_coverage * 100.0f));
-    logger.info(fmt::format("Target coverage: {:.2f}%", g_config.coverage_ratio * 100.0f));
-    logger.info(fmt::format("Uncovered samples: {}", uncovered_count));
+    ARTEA_INFO(fmt::format("Target coverage: {:.2f}%", g_config.coverage_ratio * 100.0f));
+    ARTEA_INFO(fmt::format("Uncovered samples: {}", uncovered_count));
 
     // Coverage should be approximately equal to target (within reasonable tolerance)
     // Note: This is a statistical test, so we allow some deviation

@@ -83,28 +83,23 @@ int main(int argc, char** argv) {
 
     // Validate parameter combinations
     if (has_quantile && has_num_distances && (has_confidence || has_relative_err)) {
-        logger.error("Cannot specify both --num-distances and (--confidence/--relative-err)");
-        logger.error("Use either:");
-        logger.error("  Option 1: -m/--num-distances (manual)");
-        logger.error("  Option 2: --confidence and --relative-err (auto-compute)");
-        return 1;
+        ARTEA_ERROR("Cannot specify both --num-distances and (--confidence/--relative-err)");
     }
 
     if (has_quantile && ((has_confidence && !has_relative_err) || (!has_confidence && has_relative_err))) {
-        logger.error("--confidence and --relative-err must be specified together");
-        return 1;
+        ARTEA_ERROR("--confidence and --relative-err must be specified together");
     }
 
     // Load dataset
-    logger.info("Loading dataset...");
+    ARTEA_INFO("Loading dataset...");
     vector_dataset_t dataset(config_path, dataset_name);
 
     vec_dim_t dim = dataset.get_vec_dim();
     vertex_num_t num_base_vecs = dataset.get_num_base_vecs();
 
-    logger.info(fmt::format("Dataset loaded:"));
-    logger.info(fmt::format("  Dimension: {}", dim));
-    logger.info(fmt::format("  Base vectors: {}", num_base_vecs));
+    ARTEA_INFO(fmt::format("Dataset loaded:"));
+    ARTEA_INFO(fmt::format("  Dimension: {}", dim));
+    ARTEA_INFO(fmt::format("  Base vectors: {}", num_base_vecs));
 
     // Create distance function
     dist_func_t dist_func(dim);
@@ -118,14 +113,14 @@ int main(int argc, char** argv) {
         float confidence = program.get<float>("--confidence");
         float relative_err = program.get<float>("--relative-err");
 
-        logger.info("Multi-Quantile Probing Configuration:");
-        logger.info(fmt::format("  Dataset: {}", dataset_name));
-        logger.info(fmt::format("  Config path: {}", config_path));
-        logger.info(fmt::format("  Confidence: {:.2f}%", confidence * 100));
-        logger.info(fmt::format("  Relative error: {:.2f}%", relative_err * 100));
+        ARTEA_INFO("Multi-Quantile Probing Configuration:");
+        ARTEA_INFO(fmt::format("  Dataset: {}", dataset_name));
+        ARTEA_INFO(fmt::format("  Config path: {}", config_path));
+        ARTEA_INFO(fmt::format("  Confidence: {:.2f}%", confidence * 100));
+        ARTEA_INFO(fmt::format("  Relative error: {:.2f}%", relative_err * 100));
 
         // Probe multiple quantiles
-        logger.info("Probing multiple quantiles...");
+        ARTEA_INFO("Probing multiple quantiles...");
         auto start_time = std::chrono::high_resolution_clock::now();
 
         auto result = prober.probe_multi_quantiles(dataset.get_base_vecs(), confidence, relative_err);
@@ -134,9 +129,9 @@ int main(int argc, char** argv) {
         auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(end_time - start_time);
 
         // Display results
-        logger.info(fmt::format("Probing Results:"));
-        logger.info(fmt::format("  Distance samples: {}", result.num_dists_sampled));
-        logger.info(fmt::format("  Time elapsed: {:.3f} seconds", duration.count() / 1000.0));
+        ARTEA_INFO(fmt::format("Probing Results:"));
+        ARTEA_INFO(fmt::format("  Distance samples: {}", result.num_dists_sampled));
+        ARTEA_INFO(fmt::format("  Time elapsed: {:.3f} seconds", duration.count() / 1000.0));
 
         std::cout << "\n" << std::string(80, '=') << std::endl;
         std::cout << "                    MULTI-QUANTILE PROBING SUMMARY" << std::endl;
@@ -165,41 +160,41 @@ int main(int argc, char** argv) {
     if (has_num_distances) {
         // Mode 1: User specified num-distances directly
         num_distances = program.get<uint32_t>("--num-distances");
-        logger.info(fmt::format("Radius Probing Configuration:"));
-        logger.info(fmt::format("  Dataset: {}", dataset_name));
-        logger.info(fmt::format("  Config path: {}", config_path));
-        logger.info(fmt::format("  Quantile: {:.4f} ({:.2f}%)", quantile, quantile * 100));
-        logger.info(fmt::format("  Number of distance samples: {}", num_distances));
+        ARTEA_INFO(fmt::format("Radius Probing Configuration:"));
+        ARTEA_INFO(fmt::format("  Dataset: {}", dataset_name));
+        ARTEA_INFO(fmt::format("  Config path: {}", config_path));
+        ARTEA_INFO(fmt::format("  Quantile: {:.4f} ({:.2f}%)", quantile, quantile * 100));
+        ARTEA_INFO(fmt::format("  Number of distance samples: {}", num_distances));
     } else if (has_confidence && has_relative_err) {
         // Mode 2: Auto-compute from confidence and relative error
         confidence = program.get<float>("--confidence");
         relative_err = program.get<float>("--relative-err");
         num_distances = radius_prober_t::compute_num_dists_sampled(quantile, confidence, relative_err);
 
-        logger.info(fmt::format("Radius Probing Configuration:"));
-        logger.info(fmt::format("  Dataset: {}", dataset_name));
-        logger.info(fmt::format("  Config path: {}", config_path));
-        logger.info(fmt::format("  Quantile: {:.4f} ({:.2f}%)", quantile, quantile * 100));
-        logger.info(fmt::format("  Confidence: {:.2f}%", confidence * 100));
-        logger.info(fmt::format("  Relative error: {:.2f}%", relative_err * 100));
-        logger.info(fmt::format("  Computed distance samples: {}", num_distances));
+        ARTEA_INFO(fmt::format("Radius Probing Configuration:"));
+        ARTEA_INFO(fmt::format("  Dataset: {}", dataset_name));
+        ARTEA_INFO(fmt::format("  Config path: {}", config_path));
+        ARTEA_INFO(fmt::format("  Quantile: {:.4f} ({:.2f}%)", quantile, quantile * 100));
+        ARTEA_INFO(fmt::format("  Confidence: {:.2f}%", confidence * 100));
+        ARTEA_INFO(fmt::format("  Relative error: {:.2f}%", relative_err * 100));
+        ARTEA_INFO(fmt::format("  Computed distance samples: {}", num_distances));
     } else {
         // Default mode: use default confidence and relative error
         confidence = program.get<float>("--confidence");
         relative_err = program.get<float>("--relative-err");
         num_distances = radius_prober_t::compute_num_dists_sampled(quantile, confidence, relative_err);
 
-        logger.info(fmt::format("Radius Probing Configuration:"));
-        logger.info(fmt::format("  Dataset: {}", dataset_name));
-        logger.info(fmt::format("  Config path: {}", config_path));
-        logger.info(fmt::format("  Quantile: {:.4f} ({:.2f}%)", quantile, quantile * 100));
-        logger.info(fmt::format("  Confidence: {:.2f}% (default)", confidence * 100));
-        logger.info(fmt::format("  Relative error: {:.2f}% (default)", relative_err * 100));
-        logger.info(fmt::format("  Computed distance samples: {}", num_distances));
+        ARTEA_INFO(fmt::format("Radius Probing Configuration:"));
+        ARTEA_INFO(fmt::format("  Dataset: {}", dataset_name));
+        ARTEA_INFO(fmt::format("  Config path: {}", config_path));
+        ARTEA_INFO(fmt::format("  Quantile: {:.4f} ({:.2f}%)", quantile, quantile * 100));
+        ARTEA_INFO(fmt::format("  Confidence: {:.2f}% (default)", confidence * 100));
+        ARTEA_INFO(fmt::format("  Relative error: {:.2f}% (default)", relative_err * 100));
+        ARTEA_INFO(fmt::format("  Computed distance samples: {}", num_distances));
     }
 
     // Probe radius
-    logger.info("Probing radius...");
+    ARTEA_INFO("Probing radius...");
     auto start_time = std::chrono::high_resolution_clock::now();
 
     auto result = prober.probe(dataset.get_base_vecs(), quantile, num_distances);
@@ -208,11 +203,11 @@ int main(int argc, char** argv) {
     auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(end_time - start_time);
 
     // Display results
-    logger.info(fmt::format("Probing Results:"));
-    logger.info(fmt::format("  Quantile: {:.4f} ({:.2f}%)", result.quantile, result.quantile * 100));
-    logger.info(fmt::format("  Radius: {:.6f}", result.radius));
-    logger.info(fmt::format("  Distance samples: {}", result.num_dists_sampled));
-    logger.info(fmt::format("  Time elapsed: {:.3f} seconds", duration.count() / 1000.0));
+    ARTEA_INFO(fmt::format("Probing Results:"));
+    ARTEA_INFO(fmt::format("  Quantile: {:.4f} ({:.2f}%)", result.quantile, result.quantile * 100));
+    ARTEA_INFO(fmt::format("  Radius: {:.6f}", result.radius));
+    ARTEA_INFO(fmt::format("  Distance samples: {}", result.num_dists_sampled));
+    ARTEA_INFO(fmt::format("  Time elapsed: {:.3f} seconds", duration.count() / 1000.0));
 
     return 0;
 }

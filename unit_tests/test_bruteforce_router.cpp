@@ -52,7 +52,7 @@ public:
         if (!std::filesystem::exists(g_config.config_path)) {
             throw std::runtime_error("Config file not found: " + g_config.config_path);
         }
-        logger.info(fmt::format("Loading Dataset: {} from {}", g_config.dataset_name, g_config.config_path));
+        ARTEA_INFO(fmt::format("Loading Dataset: {} from {}", g_config.dataset_name, g_config.config_path));
         dataset_ = std::make_unique<vector_dataset_t>(g_config.config_path, g_config.dataset_name);
         dist_func_ = std::make_unique<dist_func_t>(dataset_->get_base_vecs().get_vec_dim());
     }
@@ -91,7 +91,7 @@ TEST_F(BruteforceCorrectnessTest, VerifyRecallAccuracy) {
         predictions, gt_vecs, topk, query_vecs.get_num_vecs()
     );
 
-    logger.info(fmt::format("Artea Recall@1: {:.4f}", recall));
+    ARTEA_INFO(fmt::format("Artea Recall@1: {:.4f}", recall));
 
     // Bruteforce should theoretically be 100% (or extremely close due to float precision)
     EXPECT_GE(recall, 0.99f) << "Bruteforce router recall is lower than 0.99!";
@@ -110,7 +110,7 @@ TEST(BruteforceRouterTest, BatchTopKQuery) {
     std::vector<uint32_t> k_values = {1, 5, 10, 20};
 
     for (uint32_t k : k_values) {
-        logger.info(fmt::format("Testing batch top-{} query", k));
+        ARTEA_INFO(fmt::format("Testing batch top-{} query", k));
 
         // Create router with specific topk value
         bruteforce_router_t router(base_vecs, dist_func, k);
@@ -141,11 +141,11 @@ TEST(BruteforceRouterTest, BatchTopKQuery) {
         EXPECT_GE(recall, 0.99)
             << fmt::format("Bruteforce router batch Recall@{} is too low: {:.4f}", k, recall);
 
-        logger.info(fmt::format("Batch top-{} query test passed:", k));
-        logger.info(fmt::format("   -> Recall@{}: {:.2f}%", k, recall * 100.0));
+        ARTEA_INFO(fmt::format("Batch top-{} query test passed:", k));
+        ARTEA_INFO(fmt::format("   -> Recall@{}: {:.2f}%", k, recall * 100.0));
     }
 
-    logger.info("Batch top-k query test passed");
+    ARTEA_INFO("Batch top-k query test passed");
 }
 
 int main(int argc, char** argv) {

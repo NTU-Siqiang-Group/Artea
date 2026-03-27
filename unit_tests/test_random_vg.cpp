@@ -45,14 +45,14 @@ protected:
             throw std::runtime_error("Config file not found: " + g_config.config_path);
         }
 
-        logger.info(fmt::format("Loading Dataset: {} from {}", g_config.dataset_name, g_config.config_path));
+        ARTEA_INFO(fmt::format("Loading Dataset: {} from {}", g_config.dataset_name, g_config.config_path));
         dataset = std::make_unique<vector_dataset_t>(g_config.config_path, g_config.dataset_name);
 
         vecs_data = &dataset->get_base_vecs();
         num_vecs = vecs_data->get_num_vecs();
         vec_dim = vecs_data->get_vec_dim();
 
-        logger.info(fmt::format("Dataset loaded: {} vectors, {} dimensions", num_vecs, vec_dim));
+        ARTEA_INFO(fmt::format("Dataset loaded: {} vectors, {} dimensions", num_vecs, vec_dim));
     }
 
     static void TearDownTestSuite() {

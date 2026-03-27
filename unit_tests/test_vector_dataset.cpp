@@ -131,7 +131,7 @@ protected:
         }
 
         // 1. Load Dataset via Artea
-        logger.info(fmt::format("Loading Dataset: {} from {}", g_config.dataset_name, g_config.config_path));
+        ARTEA_INFO(fmt::format("Loading Dataset: {} from {}", g_config.dataset_name, g_config.config_path));
         dataset = std::make_unique<vector_dataset_t>(g_config.config_path, g_config.dataset_name);
 
         // 2. Parse JSON manually to get raw file paths for the reference loader
@@ -166,7 +166,7 @@ protected:
     template <typename T, typename ArteaArrayT>
     void verify_data(ArteaArrayT& artea_array, const std::string& json_key, const std::string& label) {
         std::string full_path = get_file_path(json_key);
-        logger.info(fmt::format("Verifying {} against file: {}", label, full_path));
+        ARTEA_INFO(fmt::format("Verifying {} against file: {}", label, full_path));
 
         // 1. Load Reference Data
         auto [ref_data, ref_dim] = load_vecs_file_simple<T>(full_path);
@@ -184,7 +184,7 @@ protected:
         std::mt19937 rng(std::random_device{}());
         std::uniform_int_distribution<size_t> dist(0, ref_num_vecs - 1);
 
-        logger.info(fmt::format("Checking {} random samples for {}...", g_config.num_check_samples, label));
+        ARTEA_INFO(fmt::format("Checking {} random samples for {}...", g_config.num_check_samples, label));
 
         for (uint32_t i = 0; i < g_config.num_check_samples; ++i) {
             size_t vec_id = dist(rng);
@@ -206,7 +206,7 @@ protected:
                 }
             }
         }
-        logger.success(fmt::format("{} passed verification.", label));
+        ARTEA_SUCCESS(fmt::format("{} passed verification.", label));
     }
 };
 
@@ -253,7 +253,7 @@ TEST_F(VectorDatasetTest, VerifyGetSubset) {
         vec_ids.push_back(dist(rng));
     }
 
-    logger.info(fmt::format("Testing extract_subset with {} random vectors...", subset_size));
+    ARTEA_INFO(fmt::format("Testing extract_subset with {} random vectors...", subset_size));
 
     // Get subset using the parallel implementation
     auto subset = base_vecs.extract_subset(vec_ids);
@@ -273,7 +273,7 @@ TEST_F(VectorDatasetTest, VerifyGetSubset) {
         }
     }
 
-    logger.success("extract_subset passed verification.");
+    ARTEA_SUCCESS("extract_subset passed verification.");
 }
 
 TEST_F(VectorDatasetTest, VerifyShuffleInPlace) {
@@ -287,7 +287,7 @@ TEST_F(VectorDatasetTest, VerifyShuffleInPlace) {
     vec_num_t num_gt = gt_vecs.get_num_vecs();
     vec_dim_t gt_dim = gt_vecs.get_vec_dim();
 
-    logger.info(fmt::format("Testing shuffle_in_place with {} base vectors...", total_vecs));
+    ARTEA_INFO(fmt::format("Testing shuffle_in_place with {} base vectors...", total_vecs));
 
     // Sample a subset for verification to avoid O(n²) complexity
     constexpr vec_num_t sample_size = 1000;
@@ -328,7 +328,7 @@ TEST_F(VectorDatasetTest, VerifyShuffleInPlace) {
     EXPECT_EQ(gt_vecs.get_vec_dim(), gt_dim) << "Ground truth dimension changed after shuffle";
 
     // Verify sampled vectors still exist (just reordered)
-    logger.info(fmt::format("Verifying {} sampled vectors...", num_samples));
+    ARTEA_INFO(fmt::format("Verifying {} sampled vectors...", num_samples));
     for (const auto& [old_idx, old_vec] : original_base_vecs) {
         bool match_found = false;
 
@@ -354,7 +354,7 @@ TEST_F(VectorDatasetTest, VerifyShuffleInPlace) {
     }
 
     // Verify ground truth IDs are correctly updated (sample a subset)
-    logger.info(fmt::format("Verifying ground truth for {} sampled queries...", std::min(100u, num_gt)));
+    ARTEA_INFO(fmt::format("Verifying ground truth for {} sampled queries...", std::min(100u, num_gt)));
     vec_num_t num_gt_samples = std::min(100u, num_gt);
 
     for (vec_num_t query_id = 0; query_id < num_gt_samples; ++query_id) {
@@ -392,7 +392,7 @@ TEST_F(VectorDatasetTest, VerifyShuffleInPlace) {
         }
     }
 
-    logger.success("shuffle_in_place passed verification.");
+    ARTEA_SUCCESS("shuffle_in_place passed verification.");
 }
 
 TEST_F(VectorDatasetTest, VerifyShuffleSeedReproducibility) {
@@ -412,7 +412,7 @@ TEST_F(VectorDatasetTest, VerifyShuffleSeedReproducibility) {
     vec_num_t num_gt = gt_vecs1.get_num_vecs();
     vec_dim_t gt_dim = gt_vecs1.get_vec_dim();
 
-    logger.info(fmt::format("Testing shuffle seed reproducibility with {} base vectors...", total_vecs));
+    ARTEA_INFO(fmt::format("Testing shuffle seed reproducibility with {} base vectors...", total_vecs));
 
     // Shuffle both datasets with the same seed
     uint32_t seed = 12345;
@@ -426,7 +426,7 @@ TEST_F(VectorDatasetTest, VerifyShuffleSeedReproducibility) {
     EXPECT_EQ(base_vecs2.get_vec_dim(), dim) << "Dataset2 dimension changed";
 
     // Verify all base vectors match exactly
-    logger.info("Verifying all base vectors match...");
+    ARTEA_INFO("Verifying all base vectors match...");
     for (vec_num_t i = 0; i < total_vecs; ++i) {
         const float* vec1 = base_vecs1.get(i);
         const float* vec2 = base_vecs2.get(i);
@@ -438,7 +438,7 @@ TEST_F(VectorDatasetTest, VerifyShuffleSeedReproducibility) {
     }
 
     // Verify all ground truth vectors match exactly
-    logger.info("Verifying all ground truth vectors match...");
+    ARTEA_INFO("Verifying all ground truth vectors match...");
     for (vec_num_t i = 0; i < num_gt; ++i) {
         const uint32_t* gt1 = gt_vecs1.get(i);
         const uint32_t* gt2 = gt_vecs2.get(i);
@@ -449,7 +449,7 @@ TEST_F(VectorDatasetTest, VerifyShuffleSeedReproducibility) {
         }
     }
 
-    logger.success("Shuffle seed reproducibility test passed.");
+    ARTEA_SUCCESS("Shuffle seed reproducibility test passed.");
 }
 
 // --- Main ---
@@ -486,9 +486,9 @@ int main(int argc, char* argv[]) {
     g_config.dataset_name = program.get<std::string>("--dataset");
     g_config.num_check_samples = program.get<uint32_t>("--samples");
 
-    logger.info("==========================================================");
-    logger.info("      Starting VectorDataset Correctness Suite");
-    logger.info("==========================================================");
+    ARTEA_INFO("==========================================================");
+    ARTEA_INFO("      Starting VectorDataset Correctness Suite");
+    ARTEA_INFO("==========================================================");
 
     return RUN_ALL_TESTS();
 }

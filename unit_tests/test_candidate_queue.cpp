@@ -86,10 +86,10 @@ static std::vector<distance_t> drain_unexplored(QueueT& q) {
 class CandidateQueueTest : public ::testing::Test {
 protected:
     void SetUp() override {
-        logger.info("----------------------------------------------------------");
+        ARTEA_INFO("----------------------------------------------------------");
     }
     void TearDown() override {
-        logger.info("----------------------------------------------------------");
+        ARTEA_INFO("----------------------------------------------------------");
     }
 };
 
@@ -98,7 +98,7 @@ protected:
 // ============================================================================
 
 TEST_F(CandidateQueueTest, Initialize_StdQueue) {
-    logger.info(" -> [StdQueue] Initialize Function");
+    ARTEA_INFO(" -> [StdQueue] Initialize Function");
 
     const std::size_t K = 32 * g_config.scale;
     std_queue_t q(K);
@@ -131,11 +131,11 @@ TEST_F(CandidateQueueTest, Initialize_StdQueue) {
             << "StdQueue initialize: order violated at position " << i;
     }
 
-    logger.success(" [StdQueue] Initialize Function passed.");
+    ARTEA_SUCCESS(" [StdQueue] Initialize Function passed.");
 }
 
 TEST_F(CandidateQueueTest, Initialize_LinearQueue) {
-    logger.info(" -> [LinearQueue] Initialize Function");
+    ARTEA_INFO(" -> [LinearQueue] Initialize Function");
 
     const std::size_t K = 32 * g_config.scale;
     linear_queue_t q(K);
@@ -169,11 +169,11 @@ TEST_F(CandidateQueueTest, Initialize_LinearQueue) {
             << "LinearQueue initialize: order violated at position " << i;
     }
 
-    logger.success(" [LinearQueue] Initialize Function passed.");
+    ARTEA_SUCCESS(" [LinearQueue] Initialize Function passed.");
 }
 
 TEST_F(CandidateQueueTest, Initialize_FHQueue) {
-    logger.info(" -> [FHQueue] Initialize Function");
+    ARTEA_INFO(" -> [FHQueue] Initialize Function");
 
     const std::size_t K = 32 * g_config.scale;
     fh_queue_t q(K);
@@ -206,7 +206,7 @@ TEST_F(CandidateQueueTest, Initialize_FHQueue) {
             << "FHQueue initialize: order violated at position " << i;
     }
 
-    logger.success(" [FHQueue] Initialize Function passed.");
+    ARTEA_SUCCESS(" [FHQueue] Initialize Function passed.");
 }
 
 // ============================================================================
@@ -214,7 +214,7 @@ TEST_F(CandidateQueueTest, Initialize_FHQueue) {
 // ============================================================================
 
 TEST_F(CandidateQueueTest, RandomInitialize_StdQueue) {
-    logger.info(" -> [StdQueue] Random Initialize Function");
+    ARTEA_INFO(" -> [StdQueue] Random Initialize Function");
 
     const std::size_t K = 32 * g_config.scale;
     const std::size_t num_vecs = 1000;
@@ -266,11 +266,11 @@ TEST_F(CandidateQueueTest, RandomInitialize_StdQueue) {
             << "StdQueue random_initialize: order violated at position " << i;
     }
 
-    logger.success(" [StdQueue] Random Initialize Function passed.");
+    ARTEA_SUCCESS(" [StdQueue] Random Initialize Function passed.");
 }
 
 TEST_F(CandidateQueueTest, RandomInitialize_LinearQueue) {
-    logger.info(" -> [LinearQueue] Random Initialize Function");
+    ARTEA_INFO(" -> [LinearQueue] Random Initialize Function");
 
     const std::size_t K = 32 * g_config.scale;
     const std::size_t num_vecs = 1000;
@@ -316,11 +316,11 @@ TEST_F(CandidateQueueTest, RandomInitialize_LinearQueue) {
             << "LinearQueue random_initialize: order violated at position " << i;
     }
 
-    logger.success(" [LinearQueue] Random Initialize Function passed.");
+    ARTEA_SUCCESS(" [LinearQueue] Random Initialize Function passed.");
 }
 
 TEST_F(CandidateQueueTest, RandomInitialize_FHQueue) {
-    logger.info(" -> [FHQueue] Random Initialize Function");
+    ARTEA_INFO(" -> [FHQueue] Random Initialize Function");
 
     const std::size_t K = 32 * g_config.scale;
     const std::size_t num_vecs = 1000;
@@ -366,7 +366,7 @@ TEST_F(CandidateQueueTest, RandomInitialize_FHQueue) {
             << "FHQueue random_initialize: order violated at position " << i;
     }
 
-    logger.success(" [FHQueue] Random Initialize Function passed.");
+    ARTEA_SUCCESS(" [FHQueue] Random Initialize Function passed.");
 }
 
 // ============================================================================
@@ -374,7 +374,7 @@ TEST_F(CandidateQueueTest, RandomInitialize_FHQueue) {
 // ============================================================================
 
 TEST_F(CandidateQueueTest, BasicSort_StdQueue) {
-    logger.info(" -> [StdQueue] Basic Sort: unordered in, ordered out");
+    ARTEA_INFO(" -> [StdQueue] Basic Sort: unordered in, ordered out");
 
     const std::size_t N = 64 * g_config.scale;
     std_queue_t q(N);
@@ -400,11 +400,11 @@ TEST_F(CandidateQueueTest, BasicSort_StdQueue) {
     auto [sentinel_id, sentinel_dist] = q.pop_best_unexplored();
     EXPECT_FLOAT_EQ(sentinel_dist, router_traits_t::max_distance);
 
-    logger.success(" [StdQueue] Basic Sort passed.");
+    ARTEA_SUCCESS(" [StdQueue] Basic Sort passed.");
 }
 
 TEST_F(CandidateQueueTest, BasicSort_LinearQueue) {
-    logger.info(" -> [LinearQueue] Basic Sort: unordered in, ordered out");
+    ARTEA_INFO(" -> [LinearQueue] Basic Sort: unordered in, ordered out");
 
     const std::size_t N = 64 * g_config.scale;
     linear_queue_t q(N);
@@ -428,11 +428,11 @@ TEST_F(CandidateQueueTest, BasicSort_LinearQueue) {
     auto [sentinel_id, sentinel_dist] = q.pop_best_unexplored();
     EXPECT_FLOAT_EQ(sentinel_dist, router_traits_t::max_distance);
 
-    logger.success(" [LinearQueue] Basic Sort passed.");
+    ARTEA_SUCCESS(" [LinearQueue] Basic Sort passed.");
 }
 
 TEST_F(CandidateQueueTest, BasicSort_FHQueue) {
-    logger.info(" -> [FHQueue] Basic Sort: unordered in, ordered out");
+    ARTEA_INFO(" -> [FHQueue] Basic Sort: unordered in, ordered out");
 
     const std::size_t N = 64 * g_config.scale;
     fh_queue_t q(N);
@@ -456,7 +456,7 @@ TEST_F(CandidateQueueTest, BasicSort_FHQueue) {
     auto [sentinel_id, sentinel_dist] = q.pop_best_unexplored();
     EXPECT_FLOAT_EQ(sentinel_dist, router_traits_t::max_distance);
 
-    logger.success(" [FHQueue] Basic Sort passed.");
+    ARTEA_SUCCESS(" [FHQueue] Basic Sort passed.");
 }
 
 // ============================================================================
@@ -464,7 +464,7 @@ TEST_F(CandidateQueueTest, BasicSort_FHQueue) {
 // ============================================================================
 
 TEST_F(CandidateQueueTest, CapacityEviction_StdQueue) {
-    logger.info(" -> [StdQueue] Capacity & Eviction");
+    ARTEA_INFO(" -> [StdQueue] Capacity & Eviction");
 
     const std::size_t K = 32 * g_config.scale;
     std_queue_t q(K);
@@ -487,11 +487,11 @@ TEST_F(CandidateQueueTest, CapacityEviction_StdQueue) {
     EXPECT_TRUE(accepted_better);
     EXPECT_EQ(q.get_result_size(), K);  // still K, worst was evicted
 
-    logger.success(" [StdQueue] Capacity & Eviction passed.");
+    ARTEA_SUCCESS(" [StdQueue] Capacity & Eviction passed.");
 }
 
 TEST_F(CandidateQueueTest, CapacityEviction_LinearQueue) {
-    logger.info(" -> [LinearQueue] Capacity & Eviction");
+    ARTEA_INFO(" -> [LinearQueue] Capacity & Eviction");
 
     const std::size_t K = 32 * g_config.scale;
     linear_queue_t q(K);
@@ -519,11 +519,11 @@ TEST_F(CandidateQueueTest, CapacityEviction_LinearQueue) {
     // 15.0 should be present, K*10 should NOT be present
     EXPECT_FLOAT_EQ(out[1], 15.0f);  // second smallest (after 10.0)
 
-    logger.success(" [LinearQueue] Capacity & Eviction passed.");
+    ARTEA_SUCCESS(" [LinearQueue] Capacity & Eviction passed.");
 }
 
 TEST_F(CandidateQueueTest, CapacityEviction_FHQueue) {
-    logger.info(" -> [FHQueue] Capacity & Eviction");
+    ARTEA_INFO(" -> [FHQueue] Capacity & Eviction");
 
     const std::size_t K = 32 * g_config.scale;
     fh_queue_t q(K);
@@ -543,7 +543,7 @@ TEST_F(CandidateQueueTest, CapacityEviction_FHQueue) {
     EXPECT_TRUE(accepted_better);
     EXPECT_EQ(q.get_result_size(), K);
 
-    logger.success(" [FHQueue] Capacity & Eviction passed.");
+    ARTEA_SUCCESS(" [FHQueue] Capacity & Eviction passed.");
 }
 
 // ============================================================================
@@ -553,7 +553,7 @@ TEST_F(CandidateQueueTest, CapacityEviction_FHQueue) {
 // ============================================================================
 
 TEST_F(CandidateQueueTest, CursorRegression_StdQueue) {
-    logger.info(" -> [StdQueue] Cursor Regression");
+    ARTEA_INFO(" -> [StdQueue] Cursor Regression");
 
     const std::size_t K = 32 * g_config.scale;
     std_queue_t q(K);
@@ -580,11 +580,11 @@ TEST_F(CandidateQueueTest, CursorRegression_StdQueue) {
     auto [third_id, third_dist] = q.pop_best_unexplored();
     EXPECT_FLOAT_EQ(third_dist, 20.0f);
 
-    logger.success(" [StdQueue] Cursor Regression passed.");
+    ARTEA_SUCCESS(" [StdQueue] Cursor Regression passed.");
 }
 
 TEST_F(CandidateQueueTest, CursorRegression_LinearQueue) {
-    logger.info(" -> [LinearQueue] Cursor Regression (core test)");
+    ARTEA_INFO(" -> [LinearQueue] Cursor Regression (core test)");
 
     const std::size_t K = 32 * g_config.scale;
     linear_queue_t q(K);
@@ -609,11 +609,11 @@ TEST_F(CandidateQueueTest, CursorRegression_LinearQueue) {
     auto [third_id, third_dist] = q.pop_best_unexplored();
     EXPECT_FLOAT_EQ(third_dist, 20.0f);
 
-    logger.success(" [LinearQueue] Cursor Regression passed.");
+    ARTEA_SUCCESS(" [LinearQueue] Cursor Regression passed.");
 }
 
 TEST_F(CandidateQueueTest, CursorRegression_FHQueue) {
-    logger.info(" -> [FHQueue] Cursor Regression");
+    ARTEA_INFO(" -> [FHQueue] Cursor Regression");
 
     const std::size_t K = 32 * g_config.scale;
     fh_queue_t q(K);
@@ -636,12 +636,12 @@ TEST_F(CandidateQueueTest, CursorRegression_FHQueue) {
     auto [third_id, third_dist] = q.pop_best_unexplored();
     EXPECT_FLOAT_EQ(third_dist, 20.0f);
 
-    logger.success(" [FHQueue] Cursor Regression passed.");
+    ARTEA_SUCCESS(" [FHQueue] Cursor Regression passed.");
 }
 
 // Deep cursor regression: explore many entries, then insert something early
 TEST_F(CandidateQueueTest, CursorRegressionDeep_LinearQueue) {
-    logger.info(" -> [LinearQueue] Deep Cursor Regression");
+    ARTEA_INFO(" -> [LinearQueue] Deep Cursor Regression");
 
     const std::size_t K = 64 * g_config.scale;
     linear_queue_t q(K);
@@ -668,7 +668,7 @@ TEST_F(CandidateQueueTest, CursorRegressionDeep_LinearQueue) {
     EXPECT_FLOAT_EQ(next_dist, 5.0f)
         << "Deep cursor regression bug: expected 5.0 but got " << next_dist;
 
-    logger.success(" [LinearQueue] Deep Cursor Regression passed.");
+    ARTEA_SUCCESS(" [LinearQueue] Deep Cursor Regression passed.");
 }
 
 // ============================================================================
@@ -676,7 +676,7 @@ TEST_F(CandidateQueueTest, CursorRegressionDeep_LinearQueue) {
 // ============================================================================
 
 TEST_F(CandidateQueueTest, ThresholdLogic_StdQueue) {
-    logger.info(" -> [StdQueue] Threshold Logic");
+    ARTEA_INFO(" -> [StdQueue] Threshold Logic");
 
     const std::size_t K = 32 * g_config.scale;
     std_queue_t q(K);
@@ -699,11 +699,11 @@ TEST_F(CandidateQueueTest, ThresholdLogic_StdQueue) {
     // Verify queue unchanged
     EXPECT_EQ(q.get_result_size(), K);
 
-    logger.success(" [StdQueue] Threshold Logic passed.");
+    ARTEA_SUCCESS(" [StdQueue] Threshold Logic passed.");
 }
 
 TEST_F(CandidateQueueTest, ThresholdLogic_LinearQueue) {
-    logger.info(" -> [LinearQueue] Threshold Logic");
+    ARTEA_INFO(" -> [LinearQueue] Threshold Logic");
 
     const std::size_t K = 32 * g_config.scale;
     linear_queue_t q(K);
@@ -721,11 +721,11 @@ TEST_F(CandidateQueueTest, ThresholdLogic_LinearQueue) {
 
     EXPECT_EQ(q.get_result_size(), K);
 
-    logger.success(" [LinearQueue] Threshold Logic passed.");
+    ARTEA_SUCCESS(" [LinearQueue] Threshold Logic passed.");
 }
 
 TEST_F(CandidateQueueTest, ThresholdLogic_FHQueue) {
-    logger.info(" -> [FHQueue] Threshold Logic");
+    ARTEA_INFO(" -> [FHQueue] Threshold Logic");
 
     const std::size_t K = 32 * g_config.scale;
     fh_queue_t q(K);
@@ -743,7 +743,7 @@ TEST_F(CandidateQueueTest, ThresholdLogic_FHQueue) {
 
     EXPECT_EQ(q.get_result_size(), K);
 
-    logger.success(" [FHQueue] Threshold Logic passed.");
+    ARTEA_SUCCESS(" [FHQueue] Threshold Logic passed.");
 }
 
 // ============================================================================
@@ -751,7 +751,7 @@ TEST_F(CandidateQueueTest, ThresholdLogic_FHQueue) {
 // ============================================================================
 
 TEST_F(CandidateQueueTest, ExtractResults_StdQueue) {
-    logger.info(" -> [StdQueue] Extract Results Order");
+    ARTEA_INFO(" -> [StdQueue] Extract Results Order");
 
     const std::size_t K = 32 * g_config.scale;
     std_queue_t q(K);
@@ -782,11 +782,11 @@ TEST_F(CandidateQueueTest, ExtractResults_StdQueue) {
             << "StdQueue extract_results: incorrect distance at position " << i;
     }
 
-    logger.success(" [StdQueue] Extract Results Order passed.");
+    ARTEA_SUCCESS(" [StdQueue] Extract Results Order passed.");
 }
 
 TEST_F(CandidateQueueTest, ExtractResults_LinearQueue) {
-    logger.info(" -> [LinearQueue] Extract Results Order");
+    ARTEA_INFO(" -> [LinearQueue] Extract Results Order");
 
     const std::size_t K = 32 * g_config.scale;
     linear_queue_t q(K);
@@ -813,11 +813,11 @@ TEST_F(CandidateQueueTest, ExtractResults_LinearQueue) {
             << "LinearQueue extract_results: incorrect distance at position " << i;
     }
 
-    logger.success(" [LinearQueue] Extract Results Order passed.");
+    ARTEA_SUCCESS(" [LinearQueue] Extract Results Order passed.");
 }
 
 TEST_F(CandidateQueueTest, ExtractResults_FHQueue) {
-    logger.info(" -> [FHQueue] Extract Results Order");
+    ARTEA_INFO(" -> [FHQueue] Extract Results Order");
 
     const std::size_t K = 32 * g_config.scale;
     fh_queue_t q(K);
@@ -844,11 +844,11 @@ TEST_F(CandidateQueueTest, ExtractResults_FHQueue) {
             << "FHQueue extract_results: incorrect distance at position " << i;
     }
 
-    logger.success(" [FHQueue] Extract Results Order passed.");
+    ARTEA_SUCCESS(" [FHQueue] Extract Results Order passed.");
 }
 
 TEST_F(CandidateQueueTest, ExtractResultIds_StdQueue) {
-    logger.info(" -> [StdQueue] Extract Result IDs Order");
+    ARTEA_INFO(" -> [StdQueue] Extract Result IDs Order");
 
     const std::size_t K = 32 * g_config.scale;
     std_queue_t q(K);
@@ -874,11 +874,11 @@ TEST_F(CandidateQueueTest, ExtractResultIds_StdQueue) {
             << "StdQueue extract_results: order violated at position " << i;
     }
 
-    logger.success(" [StdQueue] Extract Result IDs Order passed.");
+    ARTEA_SUCCESS(" [StdQueue] Extract Result IDs Order passed.");
 }
 
 TEST_F(CandidateQueueTest, ExtractResultIds_LinearQueue) {
-    logger.info(" -> [LinearQueue] Extract Result IDs Order");
+    ARTEA_INFO(" -> [LinearQueue] Extract Result IDs Order");
 
     const std::size_t K = 32 * g_config.scale;
     linear_queue_t q(K);
@@ -901,11 +901,11 @@ TEST_F(CandidateQueueTest, ExtractResultIds_LinearQueue) {
             << "LinearQueue extract_results: order violated at position " << i;
     }
 
-    logger.success(" [LinearQueue] Extract Result IDs Order passed.");
+    ARTEA_SUCCESS(" [LinearQueue] Extract Result IDs Order passed.");
 }
 
 TEST_F(CandidateQueueTest, ExtractResultIds_FHQueue) {
-    logger.info(" -> [FHQueue] Extract Result IDs Order");
+    ARTEA_INFO(" -> [FHQueue] Extract Result IDs Order");
 
     const std::size_t K = 32 * g_config.scale;
     fh_queue_t q(K);
@@ -928,7 +928,7 @@ TEST_F(CandidateQueueTest, ExtractResultIds_FHQueue) {
             << "FHQueue extract_results: order violated at position " << i;
     }
 
-    logger.success(" [FHQueue] Extract Result IDs Order passed.");
+    ARTEA_SUCCESS(" [FHQueue] Extract Result IDs Order passed.");
 }
 
 // ============================================================================
@@ -937,7 +937,7 @@ TEST_F(CandidateQueueTest, ExtractResultIds_FHQueue) {
 // ============================================================================
 
 TEST_F(CandidateQueueTest, StressTest_StdQueue) {
-    logger.info(fmt::format(" -> [StdQueue] Stress Test (scale={})", g_config.scale));
+    ARTEA_INFO(fmt::format(" -> [StdQueue] Stress Test (scale={})", g_config.scale));
 
     const std::size_t K = 64 * g_config.scale;
     const std::size_t N = 256 * g_config.scale;
@@ -957,11 +957,11 @@ TEST_F(CandidateQueueTest, StressTest_StdQueue) {
             << "StdQueue stress: order violated at " << i;
     }
 
-    logger.success(" [StdQueue] Stress Test passed.");
+    ARTEA_SUCCESS(" [StdQueue] Stress Test passed.");
 }
 
 TEST_F(CandidateQueueTest, StressTest_LinearQueue) {
-    logger.info(fmt::format(" -> [LinearQueue] Stress Test (scale={})", g_config.scale));
+    ARTEA_INFO(fmt::format(" -> [LinearQueue] Stress Test (scale={})", g_config.scale));
 
     const std::size_t K = 64 * g_config.scale;
     const std::size_t N = 256 * g_config.scale;
@@ -981,11 +981,11 @@ TEST_F(CandidateQueueTest, StressTest_LinearQueue) {
             << "LinearQueue stress: order violated at " << i;
     }
 
-    logger.success(" [LinearQueue] Stress Test passed.");
+    ARTEA_SUCCESS(" [LinearQueue] Stress Test passed.");
 }
 
 TEST_F(CandidateQueueTest, StressTest_FHQueue) {
-    logger.info(fmt::format(" -> [FHQueue] Stress Test (scale={})", g_config.scale));
+    ARTEA_INFO(fmt::format(" -> [FHQueue] Stress Test (scale={})", g_config.scale));
 
     const std::size_t K = 64 * g_config.scale;
     const std::size_t N = 256 * g_config.scale;
@@ -1005,7 +1005,7 @@ TEST_F(CandidateQueueTest, StressTest_FHQueue) {
             << "FHQueue stress: order violated at " << i;
     }
 
-    logger.success(" [FHQueue] Stress Test passed.");
+    ARTEA_SUCCESS(" [FHQueue] Stress Test passed.");
 }
 
 // ============================================================================
@@ -1013,7 +1013,7 @@ TEST_F(CandidateQueueTest, StressTest_FHQueue) {
 // ============================================================================
 
 TEST_F(CandidateQueueTest, SeededInitialize_StdQueue) {
-    logger.info(" -> [StdQueue] Seeded Initialize with Vertex IDs");
+    ARTEA_INFO(" -> [StdQueue] Seeded Initialize with Vertex IDs");
 
     const std::size_t K = 32 * g_config.scale;
     const std::size_t num_vecs = 10000;  // Increased to ensure enough vectors
@@ -1066,11 +1066,11 @@ TEST_F(CandidateQueueTest, SeededInitialize_StdQueue) {
             << "StdQueue seeded_initialize: order violated at position " << i;
     }
 
-    logger.success(" [StdQueue] Seeded Initialize with Vertex IDs passed.");
+    ARTEA_SUCCESS(" [StdQueue] Seeded Initialize with Vertex IDs passed.");
 }
 
 TEST_F(CandidateQueueTest, SeededInitialize_LinearQueue) {
-    logger.info(" -> [LinearQueue] Seeded Initialize with Vertex IDs");
+    ARTEA_INFO(" -> [LinearQueue] Seeded Initialize with Vertex IDs");
 
     const std::size_t K = 32 * g_config.scale;
     const std::size_t num_vecs = 10000;  // Increased to ensure enough vectors
@@ -1119,11 +1119,11 @@ TEST_F(CandidateQueueTest, SeededInitialize_LinearQueue) {
             << "LinearQueue seeded_initialize: order violated at position " << i;
     }
 
-    logger.success(" [LinearQueue] Seeded Initialize with Vertex IDs passed.");
+    ARTEA_SUCCESS(" [LinearQueue] Seeded Initialize with Vertex IDs passed.");
 }
 
 TEST_F(CandidateQueueTest, SeededInitialize_FHQueue) {
-    logger.info(" -> [FHQueue] Seeded Initialize with Vertex IDs");
+    ARTEA_INFO(" -> [FHQueue] Seeded Initialize with Vertex IDs");
 
     const std::size_t K = 32 * g_config.scale;
     const std::size_t num_vecs = 10000;  // Increased to ensure enough vectors
@@ -1172,7 +1172,7 @@ TEST_F(CandidateQueueTest, SeededInitialize_FHQueue) {
             << "FHQueue seeded_initialize: order violated at position " << i;
     }
 
-    logger.success(" [FHQueue] Seeded Initialize with Vertex IDs passed.");
+    ARTEA_SUCCESS(" [FHQueue] Seeded Initialize with Vertex IDs passed.");
 }
 
 // ============================================================================
@@ -1180,7 +1180,7 @@ TEST_F(CandidateQueueTest, SeededInitialize_FHQueue) {
 // ============================================================================
 
 TEST_F(CandidateQueueTest, SeededInitialize_ExceedsCapacity_StdQueue) {
-    logger.info(" -> [StdQueue] Seeded Initialize with size > capacity");
+    ARTEA_INFO(" -> [StdQueue] Seeded Initialize with size > capacity");
 
     const std::size_t K = 32;  // capacity
     const std::size_t init_size = K * 2;  // 2x capacity
@@ -1233,11 +1233,11 @@ TEST_F(CandidateQueueTest, SeededInitialize_ExceedsCapacity_StdQueue) {
             << "StdQueue seeded_initialize: order violated at position " << i;
     }
 
-    logger.success(" [StdQueue] Seeded Initialize with size > capacity passed.");
+    ARTEA_SUCCESS(" [StdQueue] Seeded Initialize with size > capacity passed.");
 }
 
 TEST_F(CandidateQueueTest, SeededInitialize_ExceedsCapacity_LinearQueue) {
-    logger.info(" -> [LinearQueue] Seeded Initialize with size > capacity");
+    ARTEA_INFO(" -> [LinearQueue] Seeded Initialize with size > capacity");
 
     const std::size_t K = 32;
     const std::size_t init_size = K * 2;
@@ -1287,11 +1287,11 @@ TEST_F(CandidateQueueTest, SeededInitialize_ExceedsCapacity_LinearQueue) {
             << "LinearQueue seeded_initialize: order violated at position " << i;
     }
 
-    logger.success(" [LinearQueue] Seeded Initialize with size > capacity passed.");
+    ARTEA_SUCCESS(" [LinearQueue] Seeded Initialize with size > capacity passed.");
 }
 
 TEST_F(CandidateQueueTest, SeededInitialize_ExceedsCapacity_FHQueue) {
-    logger.info(" -> [FHQueue] Seeded Initialize with size > capacity");
+    ARTEA_INFO(" -> [FHQueue] Seeded Initialize with size > capacity");
 
     const std::size_t K = 32;
     const std::size_t init_size = K * 2;
@@ -1341,7 +1341,7 @@ TEST_F(CandidateQueueTest, SeededInitialize_ExceedsCapacity_FHQueue) {
             << "FHQueue seeded_initialize: order violated at position " << i;
     }
 
-    logger.success(" [FHQueue] Seeded Initialize with size > capacity passed.");
+    ARTEA_SUCCESS(" [FHQueue] Seeded Initialize with size > capacity passed.");
 }
 
 // ============================================================================
@@ -1374,11 +1374,11 @@ int main(int argc, char* argv[]) {
     g_config.scale = program.get<uint32_t>("--scale");
     g_config.seed = program.get<uint32_t>("--seed");
 
-    logger.info("==========================================================");
-    logger.info("      Starting CandidateQueue Correctness Suite");
-    logger.info(fmt::format("      Config: Scale={}, Seed={}",
+    ARTEA_INFO("==========================================================");
+    ARTEA_INFO("      Starting CandidateQueue Correctness Suite");
+    ARTEA_INFO(fmt::format("      Config: Scale={}, Seed={}",
                            g_config.scale, g_config.seed));
-    logger.info("==========================================================");
+    ARTEA_INFO("==========================================================");
 
     return RUN_ALL_TESTS();
 }

@@ -150,18 +150,18 @@ int main(int argc, char** argv) {
     g_config.quantile = program.get<float>("--quantile");
     g_config.iterations = program.get<int64_t>("--iterations");
 
-    logger.info(fmt::format("Benchmark Configuration:"));
-    logger.info(fmt::format("  Dataset: {}", g_config.dataset_name));
-    logger.info(fmt::format("  Config path: {}", g_config.config_path));
-    logger.info(fmt::format("  Num distance samples: {}", g_config.num_dists_sampled));
-    logger.info(fmt::format("  Quantile: {:.4f}", g_config.quantile));
-    logger.info(fmt::format("  Iterations: {}", g_config.iterations));
+    ARTEA_INFO(fmt::format("Benchmark Configuration:"));
+    ARTEA_INFO(fmt::format("  Dataset: {}", g_config.dataset_name));
+    ARTEA_INFO(fmt::format("  Config path: {}", g_config.config_path));
+    ARTEA_INFO(fmt::format("  Num distance samples: {}", g_config.num_dists_sampled));
+    ARTEA_INFO(fmt::format("  Quantile: {:.4f}", g_config.quantile));
+    ARTEA_INFO(fmt::format("  Iterations: {}", g_config.iterations));
 
     DataProvider::instance().init();
 
-    logger.info(fmt::format("Dataset loaded:"));
-    logger.info(fmt::format("  Dimension: {}", DataProvider::instance().get_dim()));
-    logger.info(fmt::format("  Base vectors: {}", DataProvider::instance().get_num_base_vecs()));
+    ARTEA_INFO(fmt::format("Dataset loaded:"));
+    ARTEA_INFO(fmt::format("  Dimension: {}", DataProvider::instance().get_dim()));
+    ARTEA_INFO(fmt::format("  Base vectors: {}", DataProvider::instance().get_num_base_vecs()));
 
     // Initialize and run Google Benchmark
     benchmark::Initialize(&argc, argv);

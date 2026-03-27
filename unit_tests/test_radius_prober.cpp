@@ -54,7 +54,7 @@ public:
         if (!std::filesystem::exists(g_config.config_path)) {
             throw std::runtime_error("Config file not found: " + g_config.config_path);
         }
-        logger.info(fmt::format("Loading Dataset: {} from {}", g_config.dataset_name, g_config.config_path));
+        ARTEA_INFO(fmt::format("Loading Dataset: {} from {}", g_config.dataset_name, g_config.config_path));
         dataset_ = std::make_unique<vector_dataset_t>(g_config.config_path, g_config.dataset_name);
         dist_func_ = std::make_unique<dist_func_t>(dataset_->get_base_vecs().get_vec_dim());
     }
@@ -78,8 +78,8 @@ TEST_F(RadiusProberTest, ProbeQuantile) {
     const auto& base_vecs = dataset.get_base_vecs();
 
     if (g_config.verbose) {
-        logger.info(fmt::format("Base vectors size: {}", base_vecs.get_num_vecs()));
-        logger.info(fmt::format("Sampling {} distance pairs for probe", g_config.num_dists_sampled));
+        ARTEA_INFO(fmt::format("Base vectors size: {}", base_vecs.get_num_vecs()));
+        ARTEA_INFO(fmt::format("Sampling {} distance pairs for probe", g_config.num_dists_sampled));
     }
 
     radius_prober_t prober(dist_func);
@@ -90,9 +90,9 @@ TEST_F(RadiusProberTest, ProbeQuantile) {
 
     auto result = prober.probe(base_vecs, quantile, num_distances);
 
-    logger.info(fmt::format("Quantile Result:"));
-    logger.info(fmt::format("  {:.1f}% quantile: {:.4f}", result.quantile * 100.0f, result.radius));
-    logger.info(fmt::format("  Distance samples: {}", result.num_dists_sampled));
+    ARTEA_INFO(fmt::format("Quantile Result:"));
+    ARTEA_INFO(fmt::format("  {:.1f}% quantile: {:.4f}", result.quantile * 100.0f, result.radius));
+    ARTEA_INFO(fmt::format("  Distance samples: {}", result.num_dists_sampled));
 
     // Verify result
     EXPECT_EQ(result.quantile, quantile);
@@ -108,8 +108,8 @@ TEST_F(RadiusProberTest, ProbeMultipleQuantiles) {
     const auto& base_vecs = dataset.get_base_vecs();
 
     if (g_config.verbose) {
-        logger.info(fmt::format("Base vectors size: {}", base_vecs.get_num_vecs()));
-        logger.info(fmt::format("Sampling {} distance pairs for probe", g_config.num_dists_sampled));
+        ARTEA_INFO(fmt::format("Base vectors size: {}", base_vecs.get_num_vecs()));
+        ARTEA_INFO(fmt::format("Sampling {} distance pairs for probe", g_config.num_dists_sampled));
     }
 
     radius_prober_t prober(dist_func);
@@ -120,12 +120,12 @@ TEST_F(RadiusProberTest, ProbeMultipleQuantiles) {
     std::vector<float> quantiles = {0.01f, 0.05f, 0.10f, 0.25f, 0.50f, 0.75f, 0.99f};
     std::vector<typename radius_prober_t::ProbeResult> results;
 
-    logger.info("Multiple Quantile Results:");
+    ARTEA_INFO("Multiple Quantile Results:");
     for (float q : quantiles) {
         auto result = prober.probe(base_vecs, q, num_distances);
         results.push_back(result);
 
-        logger.info(fmt::format("  {:.1f}% quantile: {:.4f}",
+        ARTEA_INFO(fmt::format("  {:.1f}% quantile: {:.4f}",
             result.quantile * 100.0f, result.radius));
     }
 
@@ -143,8 +143,8 @@ TEST_F(RadiusProberTest, ProbeSmallQuantiles) {
     const auto& base_vecs = dataset.get_base_vecs();
 
     if (g_config.verbose) {
-        logger.info(fmt::format("Base vectors size: {}", base_vecs.get_num_vecs()));
-        logger.info(fmt::format("Sampling {} distance pairs for probe", g_config.num_dists_sampled));
+        ARTEA_INFO(fmt::format("Base vectors size: {}", base_vecs.get_num_vecs()));
+        ARTEA_INFO(fmt::format("Sampling {} distance pairs for probe", g_config.num_dists_sampled));
     }
 
     radius_prober_t prober(dist_func);
@@ -155,12 +155,12 @@ TEST_F(RadiusProberTest, ProbeSmallQuantiles) {
     std::vector<float> quantiles = {0.0001f, 0.0005f, 0.0015f};
     std::vector<typename radius_prober_t::ProbeResult> results;
 
-    logger.info("Small Quantile Results:");
+    ARTEA_INFO("Small Quantile Results:");
     for (float q : quantiles) {
         auto result = prober.probe(base_vecs, q, num_distances);
         results.push_back(result);
 
-        logger.info(fmt::format("  {:.2f}% quantile: {:.4f}",
+        ARTEA_INFO(fmt::format("  {:.2f}% quantile: {:.4f}",
             result.quantile * 100.0f, result.radius));
     }
 

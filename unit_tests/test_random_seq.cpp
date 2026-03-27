@@ -87,10 +87,10 @@ void verify_and_log_stats(const std::vector<T>& data, const T num_vecs, const st
     long double theoretical_variance = (N * N - 1.0) / 12.0;
 
     // Log results using Artea
-    logger.info(fmt::format("--- Statistics for {} ---", method_name));
-    logger.info(fmt::format("    - Generated Mean:         {:.4f} (Theoretical: {:.4f})", mean, theoretical_mean));
-    logger.info(fmt::format("    - Generated Variance:     {:.4f} (Theoretical: {:.4f})", variance, theoretical_variance));
-    logger.info(fmt::format("    - Generated Std Deviation: {:.4f}", std::sqrt(variance)));
+    ARTEA_INFO(fmt::format("--- Statistics for {} ---", method_name));
+    ARTEA_INFO(fmt::format("    - Generated Mean:         {:.4f} (Theoretical: {:.4f})", mean, theoretical_mean));
+    ARTEA_INFO(fmt::format("    - Generated Variance:     {:.4f} (Theoretical: {:.4f})", variance, theoretical_variance));
+    ARTEA_INFO(fmt::format("    - Generated Std Deviation: {:.4f}", std::sqrt(variance)));
 
     // GTest Assertions: Verify correctness with a tolerance (e.g., 5% error margin)
     // Note: Statistical tests can be flaky; tolerance should be generous enough for random seeds.
@@ -112,17 +112,17 @@ protected:
 
     void SetUp() override {
         // Log the start of a test case
-        logger.info("----------------------------------------------------------");
+        ARTEA_INFO("----------------------------------------------------------");
     }
 
     void TearDown() override {
         // Log the end of a test case
-        logger.info("----------------------------------------------------------");
+        ARTEA_INFO("----------------------------------------------------------");
     }
 };
 
 TEST_F(RandomSeqTest, CppStandardLibrarySerial) {
-    logger.info(" -> Running Quality Check for C++ Standard Library (Serial)...");
+    ARTEA_INFO(" -> Running Quality Check for C++ Standard Library (Serial)...");
 
     std::vector<vec_id_t> random_data(g_config.num_rand_nbrs);
     std::random_device rd;
@@ -137,7 +137,7 @@ TEST_F(RandomSeqTest, CppStandardLibrarySerial) {
 }
 
 TEST_F(RandomSeqTest, MklSingleThreaded) {
-    logger.info(" -> Running Quality Check for Single-Threaded Vectorized (MKL)...");
+    ARTEA_INFO(" -> Running Quality Check for Single-Threaded Vectorized (MKL)...");
 
     random_seq_t mkl_rng(g_config.num_vecs);
     std::vector<vec_id_t> random_data(g_config.num_rand_nbrs);
@@ -149,7 +149,7 @@ TEST_F(RandomSeqTest, MklSingleThreaded) {
 
 TEST_F(RandomSeqTest, MklMultiThreaded) {
     size_t num_threads = std::thread::hardware_concurrency();
-    logger.info(fmt::format(" -> Running Quality Check for Multi-Threaded Vectorized (MKL) with {} threads...", num_threads));
+    ARTEA_INFO(fmt::format(" -> Running Quality Check for Multi-Threaded Vectorized (MKL) with {} threads...", num_threads));
 
     random_seq_t mkl_rng(g_config.num_vecs);
     std::vector<vec_id_t> random_data(g_config.num_rand_nbrs);
@@ -200,10 +200,10 @@ int main(int argc, char** argv) {
     g_config.num_vecs = program.get<uint32_t>("--num_vecs");
     g_config.num_rand_nbrs = program.get<uint32_t>("--num_samples");
 
-    logger.info("==========================================================");
-    logger.info("      Starting Random Number Generator Test Suite (GTest)");
-    logger.info(fmt::format("      Config: Vecs={}, Samples={}", g_config.num_vecs, g_config.num_rand_nbrs));
-    logger.info("==========================================================");
+    ARTEA_INFO("==========================================================");
+    ARTEA_INFO("      Starting Random Number Generator Test Suite (GTest)");
+    ARTEA_INFO(fmt::format("      Config: Vecs={}, Samples={}", g_config.num_vecs, g_config.num_rand_nbrs));
+    ARTEA_INFO("==========================================================");
 
     return RUN_ALL_TESTS();
 }
