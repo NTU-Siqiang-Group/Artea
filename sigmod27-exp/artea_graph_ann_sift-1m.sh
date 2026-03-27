@@ -13,9 +13,9 @@
 # limitations under the License.
 
 ./bin/artea_graph_ann \
-    --ul-extracted-nbr-size 0 \
+    --ul-extracted-nbr-size 32 \
     --bl-extracted-nbr-size 64 \
-    --candidate-queue-size 86 \
+    --candidate-queue-size 90 \
     --dataset sift-1m \
     --topk 20
 
