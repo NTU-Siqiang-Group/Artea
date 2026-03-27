@@ -43,10 +43,10 @@
 #include <artea/cpu/containers/vertex_subset.hpp>
 #include <artea/cpu/containers/four_ary_heap.hpp>
 
-#include <artea/cpu/index/configs/layer_config.hpp>
-#include <artea/cpu/index/configs/propagate_config.hpp>
-#include <artea/cpu/index/configs/pruning_config.hpp>
-#include <artea/cpu/index/configs/vertices_builder_config.hpp>
+#include <artea/cpu/configs/layer_config.hpp>
+#include <artea/cpu/configs/propagate_config.hpp>
+#include <artea/cpu/configs/pruning_config.hpp>
+#include <artea/cpu/configs/vertices_builder_config.hpp>
 #include <artea/cpu/index/neighbor.hpp>
 #include <artea/cpu/index/flat_graph.hpp>
 #include <artea/cpu/index/flat_search_graph.hpp>

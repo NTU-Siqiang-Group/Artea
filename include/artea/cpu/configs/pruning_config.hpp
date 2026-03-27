@@ -13,7 +13,7 @@
 // limitations under the License.
 
 /*
- * @FilePath: /Artea/include/artea/cpu/index/configs/pruning_config.hpp
+ * @FilePath: /Artea/include/artea/cpu/configs/pruning_config.hpp
  * @Author: Chandler (Weitang Ye) <weitang.ye@ntu.edu.sg>
  * @Description: Configuration for pruning during edge generation.
  */
@@ -28,11 +28,11 @@ namespace conv_graph {
 /**
  * @brief Configuration for pruning during edge generation.
  * Supports builder pattern for flexible configuration.
- * @tparam IndexTraitsT The index traits type.
+ * @tparam BaseTraitsT The index traits type.
  */
-template <typename IndexTraitsT>
+template <typename BaseTraitsT>
 struct PruningConfig {
-    using ratio_t = typename IndexTraitsT::ratio_t;
+    using ratio_t = typename BaseTraitsT::ratio_t;
 
     /**
      * @brief Constructor for pruning configuration.
@@ -65,8 +65,8 @@ private:
 namespace artea_graph {
 
 /** @brief Artea graph uses the same PruningConfig as conv_graph. */
-template <typename IndexTraitsT>
-using PruningConfig = conv_graph::PruningConfig<IndexTraitsT>;
+template <typename BaseTraitsT>
+using PruningConfig = conv_graph::PruningConfig<BaseTraitsT>;
 
 }   // namespace artea_graph
 

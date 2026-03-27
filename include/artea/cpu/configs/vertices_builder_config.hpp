@@ -13,7 +13,7 @@
 // limitations under the License.
 
 /*
- * @FilePath: /Artea/include/artea/cpu/index/vertices_builder_config.hpp
+ * @FilePath: /Artea/include/artea/cpu/configs/vertices_builder_config.hpp
  * @Author: Chandler (Weitang Ye) <weitang.ye@ntu.edu.sg>
  * @Description: Configuration for vertices builder algorithm.
  */
@@ -26,13 +26,13 @@ namespace cpu {
 /**
  * @brief Configuration for greedy vertices builder (R-net based).
  * Supports builder pattern for flexible configuration.
- * @tparam IndexTraitsT The index traits type.
+ * @tparam BaseTraitsT The index traits type.
  */
-template <typename IndexTraitsT>
+template <typename BaseTraitsT>
 struct GreedyVerticesBuilderConfig {
-    using distance_t = typename IndexTraitsT::distance_t;
-    using ratio_t = typename IndexTraitsT::ratio_t;
-    using vertex_num_t = typename IndexTraitsT::vertex_num_t;
+    using distance_t = typename BaseTraitsT::distance_t;
+    using ratio_t = typename BaseTraitsT::ratio_t;
+    using vertex_num_t = typename BaseTraitsT::vertex_num_t;
 
     /**
      * @brief Constructor for greedy vertices builder configuration.
@@ -98,11 +98,11 @@ private:
 /**
  * @brief Configuration for random vertices builder.
  * Supports builder pattern for flexible configuration.
- * @tparam IndexTraitsT The index traits type.
+ * @tparam BaseTraitsT The index traits type.
  */
-template <typename IndexTraitsT>
+template <typename BaseTraitsT>
 struct RandomVerticesBuilderConfig {
-    using ratio_t = typename IndexTraitsT::ratio_t;
+    using ratio_t = typename BaseTraitsT::ratio_t;
 
     /**
      * @brief Constructor for random vertices builder configuration.

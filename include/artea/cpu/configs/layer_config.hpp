@@ -13,7 +13,7 @@
 // limitations under the License.
 
 /*
- * @FilePath: /Artea/include/artea/cpu/index/layer_config.hpp
+ * @FilePath: /Artea/include/artea/cpu/configs/layer_config.hpp
  * @Author: Chandler (Weitang Ye) <weitang.ye@ntu.edu.sg>
  * @Description: Configuration for graph layer parameters.
  */
@@ -26,11 +26,11 @@ namespace cpu {
 /**
  * @brief Configuration for a single layer in hierarchical graph.
  * Supports builder pattern for flexible configuration.
- * @tparam IndexTraitsT The index traits type.
+ * @tparam BaseTraitsT The index traits type.
  */
-template <typename IndexTraitsT>
+template <typename BaseTraitsT>
 struct LayerConfig {
-    using vertex_num_t = typename IndexTraitsT::vertex_num_t;
+    using vertex_num_t = typename BaseTraitsT::vertex_num_t;
 
     /**
      * @brief Constructor for layer configuration.

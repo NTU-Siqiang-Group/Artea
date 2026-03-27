@@ -22,6 +22,7 @@
 
 #include <cstddef>
 #include <vector>
+#include <variant>
 #include <utility>
 #include <limits>
 #include <cmath>
@@ -49,6 +50,19 @@ template <typename BaseTraitsT> struct NeighborIdComparator;
 template <typename BaseTraitsT> struct NeighborDistanceComparator;
 template <typename BaseTraitsT> struct VertexSubset;
 template <typename T, typename ContainerT, typename Compare> class FourAryHeap;
+template <typename BaseTraitsT> struct LayerConfig;
+template <typename BaseTraitsT> struct GreedyVerticesBuilderConfig;
+template <typename BaseTraitsT> struct RandomVerticesBuilderConfig;
+
+namespace conv_graph {
+    template <typename BaseTraitsT> struct PropagateConfig;
+    template <typename BaseTraitsT> struct PruningConfig;
+}
+
+namespace artea_graph {
+    template <typename BaseTraitsT> using PropagateConfig = conv_graph::PropagateConfig<BaseTraitsT>;
+    template <typename BaseTraitsT> using PruningConfig = conv_graph::PruningConfig<BaseTraitsT>;
+}
 
 /* ------ Enumerations ------ */
 enum class PruningConditionT;
@@ -183,6 +197,32 @@ public:
 
     /** @brief pruning condition type for triangle inequality. */
     using pruning_condition_t = PruningConditionT;
+
+    /** @brief Layer configuration type. */
+    using layer_config_t = LayerConfig<base_traits_t>;
+
+    /** @brief Greedy vertices builder configuration type. */
+    using greedy_vertices_builder_config_t = GreedyVerticesBuilderConfig<base_traits_t>;
+
+    /** @brief Random vertices builder configuration type. */
+    using random_vertices_builder_config_t = RandomVerticesBuilderConfig<base_traits_t>;
+
+    /** @brief Vertices builder configuration variant type (greedy or random). */
+    using vertices_builder_config_t = std::variant<greedy_vertices_builder_config_t, random_vertices_builder_config_t>;
+
+    /** @brief Namespace-specific type aliases for conv_graph. */
+    struct conv_graph {
+        conv_graph() = delete;
+        using propagate_config_t = cpu::conv_graph::PropagateConfig<base_traits_t>;
+        using pruning_config_t = cpu::conv_graph::PruningConfig<base_traits_t>;
+    };
+
+    /** @brief Namespace-specific type aliases for artea_graph. */
+    struct artea_graph {
+        artea_graph() = delete;
+        using propagate_config_t = cpu::artea_graph::PropagateConfig<base_traits_t>;
+        using pruning_config_t = cpu::artea_graph::PruningConfig<base_traits_t>;
+    };
 
     #ifdef ARTEA_PROFILING
     static constexpr bool profiling_mode = true;

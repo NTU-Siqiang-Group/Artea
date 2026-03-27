@@ -20,25 +20,10 @@
 
 #pragma once
 
-#include <variant>
-
 namespace artea {
 namespace cpu {
 
 /** ------ Forward Declaration  ------ **/
-template <typename IndexTraitsT> struct LayerConfig;
-template <typename IndexTraitsT> struct GreedyVerticesBuilderConfig;
-template <typename IndexTraitsT> struct RandomVerticesBuilderConfig;
-
-namespace conv_graph {
-    template <typename IndexTraitsT> struct PropagateConfig;
-    template <typename IndexTraitsT> struct PruningConfig;
-}
-
-namespace artea_graph {
-    template <typename IndexTraitsT> using PropagateConfig = conv_graph::PropagateConfig<IndexTraitsT>;
-    template <typename IndexTraitsT> using PruningConfig = conv_graph::PruningConfig<IndexTraitsT>;
-}
 template <typename IndexTraitsT> class FlatGraph;
 template <typename IndexTraitsT> class FlatSearchGraph;
 template <typename IndexTraitsT> class HierarchicalGraph;
@@ -58,32 +43,6 @@ struct IndexTraits : virtual public BaseTraitsT {
 
     /** @brief Base traits type. */
     using base_traits_t = BaseTraitsT;
-
-    /** @brief Layer configuration type. */
-    using layer_config_t = LayerConfig<index_traits_t>;
-
-    /** @brief Greedy vertices builder configuration type. */
-    using greedy_vertices_builder_config_t = GreedyVerticesBuilderConfig<index_traits_t>;
-
-    /** @brief Random vertices builder configuration type. */
-    using random_vertices_builder_config_t = RandomVerticesBuilderConfig<index_traits_t>;
-
-    /** @brief Vertices builder configuration variant type (greedy or random). */
-    using vertices_builder_config_t = std::variant<greedy_vertices_builder_config_t, random_vertices_builder_config_t>;
-
-    /** @brief Namespace-specific type aliases for conv_graph. */
-    struct conv_graph {
-        conv_graph() = delete;
-        using propagate_config_t = cpu::conv_graph::PropagateConfig<index_traits_t>;
-        using pruning_config_t = cpu::conv_graph::PruningConfig<index_traits_t>;
-    };
-
-    /** @brief Namespace-specific type aliases for artea_graph. */
-    struct artea_graph {
-        artea_graph() = delete;
-        using propagate_config_t = cpu::artea_graph::PropagateConfig<index_traits_t>;
-        using pruning_config_t = cpu::artea_graph::PruningConfig<index_traits_t>;
-    };
 
     /** @brief Flat graph type. */
     using flat_graph_t = FlatGraph<index_traits_t>;
