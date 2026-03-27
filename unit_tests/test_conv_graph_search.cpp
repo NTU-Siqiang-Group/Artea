@@ -92,9 +92,8 @@ public:
         layer_config_t layer_cfg(16, 24);
         conv_graph::pruning_config_t pruning_cfg(1.0f, 0.0f);
         conv_graph::propagate_config_t propagate_cfg(4, 14, 0.6f);
-        conv_graph_factory_t factory;
         flat_graph_ = std::make_unique<flat_graph_t>(
-            factory.construct_graph(base_vecs, layer_cfg, pruning_cfg, propagate_cfg)
+            conv_graph_factory_t::construct_graph(base_vecs, layer_cfg, pruning_cfg, propagate_cfg)
         );
 
         // Convert to search graph

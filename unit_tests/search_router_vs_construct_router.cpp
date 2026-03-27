@@ -102,9 +102,8 @@ public:
 
         logger.info("Building convergent graph...");
         auto t0 = std::chrono::high_resolution_clock::now();
-        conv_graph_factory_t factory;
         flat_graph_ = std::make_unique<flat_graph_t>(
-            factory.construct_graph(base_vecs, layer_cfg, pruning_cfg, propagate_cfg)
+            conv_graph_factory_t::construct_graph(base_vecs, layer_cfg, pruning_cfg, propagate_cfg)
         );
         auto t1 = std::chrono::high_resolution_clock::now();
         g_results.build_time_s =

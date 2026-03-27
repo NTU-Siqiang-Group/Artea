@@ -95,8 +95,7 @@ TEST_F(FlatGraphPersistenceTest, FlatGraphSnapshotRestore) {
     logger.info("Building flat graph for persistence test...");
 
     // Build original flat graph
-    conv_graph_factory_t factory;
-    flat_graph_t original_graph = factory.construct_graph(
+    flat_graph_t original_graph = conv_graph_factory_t::construct_graph(
         base_vecs,
         g_config.layer_config,
         g_config.pruning_config,

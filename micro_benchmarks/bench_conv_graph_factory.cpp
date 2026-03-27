@@ -78,11 +78,9 @@ auto make_benchmark_func(const GraphParams& params) {
         const auto& dataset = provider.get_dataset();
         const vertex_num_t num_vertices = provider.get_num_base_vecs();
 
-        conv_graph_factory_t conv_graph_factory;
-
         for (auto _ : state) {
             // Construct the graph
-            flat_graph_t flat_graph = conv_graph_factory.profile_search_quality(
+            flat_graph_t flat_graph = conv_graph_factory_t::profile_search_quality(
                 dataset,
                 params.layer_config,
                 params.pruning_config,

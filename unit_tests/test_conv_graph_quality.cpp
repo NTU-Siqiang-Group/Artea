@@ -88,8 +88,7 @@ public:
 
         // Build convergent graph using dataset version (per-iter profiling logged inside)
         logger.info("Building convergent graph (dataset mode, per-iter profiling)...");
-        conv_graph_factory_t factory;
-        flat_graph_ = std::make_unique<flat_graph_t>(factory.profile_search_quality(
+        flat_graph_ = std::make_unique<flat_graph_t>(conv_graph_factory_t::profile_search_quality(
             *dataset_,
             g_config.layer_config,
             g_config.pruning_config,

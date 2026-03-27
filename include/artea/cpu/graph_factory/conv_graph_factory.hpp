@@ -69,10 +69,8 @@ class ConvGraphFactory :
     using monolayer_graph_router_t = typename GraphFactoryTraitsT::template monolayer_graph_router_t<graph_mode_t::construct_mode>;
 
 public:
-    ConvGraphFactory() {}
-
     /** @brief construct a new convergent graph from vector array */
-    auto construct_graph_impl(
+    static auto construct_graph_impl(
         const vector_array_t& base_vecs,
         const layer_config_t layer_config,
         const pruning_config_t pruning_config,
@@ -85,7 +83,7 @@ public:
     }
 
     /** @brief construct a new convergent graph from dataset, with per-build-loop recall/throughput profiling */
-    auto profile_search_quality_impl(
+    static auto profile_search_quality_impl(
         const vector_dataset_t& dataset,
         const layer_config_t layer_config,
         const pruning_config_t pruning_config,
@@ -138,7 +136,7 @@ private:
      * @param on_iter_end      Optional callback called after each build loop with
      *                         the current build loop index. Pass nullptr to skip.
      */
-    auto _build_loop(
+    static auto _build_loop(
         flat_graph_t& flat_graph,
         const dist_func_t& dist_func,
         const pruning_config_t& pruning_config,
