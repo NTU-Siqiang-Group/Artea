@@ -16,12 +16,12 @@
     --beta 1.44 \
     --ul-max-nbr-size 96 \
     --bl-max-nbr-size 96 \
-    --prefill-ratio 0.33 \
+    --prefill-ratio 0.34 \
     --ul-scale-coeffs 1.10 \
     --bl-scale-coeffs 1.10 \
     --ul-shifted-coeffs 0.10 \
     --bl-shifted-coeffs 0.10 \
-    --num-build-loops 4 \
+    --num-build-loops 5 \
     --num-triu-iters 12 \
-    --num-routing-loops 2 \
+    --num-routing-loops 1 \
     --dataset sift-1m

@@ -18,6 +18,6 @@
     --scale-coeffs 1.00 \
     --shifted-coeffs 0.00 \
     --num-build-loops 4 \
-    --num-triu-iters 12 \
-    --num-routing-loops 2
+    --num-triu-iters 15 \
+    --num-routing-loops 1
 
