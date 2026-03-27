@@ -14,6 +14,8 @@
 
 #pragma once
 
+#include <artea/common/logger.hpp>
+
 namespace artea {
 namespace cpu {
 
@@ -21,23 +23,30 @@ template <typename GraphFactoryTraitsT>
 class ArteaGraphFactory :
     public GraphFactoryTraitsT::template hierarchical_graph_factory_t<ArteaGraphFactory<GraphFactoryTraitsT>>
 {
+    using vertex_num_t = typename GraphFactoryTraitsT::vertex_num_t;
+    using vertex_id_t = typename GraphFactoryTraitsT::vertex_id_t;
+    using layer_id_t = typename GraphFactoryTraitsT::layer_id_t;
+    using layer_num_t = typename GraphFactoryTraitsT::layer_num_t;
+    using ratio_t = typename GraphFactoryTraitsT::ratio_t;
+    using distance_t = typename GraphFactoryTraitsT::distance_t;
     using dist_func_t = typename GraphFactoryTraitsT::dist_func_t;
     using flat_graph_t = typename GraphFactoryTraitsT::flat_graph_t;
     using conv_graph_factory_t = typename GraphFactoryTraitsT::conv_graph_factory_t;
     using hierarchical_graph_t = typename GraphFactoryTraitsT::hierarchical_graph_t;
     using vector_array_t = typename GraphFactoryTraitsT::vector_array_t;
-    using hierarchical_vertices_builder_t = typename GraphFactoryTraitsT::hierarchical_vertices_builder_t;
-    using hierarchical_edges_builder_t = typename GraphFactoryTraitsT::hierarchical_edges_builder_t;
+    using vertex_subset_t = typename GraphFactoryTraitsT::vertex_subset_t;
+    using lb_greedy_vg_t = typename GraphFactoryTraitsT::lb_greedy_vg_t;
+    using centroid_computer_t = typename GraphFactoryTraitsT::centroid_computer_t;
+    using bruteforce_router_t = typename GraphFactoryTraitsT::bruteforce_router_t;
     using layer_config_t = typename GraphFactoryTraitsT::layer_config_t;
     using greedy_vertices_builder_config_t = typename GraphFactoryTraitsT::greedy_vertices_builder_config_t;
     using pruning_config_t = typename GraphFactoryTraitsT::artea_graph::pruning_config_t;
     using propagate_config_t = typename GraphFactoryTraitsT::artea_graph::propagate_config_t;
-    using vg_policy_t = typename GraphFactoryTraitsT::vg_policy_t;
-    using eg_policy_t = typename GraphFactoryTraitsT::eg_policy_t;
+
+    static constexpr vertex_num_t min_num_layer_vertex = GraphFactoryTraitsT::min_num_layer_vertex;
 
 public:
 
-    template <vg_policy_t VGPolicy, eg_policy_t EGPolicy>
     static auto construct_graph_impl(
         const vector_array_t& base_vecs,
         layer_config_t bottom_layer_config,
@@ -59,18 +68,126 @@ public:
             vertices_builder_config
         );
 
-        hierarchical_vertices_builder_t::template construct<VGPolicy>(
-            dist_func,
-            hierarchical_graph,
-            vertices_builder_config
-        );
-
-        hierarchical_edges_builder_t::template construct<EGPolicy>(
-            dist_func,
-            hierarchical_graph
-        );
+        _construct_vertices(dist_func, hierarchical_graph, vertices_builder_config);
+        _construct_edges(dist_func, hierarchical_graph);
 
         return hierarchical_graph;
+    }
+
+private:
+
+    /** @brief Construct hierarchical vertices using r-net based greedy selection. */
+    static auto _construct_vertices(
+        const dist_func_t& dist_func,
+        hierarchical_graph_t& hierarchical_graph,
+        greedy_vertices_builder_config_t vertices_builder_config
+    ) -> void {
+        const auto& base_vecs = hierarchical_graph.get_base_vecs();
+        auto& hier_vecs_manager = hierarchical_graph.get_hier_vecs_manager();
+        auto& inter_layer_links = hierarchical_graph.get_inter_layer_links();
+
+        layer_id_t current_layer_id = 0;
+        const vector_array_t* current_layer_vecs = &base_vecs;
+        distance_t current_radius = vertices_builder_config.min_radius() * vertices_builder_config.beta();
+
+        while (true) {
+            vertex_num_t max_result_size = static_cast<vertex_num_t>(
+                current_layer_vecs->get_num_vecs() * vertices_builder_config.max_result_ratio()
+            );
+
+            lb_greedy_vg_t lb_greedy_vg(dist_func);
+            vertex_subset_t next_layer_subset = lb_greedy_vg.generate(
+                *current_layer_vecs,
+                current_radius,
+                max_result_size,
+                vertices_builder_config.coverage_ratio(),
+                vertices_builder_config.confidence(),
+                vertices_builder_config.sampling_batch_size()
+            );
+
+            if (next_layer_subset.get_num_vecs() < min_num_layer_vertex) {
+                break;
+            }
+
+            current_layer_id++;
+
+            inter_layer_links.bottom_up_append(std::move(next_layer_subset.vec_ids));
+            hier_vecs_manager.bottom_up_append(std::move(next_layer_subset.vecs_data));
+
+            current_layer_vecs = &hier_vecs_manager.get_layer_vecs(current_layer_id);
+            current_radius *= vertices_builder_config.beta();
+        }
+
+        vertex_id_t entry_point = _find_entry_point(hierarchical_graph, dist_func);
+        hierarchical_graph.set_entry_point(entry_point);
+    }
+
+    /** @brief Construct edges for all layers using convergent graph descent. */
+    static auto _construct_edges(
+        const dist_func_t& dist_func,
+        hierarchical_graph_t& hierarchical_graph
+    ) -> void {
+        const auto& base_vecs = hierarchical_graph.get_base_vecs();
+        const auto num_layers = hierarchical_graph.get_num_layers();
+
+        hierarchical_graph.resize(num_layers);
+
+        conv_graph_factory_t conv_factory;
+
+        auto bottom_graph = conv_factory.construct_graph(
+            base_vecs,
+            hierarchical_graph.bottom_layer_config(),
+            hierarchical_graph.bottom_pruning_config(),
+            hierarchical_graph.propagate_config()
+        );
+        hierarchical_graph.set_layer_graph(0, std::move(bottom_graph));
+
+        for (layer_id_t layer_id = 1; layer_id < num_layers; ++layer_id) {
+            const auto& layer_vecs = hierarchical_graph.get_hier_vecs_manager().get_layer_vecs(layer_id);
+            auto upper_graph = conv_factory.construct_graph(
+                layer_vecs,
+                hierarchical_graph.upper_layer_config(),
+                hierarchical_graph.upper_pruning_config(),
+                hierarchical_graph.propagate_config()
+            );
+            hierarchical_graph.set_layer_graph(layer_id, std::move(upper_graph));
+        }
+    }
+
+    /** @brief Find the entry point as the vertex closest to the centroid in the top layer. */
+    static auto _find_entry_point(
+        const hierarchical_graph_t& hierarchical_graph,
+        const dist_func_t& dist_func
+    ) -> vertex_id_t {
+        const auto& hier_vecs_manager = hierarchical_graph.get_hier_vecs_manager();
+        const layer_num_t num_layers = hier_vecs_manager.get_num_layers();
+
+        if (num_layers == 0) {
+            ARTEA_ERROR("Cannot find entry point: no layers in hierarchical graph");
+            return 0;
+        }
+
+        const layer_id_t top_layer_id = num_layers - 1;
+        const auto& top_layer_vecs = hier_vecs_manager.get_layer_vecs(top_layer_id);
+        const vertex_num_t top_layer_num_vecs = top_layer_vecs.get_num_vecs();
+
+        if (top_layer_num_vecs == 0) {
+            ARTEA_ERROR("Cannot find entry point: top layer is empty");
+            return 0;
+        }
+
+        auto centroid = centroid_computer_t::compute(top_layer_vecs);
+
+        bruteforce_router_t bf_router(top_layer_vecs, dist_func, 1);
+        bf_router.initialize();
+        auto nearest_vertices = bf_router.query(centroid.data());
+
+        if (nearest_vertices.empty()) {
+            ARTEA_ERROR("Cannot find entry point: bruteforce router returned empty result");
+            return 0;
+        }
+
+        return nearest_vertices[0].get_id();
     }
 };
 

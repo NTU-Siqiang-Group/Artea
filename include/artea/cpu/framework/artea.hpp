@@ -61,8 +61,6 @@
 
 #include <artea/cpu/graph_factory/flat_graph_factory.hpp>
 #include <artea/cpu/graph_factory/conv_graph_factory.hpp>
-#include <artea/cpu/graph_factory/hierarchical_vertices_builder.hpp>
-#include <artea/cpu/graph_factory/hierarchical_edges_builder.hpp>
 #include <artea/cpu/graph_factory/hierarchical_graph_factory.hpp>
 #include <artea/cpu/graph_factory/artea_graph_factory.hpp>
 

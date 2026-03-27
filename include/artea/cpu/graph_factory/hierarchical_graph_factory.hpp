@@ -33,13 +33,10 @@ class HierarchicalGraphFactory {
     using pruning_config_t = typename GraphFactoryTraitsT::artea_graph::pruning_config_t;
     using propagate_config_t = typename GraphFactoryTraitsT::artea_graph::propagate_config_t;
     using greedy_vertices_builder_config_t = typename GraphFactoryTraitsT::greedy_vertices_builder_config_t;
-    using vg_policy_t = typename GraphFactoryTraitsT::vg_policy_t;
-    using eg_policy_t = typename GraphFactoryTraitsT::eg_policy_t;
 
 public:
     HierarchicalGraphFactory() = default;
 
-    template <vg_policy_t VGPolicy, eg_policy_t EGPolicy>
     static auto construct_graph(
         const vector_dataset_t& dataset,
         layer_config_t bottom_layer_config,
@@ -49,7 +46,7 @@ public:
         propagate_config_t propagate_config,
         greedy_vertices_builder_config_t vertices_builder_config
     ) -> hierarchical_graph_t {
-        return DerivedClassT::template construct_graph<VGPolicy, EGPolicy>(
+        return DerivedClassT::construct_graph_impl(
             dataset.get_base_vecs(),
             bottom_layer_config,
             upper_layer_config,
@@ -60,7 +57,6 @@ public:
         );
     }
 
-    template <vg_policy_t VGPolicy, eg_policy_t EGPolicy>
     static auto construct_graph(
         const vector_array_t& base_vecs,
         layer_config_t bottom_layer_config,
@@ -70,7 +66,7 @@ public:
         propagate_config_t propagate_config,
         greedy_vertices_builder_config_t vertices_builder_config
     ) -> hierarchical_graph_t {
-        return DerivedClassT::template construct_graph_impl<VGPolicy, EGPolicy>(
+        return DerivedClassT::construct_graph_impl(
             base_vecs,
             bottom_layer_config,
             upper_layer_config,

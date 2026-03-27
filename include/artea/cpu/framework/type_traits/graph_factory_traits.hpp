@@ -23,28 +23,10 @@
 namespace artea {
 namespace cpu {
 
-/**
- * @brief Policy for vertex generation strategy.
- */
-enum class VGPolicyT {
-    random_selection,  ///< Random vertex selection
-    rnet_selection     ///< R-net based greedy selection
-};
-
-/**
- * @brief Policy for edge generation strategy.
- */
-enum class EGPolicyT {
-    conv_graph_descent,                 ///< Convergent graph descent
-    speculative_conv_graph_descent      ///< Speculative convergent graph descent
-};
-
 /** ------ Forward Declaration  ------ **/
 template <typename GraphFactoryTraitsT, typename DerivedClassT> class FlatGraphFactory;
 template <typename GraphFactoryTraitsT, typename DerivedClassT> class HierarchicalGraphFactory;
 template <typename GraphFactoryTraitsT> class ConvGraphFactory;
-template <typename GraphFactoryTraitsT> class HierarchicalVerticesBuilder;
-template <typename GraphFactoryTraitsT> class HierarchicalEdgesBuilder;
 template <typename GraphFactoryTraitsT> class RoutingUpdater;
 template <typename GraphFactoryTraitsT> class ArteaGraphFactory;
 
@@ -59,12 +41,6 @@ struct GraphFactoryTraits :
 {
     using graph_factory_traits_t = GraphFactoryTraits<VertexGeneratorTraitsT, EdgeGeneratorTraitsT, RouterTraitsT>;
 
-    /** @brief Vertex generation policy type. */
-    using vg_policy_t = VGPolicyT;
-
-    /** @brief Edge generation policy type. */
-    using eg_policy_t = EGPolicyT;
-
     /** @brief Type for graph factory. */
     template <typename DerivedClassT>
     using flat_graph_factory_t = FlatGraphFactory<graph_factory_traits_t, DerivedClassT>;
@@ -73,10 +49,6 @@ struct GraphFactoryTraits :
     using hierarchical_graph_factory_t = HierarchicalGraphFactory<graph_factory_traits_t, DerivedClassT>;
 
     using conv_graph_factory_t = ConvGraphFactory<graph_factory_traits_t>;
-
-    using hierarchical_vertices_builder_t = HierarchicalVerticesBuilder<graph_factory_traits_t>;
-
-    using hierarchical_edges_builder_t = HierarchicalEdgesBuilder<graph_factory_traits_t>;
 
     using artea_graph_factory_t = ArteaGraphFactory<graph_factory_traits_t>;
 

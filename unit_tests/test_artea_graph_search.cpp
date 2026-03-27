@@ -47,9 +47,9 @@ struct TestConfig {
     std::string config_path;
     std::string dataset_name;
     uint32_t topk                  = 20;
-    uint32_t queue_size            = 50;
-    uint32_t bl_extracted_nbr_size = 32;
-    uint32_t ul_extracted_nbr_size = 24;
+    uint32_t queue_size            = 90;
+    uint32_t bl_extracted_nbr_size = 64;
+    uint32_t ul_extracted_nbr_size = 32;
     bool verbose                   = false;
 } g_config;
 
@@ -90,19 +90,19 @@ public:
 
         // Build hierarchical graph
         logger.info("Building Artea hierarchical graph...");
-        layer_config_t bottom_cfg(16, 24);
-        layer_config_t upper_cfg(12, 18);
-        artea_graph::pruning_config_t bottom_pruning(1.0f, 0.0f);
-        artea_graph::pruning_config_t upper_pruning(1.0f, 0.0f);
-        artea_graph::propagate_config_t propagate_cfg(4, 14, 0.6f);
+        layer_config_t bottom_cfg(96, 144);
+        layer_config_t upper_cfg(96, 144);
+        artea_graph::pruning_config_t bottom_pruning(1.10f, 0.10f);
+        artea_graph::pruning_config_t upper_pruning(1.10f, 0.10f);
+        artea_graph::propagate_config_t propagate_cfg(5, 12, 0.34f);
 
         logger.info("Probing min_radius...");
         radius_prober_t prober(*dist_func_);
         auto probe = prober.probe(base_vecs, 0.001f, 0.95f, 0.05f);
-        greedy_vertices_builder_config_t vb_cfg(probe.radius, 1.69f, 0.999f, 0.95f, 0.2f, 2048);
+        greedy_vertices_builder_config_t vb_cfg(probe.radius, 1.44f, 0.999f, 0.95f, 0.2f, 2048);
 
         hgraph_ = std::make_unique<hierarchical_graph_t>(
-            artea_graph_factory_t::template construct_graph<VGPolicyT::rnet_selection, EGPolicyT::conv_graph_descent>(
+            artea_graph_factory_t::construct_graph(
                 base_vecs, bottom_cfg, upper_cfg, bottom_pruning, upper_pruning, propagate_cfg, vb_cfg
             )
         );
@@ -251,9 +251,9 @@ int main(int argc, char** argv) {
     program.add_argument("-c", "--config").default_value(std::string("./configs/datasets.json"));
     program.add_argument("-d", "--dataset").default_value(std::string("sift-1m"));
     program.add_argument("-k", "--topk").default_value(20u).scan<'u', uint32_t>();
-    program.add_argument("--candidate-queue-size").default_value(50u).scan<'u', uint32_t>();
-    program.add_argument("--bl-extracted-nbr-size").default_value(32u).scan<'u', uint32_t>();
-    program.add_argument("--ul-extracted-nbr-size").default_value(24u).scan<'u', uint32_t>();
+    program.add_argument("--candidate-queue-size").default_value(90u).scan<'u', uint32_t>();
+    program.add_argument("--bl-extracted-nbr-size").default_value(64u).scan<'u', uint32_t>();
+    program.add_argument("--ul-extracted-nbr-size").default_value(32u).scan<'u', uint32_t>();
     program.add_argument("-v", "--verbose").default_value(false).implicit_value(true);
 
     try { program.parse_args(argc, argv); }

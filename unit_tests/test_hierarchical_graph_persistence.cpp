@@ -78,7 +78,7 @@ TEST_F(HierarchicalGraphPersistenceTest, SnapshotAndRestore) {
     logger.info("Constructing hierarchical graph...");
     auto start_time = std::chrono::high_resolution_clock::now();
 
-    hierarchical_graph_t original_graph(
+    auto original_graph = artea_graph_factory_t::construct_graph(
         base_vecs,
         bottom_layer_config,
         upper_layer_config,
@@ -86,19 +86,6 @@ TEST_F(HierarchicalGraphPersistenceTest, SnapshotAndRestore) {
         upper_pruning_config,
         propagate_config,
         vertices_builder_config
-    );
-
-    // Construct vertices
-    hierarchical_vertices_builder_t::template construct<VGPolicyT::rnet_selection>(
-        dist_func,
-        original_graph,
-        vertices_builder_config
-    );
-
-    // Construct edges
-    hierarchical_edges_builder_t::template construct<EGPolicyT::conv_graph_descent>(
-        dist_func,
-        original_graph
     );
 
     auto end_time = std::chrono::high_resolution_clock::now();

@@ -155,17 +155,19 @@ int main(int argc, char** argv) {
         .help("Top-k results to return");
 
     program.add_argument("--candidate-queue-size")
-        .default_value(50u)
+        .default_value(90u)
         .scan<'u', uint32_t>()
         .help("Bottom layer candidate queue size");
 
     program.add_argument("--bl-extracted-nbr-size")
+        .default_value(64u)
         .scan<'u', uint32_t>()
-        .help("Bottom layer extracted neighbor size (defaults to graph's max_nbr_size)");
+        .help("Bottom layer extracted neighbor size");
 
     program.add_argument("--ul-extracted-nbr-size")
+        .default_value(32u)
         .scan<'u', uint32_t>()
-        .help("Upper layer extracted neighbor size (defaults to graph's max_nbr_size)");
+        .help("Upper layer extracted neighbor size");
 
     try {
         program.parse_args(argc, argv);
@@ -236,13 +238,8 @@ int main(int argc, char** argv) {
     auto index_size_info = index_size_calc.calculate_size(hierarchical_graph);
 
     // Determine extracted neighbor sizes
-    vertex_num_t bl_extracted_nbr_size = program.is_used("--bl-extracted-nbr-size")
-        ? program.get<uint32_t>("--bl-extracted-nbr-size")
-        : hierarchical_graph.bottom_layer_config().max_nbr_size();
-
-    vertex_num_t ul_extracted_nbr_size = program.is_used("--ul-extracted-nbr-size")
-        ? program.get<uint32_t>("--ul-extracted-nbr-size")
-        : hierarchical_graph.upper_layer_config().max_nbr_size();
+    vertex_num_t bl_extracted_nbr_size = program.get<uint32_t>("--bl-extracted-nbr-size");
+    vertex_num_t ul_extracted_nbr_size = program.get<uint32_t>("--ul-extracted-nbr-size");
 
     // Print graph construction configuration
     std::cout << "\n" << std::string(80, '=') << std::endl;

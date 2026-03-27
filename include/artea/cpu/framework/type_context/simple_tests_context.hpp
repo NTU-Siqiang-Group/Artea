@@ -127,10 +127,6 @@ using mb_greedy_vg_t = typename vertex_generator_traits_t::mb_greedy_vg_t;
 using random_vg_t = typename vertex_generator_traits_t::random_vg_t;
 
 // Graph factory types from GraphFactoryTraits
-using hierarchical_vertices_builder_t = typename graph_factory_traits_t::hierarchical_vertices_builder_t;
-using hierarchical_edges_builder_t = typename graph_factory_traits_t::hierarchical_edges_builder_t;
-using vg_policy_t = typename graph_factory_traits_t::vg_policy_t;
-using eg_policy_t = typename graph_factory_traits_t::eg_policy_t;
 using conv_graph_factory_t = typename graph_factory_traits_t::conv_graph_factory_t;
 using artea_graph_factory_t = typename graph_factory_traits_t::artea_graph_factory_t;
 

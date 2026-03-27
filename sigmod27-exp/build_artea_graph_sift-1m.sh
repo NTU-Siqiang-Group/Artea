@@ -13,7 +13,7 @@
 # limitations under the License.
 
 ./bin/build_artea_graph \
-    --beta 1.44 \
+    --beta 1.69 \
     --ul-max-nbr-size 96 \
     --bl-max-nbr-size 96 \
     --prefill-ratio 0.34 \

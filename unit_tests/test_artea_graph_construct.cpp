@@ -217,10 +217,7 @@ protected:
         logger.info("Constructing hierarchical Artea graph...");
         auto construction_start = std::chrono::high_resolution_clock::now();
 
-        auto graph = artea_graph_factory_t::template construct_graph<
-            VGPolicyT::rnet_selection,
-            EGPolicyT::conv_graph_descent
-        >(
+        auto graph = artea_graph_factory_t::construct_graph(
             base_vecs,
             bottom_layer_config,
             upper_layer_config,
@@ -447,29 +444,29 @@ int main(int argc, char** argv) {
     program.add_argument("-d", "--dataset").default_value(std::string("sift-1m"));
 
     // Vertices builder parameters
-    program.add_argument("--beta").default_value(1.69f).scan<'g', float>();
+    program.add_argument("--beta").default_value(1.44f).scan<'g', float>();
     program.add_argument("--coverage-ratio").default_value(0.999f).scan<'g', float>();
     program.add_argument("--confidence").default_value(0.950f).scan<'g', float>();
     program.add_argument("--max-result-ratio").default_value(0.2f).scan<'g', float>();
     program.add_argument("--sampling-batch-size").default_value(2048u).scan<'u', uint32_t>();
 
     // Bottom layer config
-    program.add_argument("--bl-max-nbr-size").default_value(32u).scan<'u', uint32_t>();
+    program.add_argument("--bl-max-nbr-size").default_value(96u).scan<'u', uint32_t>();
     // Upper layer config
-    program.add_argument("--ul-max-nbr-size").default_value(24u).scan<'u', uint32_t>();
+    program.add_argument("--ul-max-nbr-size").default_value(96u).scan<'u', uint32_t>();
 
     // Bottom layer pruning config
-    program.add_argument("--bl-scale-coeffs").default_value(1.0f).scan<'g', float>();
-    program.add_argument("--bl-shifted-coeffs").default_value(0.0f).scan<'g', float>();
+    program.add_argument("--bl-scale-coeffs").default_value(1.10f).scan<'g', float>();
+    program.add_argument("--bl-shifted-coeffs").default_value(0.10f).scan<'g', float>();
 
     // Upper layer pruning config
-    program.add_argument("--ul-scale-coeffs").default_value(1.0f).scan<'g', float>();
-    program.add_argument("--ul-shifted-coeffs").default_value(0.0f).scan<'g', float>();
+    program.add_argument("--ul-scale-coeffs").default_value(1.10f).scan<'g', float>();
+    program.add_argument("--ul-shifted-coeffs").default_value(0.10f).scan<'g', float>();
 
     // Propagate config (shared between layers)
-    program.add_argument("--num-build-loops").default_value(4u).scan<'u', uint32_t>();
-    program.add_argument("--num-triu-iters").default_value(14u).scan<'u', uint32_t>();
-    program.add_argument("--prefill-ratio").default_value(0.6f).scan<'g', float>();
+    program.add_argument("--num-build-loops").default_value(5u).scan<'u', uint32_t>();
+    program.add_argument("--num-triu-iters").default_value(12u).scan<'u', uint32_t>();
+    program.add_argument("--prefill-ratio").default_value(0.34f).scan<'g', float>();
     program.add_argument("--num-routing-loops").default_value(1u).scan<'u', uint32_t>();
 
     // Router parameters
@@ -477,10 +474,10 @@ int main(int argc, char** argv) {
     program.add_argument("--candidate-queue-config")
         .default_value(std::string("40,100,20"))
         .help("Candidate queue size grid search: start,end,step (default: 40,100,20)");
-    program.add_argument("--bl-extracted-nbr-size").scan<'u', uint32_t>()
-        .help("Bottom layer extracted neighbor size (defaults to bl-max-nbr-size)");
-    program.add_argument("--ul-extracted-nbr-size").scan<'u', uint32_t>()
-        .help("Upper layer extracted neighbor size (defaults to ul-max-nbr-size)");
+    program.add_argument("--bl-extracted-nbr-size").default_value(64u).scan<'u', uint32_t>()
+        .help("Bottom layer extracted neighbor size (defaults to 64)");
+    program.add_argument("--ul-extracted-nbr-size").default_value(32u).scan<'u', uint32_t>()
+        .help("Upper layer extracted neighbor size (defaults to 32)");
 
     program.add_argument("-v", "--verbose").default_value(false).implicit_value(true);
 
@@ -540,13 +537,8 @@ int main(int argc, char** argv) {
         g_config.queue_step = values[2];
     }
 
-    g_config.bl_extracted_nbr_size = program.is_used("--bl-extracted-nbr-size")
-        ? program.get<uint32_t>("--bl-extracted-nbr-size")
-        : g_config.bottom_layer_config.max_nbr_size;
-
-    g_config.ul_extracted_nbr_size = program.is_used("--ul-extracted-nbr-size")
-        ? program.get<uint32_t>("--ul-extracted-nbr-size")
-        : g_config.upper_layer_config.max_nbr_size;
+    g_config.bl_extracted_nbr_size = program.get<uint32_t>("--bl-extracted-nbr-size");
+    g_config.ul_extracted_nbr_size = program.get<uint32_t>("--ul-extracted-nbr-size");
 
     g_config.verbose = program.get<bool>("--verbose");
 
