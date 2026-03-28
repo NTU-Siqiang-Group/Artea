@@ -12,3 +12,27 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#pragma once
+
+#include <algorithm>
+#include <limits>
+#include <vector>
+#include <cmath>
+#include <tbb/parallel_for.h>
+#include <tbb/blocked_range.h>
+#include <tbb/enumerable_thread_specific.h>
+#include <boost/math/distributions/normal.hpp>
+#include <artea/common/logger.hpp>
+
+namespace artea {
+namespace cpu {
+
+template <typename VertexGeneratorTraitsT>
+class GraphMISVG : public VertexGeneratorTraitsT::template vertex_generator_t<GraphMISVG<VertexGeneratorTraitsT>> {
+
+
+
+};  // class GraphMISVG
+
+}   // namespace cpu
+}   // namespace artea

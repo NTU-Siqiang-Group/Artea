@@ -63,10 +63,14 @@ public:
         const dist_func_t& dist_func,
         const hierarchical_graph_t& hierarchical_graph,
         const uint32_t topk,
-        const vertex_num_t candidate_queue_size
+        const vertex_num_t candidate_queue_size,
+        const vertex_num_t ul_extracted_nbr_size = 32,
+        const vertex_num_t bl_extracted_nbr_size = 64
     ) : base_class_t(vecs_data, dist_func, topk),
         _hierarchical_graph(hierarchical_graph),
         _candidate_queue_size(candidate_queue_size),
+        _ul_extracted_nbr_size(ul_extracted_nbr_size),
+        _bl_extracted_nbr_size(bl_extracted_nbr_size),
         _visited_table_pool(vecs_data.get_num_vecs())
     {
         if (candidate_queue_size < topk) {
@@ -175,7 +179,8 @@ private:
         while (improved) {
             improved = false;
             const nbr_arr_t& nbrs = layer_graph.fetch_nbrs(current_nearest);
-            for (vertex_num_t i = 0; i < nbrs.size(); ++i) {
+            const vertex_num_t nbr_limit = std::min(static_cast<vertex_num_t>(nbrs.size()), _ul_extracted_nbr_size);
+            for (vertex_num_t i = 0; i < nbr_limit; ++i) {
                 const vertex_id_t nbr_id = nbrs[i].get_id();
                 const distance_t nbr_dist = this->_dist_func(query_vec, layer_vecs.get(nbr_id));
                 if (nbr_dist < current_dist) {
@@ -209,7 +214,8 @@ private:
             if (current_id == RouterTraitsT::invalid_vertex_id) { break; }
 
             const nbr_arr_t& nbrs = layer_graph.fetch_nbrs(current_id);
-            for (vertex_num_t i = 0; i < nbrs.size(); ++i) {
+            const vertex_num_t nbr_limit = std::min(static_cast<vertex_num_t>(nbrs.size()), _bl_extracted_nbr_size);
+            for (vertex_num_t i = 0; i < nbr_limit; ++i) {
                 const vertex_id_t nbr_id = nbrs[i].get_id();
                 if (nbr_id == RouterTraitsT::invalid_vertex_id) { break; }
                 if (visited_table.test(nbr_id)) { continue; }
@@ -225,6 +231,12 @@ private:
 
     /** @brief Candidate queue size for bottom layer beam search. */
     vertex_num_t _candidate_queue_size;
+
+    /** @brief Maximum number of neighbors to explore per vertex in upper layers. */
+    vertex_num_t _ul_extracted_nbr_size = 32;
+
+    /** @brief Maximum number of neighbors to explore per vertex in bottom layer. */
+    vertex_num_t _bl_extracted_nbr_size = 64;
 
     /** @brief Pool of thread-local visited bitmaps. */
     mutable visited_table_pool_t _visited_table_pool;

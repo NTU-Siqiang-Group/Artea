@@ -3,20 +3,16 @@ cmake_minimum_required(VERSION 3.24)
 cmake_policy(SET CMP0135 NEW) # Use modern timestamp behavior
 project(Artea LANGUAGES C CXX)
 
-# include(CheckIPOSupported)
-# check_ipo_supported(RESULT result OUTPUT output)
-# if(result)
-#     message(STATUS "IPO/LTO is supported. Enabling globally.")
-#     set(CMAKE_INTERPROCEDURAL_OPTIMIZATION ON)
-# else()
-#     message(WARNING "IPO/LTO is not supported: ${output}")
-# endif()
 
-# --- Compiler specific Warning Suppression ---
-if(CMAKE_CXX_COMPILER_ID MATCHES "IntelLLVM")
-	add_compile_options(-Wno-unknown-warning-option)
-	add_compile_options(-diag-disable=10430)
+# --- Require Intel icpx compiler ---
+if(NOT CMAKE_CXX_COMPILER_ID MATCHES "IntelLLVM")
+    message(FATAL_ERROR
+        "Artea requires the Intel icpx compiler (IntelLLVM). "
+        "Detected: ${CMAKE_CXX_COMPILER_ID}. "
+        "Set -DCMAKE_CXX_COMPILER=icpx -DCMAKE_C_COMPILER=icx.")
 endif()
+add_compile_options(-Wno-unknown-warning-option)
+add_compile_options(-diag-disable=10430)
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -112,9 +108,11 @@ set(BENCHMARK_INSTALL_DOCS OFF CACHE BOOL "Disable benchmark docs" FORCE)
 # --- Hnswlib Local Configuration ---
 add_subdirectory(third_party/hnswlib)
 
-# --- Arena Benchmark Configuration ---
-set(BUILD_EXAMPLES OFF CACHE BOOL "Disable arena-benchmark examples" FORCE)
-add_subdirectory(third_party/arena-benchmark)
+
+# --- NumKong Configuration ---
+set(NK_BUILD_TEST OFF CACHE BOOL "Disable NumKong tests" FORCE)
+set(NK_BUILD_BENCH OFF CACHE BOOL "Disable NumKong benchmarks" FORCE)
+add_subdirectory(third_party/NumKong)
 
 # --- Faiss Submodule Configuration ---
 # Set options to build a minimal CPU version of Faiss

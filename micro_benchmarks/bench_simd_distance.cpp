@@ -17,6 +17,8 @@
 #include <artea/cpu/framework/artea.hpp>
 #include <faiss/utils/distances.h>
 #include <hnswlib/hnswlib.h>
+#include <numkong/spatial.h>
+#include <experimental/simd>
 #include <memory>
 #include <vector>
 #include <cstring>
@@ -48,6 +50,47 @@ private:
     uint32_t dim_;
     std::vector<float> query_vec_, target_vec_;
 };
+
+// 0. Baseline: std::experimental::simd L2 squared distance with unroll factor U
+namespace stdx = std::experimental;
+template <std::size_t U>
+static float stdsimd_L2sqr(const float* a, const float* b, uint32_t dim) {
+    using simd_t = stdx::native_simd<float>;
+    constexpr std::size_t W = simd_t::size();
+    constexpr std::size_t stride = W * U;
+    simd_t sums[U] = {};
+    std::size_t i = 0;
+    for (; i + stride <= dim; i += stride) {
+        for (std::size_t u = 0; u < U; ++u) {
+            simd_t va(a + i + u * W, stdx::element_aligned);
+            simd_t vb(b + i + u * W, stdx::element_aligned);
+            simd_t diff = va - vb;
+            sums[u] += diff * diff;
+        }
+    }
+    // Reduce remaining full SIMD lanes
+    for (; i + W <= dim; i += W) {
+        simd_t va(a + i, stdx::element_aligned);
+        simd_t vb(b + i, stdx::element_aligned);
+        simd_t diff = va - vb;
+        sums[0] += diff * diff;
+    }
+    // Merge accumulators and scalar tail
+    for (std::size_t u = 1; u < U; ++u) sums[0] += sums[u];
+    return stdx::reduce(sums[0]);
+}
+
+template <std::size_t U>
+static void BM_StdSimd(benchmark::State& state) {
+    auto& p = DataProvider::instance();
+    for (auto _ : state) {
+        benchmark::DoNotOptimize(stdsimd_L2sqr<U>(p.get_q(), p.get_t(), p.get_dim()));
+    }
+    state.SetItemsProcessed(state.iterations());
+}
+BENCHMARK_TEMPLATE(BM_StdSimd, 1)->Name("StdSimd_L2_U1");
+BENCHMARK_TEMPLATE(BM_StdSimd, 2)->Name("StdSimd_L2_U2");
+BENCHMARK_TEMPLATE(BM_StdSimd, 4)->Name("StdSimd_L2_U4");
 
 // 1. Artea Benchmarks (1, 2, 4)
 template <std::size_t U>
@@ -86,6 +129,18 @@ static void BM_HNSWLib(benchmark::State& state) {
 }
 BENCHMARK(BM_HNSWLib)->Name("HNSWLib_L2");
 
+// 4. NumKong
+static void BM_NumKong(benchmark::State& state) {
+    auto& p = DataProvider::instance();
+    for (auto _ : state) {
+        nk_f64_t result = 0;
+        nk_sqeuclidean_f32(p.get_q(), p.get_t(), p.get_dim(), &result);
+        benchmark::DoNotOptimize(result);
+    }
+    state.SetItemsProcessed(state.iterations());
+}
+BENCHMARK(BM_NumKong)->Name("NumKong_L2_sqeuclidean");
+
 int main(int argc, char** argv) {
     argparse::ArgumentParser program("bench_simd_distance");
     program.add_argument("-c", "--config").default_value(std::string("./configs/datasets.json"));
@@ -94,6 +149,15 @@ int main(int argc, char** argv) {
     g_config.config_path = program.get<std::string>("--config");
     g_config.dataset_name = program.get<std::string>("--dataset");
     DataProvider::instance().init();
+
+#if NK_TARGET_SKYLAKE
+    printf("[NumKong] Using Skylake (AVX-512)\n");
+#elif NK_TARGET_HASWELL
+    printf("[NumKong] Using Haswell (AVX2)\n");
+#else
+    printf("[NumKong] Using serial fallback\n");
+#endif
+
     ::benchmark::Initialize(&argc, argv);
     ::benchmark::RunSpecifiedBenchmarks();
     return 0;

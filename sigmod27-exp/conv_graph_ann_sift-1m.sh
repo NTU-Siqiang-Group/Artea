@@ -13,6 +13,6 @@
 # limitations under the License.
 
 ./build/apps/conv_graph_ann \
-    --extracted-nbr-size 32 \
+    --extracted-nbr-size 64 \
     --topk 20 \
-    --candidate-queue-size 100
+    --candidate-queue-size 90

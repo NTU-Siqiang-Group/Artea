@@ -46,7 +46,7 @@ class RandomUpdater :
     using dist_func_t = typename EdgeGeneratorTraitsT::dist_func_t;
     using flat_graph_t = typename EdgeGeneratorTraitsT::flat_graph_t;
     using base_class_t = typename EdgeGeneratorTraitsT::template neighbor_updater_t<RandomUpdater<EdgeGeneratorTraitsT>>;
-    using base_traits_t = typename EdgeGeneratorTraitsT::base_traits_t;
+    using random_seq_t = typename EdgeGeneratorTraitsT::random_seq_t;
 
 public:
     static constexpr const char* updater_name = "random_updater";
@@ -121,7 +121,7 @@ private:
     const vertex_num_t _rand_gen_size;
 
     /** @brief Thread-safe random sequence generator. */
-    RandomSeq<base_traits_t> _random_seq;
+    random_seq_t _random_seq;
 
 };  // class RandomUpdater
 

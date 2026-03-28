@@ -88,7 +88,7 @@ public:
         _propagate_config(propagate_config),
         _vertices_builder_config(vertices_builder_config),
         _hier_vecs_manager(base_vecs),
-        _inter_layer_links(inter_layer_links_t(_num_vertices))
+        _inter_layer_links(_num_vertices)
     {
         // Note: _layer_graphs will be resized in HierarchicalEdgesBuilder after vertices construction
     }

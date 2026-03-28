@@ -35,8 +35,7 @@ foreach(sourcefile ${BENCH_SOURCES})
     target_link_libraries(${bench_target} PRIVATE
         artea
         benchmark::benchmark
-        arena_benchmark
-        argparse::argparse
+argparse::argparse
         hnswlib
 	    faiss
     )

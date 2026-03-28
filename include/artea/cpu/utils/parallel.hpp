@@ -29,7 +29,7 @@ namespace cpu {
   * @return The number of threads used by TBB.
   */
 __attribute__((always_inline))
-auto tbb_max_num_threads() -> int {
+inline auto tbb_max_num_threads() -> int {
     return tbb::this_task_arena::max_concurrency();
 }
 
