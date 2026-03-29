@@ -40,8 +40,8 @@ enum class GraphModeT {
 /** ------ Forward Declaration  ------ **/
 template <typename RouterTraitsT, typename DerivedClassT> class VectorRouter;
 template <typename RouterTraitsT> class BruteforceRouter;
-template <typename RouterTraitsT, GraphModeT Mode = GraphModeT::search_mode> class MonolayerGraphRouter;
-template <typename RouterTraitsT, GraphModeT Mode = GraphModeT::search_mode> class HierarchicalGraphRouter;
+template <typename RouterTraitsT, GraphModeT Mode = GraphModeT::search_mode, typename GraphT = void> class MonolayerGraphRouter;
+template <typename RouterTraitsT, GraphModeT Mode = GraphModeT::search_mode, typename GraphT = void> class HierarchicalGraphRouter;
 template <typename RouterTraitsT> struct CandidateEntry;
 template <typename RouterTraitsT> struct CandidateEntryComparator;
 template <typename RouterTraitsT> class StdCandidateQueue;
@@ -108,12 +108,12 @@ struct RouterTraits : virtual public ComputerTraitsT, virtual public IndexTraits
     using visited_table_pool_t = VisitedTablePool<router_traits_t, visited_table_t>;
 
     /** @brief Type for monolayer graph router (template on GraphModeT). */
-    template <GraphModeT Mode = GraphModeT::search_mode>
-    using monolayer_graph_router_t = MonolayerGraphRouter<router_traits_t, Mode>;
+    template <GraphModeT Mode = GraphModeT::search_mode, typename GraphT = void>
+    using monolayer_graph_router_t = MonolayerGraphRouter<router_traits_t, Mode, GraphT>;
 
     /** @brief Type for hierarchical graph router (template on GraphModeT). */
-    template <GraphModeT Mode = GraphModeT::search_mode>
-    using hierarchical_graph_router_t = HierarchicalGraphRouter<router_traits_t, Mode>;
+    template <GraphModeT Mode = GraphModeT::search_mode, typename GraphT = void>
+    using hierarchical_graph_router_t = HierarchicalGraphRouter<router_traits_t, Mode, GraphT>;
 
     /** @brief Graph mode enum alias. */
     using graph_mode_t = GraphModeT;

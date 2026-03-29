@@ -34,9 +34,7 @@ template <typename IndexTraitsT>
 class IndexSizeCalculator {
     using vertex_id_t = typename IndexTraitsT::vertex_id_t;
     using vertex_num_t = typename IndexTraitsT::vertex_num_t;
-    using conv_graph_index_t = typename IndexTraitsT::conv_graph_index_t;
     using flat_search_graph_t = typename IndexTraitsT::flat_search_graph_t;
-    using artea_graph_index_t = typename IndexTraitsT::artea_graph_index_t;
     using hierarchical_search_graph_t = typename IndexTraitsT::hierarchical_search_graph_t;
 
 public:
@@ -44,7 +42,8 @@ public:
      * @brief Calculate size of a flat graph (uses max_nbr_size)
      * Each vertex has max_nbr_size neighbors.
      */
-    static auto calculate_size(const conv_graph_index_t& graph) -> IndexSizeInfo {
+    template <typename FlatGraphT>
+    static auto calculate_flat_graph_size(const FlatGraphT& graph) -> IndexSizeInfo {
         IndexSizeInfo info;
 
         vertex_num_t num_vertices = graph.get_num_vertices();
@@ -76,7 +75,8 @@ public:
      * @brief Calculate size of a hierarchical graph (uses max_nbr_size for each layer)
      * Bottom layer uses bottom_layer_config, upper layers use upper_layer_config.
      */
-    static auto calculate_size(const artea_graph_index_t& graph) -> IndexSizeInfo {
+    template <typename HierGraphT>
+    static auto calculate_hierarchical_graph_size(const HierGraphT& graph) -> IndexSizeInfo {
         IndexSizeInfo info;
 
         const auto& layer_graphs = graph.get_layer_graphs();

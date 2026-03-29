@@ -7,6 +7,9 @@
 #pragma once
 
 #include <variant>
+#include <nlohmann/json.hpp>
+#include <artea/common/logger.hpp>
+#include <fmt/format.h>
 
 namespace artea {
 namespace cpu {
@@ -17,11 +20,11 @@ namespace artea_graph {
  *        pruning, propagation, and vertices builder configs.
  * @tparam IndexTraitsT The index traits type.
  */
-template <typename IndexTraitsT>
+template <typename IndexTraitsT, typename LayerGraphT>
 class GraphIndex :
-    public IndexTraitsT::template hierarchical_graph_t<GraphIndex<IndexTraitsT>>
+    public IndexTraitsT::template hierarchical_graph_t<GraphIndex<IndexTraitsT, LayerGraphT>, LayerGraphT>
 {
-    using base_t = typename IndexTraitsT::template hierarchical_graph_t<GraphIndex<IndexTraitsT>>;
+    using base_t = typename IndexTraitsT::template hierarchical_graph_t<GraphIndex<IndexTraitsT, LayerGraphT>, LayerGraphT>;
     using vector_array_t = typename IndexTraitsT::vector_array_t;
     using layer_config_t = typename IndexTraitsT::layer_config_t;
     using propagate_config_t = typename IndexTraitsT::artea_graph::propagate_config_t;
@@ -87,6 +90,99 @@ public:
 
     __attribute__((always_inline))
     auto vertices_builder_config() -> vertices_builder_config_t& { return _vertices_builder_config; }
+
+    // --- Metadata hooks ---
+
+    auto get_metadata() const -> nlohmann::json {
+        nlohmann::json meta;
+        meta["bottom_pruning_config"] = {
+            {"scale_coeffs", _bottom_pruning_config.scale_coeffs()},
+            {"shifted_coeffs", _bottom_pruning_config.shifted_coeffs()}
+        };
+        meta["upper_pruning_config"] = {
+            {"scale_coeffs", _upper_pruning_config.scale_coeffs()},
+            {"shifted_coeffs", _upper_pruning_config.shifted_coeffs()}
+        };
+        meta["propagate_config"] = {
+            {"num_build_loops", _propagate_config.num_build_loops()},
+            {"num_triu_iters", _propagate_config.num_triu_iters()},
+            {"prefill_ratio", _propagate_config.prefill_ratio()},
+            {"num_routing_loops", _propagate_config.num_routing_loops()}
+        };
+        // Save vertices_builder_config based on which variant is active
+        if (std::holds_alternative<greedy_vertices_builder_config_t>(_vertices_builder_config)) {
+            const auto& config = std::get<greedy_vertices_builder_config_t>(_vertices_builder_config);
+            meta["vertices_builder_config"] = {
+                {"type", "approx_rnet"},
+                {"min_radius", config.min_radius()},
+                {"beta", config.beta()},
+                {"coverage_ratio", config.coverage_ratio()},
+                {"confidence", config.confidence()},
+                {"max_result_ratio", config.max_result_ratio()},
+                {"sampling_batch_size", config.sampling_batch_size()}
+            };
+        } else if (std::holds_alternative<random_vertices_builder_config_t>(_vertices_builder_config)) {
+            const auto& config = std::get<random_vertices_builder_config_t>(_vertices_builder_config);
+            meta["vertices_builder_config"] = {
+                {"type", "random"},
+                {"random_result_ratio", config.random_result_ratio()}
+            };
+        }
+        return meta;
+    }
+
+    static auto from_metadata(
+        const nlohmann::json& meta,
+        const vector_array_t& base_vecs,
+        const layer_config_t& bottom_layer_config,
+        const layer_config_t& upper_layer_config
+    ) -> GraphIndex {
+        using ratio_t = typename IndexTraitsT::ratio_t;
+        using iter_t = typename IndexTraitsT::iter_t;
+        using distance_t = typename IndexTraitsT::distance_t;
+        using vertex_num_t = typename IndexTraitsT::vertex_num_t;
+
+        pruning_config_t bottom_pruning_config(
+            meta["bottom_pruning_config"]["scale_coeffs"].get<ratio_t>(),
+            meta["bottom_pruning_config"]["shifted_coeffs"].get<ratio_t>()
+        );
+        pruning_config_t upper_pruning_config(
+            meta["upper_pruning_config"]["scale_coeffs"].get<ratio_t>(),
+            meta["upper_pruning_config"]["shifted_coeffs"].get<ratio_t>()
+        );
+        propagate_config_t propagate_config(
+            meta["propagate_config"]["num_build_loops"].get<iter_t>(),
+            meta["propagate_config"]["num_triu_iters"].get<iter_t>(),
+            meta["propagate_config"]["prefill_ratio"].get<ratio_t>(),
+            meta["propagate_config"]["num_routing_loops"].get<iter_t>()
+        );
+
+        const std::string vb_type = meta["vertices_builder_config"]["type"].get<std::string>();
+        vertices_builder_config_t vertices_builder_config = [&]() -> vertices_builder_config_t {
+            if (vb_type == "approx_rnet") {
+                return greedy_vertices_builder_config_t(
+                    meta["vertices_builder_config"]["min_radius"].get<distance_t>(),
+                    meta["vertices_builder_config"]["beta"].get<ratio_t>(),
+                    meta["vertices_builder_config"]["coverage_ratio"].get<ratio_t>(),
+                    meta["vertices_builder_config"]["confidence"].get<ratio_t>(),
+                    meta["vertices_builder_config"]["max_result_ratio"].get<ratio_t>(),
+                    meta["vertices_builder_config"]["sampling_batch_size"].get<vertex_num_t>()
+                );
+            } else if (vb_type == "random") {
+                return random_vertices_builder_config_t(
+                    meta["vertices_builder_config"]["random_result_ratio"].get<ratio_t>()
+                );
+            }
+            ARTEA_ERROR(fmt::format("Unknown vertices_builder_config type: {}", vb_type));
+            __builtin_unreachable();
+        }();
+
+        return GraphIndex(
+            base_vecs, bottom_layer_config, upper_layer_config,
+            bottom_pruning_config, upper_pruning_config,
+            propagate_config, vertices_builder_config
+        );
+    }
 
 private:
     /** @brief Pruning configuration for bottom layer. */

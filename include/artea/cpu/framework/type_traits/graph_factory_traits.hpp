@@ -25,7 +25,6 @@ namespace cpu {
 
 /** ------ Forward Declaration  ------ **/
 template <typename GraphFactoryTraitsT> class ConvGraphFactory;
-template <typename GraphFactoryTraitsT> class RoutingUpdater;
 template <typename GraphFactoryTraitsT> class ArteaGraphFactory;
 
 template <

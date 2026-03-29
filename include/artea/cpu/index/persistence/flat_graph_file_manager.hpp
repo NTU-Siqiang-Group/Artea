@@ -35,7 +35,7 @@ namespace cpu {
  * @brief File manager for FlatGraph snapshot and restore operations.
  * @tparam IndexTraitsT The index traits type.
  */
-template <typename IndexTraitsT>
+template <typename IndexTraitsT, typename FlatGraphT = typename IndexTraitsT::conv_graph_index_t>
 class FlatGraphFileManager {
 
     using vertex_num_t = typename IndexTraitsT::vertex_num_t;
@@ -44,12 +44,7 @@ class FlatGraphFileManager {
     using nbr_t = typename IndexTraitsT::nbr_t;
     using nbr_arr_t = typename IndexTraitsT::nbr_arr_t;
     using vector_array_t = typename IndexTraitsT::vector_array_t;
-    using conv_graph_index_t = typename IndexTraitsT::conv_graph_index_t;
-    using iter_t = typename IndexTraitsT::iter_t;
-    using ratio_t = typename IndexTraitsT::ratio_t;
     using layer_config_t = typename IndexTraitsT::layer_config_t;
-    using propagate_config_t = typename IndexTraitsT::conv_graph::propagate_config_t;
-    using pruning_config_t = typename IndexTraitsT::conv_graph::pruning_config_t;
 
 public:
     /**
@@ -59,7 +54,7 @@ public:
      * @param metadata Optional metadata to include in metadata.json.
      */
     static auto snapshot(
-        const conv_graph_index_t& flat_graph,
+        const FlatGraphT& flat_graph,
         const std::string& index_dir,
         const nlohmann::json& metadata = nlohmann::json::object()
     ) -> void {
@@ -80,16 +75,8 @@ public:
             {"max_nbr_size", flat_graph.layer_config().max_nbr_size()},
             {"reserved_nbr_size", flat_graph.layer_config().reserved_nbr_size()}
         };
-        meta["pruning_config"] = {
-            {"scale_coeffs", flat_graph.pruning_config().scale_coeffs()},
-            {"shifted_coeffs", flat_graph.pruning_config().shifted_coeffs()}
-        };
-        meta["propagate_config"] = {
-            {"num_build_loops", flat_graph.propagate_config().num_build_loops()},
-            {"num_triu_iters", flat_graph.propagate_config().num_triu_iters()},
-            {"prefill_ratio", flat_graph.propagate_config().prefill_ratio()},
-            {"num_routing_loops", flat_graph.propagate_config().num_routing_loops()}
-        };
+        nlohmann::json subclass_meta = flat_graph.get_metadata();
+        meta.merge_patch(subclass_meta);
 
         std::string metadata_path = index_dir + "/metadata.json";
         std::ofstream meta_ofs(metadata_path);
@@ -147,7 +134,7 @@ public:
     static auto restore(
         const std::string& index_dir,
         const vector_array_t& vecs_data
-    ) -> conv_graph_index_t {
+    ) -> FlatGraphT {
         static_assert(
             std::is_trivially_copyable_v<vertex_id_t> && std::is_trivially_copyable_v<distance_t>,
             "vertex_id_t and distance_t must be trivially copyable for binary loading."
@@ -202,19 +189,8 @@ public:
 
         layer_config_t layer_config(max_nbr_size, reserved_nbr_size);
 
-        // Read pruning_config and propagate_config from metadata
-        pruning_config_t pruning_config(
-            meta["pruning_config"]["scale_coeffs"].get<ratio_t>(),
-            meta["pruning_config"]["shifted_coeffs"].get<ratio_t>()
-        );
-        propagate_config_t propagate_config(
-            meta["propagate_config"]["num_build_loops"].get<iter_t>(),
-            meta["propagate_config"]["num_triu_iters"].get<iter_t>(),
-            meta["propagate_config"]["prefill_ratio"].get<ratio_t>(),
-            meta["propagate_config"]["num_routing_loops"].get<iter_t>()
-        );
-
-        conv_graph_index_t flat_graph(vecs_data, layer_config, pruning_config, propagate_config);
+        // Construct flat graph from metadata using subclass hook
+        FlatGraphT flat_graph = FlatGraphT::from_metadata(meta, vecs_data, layer_config);
 
         // Check if the number of vertices matches
         if (flat_graph.get_num_vertices() != num_vertices) {

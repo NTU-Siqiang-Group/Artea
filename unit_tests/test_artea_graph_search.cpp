@@ -220,7 +220,7 @@ TEST_F(ArteaGraphSearchTest, ConstructModeBatchQuery) {
     const auto& base_vecs  = p.get_dataset().get_base_vecs();
     const auto& query_vecs = p.get_dataset().get_query_vecs();
 
-    hierarchical_graph_router_t<graph_mode_t::construct_mode> router(
+    hierarchical_graph_router_t<graph_mode_t::construct_mode, artea_graph_index_t> router(
         base_vecs, p.get_dist_func(), p.get_hgraph(),
         g_config.topk, g_config.queue_size
     );

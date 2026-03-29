@@ -108,22 +108,22 @@ using vertices_builder_config_t = typename base_traits_t::vertices_builder_confi
 // Index types from IndexTraits
 using conv_graph_index_t = typename index_traits_t::conv_graph_index_t;
 using flat_search_graph_t = typename index_traits_t::flat_search_graph_t;
-using artea_graph_index_t = typename index_traits_t::artea_graph_index_t;
+using artea_graph_index_t = typename index_traits_t::template artea_graph_index_t<conv_graph_index_t>;
 using hierarchical_search_graph_t = typename index_traits_t::hierarchical_search_graph_t;
 using inter_layer_links_t = typename index_traits_t::inter_layer_links_t;
 using hierarchical_vecs_manager_t = typename index_traits_t::hierarchical_vecs_manager_t;
 using search_graph_converter_t = typename index_traits_t::search_graph_converter_t;
-using flat_graph_file_manager_t = typename index_traits_t::flat_graph_file_manager_t;
-using hierarchical_graph_file_manager_t = typename index_traits_t::hierarchical_graph_file_manager_t;
+using flat_graph_file_manager_t = typename index_traits_t::template flat_graph_file_manager_t<>;
+using hierarchical_graph_file_manager_t = typename index_traits_t::template hierarchical_graph_file_manager_t<>;
 using index_size_calculator_t = typename index_traits_t::index_size_calculator_t;
 
 // Edge generator types from EdgeGeneratorTraits
-using triangle_updater_t = typename edge_generator_traits_t::triangle_updater_t;
-using reverse_updater_t = typename edge_generator_traits_t::reverse_updater_t;
-using random_updater_t = typename edge_generator_traits_t::random_updater_t;
-using routing_updater_t = typename edge_generator_traits_t::routing_updater_t;
-using truncate_updater_t = typename edge_generator_traits_t::truncate_updater_t;
-using random_eg_t = typename edge_generator_traits_t::random_eg_t;
+using triangle_updater_t = typename edge_generator_traits_t::template triangle_updater_t<conv_graph_index_t>;
+using reverse_updater_t = typename edge_generator_traits_t::template reverse_updater_t<conv_graph_index_t>;
+using random_updater_t = typename edge_generator_traits_t::template random_updater_t<conv_graph_index_t>;
+using routing_updater_t = typename edge_generator_traits_t::template routing_updater_t<conv_graph_index_t>;
+using truncate_updater_t = typename edge_generator_traits_t::template truncate_updater_t<conv_graph_index_t>;
+using random_eg_t = typename edge_generator_traits_t::template random_eg_t<conv_graph_index_t>;
 using ivf_partitions_t = typename edge_generator_traits_t::ivf_partitions_t;
 using ivf_construct_policy_t = typename edge_generator_traits_t::ivf_construct_policy_t;
 
@@ -154,18 +154,18 @@ using bruteforce_router_t = typename router_traits_t::bruteforce_router_t;
 // alias for routers with customizable GraphModeT
 using graph_mode_t = typename router_traits_t::graph_mode_t;
 
-template <GraphModeT Mode = GraphModeT::search_mode>
-using monolayer_graph_router_t = typename router_traits_t::template monolayer_graph_router_t<Mode>;
+template <GraphModeT Mode = GraphModeT::search_mode, typename GraphT = void>
+using monolayer_graph_router_t = typename router_traits_t::template monolayer_graph_router_t<Mode, GraphT>;
 
-template <GraphModeT Mode = GraphModeT::search_mode>
-using hierarchical_graph_router_t = typename router_traits_t::template hierarchical_graph_router_t<Mode>;
+template <GraphModeT Mode = GraphModeT::search_mode, typename GraphT = void>
+using hierarchical_graph_router_t = typename router_traits_t::template hierarchical_graph_router_t<Mode, GraphT>;
 
 // Utility types
 using index_register_util_t = IndexRegisterUtil;
 
 // Propagate engine from EdgeGeneratorTraits
-using propagate_engine_ss_t = typename edge_generator_traits_t::propagate_engine_t<true>;
-using propagate_engine_noss_t = typename edge_generator_traits_t::propagate_engine_t<false>;
+using propagate_engine_ss_t = typename edge_generator_traits_t::template propagate_engine_t<conv_graph_index_t, true>;
+using propagate_engine_noss_t = typename edge_generator_traits_t::template propagate_engine_t<conv_graph_index_t, false>;
 // Currently, NO SELECTIVE SCHEDULING is faster
 using propagate_engine_t = propagate_engine_noss_t;
 
@@ -177,7 +177,7 @@ namespace conv_graph {
 }
 
 namespace artea_graph {
-    using graph_index_t = typename index_traits_t::artea_graph_index_t;
+    using graph_index_t = typename index_traits_t::template artea_graph_index_t<conv_graph_index_t>;
     using propagate_config_t = typename base_traits_t::artea_graph::propagate_config_t;
     using pruning_config_t = typename base_traits_t::artea_graph::pruning_config_t;
 }

@@ -52,19 +52,19 @@ class ConvGraphFactory {
     using layer_config_t = typename GraphFactoryTraitsT::layer_config_t;
     using propagate_config_t = typename GraphFactoryTraitsT::conv_graph::propagate_config_t;
     using pruning_config_t = typename GraphFactoryTraitsT::conv_graph::pruning_config_t;
-    // Using propagate_engine_t with no selective scheduling currently.
-    using random_eg_t = typename GraphFactoryTraitsT::random_eg_t;
-    using propagate_engine_t = typename GraphFactoryTraitsT::template propagate_engine_t<false>;
-    using triangle_updater_t = typename GraphFactoryTraitsT::triangle_updater_t;
-    using reverse_updater_t = typename GraphFactoryTraitsT::reverse_updater_t;
-    using routing_updater_t = typename GraphFactoryTraitsT::routing_updater_t;
-    using truncate_updater_t = typename GraphFactoryTraitsT::truncate_updater_t;
+    // Edge generator types parameterized on conv_graph_index_t
+    using random_eg_t = typename GraphFactoryTraitsT::template random_eg_t<conv_graph_index_t>;
+    using propagate_engine_t = typename GraphFactoryTraitsT::template propagate_engine_t<conv_graph_index_t, false>;
+    using triangle_updater_t = typename GraphFactoryTraitsT::template triangle_updater_t<conv_graph_index_t>;
+    using reverse_updater_t = typename GraphFactoryTraitsT::template reverse_updater_t<conv_graph_index_t>;
+    using routing_updater_t = typename GraphFactoryTraitsT::template routing_updater_t<conv_graph_index_t>;
+    using truncate_updater_t = typename GraphFactoryTraitsT::template truncate_updater_t<conv_graph_index_t>;
     using vector_array_t = typename GraphFactoryTraitsT::vector_array_t;
     using query_vecs_t = typename GraphFactoryTraitsT::query_vecs_t;
     using ground_truth_t = typename GraphFactoryTraitsT::ground_truth_t;
     using recall_estimator_t = typename GraphFactoryTraitsT::recall_estimator_t;
     using graph_mode_t = typename GraphFactoryTraitsT::graph_mode_t;
-    using monolayer_graph_router_t = typename GraphFactoryTraitsT::template monolayer_graph_router_t<graph_mode_t::construct_mode>;
+    using monolayer_graph_router_t = typename GraphFactoryTraitsT::template monolayer_graph_router_t<graph_mode_t::construct_mode, conv_graph_index_t>;
 
 public:
     /** @brief construct a new convergent graph from vector array */

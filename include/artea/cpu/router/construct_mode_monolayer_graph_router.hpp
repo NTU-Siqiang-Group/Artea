@@ -35,9 +35,9 @@
 namespace artea {
 namespace cpu {
 
-template <typename RouterTraitsT>
-class MonolayerGraphRouter<RouterTraitsT, GraphModeT::construct_mode> :
-    public RouterTraitsT::template vector_router_t<MonolayerGraphRouter<RouterTraitsT, GraphModeT::construct_mode>>
+template <typename RouterTraitsT, typename FlatGraphT>
+class MonolayerGraphRouter<RouterTraitsT, GraphModeT::construct_mode, FlatGraphT> :
+    public RouterTraitsT::template vector_router_t<MonolayerGraphRouter<RouterTraitsT, GraphModeT::construct_mode, FlatGraphT>>
 {
     using vertex_num_t = typename RouterTraitsT::vertex_num_t;
     using vertex_id_t = typename RouterTraitsT::vertex_id_t;
@@ -46,20 +46,19 @@ class MonolayerGraphRouter<RouterTraitsT, GraphModeT::construct_mode> :
     using dist_func_t = typename RouterTraitsT::dist_func_t;
     using vector_array_t = typename RouterTraitsT::vector_array_t;
     using query_vecs_t = typename RouterTraitsT::query_vecs_t;
-    using conv_graph_index_t = typename RouterTraitsT::conv_graph_index_t;
     using nbr_arr_t = typename RouterTraitsT::nbr_arr_t;
     using candidate_queue_t = typename RouterTraitsT::candidate_queue_t;
     using visited_table_t = typename RouterTraitsT::visited_table_t;
     using visited_table_pool_t = typename RouterTraitsT::visited_table_pool_t;
     using knn_results_t = typename RouterTraitsT::knn_results_t;
-    using base_class_t = typename RouterTraitsT::template vector_router_t<MonolayerGraphRouter<RouterTraitsT, GraphModeT::construct_mode>>;
+    using base_class_t = typename RouterTraitsT::template vector_router_t<MonolayerGraphRouter<RouterTraitsT, GraphModeT::construct_mode, FlatGraphT>>;
 
 public:
 
     MonolayerGraphRouter(
         const vector_array_t& vecs_data,
         const dist_func_t& dist_func,
-        const conv_graph_index_t& flat_graph,
+        const FlatGraphT& flat_graph,
         const uint32_t topk,
         const vertex_num_t candidate_queue_size = 16,
         const vertex_num_t extracted_nbr_size = 64
@@ -186,7 +185,7 @@ private:
     }
 
     /** @brief Reference to the flat graph (build-time, nbr_t neighbors). */
-    const conv_graph_index_t& _flat_graph;
+    const FlatGraphT& _flat_graph;
 
     /** @brief Candidate queue size for beam search. */
     vertex_num_t _candidate_queue_size = 0;

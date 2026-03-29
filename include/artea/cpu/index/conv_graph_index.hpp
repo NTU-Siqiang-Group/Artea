@@ -6,6 +6,8 @@
 
 #pragma once
 
+#include <nlohmann/json.hpp>
+
 namespace artea {
 namespace cpu {
 namespace conv_graph {
@@ -61,6 +63,41 @@ public:
 
     __attribute__((always_inline))
     auto propagate_config() -> propagate_config_t& { return _propagate_config; }
+
+    // --- Metadata hooks ---
+
+    auto get_metadata() const -> nlohmann::json {
+        nlohmann::json meta;
+        meta["pruning_config"] = {
+            {"scale_coeffs", _pruning_config.scale_coeffs()},
+            {"shifted_coeffs", _pruning_config.shifted_coeffs()}
+        };
+        meta["propagate_config"] = {
+            {"num_build_loops", _propagate_config.num_build_loops()},
+            {"num_triu_iters", _propagate_config.num_triu_iters()},
+            {"prefill_ratio", _propagate_config.prefill_ratio()},
+            {"num_routing_loops", _propagate_config.num_routing_loops()}
+        };
+        return meta;
+    }
+
+    static auto from_metadata(
+        const nlohmann::json& meta,
+        const vector_array_t& vecs_data,
+        const layer_config_t& layer_config
+    ) -> GraphIndex {
+        pruning_config_t pruning_config(
+            meta["pruning_config"]["scale_coeffs"].get<float>(),
+            meta["pruning_config"]["shifted_coeffs"].get<float>()
+        );
+        propagate_config_t propagate_config(
+            meta["propagate_config"]["num_build_loops"].get<uint32_t>(),
+            meta["propagate_config"]["num_triu_iters"].get<uint32_t>(),
+            meta["propagate_config"]["prefill_ratio"].get<float>(),
+            meta["propagate_config"]["num_routing_loops"].get<uint32_t>()
+        );
+        return GraphIndex(vecs_data, layer_config, pruning_config, propagate_config);
+    }
 
 private:
     /** @brief Pruning configuration. */

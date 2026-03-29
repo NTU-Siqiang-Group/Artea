@@ -31,7 +31,7 @@ namespace cpu {
  * @brief Random edge generator for initializing graph with random neighbors.
  * @tparam EdgeGeneratorTraitsT The edge generator traits type.
  */
-template <typename EdgeGeneratorTraitsT>
+template <typename EdgeGeneratorTraitsT, typename FlatGraphT>
 class RandomEG {
 
     using vertex_num_t = typename EdgeGeneratorTraitsT::vertex_num_t;
@@ -45,7 +45,6 @@ class RandomEG {
     using nbr_comp_t = typename EdgeGeneratorTraitsT::nbr_comp_t;
     using dist_func_t = typename EdgeGeneratorTraitsT::dist_func_t;
     using random_seq_t = typename EdgeGeneratorTraitsT::random_seq_t;
-    using conv_graph_index_t = typename EdgeGeneratorTraitsT::conv_graph_index_t;
 
     static constexpr nbr_comp_t nbr_comp {};
 
@@ -63,7 +62,7 @@ public:
      * @param init_nbr_size Number of random neighbors to generate for each vertex.
      */
     auto generate(
-        conv_graph_index_t& flat_graph,
+        FlatGraphT& flat_graph,
         const vertex_num_t init_nbr_size
     ) -> void {
         const vertex_num_t num_vertices = flat_graph.get_num_vertices();

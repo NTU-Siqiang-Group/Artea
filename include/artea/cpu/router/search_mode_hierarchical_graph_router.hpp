@@ -35,9 +35,9 @@
 namespace artea {
 namespace cpu {
 
-template <typename RouterTraitsT>
-class HierarchicalGraphRouter<RouterTraitsT, GraphModeT::search_mode> :
-    public RouterTraitsT::template vector_router_t<HierarchicalGraphRouter<RouterTraitsT, GraphModeT::search_mode>>
+template <typename RouterTraitsT, typename GraphT>
+class HierarchicalGraphRouter<RouterTraitsT, GraphModeT::search_mode, GraphT> :
+    public RouterTraitsT::template vector_router_t<HierarchicalGraphRouter<RouterTraitsT, GraphModeT::search_mode, GraphT>>
 {
 
     using vertex_num_t = typename RouterTraitsT::vertex_num_t;
@@ -54,7 +54,7 @@ class HierarchicalGraphRouter<RouterTraitsT, GraphModeT::search_mode> :
     using visited_table_t = typename RouterTraitsT::visited_table_t;
     using visited_table_pool_t = typename RouterTraitsT::visited_table_pool_t;
     using knn_results_t = typename RouterTraitsT::knn_results_t;
-    using base_class_t = typename RouterTraitsT::template vector_router_t<HierarchicalGraphRouter<RouterTraitsT, GraphModeT::search_mode>>;
+    using base_class_t = typename RouterTraitsT::template vector_router_t<HierarchicalGraphRouter<RouterTraitsT, GraphModeT::search_mode, GraphT>>;
 
     static constexpr vertex_num_t min_num_layer_vertex = RouterTraitsT::min_num_layer_vertex;
 

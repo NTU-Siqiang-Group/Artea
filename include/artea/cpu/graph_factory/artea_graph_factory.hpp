@@ -29,8 +29,9 @@ class ArteaGraphFactory {
     using ratio_t = typename GraphFactoryTraitsT::ratio_t;
     using distance_t = typename GraphFactoryTraitsT::distance_t;
     using dist_func_t = typename GraphFactoryTraitsT::dist_func_t;
+    using conv_graph_index_t = typename GraphFactoryTraitsT::conv_graph_index_t;
     using conv_graph_factory_t = typename GraphFactoryTraitsT::conv_graph_factory_t;
-    using artea_graph_index_t = typename GraphFactoryTraitsT::artea_graph_index_t;
+    using artea_graph_index_t = typename GraphFactoryTraitsT::template artea_graph_index_t<conv_graph_index_t>;
     using vector_array_t = typename GraphFactoryTraitsT::vector_array_t;
     using vertex_subset_t = typename GraphFactoryTraitsT::vertex_subset_t;
     using lb_greedy_vg_t = typename GraphFactoryTraitsT::lb_greedy_vg_t;

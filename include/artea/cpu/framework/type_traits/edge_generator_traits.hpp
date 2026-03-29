@@ -32,14 +32,14 @@ enum class IVFConstructPolicyT {
 };
 
 // ----- Forward Declaration  ------ //
-template <typename EdgeGeneratorTraitsT, typename DerivedClassT> class NeighborUpdater;
-template <typename EdgeGeneratorTraitsT> class TriangleUpdater;
-template <typename EdgeGeneratorTraitsT> class ReverseUpdater;
-template <typename EdgeGeneratorTraitsT> class RandomUpdater;
-template <typename EdgeGeneratorTraitsT> class RoutingUpdater;
-template <typename EdgeGeneratorTraitsT> class TruncateUpdater;
-template <typename EdgeGeneratorTraitsT> class RandomEG;
-template <typename EdgeGeneratorTraitsT, bool SelectiveSchedule> class PropagateEngine;
+template <typename EdgeGeneratorTraitsT, typename FlatGraphT, typename DerivedClassT> class NeighborUpdater;
+template <typename EdgeGeneratorTraitsT, typename FlatGraphT> class TriangleUpdater;
+template <typename EdgeGeneratorTraitsT, typename FlatGraphT> class ReverseUpdater;
+template <typename EdgeGeneratorTraitsT, typename FlatGraphT> class RandomUpdater;
+template <typename EdgeGeneratorTraitsT, typename FlatGraphT> class RoutingUpdater;
+template <typename EdgeGeneratorTraitsT, typename FlatGraphT> class TruncateUpdater;
+template <typename EdgeGeneratorTraitsT, typename FlatGraphT> class RandomEG;
+template <typename EdgeGeneratorTraitsT, typename FlatGraphT, bool SelectiveSchedule> class PropagateEngine;
 template <typename EdgeGeneratorTraitsT> class IVFPartitions;
 
 template <typename ComputerTraitsT, typename BufferTraitsT, typename IndexTraitsT, typename RouterTraitsT>
@@ -56,30 +56,36 @@ struct EdgeGeneratorTraits :
     /** @brief IVF construction policy type. */
     using ivf_construct_policy_t = IVFConstructPolicyT;
 
-    template <typename DerivedClassT>
-    using neighbor_updater_t = NeighborUpdater<edge_generator_traits_t, DerivedClassT>;
+    template <typename FlatGraphT, typename DerivedClassT>
+    using neighbor_updater_t = NeighborUpdater<edge_generator_traits_t, FlatGraphT, DerivedClassT>;
 
     /** @brief Triangle updater. */
-    using triangle_updater_t = TriangleUpdater<edge_generator_traits_t>;
+    template <typename FlatGraphT>
+    using triangle_updater_t = TriangleUpdater<edge_generator_traits_t, FlatGraphT>;
 
     /** @brief Reverse edge updater. */
-    using reverse_updater_t = ReverseUpdater<edge_generator_traits_t>;
+    template <typename FlatGraphT>
+    using reverse_updater_t = ReverseUpdater<edge_generator_traits_t, FlatGraphT>;
 
     /** @brief Random neighbor updater. */
-    using random_updater_t = RandomUpdater<edge_generator_traits_t>;
+    template <typename FlatGraphT>
+    using random_updater_t = RandomUpdater<edge_generator_traits_t, FlatGraphT>;
 
     /** @brief Routing-based neighbor updater (uses construct-mode router). */
-    using routing_updater_t = RoutingUpdater<edge_generator_traits_t>;
+    template <typename FlatGraphT>
+    using routing_updater_t = RoutingUpdater<edge_generator_traits_t, FlatGraphT>;
 
     /** @brief Truncate updater: trims neighbor arrays to max_nbr_size. */
-    using truncate_updater_t = TruncateUpdater<edge_generator_traits_t>;
+    template <typename FlatGraphT>
+    using truncate_updater_t = TruncateUpdater<edge_generator_traits_t, FlatGraphT>;
 
     /** @brief Random edge generator. */
-    using random_eg_t = RandomEG<edge_generator_traits_t>;
+    template <typename FlatGraphT>
+    using random_eg_t = RandomEG<edge_generator_traits_t, FlatGraphT>;
 
     /** @brief Type for propagation engine. */
-    template <bool SelectiveSchedule>
-    using propagate_engine_t = PropagateEngine<edge_generator_traits_t, SelectiveSchedule>;
+    template <typename FlatGraphT, bool SelectiveSchedule>
+    using propagate_engine_t = PropagateEngine<edge_generator_traits_t, FlatGraphT, SelectiveSchedule>;
 
     /** @brief Neighbor array checker. */
     using nbr_arr_checker_t = typename IndexTraitsT::nbr_arr_checker_t;

@@ -28,7 +28,7 @@
 namespace artea {
 namespace cpu {
 
-template <typename EdgeGeneratorTraitsT, typename DerivedClassT>
+template <typename EdgeGeneratorTraitsT, typename FlatGraphT, typename DerivedClassT>
 class NeighborUpdater {
 
     using vertex_id_t = typename EdgeGeneratorTraitsT::vertex_id_t;
@@ -41,7 +41,6 @@ class NeighborUpdater {
     using log_table_t = typename EdgeGeneratorTraitsT::log_table_t;
     using dist_func_t = typename EdgeGeneratorTraitsT::dist_func_t;
     using nbr_arr_checker_t = typename EdgeGeneratorTraitsT::nbr_arr_checker_t;
-    using conv_graph_index_t = typename EdgeGeneratorTraitsT::conv_graph_index_t;
 
 public:
 
@@ -49,7 +48,7 @@ public:
         const dist_func_t& dist_func,
         const vector_array_t& vecs_data,
         log_table_t& log_table,
-        const conv_graph_index_t& flat_graph
+        const FlatGraphT& flat_graph
     ) : _dist_func(dist_func), _vecs_data(vecs_data), _log_table(log_table), _flat_graph(flat_graph) {}
 
     /**
@@ -88,7 +87,7 @@ protected:
     log_table_t& _log_table;
 
     /** @brief Reference to the flat graph for neighbor overflow check. */
-    const conv_graph_index_t& _flat_graph;
+    const FlatGraphT& _flat_graph;
 
 };  //  class NeighborUpdater
 

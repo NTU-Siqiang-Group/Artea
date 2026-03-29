@@ -34,7 +34,7 @@
 namespace artea {
 namespace cpu {
 
-template <typename EdgeGeneratorTraitsT, bool SelectiveSchedule = false>
+template <typename EdgeGeneratorTraitsT, typename FlatGraphT, bool SelectiveSchedule>
 class PropagateEngine {
 
     using vertex_num_t = typename EdgeGeneratorTraitsT::vertex_num_t;
@@ -48,11 +48,10 @@ class PropagateEngine {
     using log_container_t = typename EdgeGeneratorTraitsT::log_container_t;
     using log_table_t = typename EdgeGeneratorTraitsT::log_table_t;
     using word_aligned_bitmap_t = typename EdgeGeneratorTraitsT::word_aligned_bitmap_t;
-    using conv_graph_index_t = typename EdgeGeneratorTraitsT::conv_graph_index_t;
     using dist_func_t = typename EdgeGeneratorTraitsT::dist_func_t;
 
     template <typename DerivedClassT>
-    using neighbor_updater_t = typename EdgeGeneratorTraitsT::template neighbor_updater_t<DerivedClassT>;
+    using neighbor_updater_t = typename EdgeGeneratorTraitsT::template neighbor_updater_t<FlatGraphT, DerivedClassT>;
 
     static constexpr bool selective_schedule = SelectiveSchedule;
     static constexpr bool profiling_mode = EdgeGeneratorTraitsT::profiling_mode;
@@ -67,7 +66,7 @@ public:
 
     /** @brief Set the flat graph to operate on. */
     __attribute__((always_inline))
-    auto set_graph(conv_graph_index_t& flat_graph) -> void {
+    auto set_graph(FlatGraphT& flat_graph) -> void {
         _flat_graph = &flat_graph;
 
         // Initialize executor bitmap for selective scheduling
@@ -301,11 +300,11 @@ public:
       */
     template <typename UpdaterT, typename... Args>
     auto make_updater(Args&&... args) -> UpdaterT {
-        using triangle_updater_t = typename EdgeGeneratorTraitsT::triangle_updater_t;
-        using reverse_updater_t = typename EdgeGeneratorTraitsT::reverse_updater_t;
-        using random_updater_t = typename EdgeGeneratorTraitsT::random_updater_t;
-        using routing_updater_t = typename EdgeGeneratorTraitsT::routing_updater_t;
-        using truncate_updater_t = typename EdgeGeneratorTraitsT::truncate_updater_t;
+        using triangle_updater_t = typename EdgeGeneratorTraitsT::template triangle_updater_t<FlatGraphT>;
+        using reverse_updater_t = typename EdgeGeneratorTraitsT::template reverse_updater_t<FlatGraphT>;
+        using random_updater_t = typename EdgeGeneratorTraitsT::template random_updater_t<FlatGraphT>;
+        using routing_updater_t = typename EdgeGeneratorTraitsT::template routing_updater_t<FlatGraphT>;
+        using truncate_updater_t = typename EdgeGeneratorTraitsT::template truncate_updater_t<FlatGraphT>;
 
         const auto& vecs_arr = _flat_graph->get_vecs_data();
         auto& log_table = _log_table;
@@ -346,7 +345,7 @@ private:
     word_aligned_bitmap_t _executor_bitmap;
 
     /** @brief Pointer to the flat graph being operated on. */
-    conv_graph_index_t* _flat_graph;
+    FlatGraphT* _flat_graph;
 
     /** @brief Distance function reference. */
     const dist_func_t& _dist_func;

@@ -23,7 +23,11 @@ namespace cpu {
  *   - layer_id 0 is the bottom layer, stored at _layer_graphs[0]
  *   - Higher layer_id values represent upper layers
  */
-template <typename IndexTraitsT, typename DerivedClassT>
+template <
+    typename IndexTraitsT,
+    typename DerivedClassT,
+    typename LayerGraphT
+>
 class HierarchicalGraph {
 
 protected:
@@ -32,12 +36,14 @@ protected:
     using layer_id_t = typename IndexTraitsT::layer_id_t;
     using layer_num_t = typename IndexTraitsT::layer_num_t;
     using vector_array_t = typename IndexTraitsT::vector_array_t;
-    using conv_graph_index_t = typename IndexTraitsT::conv_graph_index_t;
     using inter_layer_links_t = typename IndexTraitsT::inter_layer_links_t;
     using hierarchical_vecs_manager_t = typename IndexTraitsT::hierarchical_vecs_manager_t;
     using layer_config_t = typename IndexTraitsT::layer_config_t;
 
 public:
+    /** @brief The flat graph type used for each layer. */
+    using layer_graph_t = LayerGraphT;
+
     /**
      * @brief Construct a new Hierarchical Graph object.
      * @param base_vecs Reference to the base layer vector data.
@@ -89,30 +95,30 @@ public:
     auto upper_layer_config() -> layer_config_t& { return _upper_layer_config; }
 
     __attribute__((always_inline))
-    auto get_layer_graphs() -> std::vector<std::unique_ptr<conv_graph_index_t>>& { return _layer_graphs; }
+    auto get_layer_graphs() -> std::vector<std::unique_ptr<LayerGraphT>>& { return _layer_graphs; }
 
     __attribute__((always_inline))
-    auto get_layer_graphs() const -> const std::vector<std::unique_ptr<conv_graph_index_t>>& { return _layer_graphs; }
+    auto get_layer_graphs() const -> const std::vector<std::unique_ptr<LayerGraphT>>& { return _layer_graphs; }
 
     __attribute__((always_inline))
-    auto get_bottom_layer_graph() -> conv_graph_index_t& { return *_layer_graphs[0]; }
+    auto get_bottom_layer_graph() -> LayerGraphT& { return *_layer_graphs[0]; }
 
     __attribute__((always_inline))
-    auto get_bottom_layer_graph() const -> const conv_graph_index_t& { return *_layer_graphs[0]; }
+    auto get_bottom_layer_graph() const -> const LayerGraphT& { return *_layer_graphs[0]; }
 
     /**
      * @brief Get the flat graph at a given layer_id.
      * @param layer_id The layer ID (0 for bottom layer, higher values for upper layers).
      */
     __attribute__((always_inline))
-    auto get_layer_graph(const layer_id_t layer_id) -> conv_graph_index_t& { return *_layer_graphs[layer_id]; }
+    auto get_layer_graph(const layer_id_t layer_id) -> LayerGraphT& { return *_layer_graphs[layer_id]; }
 
     /**
      * @brief Get the flat graph at a given layer_id (const version).
      * @param layer_id The layer ID (0 for bottom layer, higher values for upper layers).
      */
     __attribute__((always_inline))
-    auto get_layer_graph(const layer_id_t layer_id) const -> const conv_graph_index_t& { return *_layer_graphs[layer_id]; }
+    auto get_layer_graph(const layer_id_t layer_id) const -> const LayerGraphT& { return *_layer_graphs[layer_id]; }
 
     /**
      * @brief Set the flat graph at a given layer_id.
@@ -120,7 +126,7 @@ public:
      * @param layer_graph Unique pointer to the flat graph to set.
      */
     __attribute__((always_inline))
-    auto set_layer_graph(const layer_id_t layer_id, std::unique_ptr<conv_graph_index_t> layer_graph) -> void {
+    auto set_layer_graph(const layer_id_t layer_id, std::unique_ptr<LayerGraphT> layer_graph) -> void {
         _layer_graphs[layer_id] = std::move(layer_graph);
     }
 
@@ -130,8 +136,8 @@ public:
      * @param layer_graph Reference to the flat graph to set (will be moved).
      */
     __attribute__((always_inline))
-    auto set_layer_graph(const layer_id_t layer_id, conv_graph_index_t&& layer_graph) -> void {
-        _layer_graphs[layer_id] = std::make_unique<conv_graph_index_t>(std::move(layer_graph));
+    auto set_layer_graph(const layer_id_t layer_id, LayerGraphT&& layer_graph) -> void {
+        _layer_graphs[layer_id] = std::make_unique<LayerGraphT>(std::move(layer_graph));
     }
 
     __attribute__((always_inline))
@@ -172,7 +178,7 @@ protected:
     hierarchical_vecs_manager_t _hier_vecs_manager;
 
     /** @brief Flat graphs for all layers. layer_id 0 is the bottom layer at _layer_graphs[0]. */
-    std::vector<std::unique_ptr<conv_graph_index_t>> _layer_graphs;
+    std::vector<std::unique_ptr<LayerGraphT>> _layer_graphs;
 
     /** @brief Links vertex between two adjacent layers. */
     inter_layer_links_t _inter_layer_links;

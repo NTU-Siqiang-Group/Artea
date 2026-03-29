@@ -40,7 +40,6 @@ class SearchGraphConverter {
     using vector_array_t = typename IndexTraitsT::vector_array_t;
     using conv_graph_index_t = typename IndexTraitsT::conv_graph_index_t;
     using flat_search_graph_t = typename IndexTraitsT::flat_search_graph_t;
-    using artea_graph_index_t = typename IndexTraitsT::artea_graph_index_t;
     using hierarchical_search_graph_t = typename IndexTraitsT::hierarchical_search_graph_t;
     using nbr_arr_checker_t = typename IndexTraitsT::nbr_arr_checker_t;
 
@@ -51,8 +50,9 @@ public:
      * @param extracted_nbr_size Fixed number of neighbors per vertex in the flat search graph.
      * @return A new FlatSearchGraph instance.
      */
+    template <typename FlatGraphT>
     static auto from_flat_graph(
-        const conv_graph_index_t& flat_graph,
+        const FlatGraphT& flat_graph,
         const vertex_num_t extracted_nbr_size
     ) -> flat_search_graph_t {
         const vertex_num_t max_nbr_size = flat_graph.layer_config().max_nbr_size();
@@ -113,8 +113,9 @@ public:
      * @param ul_extracted_nbr_size Fixed number of neighbors for upper layers.
      * @return A new HierarchicalSearchGraph instance.
      */
+    template <typename HierGraphT>
     static auto from_hierarchical_graph(
-        const artea_graph_index_t& hierarchical_graph,
+        const HierGraphT& hierarchical_graph,
         const vertex_num_t bl_extracted_nbr_size,
         const vertex_num_t ul_extracted_nbr_size
     ) -> hierarchical_search_graph_t {

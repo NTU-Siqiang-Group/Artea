@@ -232,7 +232,7 @@ int main(int argc, char** argv) {
 
     // Calculate and output index size
     index_size_calculator_t index_size_calc;
-    auto index_size_info = index_size_calc.calculate_size(hierarchical_graph);
+    auto index_size_info = index_size_calc.calculate_hierarchical_graph_size(hierarchical_graph);
 
     // Determine extracted neighbor sizes
     vertex_num_t bl_extracted_nbr_size = program.get<uint32_t>("--bl-extracted-nbr-size");

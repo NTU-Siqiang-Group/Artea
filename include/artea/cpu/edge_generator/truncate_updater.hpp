@@ -25,9 +25,9 @@
 namespace artea {
 namespace cpu {
 
-template <typename EdgeGeneratorTraitsT>
+template <typename EdgeGeneratorTraitsT, typename FlatGraphT>
 class TruncateUpdater :
-    public EdgeGeneratorTraitsT::template neighbor_updater_t<TruncateUpdater<EdgeGeneratorTraitsT>> {
+    public EdgeGeneratorTraitsT::template neighbor_updater_t<FlatGraphT, TruncateUpdater<EdgeGeneratorTraitsT, FlatGraphT>> {
 
     using vertex_id_t    = typename EdgeGeneratorTraitsT::vertex_id_t;
     using vertex_num_t   = typename EdgeGeneratorTraitsT::vertex_num_t;
@@ -35,8 +35,7 @@ class TruncateUpdater :
     using log_table_t    = typename EdgeGeneratorTraitsT::log_table_t;
     using dist_func_t    = typename EdgeGeneratorTraitsT::dist_func_t;
     using vector_array_t = typename EdgeGeneratorTraitsT::vector_array_t;
-    using conv_graph_index_t   = typename EdgeGeneratorTraitsT::conv_graph_index_t;
-    using base_class_t   = typename EdgeGeneratorTraitsT::template neighbor_updater_t<TruncateUpdater<EdgeGeneratorTraitsT>>;
+    using base_class_t   = typename EdgeGeneratorTraitsT::template neighbor_updater_t<FlatGraphT, TruncateUpdater<EdgeGeneratorTraitsT, FlatGraphT>>;
 
 public:
     static constexpr const char* updater_name = "truncate_updater";
@@ -45,7 +44,7 @@ public:
         const dist_func_t& dist_func,
         const vector_array_t& vecs_data,
         log_table_t& log_table,
-        const conv_graph_index_t& flat_graph
+        const FlatGraphT& flat_graph
     ) : base_class_t(dist_func, vecs_data, log_table, flat_graph) {}
 
     /**

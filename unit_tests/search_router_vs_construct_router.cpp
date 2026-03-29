@@ -154,7 +154,7 @@ TEST_F(RouterComparisonTest, ConstructModeRouter) {
     const auto& base_vecs  = p.get_dataset().get_base_vecs();
     const auto& query_vecs = p.get_dataset().get_query_vecs();
 
-    monolayer_graph_router_t<graph_mode_t::construct_mode> router(
+    monolayer_graph_router_t<graph_mode_t::construct_mode, conv_graph_index_t> router(
         base_vecs, p.get_dist_func(), p.get_flat_graph(),
         g_config.topk, g_config.queue_size
     );

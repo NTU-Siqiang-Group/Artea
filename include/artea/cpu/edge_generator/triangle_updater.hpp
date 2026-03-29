@@ -37,9 +37,9 @@ enum class PruningConditionT {
     origin_rng_ineq
 };
 
-template <typename EdgeGeneratorTraitsT>
+template <typename EdgeGeneratorTraitsT, typename FlatGraphT>
 class TriangleUpdater :
-    public EdgeGeneratorTraitsT::template neighbor_updater_t<TriangleUpdater<EdgeGeneratorTraitsT>> {
+    public EdgeGeneratorTraitsT::template neighbor_updater_t<FlatGraphT, TriangleUpdater<EdgeGeneratorTraitsT, FlatGraphT>> {
 
     using vertex_id_t = typename EdgeGeneratorTraitsT::vertex_id_t;
     using vertex_num_t = typename EdgeGeneratorTraitsT::vertex_num_t;
@@ -51,8 +51,7 @@ class TriangleUpdater :
     using nbr_arr_t = typename EdgeGeneratorTraitsT::nbr_arr_t;
     using log_table_t = typename EdgeGeneratorTraitsT::log_table_t;
     using dist_func_t = typename EdgeGeneratorTraitsT::dist_func_t;
-    using conv_graph_index_t = typename EdgeGeneratorTraitsT::conv_graph_index_t;
-    using base_class_t = typename EdgeGeneratorTraitsT::template neighbor_updater_t<TriangleUpdater<EdgeGeneratorTraitsT>>;
+    using base_class_t = typename EdgeGeneratorTraitsT::template neighbor_updater_t<FlatGraphT, TriangleUpdater<EdgeGeneratorTraitsT, FlatGraphT>>;
     static constexpr vertex_id_t invalid_vertex_id = EdgeGeneratorTraitsT::invalid_vertex_id;
     static constexpr distance_t nan_distance = EdgeGeneratorTraitsT::nan_distance;
     static constexpr distance_t max_distance = EdgeGeneratorTraitsT::max_distance;
@@ -66,7 +65,7 @@ public:
         const dist_func_t& dist_func,
         const vector_array_t& vecs_data,
         log_table_t& log_table,
-        const conv_graph_index_t& flat_graph,
+        const FlatGraphT& flat_graph,
         const ratio_t scale_coeffs,
         const ratio_t shifted_coeffs = 0.0
     ) : base_class_t(dist_func, vecs_data, log_table, flat_graph),

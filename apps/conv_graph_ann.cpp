@@ -170,7 +170,7 @@ int main(int argc, char** argv) {
 
     // Calculate and output index size
     index_size_calculator_t index_size_calc;
-    auto index_size_info = index_size_calc.calculate_size(flat_graph);
+    auto index_size_info = index_size_calc.calculate_flat_graph_size(flat_graph);
 
     // Determine extracted neighbor size
     vertex_num_t extracted_nbr_size = program.is_used("--extracted-nbr-size")

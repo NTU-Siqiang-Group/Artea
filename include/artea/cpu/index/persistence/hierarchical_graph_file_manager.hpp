@@ -35,7 +35,7 @@ namespace cpu {
  * @brief File manager for HierarchicalGraph snapshot and restore operations.
  * @tparam IndexTraitsT The index traits type.
  */
-template <typename IndexTraitsT>
+template <typename IndexTraitsT, typename HierGraphT, typename LayerGraphT>
 class HierarchicalGraphFileManager {
 
     using vertex_num_t = typename IndexTraitsT::vertex_num_t;
@@ -43,18 +43,9 @@ class HierarchicalGraphFileManager {
     using layer_id_t = typename IndexTraitsT::layer_id_t;
     using layer_num_t = typename IndexTraitsT::layer_num_t;
     using distance_t = typename IndexTraitsT::distance_t;
-    using artea_graph_index_t = typename IndexTraitsT::artea_graph_index_t;
     using hierarchical_vecs_manager_t = typename IndexTraitsT::hierarchical_vecs_manager_t;
-    using conv_graph_index_t = typename IndexTraitsT::conv_graph_index_t;
-    using flat_graph_file_manager_t = typename IndexTraitsT::flat_graph_file_manager_t;
-    using iter_t = typename IndexTraitsT::iter_t;
-    using ratio_t = typename IndexTraitsT::ratio_t;
+    using flat_graph_file_manager_t = FlatGraphFileManager<IndexTraitsT, LayerGraphT>;
     using layer_config_t = typename IndexTraitsT::layer_config_t;
-    using propagate_config_t = typename IndexTraitsT::artea_graph::propagate_config_t;
-    using pruning_config_t = typename IndexTraitsT::artea_graph::pruning_config_t;
-    using greedy_vertices_builder_config_t = typename IndexTraitsT::greedy_vertices_builder_config_t;
-    using random_vertices_builder_config_t = typename IndexTraitsT::random_vertices_builder_config_t;
-    using vertices_builder_config_t = typename IndexTraitsT::vertices_builder_config_t;
     using vector_array_t = typename IndexTraitsT::vector_array_t;
 
 public:
@@ -65,7 +56,7 @@ public:
      * @param metadata Optional metadata to include in metadata.json.
      */
     static auto snapshot(
-        const artea_graph_index_t& hierarchical_graph,
+        const HierGraphT& hierarchical_graph,
         const std::string& index_dir,
         const nlohmann::json& metadata = nlohmann::json::object()
     ) -> void {
@@ -87,41 +78,7 @@ public:
             {"max_nbr_size", hierarchical_graph.upper_layer_config().max_nbr_size()},
             {"reserved_nbr_size", hierarchical_graph.upper_layer_config().reserved_nbr_size()}
         };
-        meta["bottom_pruning_config"] = {
-            {"scale_coeffs", hierarchical_graph.bottom_pruning_config().scale_coeffs()},
-            {"shifted_coeffs", hierarchical_graph.bottom_pruning_config().shifted_coeffs()}
-        };
-        meta["upper_pruning_config"] = {
-            {"scale_coeffs", hierarchical_graph.upper_pruning_config().scale_coeffs()},
-            {"shifted_coeffs", hierarchical_graph.upper_pruning_config().shifted_coeffs()}
-        };
-        meta["propagate_config"] = {
-            {"num_build_loops", hierarchical_graph.propagate_config().num_build_loops()},
-            {"num_triu_iters", hierarchical_graph.propagate_config().num_triu_iters()},
-            {"prefill_ratio", hierarchical_graph.propagate_config().prefill_ratio()},
-            {"num_routing_loops", hierarchical_graph.propagate_config().num_routing_loops()}
-        };
-
-        // Save vertices_builder_config based on which variant is active
-        const auto& vertices_builder_config = hierarchical_graph.vertices_builder_config();
-        if (std::holds_alternative<greedy_vertices_builder_config_t>(vertices_builder_config)) {
-            const auto& config = std::get<greedy_vertices_builder_config_t>(vertices_builder_config);
-            meta["vertices_builder_config"] = {
-                {"type", "approx_rnet"},
-                {"min_radius", config.min_radius()},
-                {"beta", config.beta()},
-                {"coverage_ratio", config.coverage_ratio()},
-                {"confidence", config.confidence()},
-                {"max_result_ratio", config.max_result_ratio()},
-                {"sampling_batch_size", config.sampling_batch_size()}
-            };
-        } else if (std::holds_alternative<random_vertices_builder_config_t>(vertices_builder_config)) {
-            const auto& config = std::get<random_vertices_builder_config_t>(vertices_builder_config);
-            meta["vertices_builder_config"] = {
-                {"type", "random"},
-                {"random_result_ratio", config.random_result_ratio()}
-            };
-        }
+        meta.merge_patch(hierarchical_graph.get_metadata());
 
         meta["entry_point"] = hierarchical_graph.get_entry_point();
 
@@ -195,7 +152,7 @@ public:
     static auto restore(
         const std::string& index_dir,
         const vector_array_t& base_vecs
-    ) -> artea_graph_index_t {
+    ) -> HierGraphT {
         // Read root metadata.json
         std::string metadata_path = index_dir + "/metadata.json";
         std::ifstream meta_ifs(metadata_path);
@@ -222,53 +179,9 @@ public:
             meta["upper_layer_config"]["reserved_nbr_size"].get<vertex_num_t>()
         );
 
-        // Extract pruning and propagate configurations
-        pruning_config_t bottom_pruning_config(
-            meta["bottom_pruning_config"]["scale_coeffs"].get<ratio_t>(),
-            meta["bottom_pruning_config"]["shifted_coeffs"].get<ratio_t>()
-        );
-        pruning_config_t upper_pruning_config(
-            meta["upper_pruning_config"]["scale_coeffs"].get<ratio_t>(),
-            meta["upper_pruning_config"]["shifted_coeffs"].get<ratio_t>()
-        );
-        propagate_config_t propagate_config(
-            meta["propagate_config"]["num_build_loops"].get<iter_t>(),
-            meta["propagate_config"]["num_triu_iters"].get<iter_t>(),
-            meta["propagate_config"]["prefill_ratio"].get<ratio_t>(),
-            meta["propagate_config"]["num_routing_loops"].get<iter_t>()
-        );
-
-        // Restore vertices_builder_config based on type
-        const std::string vertices_builder_config_type = meta["vertices_builder_config"]["type"].get<std::string>();
-        vertices_builder_config_t vertices_builder_config = [&]() -> vertices_builder_config_t {
-            if (vertices_builder_config_type == "approx_rnet") {
-                return greedy_vertices_builder_config_t(
-                    meta["vertices_builder_config"]["min_radius"].get<distance_t>(),
-                    meta["vertices_builder_config"]["beta"].get<typename greedy_vertices_builder_config_t::ratio_t>(),
-                    meta["vertices_builder_config"]["coverage_ratio"].get<typename greedy_vertices_builder_config_t::ratio_t>(),
-                    meta["vertices_builder_config"]["confidence"].get<typename greedy_vertices_builder_config_t::ratio_t>(),
-                    meta["vertices_builder_config"]["max_result_ratio"].get<typename greedy_vertices_builder_config_t::ratio_t>(),
-                    meta["vertices_builder_config"]["sampling_batch_size"].get<vertex_num_t>()
-                );
-            } else if (vertices_builder_config_type == "random") {
-                return random_vertices_builder_config_t(
-                    meta["vertices_builder_config"]["random_result_ratio"].get<typename random_vertices_builder_config_t::ratio_t>()
-                );
-            }
-            // This will throw and never return
-            ARTEA_ERROR(fmt::format("Unknown vertices_builder_config type: {}", vertices_builder_config_type));
-            __builtin_unreachable();
-        }();
-
-        // Create hierarchical graph with base_vecs
-        artea_graph_index_t hier_graph(
-            base_vecs,
-            bottom_layer_config,
-            upper_layer_config,
-            bottom_pruning_config,
-            upper_pruning_config,
-            propagate_config,
-            vertices_builder_config
+        // Construct hierarchical graph from metadata using subclass hook
+        HierGraphT hier_graph = HierGraphT::from_metadata(
+            meta, base_vecs, bottom_layer_config, upper_layer_config
         );
 
         const layer_num_t num_layers = meta["num_layers"].get<layer_num_t>();
