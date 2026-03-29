@@ -220,14 +220,14 @@ TEST_F(ArteaGraphSearchTest, ConstructModeBatchQuery) {
     const auto& base_vecs  = p.get_dataset().get_base_vecs();
     const auto& query_vecs = p.get_dataset().get_query_vecs();
 
-    hierarchical_graph_router_t<graph_mode_t::construct_mode, artea_graph_index_t> router(
-        base_vecs, p.get_dist_func(), p.get_hgraph(),
+    hierarchical_graph_router_t<graph_mode_t::construct_mode> router(
+        base_vecs, p.get_dist_func(),
         g_config.topk, g_config.queue_size
     );
     router.initialize();
 
     auto t0 = std::chrono::high_resolution_clock::now();
-    knn_results_t results = router.batch_query(query_vecs);
+    knn_results_t results = router.batch_query(query_vecs, p.get_hgraph());
     auto t1 = std::chrono::high_resolution_clock::now();
     double us = std::chrono::duration_cast<std::chrono::microseconds>(t1 - t0).count();
 

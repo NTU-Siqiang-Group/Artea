@@ -35,9 +35,9 @@
 namespace artea {
 namespace cpu {
 
-template <typename RouterTraitsT, typename FlatGraphT>
-class MonolayerGraphRouter<RouterTraitsT, GraphModeT::construct_mode, FlatGraphT> :
-    public RouterTraitsT::template vector_router_t<MonolayerGraphRouter<RouterTraitsT, GraphModeT::construct_mode, FlatGraphT>>
+template <typename RouterTraitsT>
+class MonolayerGraphRouter<RouterTraitsT, GraphModeT::construct_mode> :
+    public RouterTraitsT::template vector_router_t<MonolayerGraphRouter<RouterTraitsT, GraphModeT::construct_mode>>
 {
     using vertex_num_t = typename RouterTraitsT::vertex_num_t;
     using vertex_id_t = typename RouterTraitsT::vertex_id_t;
@@ -51,19 +51,17 @@ class MonolayerGraphRouter<RouterTraitsT, GraphModeT::construct_mode, FlatGraphT
     using visited_table_t = typename RouterTraitsT::visited_table_t;
     using visited_table_pool_t = typename RouterTraitsT::visited_table_pool_t;
     using knn_results_t = typename RouterTraitsT::knn_results_t;
-    using base_class_t = typename RouterTraitsT::template vector_router_t<MonolayerGraphRouter<RouterTraitsT, GraphModeT::construct_mode, FlatGraphT>>;
+    using base_class_t = typename RouterTraitsT::template vector_router_t<MonolayerGraphRouter<RouterTraitsT, GraphModeT::construct_mode>>;
 
 public:
 
     MonolayerGraphRouter(
         const vector_array_t& vecs_data,
         const dist_func_t& dist_func,
-        const FlatGraphT& flat_graph,
         const uint32_t topk,
         const vertex_num_t candidate_queue_size = 16,
         const vertex_num_t extracted_nbr_size = 64
     ) : base_class_t(vecs_data, dist_func, topk),
-        _flat_graph(flat_graph),
         _candidate_queue_size(candidate_queue_size),
         _extracted_nbr_size(extracted_nbr_size),
         _visited_table_pool(vecs_data.get_num_vecs())
@@ -76,19 +74,21 @@ public:
         }
     }
 
-    auto initialize_impl() -> void {
+    auto initialize() -> void {
         _visited_table_pool.warmup();
     }
 
     /**
      * @brief Query the top-k nearest vertices using the flat graph (build-time).
      * @param query_vec Pointer to the query vector data.
+     * @param flat_graph The flat graph to search on.
      * @return knn_results_t Flat array of topk result entries sorted by distance.
      */
+    template <typename FlatGraphT>
     __attribute__((always_inline))
-    auto query_impl(const vec_ele_t* query_vec) const -> knn_results_t {
+    auto query(const vec_ele_t* query_vec, const FlatGraphT& flat_graph) const -> knn_results_t {
         auto& visited_table = _visited_table_pool.acquire();
-        auto results = _beam_search(query_vec, visited_table);
+        auto results = _beam_search(query_vec, visited_table, static_cast<vertex_id_t>(0), flat_graph);
         visited_table.clear();
         return results;
     }
@@ -97,12 +97,14 @@ public:
      * @brief Query the top-k nearest vertices using the flat graph with an entry point.
      * @param query_vec Pointer to the query vector data.
      * @param entry_point Starting vertex ID for the search.
+     * @param flat_graph The flat graph to search on.
      * @return knn_results_t Flat array of topk result entries sorted by distance.
      */
+    template <typename FlatGraphT>
     __attribute__((always_inline))
-    auto query_impl(const vec_ele_t* query_vec, const vertex_id_t entry_point) const -> knn_results_t {
+    auto query(const vec_ele_t* query_vec, const vertex_id_t entry_point, const FlatGraphT& flat_graph) const -> knn_results_t {
         auto& visited_table = _visited_table_pool.acquire();
-        auto results = _beam_search(query_vec, visited_table, entry_point);
+        auto results = _beam_search(query_vec, visited_table, entry_point, flat_graph);
         visited_table.clear();
         return results;
     }
@@ -110,9 +112,11 @@ public:
     /**
      * @brief Perform batch queries to find the top-k nearest vertices for multiple vectors.
      * @param query_vecs A VectorArray containing the query vectors.
+     * @param flat_graph The flat graph to search on.
      * @return knn_results_t Flat array of num_queries * topk result entries in row-major order.
      */
-    auto batch_query_impl(const query_vecs_t& query_vecs) const -> knn_results_t {
+    template <typename FlatGraphT>
+    auto batch_query(const query_vecs_t& query_vecs, const FlatGraphT& flat_graph) const -> knn_results_t {
         const vertex_num_t num_queries = query_vecs.get_num_vecs();
         const uint32_t K = this->_topk;
         knn_results_t results(num_queries * K);
@@ -123,7 +127,7 @@ public:
                 auto& visited = _visited_table_pool.acquire();
                 for (vertex_num_t i = r.begin(); i != r.end(); ++i) {
                     const vec_ele_t* q_vec = query_vecs.get(i);
-                    auto topk_results = _beam_search(q_vec, visited);
+                    auto topk_results = _beam_search(q_vec, visited, static_cast<vertex_id_t>(0), flat_graph);
                     std::copy(topk_results.begin(), topk_results.end(), results.begin() + i * K);
                     visited.clear();
                 }
@@ -140,12 +144,15 @@ private:
      * @param query_vec Pointer to the query vector data.
      * @param visited_table Reference to the visited table for tracking explored vertices.
      * @param entry_point Starting vertex ID for the search.
+     * @param flat_graph The flat graph to search on.
      * @return knn_results_t Flat array of topk result entries sorted by distance.
      */
+    template <typename FlatGraphT>
     auto _beam_search(
         const vec_ele_t* query_vec,
         visited_table_t& visited_table,
-        const vertex_id_t entry_point
+        const vertex_id_t entry_point,
+        const FlatGraphT& flat_graph
     ) const -> knn_results_t {
         const vertex_num_t queue_capacity = std::max(this->_topk, _candidate_queue_size);
         candidate_queue_t candidate_queue(queue_capacity);
@@ -159,7 +166,7 @@ private:
             auto [current_id, current_dist] = candidate_queue.pop_best_unexplored();
             if (current_id == RouterTraitsT::invalid_vertex_id) { break; }
 
-            const nbr_arr_t& nbrs = _flat_graph.fetch_nbrs(current_id);
+            const nbr_arr_t& nbrs = flat_graph.fetch_nbrs(current_id);
             const vertex_num_t nbr_limit = std::min(static_cast<vertex_num_t>(nbrs.size()), _extracted_nbr_size);
             for (vertex_num_t i = 0; i < nbr_limit; ++i) {
                 const vertex_id_t nbr_id = nbrs[i].get_id();
@@ -173,19 +180,6 @@ private:
 
         return candidate_queue.extract_results(this->_topk);
     }
-
-    /** @brief Beam search with default entry point (vertex 0). Uses the entry_point overload internally. */
-    auto _beam_search(
-        const vec_ele_t* query_vec,
-        visited_table_t& visited_table
-    ) const -> knn_results_t {
-        // Use vertex 0 as a simple default entry point for construct_mode.
-        // Callers that need a better entry point should use the entry_point overload.
-        return _beam_search(query_vec, visited_table, static_cast<vertex_id_t>(0));
-    }
-
-    /** @brief Reference to the flat graph (build-time, nbr_t neighbors). */
-    const FlatGraphT& _flat_graph;
 
     /** @brief Candidate queue size for beam search. */
     vertex_num_t _candidate_queue_size = 0;

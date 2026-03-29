@@ -115,7 +115,7 @@ TEST_F(FlatGraphPersistenceTest, FlatGraphSnapshotRestore) {
 
     // Restore the graph
     ARTEA_INFO("Restoring graph from snapshot...");
-    conv_graph_index_t restored_graph = flat_graph_file_manager_t::restore(snapshot_dir, base_vecs);
+    conv_graph_index_t restored_graph = flat_graph_file_manager_t::restore<conv_graph_index_t>(snapshot_dir, base_vecs);
 
     // Verify consistency
     ARTEA_INFO("Verifying graph consistency...");

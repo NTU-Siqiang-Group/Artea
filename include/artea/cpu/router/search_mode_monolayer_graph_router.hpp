@@ -37,9 +37,9 @@
 namespace artea {
 namespace cpu {
 
-template <typename RouterTraitsT, typename GraphT>
-class MonolayerGraphRouter<RouterTraitsT, GraphModeT::search_mode, GraphT> :
-    public RouterTraitsT::template vector_router_t<MonolayerGraphRouter<RouterTraitsT, GraphModeT::search_mode, GraphT>>
+template <typename RouterTraitsT>
+class MonolayerGraphRouter<RouterTraitsT, GraphModeT::search_mode> :
+    public RouterTraitsT::template vector_router_t<MonolayerGraphRouter<RouterTraitsT, GraphModeT::search_mode>>
 {
 
     using vertex_num_t = typename RouterTraitsT::vertex_num_t;
@@ -55,7 +55,7 @@ class MonolayerGraphRouter<RouterTraitsT, GraphModeT::search_mode, GraphT> :
     using visited_table_t = typename RouterTraitsT::visited_table_t;
     using visited_table_pool_t = typename RouterTraitsT::visited_table_pool_t;
     using knn_results_t = typename RouterTraitsT::knn_results_t;
-    using base_class_t = typename RouterTraitsT::template vector_router_t<MonolayerGraphRouter<RouterTraitsT, GraphModeT::search_mode, GraphT>>;
+    using base_class_t = typename RouterTraitsT::template vector_router_t<MonolayerGraphRouter<RouterTraitsT, GraphModeT::search_mode>>;
 
 public:
 
@@ -79,7 +79,7 @@ public:
         }
     }
 
-    auto initialize_impl(bool with_entry_point = false) -> void {
+    auto initialize(bool with_entry_point = false) -> void {
         _visited_table_pool.warmup();
         if (!with_entry_point) { _warmup_random_seq(); }
     }
@@ -90,7 +90,7 @@ public:
      * @return knn_results_t Flat array of topk result entries sorted by distance.
      */
     __attribute__((always_inline))
-    auto query_impl(const vec_ele_t* query_vec) const -> knn_results_t {
+    auto query(const vec_ele_t* query_vec) const -> knn_results_t {
         auto& visited_table = _visited_table_pool.acquire();
         auto results = _beam_search(query_vec, visited_table, _random_seq);
         visited_table.clear();
@@ -104,7 +104,7 @@ public:
      * @return knn_results_t Flat array of topk result entries sorted by distance.
      */
     __attribute__((always_inline))
-    auto query_impl(const vec_ele_t* query_vec, const vertex_id_t entry_point) const -> knn_results_t {
+    auto query(const vec_ele_t* query_vec, const vertex_id_t entry_point) const -> knn_results_t {
         auto& visited_table = _visited_table_pool.acquire();
         auto results = _beam_search(query_vec, visited_table, entry_point);
         visited_table.clear();
@@ -119,7 +119,7 @@ public:
      * @param query_vecs A VectorArray containing the query vectors.
      * @return knn_results_t Flat array of num_queries * topk result entries in row-major order.
      */
-    auto batch_query_impl(const query_vecs_t& query_vecs) const -> knn_results_t {
+    auto batch_query(const query_vecs_t& query_vecs) const -> knn_results_t {
         const vertex_num_t num_queries = query_vecs.get_num_vecs();
         const uint32_t K = this->_topk;
 
@@ -135,8 +135,8 @@ public:
                 auto& visited = _visited_table_pool.acquire();
                 for (vertex_num_t i = r.begin(); i != r.end(); ++i) {
                     const vec_ele_t* q_vec = query_vecs.get(i);
-                    // Call query_impl to get top-k results
-                    auto topk_results = this->query_impl(q_vec);
+                    // Call query to get top-k results
+                    auto topk_results = this->query(q_vec);
                     // Store results into flat array at row i
                     std::copy(topk_results.begin(), topk_results.end(), results.begin() + i * K);
                     visited.clear();
@@ -156,7 +156,7 @@ public:
      * @param entry_point Shared entry point vertex ID for all queries.
      * @return knn_results_t Flat array of num_queries * topk result entries in row-major order.
      */
-    auto batch_query_impl(const query_vecs_t& query_vecs, const vertex_id_t entry_point) const -> knn_results_t {
+    auto batch_query(const query_vecs_t& query_vecs, const vertex_id_t entry_point) const -> knn_results_t {
         const vertex_num_t num_queries = query_vecs.get_num_vecs();
         const uint32_t K = this->_topk;
 

@@ -48,7 +48,7 @@ class RoutingUpdater :
     using log_table_t = typename EdgeGeneratorTraitsT::log_table_t;
     using dist_func_t = typename EdgeGeneratorTraitsT::dist_func_t;
     using graph_mode_t = typename EdgeGeneratorTraitsT::graph_mode_t;
-    using router_t = typename EdgeGeneratorTraitsT::template monolayer_graph_router_t<graph_mode_t::construct_mode, FlatGraphT>;
+    using router_t = typename EdgeGeneratorTraitsT::template monolayer_graph_router_t<graph_mode_t::construct_mode>;
     using base_class_t = typename EdgeGeneratorTraitsT::template neighbor_updater_t<FlatGraphT, RoutingUpdater<EdgeGeneratorTraitsT, FlatGraphT>>;
 
 public:
@@ -71,7 +71,7 @@ public:
         const vertex_num_t topk,
         const vertex_num_t candidate_queue_size
     ) : base_class_t(dist_func, vecs_data, log_table, flat_graph),
-        _router(vecs_data, dist_func, flat_graph, topk, candidate_queue_size),
+        _router(vecs_data, dist_func, topk, candidate_queue_size),
         _topk(topk)
     {   _router.initialize();   }
 
@@ -87,7 +87,7 @@ public:
         nbr_arr_t& origin_nbrs
     ) -> void {
         const vec_ele_t* pivot_vec = this->_vecs_data.get(pivot_vid);
-        auto knn_results = _router.query(pivot_vec);
+        auto knn_results = _router.query(pivot_vec, this->_flat_graph);
 
         std::vector<vertex_id_t> knn_ids;
         std::vector<distance_t> knn_dists;

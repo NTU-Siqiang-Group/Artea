@@ -54,61 +54,6 @@ public:
         _topk(topk)
     {}
 
-    /**
-     * @brief Initialize the router, preparing any necessary data structures or indices (for fast routing).
-     */
-    template <typename... Args>
-    __attribute__((always_inline))
-    auto initialize(Args&&... args) -> void {
-        static_cast<DerivedClassT*>(this)->initialize_impl(std::forward<Args>(args)...);
-    }
-
-    /**
-     * @brief Query the top-k nearest vertices for a single vector.
-     *
-     * @param query_vec Pointer to the query vector data.
-     * @return knn_results_t Flat array of topk result entries sorted by distance.
-     */
-    __attribute__((always_inline))
-    auto query(const vec_ele_t* query_vec) const -> knn_results_t {
-        return static_cast<const DerivedClassT*>(this)->query_impl(query_vec);
-    }
-
-    /**
-     * @brief Query the top-k nearest vertices for a single vector with an entry point.
-     *
-     * @param query_vec Pointer to the query vector data.
-     * @param entry_point Starting vertex ID for the search.
-     * @return knn_results_t Flat array of topk result entries sorted by distance.
-     */
-    __attribute__((always_inline))
-    auto query(const vec_ele_t* query_vec, const vec_id_t entry_point) const -> knn_results_t {
-        return static_cast<const DerivedClassT*>(this)->query_impl(query_vec, entry_point);
-    }
-
-    /**
-     * @brief Perform batch queries to find the top-k nearest vertices for multiple vectors.
-     *
-     * @param query_vecs A VectorArray containing the query vectors.
-     * @return knn_results_t Flat array of num_queries * topk result entries in row-major order.
-     */
-    __attribute__((always_inline))
-    auto batch_query(const query_vecs_t& query_vecs) const -> knn_results_t {
-        return static_cast<const DerivedClassT*>(this)->batch_query_impl(query_vecs);
-    }
-
-    /**
-     * @brief Perform batch queries with a shared entry point.
-     *
-     * @param query_vecs A VectorArray containing the query vectors.
-     * @param entry_point Shared entry point vertex ID for all queries.
-     * @return knn_results_t Flat array of num_queries * topk result entries in row-major order.
-     */
-    __attribute__((always_inline))
-    auto batch_query(const query_vecs_t& query_vecs, const vec_id_t entry_point) const -> knn_results_t {
-        return static_cast<const DerivedClassT*>(this)->batch_query_impl(query_vecs, entry_point);
-    }
-
 protected:
 
     /** @brief Number of vectors in the dataset. */

@@ -35,7 +35,7 @@ namespace cpu {
  * @brief File manager for FlatGraph snapshot and restore operations.
  * @tparam IndexTraitsT The index traits type.
  */
-template <typename IndexTraitsT, typename FlatGraphT = typename IndexTraitsT::conv_graph_index_t>
+template <typename IndexTraitsT>
 class FlatGraphFileManager {
 
     using vertex_num_t = typename IndexTraitsT::vertex_num_t;
@@ -53,6 +53,7 @@ public:
      * @param index_dir Target directory path.
      * @param metadata Optional metadata to include in metadata.json.
      */
+    template <typename FlatGraphT>
     static auto snapshot(
         const FlatGraphT& flat_graph,
         const std::string& index_dir,
@@ -68,15 +69,8 @@ public:
 
         // Write metadata.json
         nlohmann::json meta = metadata;
-        meta["graph_type"] = "flat_graph";
-        meta["version"] = "1.0";
-        meta["num_vertices"] = flat_graph.get_num_vertices();
-        meta["layer_config"] = {
-            {"max_nbr_size", flat_graph.layer_config().max_nbr_size()},
-            {"reserved_nbr_size", flat_graph.layer_config().reserved_nbr_size()}
-        };
-        nlohmann::json subclass_meta = flat_graph.get_metadata();
-        meta.merge_patch(subclass_meta);
+        meta.merge_patch(flat_graph.get_base_metadata());
+        meta.merge_patch(flat_graph.get_metadata());
 
         std::string metadata_path = index_dir + "/metadata.json";
         std::ofstream meta_ofs(metadata_path);
@@ -131,6 +125,7 @@ public:
      * @param vecs_data Reference to the vector data that this graph should bind to.
      * @return Loaded FlatGraph instance.
      */
+    template <typename FlatGraphT>
     static auto restore(
         const std::string& index_dir,
         const vector_array_t& vecs_data

@@ -104,7 +104,7 @@ TEST_F(HierarchicalGraphPersistenceTest, SnapshotAndRestore) {
 
     // Restore the graph
     ARTEA_INFO("Restoring graph from snapshot...");
-    artea_graph_index_t restored_graph = hierarchical_graph_file_manager_t::restore(
+    artea_graph_index_t restored_graph = hierarchical_graph_file_manager_t::restore<artea_graph_index_t>(
         test_index_dir,
         base_vecs
     );

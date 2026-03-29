@@ -58,7 +58,7 @@ public:
     ) : base_class_t(vecs_data, dist_func, topk)
     {}
 
-    auto initialize_impl() -> void {
+    auto initialize() -> void {
         // Do nothing
     }
 
@@ -69,7 +69,7 @@ public:
      * @param query_vec Pointer to the query vector data.
      * @return std::vector<vec_id_t> Vector containing the IDs of the top-k nearest vertices.
      */
-    auto query_impl(const vec_ele_t* query_vec) const -> knn_results_t {
+    auto query(const vec_ele_t* query_vec) const -> knn_results_t {
         const uint32_t k = std::min(this->_topk, static_cast<uint32_t>(this->_num_vecs));
 
         // Compute distances for all vertices
@@ -97,15 +97,15 @@ public:
     /**
      * @brief Query the top-k nearest vertices for a given vector with an entry point.
      *
-     * For bruteforce router, entry point is ignored and this delegates to the standard query_impl.
+     * For bruteforce router, entry point is ignored and this delegates to the standard query.
      *
      * @param query_vec Pointer to the query vector data.
      * @param entry_point Starting vertex ID (ignored for bruteforce).
      * @return std::vector<vec_id_t> Vector containing the IDs of the top-k nearest vertices.
      */
-    auto query_impl(const vec_ele_t* query_vec, const vertex_id_t entry_point) const -> knn_results_t {
+    auto query(const vec_ele_t* query_vec, const vertex_id_t entry_point) const -> knn_results_t {
         // For bruteforce, entry point doesn't matter - just delegate to standard implementation
-        return query_impl(query_vec);
+        return query(query_vec);
     }
 
     /**
@@ -117,7 +117,7 @@ public:
      * @param query_vecs A VectorArray containing the query vectors.
      * @return knn_results_t Flat array of num_queries * topk result entries in row-major order.
      */
-    auto batch_query_impl(const typename RouterTraitsT::query_vecs_t& query_vecs) const -> knn_results_t {
+    auto batch_query(const typename RouterTraitsT::query_vecs_t& query_vecs) const -> knn_results_t {
         const vertex_num_t num_queries = query_vecs.get_num_vecs();
         const uint32_t K = this->_topk;
 
@@ -133,8 +133,8 @@ public:
                 for (vertex_num_t i = r.begin(); i != r.end(); ++i) {
                     // Retrieve the pointer to the current query vector
                     const vec_ele_t* current_vec = query_vecs.get(i);
-                    // Call query_impl to get top-k results
-                    auto topk_results = this->query_impl(current_vec);
+                    // Call query to get top-k results
+                    auto topk_results = this->query(current_vec);
                     // Store results into flat array at row i
                     std::copy(topk_results.begin(), topk_results.end(), results.begin() + i * K);
                 }
@@ -147,15 +147,15 @@ public:
     /**
      * @brief Perform batch queries with a shared entry point to find the top-k nearest vertices for multiple vectors.
      *
-     * For bruteforce router, entry point is ignored and this delegates to the standard batch_query_impl.
+     * For bruteforce router, entry point is ignored and this delegates to the standard batch_query.
      *
      * @param query_vecs A VectorArray containing the query vectors.
      * @param entry_point Shared entry point vertex ID (ignored for bruteforce).
      * @return knn_results_t Flat array of num_queries * topk result entries in row-major order.
      */
-    auto batch_query_impl(const typename RouterTraitsT::query_vecs_t& query_vecs, const vertex_id_t entry_point) const -> knn_results_t {
+    auto batch_query(const typename RouterTraitsT::query_vecs_t& query_vecs, const vertex_id_t entry_point) const -> knn_results_t {
         // For bruteforce, entry point doesn't matter - just delegate to standard implementation
-        return batch_query_impl(query_vecs);
+        return batch_query(query_vecs);
     }
 
 };  // class BruteforceRouter

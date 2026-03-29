@@ -73,7 +73,7 @@ public:
      *
      * Launches a parallel_for with one task per thread slot. Each task calls
      * _pool.local(), which triggers the lazy construction for that thread.
-     * Call this once after construction (e.g., in initialize_impl) so that
+     * Call this once after construction (e.g., in initialize) so that
      * the first real batch_query pays no allocation cost.
      */
     auto warmup() -> void {

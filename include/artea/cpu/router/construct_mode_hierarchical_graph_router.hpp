@@ -13,7 +13,7 @@
 // limitations under the License.
 
 /*
- * @FilePath: /Artea/include/artea/cpu/router/construct_mode_hierarchical_graph_router.hpp
+ * @FilePath: /Artea/include/artea/cpu/router/construct_mode_hier_graph_router.hpp
  * @Author: Chandler (Weitang Ye) <weitang.ye@ntu.edu.sg>
  * @Description: construct_mode specialization of HierarchicalGraphRouter.
  *               Operates on HierarchicalGraph (nbr_t neighbors) for build-time navigation.
@@ -34,9 +34,9 @@
 namespace artea {
 namespace cpu {
 
-template <typename RouterTraitsT, typename HierGraphT>
-class HierarchicalGraphRouter<RouterTraitsT, GraphModeT::construct_mode, HierGraphT> :
-    public RouterTraitsT::template vector_router_t<HierarchicalGraphRouter<RouterTraitsT, GraphModeT::construct_mode, HierGraphT>>
+template <typename RouterTraitsT>
+class HierarchicalGraphRouter<RouterTraitsT, GraphModeT::construct_mode> :
+    public RouterTraitsT::template vector_router_t<HierarchicalGraphRouter<RouterTraitsT, GraphModeT::construct_mode>>
 {
     using vertex_num_t = typename RouterTraitsT::vertex_num_t;
     using vertex_id_t = typename RouterTraitsT::vertex_id_t;
@@ -52,20 +52,18 @@ class HierarchicalGraphRouter<RouterTraitsT, GraphModeT::construct_mode, HierGra
     using visited_table_t = typename RouterTraitsT::visited_table_t;
     using visited_table_pool_t = typename RouterTraitsT::visited_table_pool_t;
     using knn_results_t = typename RouterTraitsT::knn_results_t;
-    using base_class_t = typename RouterTraitsT::template vector_router_t<HierarchicalGraphRouter<RouterTraitsT, GraphModeT::construct_mode, HierGraphT>>;
+    using base_class_t = typename RouterTraitsT::template vector_router_t<HierarchicalGraphRouter<RouterTraitsT, GraphModeT::construct_mode>>;
 
 public:
 
     HierarchicalGraphRouter(
         const vector_array_t& vecs_data,
         const dist_func_t& dist_func,
-        const HierGraphT& hierarchical_graph,
         const uint32_t topk,
         const vertex_num_t candidate_queue_size,
         const vertex_num_t ul_extracted_nbr_size = 32,
         const vertex_num_t bl_extracted_nbr_size = 64
     ) : base_class_t(vecs_data, dist_func, topk),
-        _hierarchical_graph(hierarchical_graph),
         _candidate_queue_size(candidate_queue_size),
         _ul_extracted_nbr_size(ul_extracted_nbr_size),
         _bl_extracted_nbr_size(bl_extracted_nbr_size),
@@ -79,27 +77,31 @@ public:
         }
     }
 
-    auto initialize_impl() -> void {
+    auto initialize() -> void {
         _visited_table_pool.warmup();
     }
 
     /**
      * @brief Query the top-k nearest vertices using hierarchical graph (build-time).
      * @param query_vec Pointer to the query vector data.
+     * @param hier_graph The hierarchical graph to search on.
      * @return knn_results_t Flat array of topk result entries sorted by distance.
      */
+    template <typename HierGraphT>
     __attribute__((always_inline))
-    auto query_impl(const vec_ele_t* query_vec) const -> knn_results_t {
+    auto query(const vec_ele_t* query_vec, const HierGraphT& hier_graph) const -> knn_results_t {
         auto& visited_table = _visited_table_pool.acquire();
-        return _hierarchical_search(query_vec, visited_table);
+        return _hierarchical_search(query_vec, visited_table, hier_graph);
     }
 
     /**
      * @brief Perform batch queries to find the top-k nearest vertices for multiple vectors.
      * @param query_vecs A VectorArray containing the query vectors.
+     * @param hier_graph The hierarchical graph to search on.
      * @return knn_results_t Flat array of num_queries * topk result entries in row-major order.
      */
-    auto batch_query_impl(const query_vecs_t& query_vecs) const -> knn_results_t {
+    template <typename HierGraphT>
+    auto batch_query(const query_vecs_t& query_vecs, const HierGraphT& hier_graph) const -> knn_results_t {
         const vertex_num_t num_queries = query_vecs.get_num_vecs();
         const uint32_t K = this->_topk;
         knn_results_t results(num_queries * K);
@@ -110,7 +112,7 @@ public:
                 auto& visited = _visited_table_pool.acquire();
                 for (vertex_num_t i = r.begin(); i != r.end(); ++i) {
                     const vec_ele_t* q_vec = query_vecs.get(i);
-                    auto topk_results = _hierarchical_search(q_vec, visited);
+                    auto topk_results = _hierarchical_search(q_vec, visited, hier_graph);
                     std::copy(topk_results.begin(), topk_results.end(), results.begin() + i * K);
                     visited.clear();
                 }
@@ -126,24 +128,27 @@ private:
      * @brief Perform hierarchical search from top layer to bottom layer.
      * @param query_vec Pointer to the query vector data.
      * @param visited_table Reference to the visited table for tracking explored vertices.
+     * @param hier_graph The hierarchical graph to search on.
      * @return knn_results_t Flat array of topk result entries sorted by distance.
      */
+    template <typename HierGraphT>
     auto _hierarchical_search(
         const vec_ele_t* query_vec,
-        visited_table_t& visited_table
+        visited_table_t& visited_table,
+        const HierGraphT& hier_graph
     ) const -> knn_results_t {
-        const layer_num_t num_layers = _hierarchical_graph.get_num_layers();
+        const layer_num_t num_layers = hier_graph.get_num_layers();
         const layer_id_t top_layer_id = num_layers - 1;
 
-        vertex_id_t current_nearest = _hierarchical_graph.get_entry_point();
-        const auto& top_layer_vecs = _hierarchical_graph.get_hier_vecs_manager().get_layer_vecs(top_layer_id);
+        vertex_id_t current_nearest = hier_graph.get_entry_point();
+        const auto& top_layer_vecs = hier_graph.get_hier_vecs_manager().get_layer_vecs(top_layer_id);
         distance_t current_dist = this->_dist_func(query_vec, top_layer_vecs.get(current_nearest));
 
         // Greedy descent from top layer down to layer 1
         for (layer_id_t layer_id = top_layer_id; layer_id > 0; --layer_id) {
-            _greedy_search_layer(query_vec, layer_id, current_nearest, current_dist);
+            _greedy_search_layer(query_vec, layer_id, current_nearest, current_dist, hier_graph);
 
-            const auto& inter_layer_links = _hierarchical_graph.get_inter_layer_links();
+            const auto& inter_layer_links = hier_graph.get_inter_layer_links();
             current_nearest = inter_layer_links.get_linked_vertex(layer_id, current_nearest);
         }
 
@@ -152,7 +157,7 @@ private:
         candidate_queue.try_push(current_nearest, current_dist);
         visited_table.set(current_nearest);
 
-        _beam_search_layer(query_vec, 0, visited_table, candidate_queue);
+        _beam_search_layer(query_vec, 0, visited_table, candidate_queue, hier_graph);
 
         return candidate_queue.extract_results(this->_topk);
     }
@@ -163,15 +168,18 @@ private:
      * @param layer_id Current layer ID.
      * @param current_nearest Reference to current nearest vertex (modified in-place).
      * @param current_dist Reference to current nearest distance (modified in-place).
+     * @param hier_graph The hierarchical graph to search on.
      */
+    template <typename HierGraphT>
     auto _greedy_search_layer(
         const vec_ele_t* query_vec,
         const layer_id_t layer_id,
         vertex_id_t& current_nearest,
-        distance_t& current_dist
+        distance_t& current_dist,
+        const HierGraphT& hier_graph
     ) const -> void {
-        const auto& layer_graph = _hierarchical_graph.get_layer_graph(layer_id);
-        const auto& layer_vecs = _hierarchical_graph.get_hier_vecs_manager().get_layer_vecs(layer_id);
+        const auto& layer_graph = hier_graph.get_layer_graph(layer_id);
+        const auto& layer_vecs = hier_graph.get_hier_vecs_manager().get_layer_vecs(layer_id);
 
         bool improved = true;
         while (improved) {
@@ -196,15 +204,18 @@ private:
      * @param layer_id Current layer ID.
      * @param visited_table Reference to the visited table.
      * @param candidate_queue Reference to the candidate queue (modified in-place).
+     * @param hier_graph The hierarchical graph to search on.
      */
+    template <typename HierGraphT>
     auto _beam_search_layer(
         const vec_ele_t* query_vec,
         const layer_id_t layer_id,
         visited_table_t& visited_table,
-        candidate_queue_t& candidate_queue
+        candidate_queue_t& candidate_queue,
+        const HierGraphT& hier_graph
     ) const -> void {
-        const auto& layer_graph = _hierarchical_graph.get_layer_graph(layer_id);
-        const auto& layer_vecs = _hierarchical_graph.get_hier_vecs_manager().get_layer_vecs(layer_id);
+        const auto& layer_graph = hier_graph.get_layer_graph(layer_id);
+        const auto& layer_vecs = hier_graph.get_hier_vecs_manager().get_layer_vecs(layer_id);
 
         while (!candidate_queue.empty()) {
             if (candidate_queue.should_terminate()) { break; }
@@ -223,9 +234,6 @@ private:
             }
         }
     }
-
-    /** @brief Reference to the hierarchical graph (build-time, nbr_t neighbors). */
-    const HierGraphT& _hierarchical_graph;
 
     /** @brief Candidate queue size for bottom layer beam search. */
     vertex_num_t _candidate_queue_size;

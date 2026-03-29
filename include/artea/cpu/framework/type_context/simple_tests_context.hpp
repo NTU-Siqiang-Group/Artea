@@ -109,14 +109,14 @@ using flat_search_graph_t = typename index_traits_t::flat_search_graph_t;
 using artea_graph_index_t = typename index_traits_t::template artea_graph_index_t<conv_graph_index_t>;
 using hierarchical_vecs_manager_t = typename index_traits_t::hierarchical_vecs_manager_t;
 using search_graph_converter_t = typename index_traits_t::search_graph_converter_t;
-using flat_graph_file_manager_t = typename index_traits_t::template flat_graph_file_manager_t<>;
-using hierarchical_graph_file_manager_t = typename index_traits_t::template hierarchical_graph_file_manager_t<>;
+using flat_graph_file_manager_t = typename index_traits_t::flat_graph_file_manager_t;
+using hierarchical_graph_file_manager_t = typename index_traits_t::hierarchical_graph_file_manager_t;
 
 // Edge generator types from EdgeGeneratorTraits
 using triangle_updater_t = typename edge_generator_traits_t::template triangle_updater_t<conv_graph_index_t>;
 using reverse_updater_t = typename edge_generator_traits_t::template reverse_updater_t<conv_graph_index_t>;
 using random_updater_t = typename edge_generator_traits_t::template random_updater_t<conv_graph_index_t>;
-using random_eg_t = typename edge_generator_traits_t::template random_eg_t<conv_graph_index_t>;
+using random_eg_t = typename edge_generator_traits_t::random_eg_t;
 using ivf_partitions_t = typename edge_generator_traits_t::ivf_partitions_t;
 using ivf_construct_policy_t = typename edge_generator_traits_t::ivf_construct_policy_t;
 

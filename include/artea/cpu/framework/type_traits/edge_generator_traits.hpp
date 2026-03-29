@@ -38,7 +38,7 @@ template <typename EdgeGeneratorTraitsT, typename FlatGraphT> class ReverseUpdat
 template <typename EdgeGeneratorTraitsT, typename FlatGraphT> class RandomUpdater;
 template <typename EdgeGeneratorTraitsT, typename FlatGraphT> class RoutingUpdater;
 template <typename EdgeGeneratorTraitsT, typename FlatGraphT> class TruncateUpdater;
-template <typename EdgeGeneratorTraitsT, typename FlatGraphT> class RandomEG;
+template <typename EdgeGeneratorTraitsT> class RandomEG;
 template <typename EdgeGeneratorTraitsT, typename FlatGraphT, bool SelectiveSchedule> class PropagateEngine;
 template <typename EdgeGeneratorTraitsT> class IVFPartitions;
 
@@ -80,8 +80,7 @@ struct EdgeGeneratorTraits :
     using truncate_updater_t = TruncateUpdater<edge_generator_traits_t, FlatGraphT>;
 
     /** @brief Random edge generator. */
-    template <typename FlatGraphT>
-    using random_eg_t = RandomEG<edge_generator_traits_t, FlatGraphT>;
+    using random_eg_t = RandomEG<edge_generator_traits_t>;
 
     /** @brief Type for propagation engine. */
     template <typename FlatGraphT, bool SelectiveSchedule>

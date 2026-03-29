@@ -10,6 +10,7 @@
 #include <vector>
 #include <memory>
 #include <utility>
+#include <nlohmann/json.hpp>
 
 namespace artea {
 namespace cpu {
@@ -163,6 +164,23 @@ public:
 
     __attribute__((always_inline))
     auto set_entry_point(const vertex_id_t entry_point) -> void { _entry_point = entry_point; }
+
+    auto get_base_metadata() const -> nlohmann::json {
+        nlohmann::json meta;
+        meta["graph_type"] = "hierarchical_graph";
+        meta["version"] = "1.0";
+        meta["num_vertices"] = _num_vertices;
+        meta["num_layers"] = get_num_layers();
+        meta["bottom_layer_config"] = {
+            {"max_nbr_size", _bottom_layer_config.max_nbr_size()},
+            {"reserved_nbr_size", _bottom_layer_config.reserved_nbr_size()}
+        };
+        meta["upper_layer_config"] = {
+            {"max_nbr_size", _upper_layer_config.max_nbr_size()},
+            {"reserved_nbr_size", _upper_layer_config.reserved_nbr_size()}
+        };
+        return meta;
+    }
 
 protected:
     /** @brief Number of vertices in the graph. */

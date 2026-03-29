@@ -35,9 +35,9 @@
 namespace artea {
 namespace cpu {
 
-template <typename RouterTraitsT, typename GraphT>
-class HierarchicalGraphRouter<RouterTraitsT, GraphModeT::search_mode, GraphT> :
-    public RouterTraitsT::template vector_router_t<HierarchicalGraphRouter<RouterTraitsT, GraphModeT::search_mode, GraphT>>
+template <typename RouterTraitsT>
+class HierarchicalGraphRouter<RouterTraitsT, GraphModeT::search_mode> :
+    public RouterTraitsT::template vector_router_t<HierarchicalGraphRouter<RouterTraitsT, GraphModeT::search_mode>>
 {
 
     using vertex_num_t = typename RouterTraitsT::vertex_num_t;
@@ -54,7 +54,7 @@ class HierarchicalGraphRouter<RouterTraitsT, GraphModeT::search_mode, GraphT> :
     using visited_table_t = typename RouterTraitsT::visited_table_t;
     using visited_table_pool_t = typename RouterTraitsT::visited_table_pool_t;
     using knn_results_t = typename RouterTraitsT::knn_results_t;
-    using base_class_t = typename RouterTraitsT::template vector_router_t<HierarchicalGraphRouter<RouterTraitsT, GraphModeT::search_mode, GraphT>>;
+    using base_class_t = typename RouterTraitsT::template vector_router_t<HierarchicalGraphRouter<RouterTraitsT, GraphModeT::search_mode>>;
 
     static constexpr vertex_num_t min_num_layer_vertex = RouterTraitsT::min_num_layer_vertex;
 
@@ -78,7 +78,7 @@ public:
         }
     }
 
-    auto initialize_impl() -> void {
+    auto initialize() -> void {
         _visited_table_pool.warmup();
     }
 
@@ -88,7 +88,7 @@ public:
      * @return knn_results_t Flat array of topk result entries sorted by distance.
      */
     __attribute__((always_inline))
-    auto query_impl(const vec_ele_t* query_vec) const -> knn_results_t {
+    auto query(const vec_ele_t* query_vec) const -> knn_results_t {
         auto& visited_table = _visited_table_pool.acquire();
         auto results = _hierarchical_search(query_vec, visited_table);
         visited_table.clear();
@@ -100,7 +100,7 @@ public:
      * @param query_vecs A VectorArray containing the query vectors.
      * @return knn_results_t Flat array of num_queries * topk result entries in row-major order.
      */
-    auto batch_query_impl(const query_vecs_t& query_vecs) const -> knn_results_t {
+    auto batch_query(const query_vecs_t& query_vecs) const -> knn_results_t {
         const vertex_num_t num_queries = query_vecs.get_num_vecs();
         const uint32_t K = this->_topk;
 

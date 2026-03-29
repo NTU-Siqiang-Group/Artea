@@ -8,6 +8,7 @@
 
 #include <cstddef>
 #include <vector>
+#include <nlohmann/json.hpp>
 
 namespace artea {
 namespace cpu {
@@ -81,6 +82,18 @@ public:
 
     __attribute__((always_inline))
     auto get_vecs_data() const -> const vector_array_t& { return _vecs_data; }
+
+    auto get_base_metadata() const -> nlohmann::json {
+        nlohmann::json meta;
+        meta["graph_type"] = "flat_graph";
+        meta["version"] = "1.0";
+        meta["num_vertices"] = _num_vertices;
+        meta["layer_config"] = {
+            {"max_nbr_size", _layer_config.max_nbr_size()},
+            {"reserved_nbr_size", _layer_config.reserved_nbr_size()}
+        };
+        return meta;
+    }
 
 protected:
     /** @brief Number of vertices in the graph. */

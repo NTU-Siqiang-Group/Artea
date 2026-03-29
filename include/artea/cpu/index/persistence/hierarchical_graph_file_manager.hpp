@@ -35,7 +35,7 @@ namespace cpu {
  * @brief File manager for HierarchicalGraph snapshot and restore operations.
  * @tparam IndexTraitsT The index traits type.
  */
-template <typename IndexTraitsT, typename HierGraphT, typename LayerGraphT>
+template <typename IndexTraitsT>
 class HierarchicalGraphFileManager {
 
     using vertex_num_t = typename IndexTraitsT::vertex_num_t;
@@ -44,7 +44,6 @@ class HierarchicalGraphFileManager {
     using layer_num_t = typename IndexTraitsT::layer_num_t;
     using distance_t = typename IndexTraitsT::distance_t;
     using hierarchical_vecs_manager_t = typename IndexTraitsT::hierarchical_vecs_manager_t;
-    using flat_graph_file_manager_t = FlatGraphFileManager<IndexTraitsT, LayerGraphT>;
     using layer_config_t = typename IndexTraitsT::layer_config_t;
     using vector_array_t = typename IndexTraitsT::vector_array_t;
 
@@ -55,6 +54,7 @@ public:
      * @param index_dir Target directory path.
      * @param metadata Optional metadata to include in metadata.json.
      */
+    template <typename HierGraphT>
     static auto snapshot(
         const HierGraphT& hierarchical_graph,
         const std::string& index_dir,
@@ -66,18 +66,7 @@ public:
 
         // Write root metadata.json
         nlohmann::json meta = metadata;
-        meta["graph_type"] = "hierarchical_graph";
-        meta["version"] = "1.0";
-        meta["num_vertices"] = hierarchical_graph.get_num_vertices();
-        meta["num_layers"] = hierarchical_graph.get_num_layers();
-        meta["bottom_layer_config"] = {
-            {"max_nbr_size", hierarchical_graph.bottom_layer_config().max_nbr_size()},
-            {"reserved_nbr_size", hierarchical_graph.bottom_layer_config().reserved_nbr_size()}
-        };
-        meta["upper_layer_config"] = {
-            {"max_nbr_size", hierarchical_graph.upper_layer_config().max_nbr_size()},
-            {"reserved_nbr_size", hierarchical_graph.upper_layer_config().reserved_nbr_size()}
-        };
+        meta.merge_patch(hierarchical_graph.get_base_metadata());
         meta.merge_patch(hierarchical_graph.get_metadata());
 
         meta["entry_point"] = hierarchical_graph.get_entry_point();
@@ -139,7 +128,7 @@ public:
             layer_meta_ofs.close();
 
             // Snapshot the flat graph using FlatGraphFileManager
-            flat_graph_file_manager_t::snapshot(*layer_graphs[layer_id], layer_dir, layer_meta);
+            FlatGraphFileManager<IndexTraitsT>::snapshot(*layer_graphs[layer_id], layer_dir, layer_meta);
         }
     }
 
@@ -149,6 +138,7 @@ public:
      * @param base_vecs Reference to the base layer vector data.
      * @return Loaded HierarchicalGraph instance.
      */
+    template <typename HierGraphT>
     static auto restore(
         const std::string& index_dir,
         const vector_array_t& base_vecs
@@ -230,7 +220,8 @@ public:
             const auto& layer_vecs = hier_graph.get_hier_vecs_manager().get_layer_vecs(layer_id);
 
             // Restore the flat graph using FlatGraphFileManager
-            auto layer_graph = flat_graph_file_manager_t::restore(layer_dir, layer_vecs);
+            using layer_graph_t = typename HierGraphT::layer_graph_t;
+            auto layer_graph = FlatGraphFileManager<IndexTraitsT>::template restore<layer_graph_t>(layer_dir, layer_vecs);
             hier_graph.set_layer_graph(layer_id, std::move(layer_graph));
         }
 
