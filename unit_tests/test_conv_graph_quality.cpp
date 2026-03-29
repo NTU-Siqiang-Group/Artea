@@ -88,8 +88,14 @@ public:
 
         // Build convergent graph using dataset version (per-iter profiling logged inside)
         ARTEA_INFO("Building convergent graph (dataset mode, per-iter profiling)...");
-        flat_graph_ = std::make_unique<flat_graph_t>(conv_graph_factory_t::profile_search_quality(
+        conv_graph_factory_t::profile_search_quality(
             *dataset_,
+            g_config.layer_config,
+            g_config.pruning_config,
+            g_config.propagate_config
+        );
+        flat_graph_ = std::make_unique<conv_graph_index_t>(conv_graph_factory_t::construct_graph(
+            dataset_->get_base_vecs(),
             g_config.layer_config,
             g_config.pruning_config,
             g_config.propagate_config
@@ -116,7 +122,7 @@ private:
     DataProvider() = default;
     std::unique_ptr<vector_dataset_t> dataset_;
     std::unique_ptr<dist_func_t> dist_func_;
-    std::unique_ptr<flat_graph_t> flat_graph_;
+    std::unique_ptr<conv_graph_index_t> flat_graph_;
     std::unique_ptr<flat_search_graph_t> flat_search_graph_;
 };
 

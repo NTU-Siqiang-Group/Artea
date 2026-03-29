@@ -38,9 +38,9 @@ class SearchGraphConverter {
     using vertex_id_t = typename IndexTraitsT::vertex_id_t;
     using layer_id_t = typename IndexTraitsT::layer_id_t;
     using vector_array_t = typename IndexTraitsT::vector_array_t;
-    using flat_graph_t = typename IndexTraitsT::flat_graph_t;
+    using conv_graph_index_t = typename IndexTraitsT::conv_graph_index_t;
     using flat_search_graph_t = typename IndexTraitsT::flat_search_graph_t;
-    using hierarchical_graph_t = typename IndexTraitsT::hierarchical_graph_t;
+    using artea_graph_index_t = typename IndexTraitsT::artea_graph_index_t;
     using hierarchical_search_graph_t = typename IndexTraitsT::hierarchical_search_graph_t;
     using nbr_arr_checker_t = typename IndexTraitsT::nbr_arr_checker_t;
 
@@ -52,7 +52,7 @@ public:
      * @return A new FlatSearchGraph instance.
      */
     static auto from_flat_graph(
-        const flat_graph_t& flat_graph,
+        const conv_graph_index_t& flat_graph,
         const vertex_num_t extracted_nbr_size
     ) -> flat_search_graph_t {
         const vertex_num_t max_nbr_size = flat_graph.layer_config().max_nbr_size();
@@ -114,7 +114,7 @@ public:
      * @return A new HierarchicalSearchGraph instance.
      */
     static auto from_hierarchical_graph(
-        const hierarchical_graph_t& hierarchical_graph,
+        const artea_graph_index_t& hierarchical_graph,
         const vertex_num_t bl_extracted_nbr_size,
         const vertex_num_t ul_extracted_nbr_size
     ) -> hierarchical_search_graph_t {
@@ -167,7 +167,7 @@ public:
         const vector_array_t& vecs_data
     ) -> flat_search_graph_t {
         // Load FlatGraph from file
-        flat_graph_t flat_graph = flat_graph_t::restore(file_path, vecs_data);
+        conv_graph_index_t flat_graph = conv_graph_index_t::restore(file_path, vecs_data);
 
         // Convert to FlatSearchGraph
         return from_flat_graph(flat_graph, extracted_nbr_size);

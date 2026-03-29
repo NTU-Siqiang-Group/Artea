@@ -47,8 +47,8 @@ class HierarchicalGraphRouter<RouterTraitsT, GraphModeT::construct_mode> :
     using dist_func_t = typename RouterTraitsT::dist_func_t;
     using vector_array_t = typename RouterTraitsT::vector_array_t;
     using query_vecs_t = typename RouterTraitsT::query_vecs_t;
-    using flat_graph_t = typename RouterTraitsT::flat_graph_t;
-    using hierarchical_graph_t = typename RouterTraitsT::hierarchical_graph_t;
+    using conv_graph_index_t = typename RouterTraitsT::conv_graph_index_t;
+    using artea_graph_index_t = typename RouterTraitsT::artea_graph_index_t;
     using nbr_arr_t = typename RouterTraitsT::nbr_arr_t;
     using candidate_queue_t = typename RouterTraitsT::candidate_queue_t;
     using visited_table_t = typename RouterTraitsT::visited_table_t;
@@ -61,7 +61,7 @@ public:
     HierarchicalGraphRouter(
         const vector_array_t& vecs_data,
         const dist_func_t& dist_func,
-        const hierarchical_graph_t& hierarchical_graph,
+        const artea_graph_index_t& hierarchical_graph,
         const uint32_t topk,
         const vertex_num_t candidate_queue_size,
         const vertex_num_t ul_extracted_nbr_size = 32,
@@ -172,7 +172,7 @@ private:
         vertex_id_t& current_nearest,
         distance_t& current_dist
     ) const -> void {
-        const flat_graph_t& layer_graph = _hierarchical_graph.get_layer_graph(layer_id);
+        const conv_graph_index_t& layer_graph = _hierarchical_graph.get_layer_graph(layer_id);
         const auto& layer_vecs = _hierarchical_graph.get_hier_vecs_manager().get_layer_vecs(layer_id);
 
         bool improved = true;
@@ -205,7 +205,7 @@ private:
         visited_table_t& visited_table,
         candidate_queue_t& candidate_queue
     ) const -> void {
-        const flat_graph_t& layer_graph = _hierarchical_graph.get_layer_graph(layer_id);
+        const conv_graph_index_t& layer_graph = _hierarchical_graph.get_layer_graph(layer_id);
         const auto& layer_vecs = _hierarchical_graph.get_hier_vecs_manager().get_layer_vecs(layer_id);
 
         while (!candidate_queue.empty()) {
@@ -227,7 +227,7 @@ private:
     }
 
     /** @brief Reference to the hierarchical graph (build-time, nbr_t neighbors). */
-    const hierarchical_graph_t& _hierarchical_graph;
+    const artea_graph_index_t& _hierarchical_graph;
 
     /** @brief Candidate queue size for bottom layer beam search. */
     vertex_num_t _candidate_queue_size;

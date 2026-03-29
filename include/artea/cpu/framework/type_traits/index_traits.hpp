@@ -24,6 +24,8 @@ namespace artea {
 namespace cpu {
 
 /** ------ Forward Declaration  ------ **/
+template <typename IndexTraitsT, typename DerivedClassT> class FlatGraph;
+template <typename IndexTraitsT, typename DerivedClassT> class HierarchicalGraph;
 namespace conv_graph {
     template <typename IndexTraitsT> class GraphIndex;
 }
@@ -48,14 +50,22 @@ struct IndexTraits : virtual public BaseTraitsT {
     /** @brief Base traits type. */
     using base_traits_t = BaseTraitsT;
 
-    /** @brief Convergent graph index type. */
-    using flat_graph_t = conv_graph::GraphIndex<index_traits_t>;
+    /** @brief CRTP base flat graph type (template on DerivedClassT). */
+    template <typename DerivedClassT>
+    using flat_graph_t = FlatGraph<index_traits_t, DerivedClassT>;
+
+    /** @brief Convergent graph index type (concrete, extends flat_graph_t). */
+    using conv_graph_index_t = conv_graph::GraphIndex<index_traits_t>;
 
     /** @brief Flat search graph type (CSR format). */
     using flat_search_graph_t = FlatSearchGraph<index_traits_t>;
 
-    /** @brief Artea hierarchical graph index type. */
-    using hierarchical_graph_t = artea_graph::GraphIndex<index_traits_t>;
+    /** @brief CRTP base hierarchical graph type (template on DerivedClassT). */
+    template <typename DerivedClassT>
+    using hierarchical_graph_t = HierarchicalGraph<index_traits_t, DerivedClassT>;
+
+    /** @brief Artea hierarchical graph index type (concrete, extends hierarchical_graph_t). */
+    using artea_graph_index_t = artea_graph::GraphIndex<index_traits_t>;
 
     /** @brief Hierarchical search graph type. */
     using hierarchical_search_graph_t = HierarchicalSearchGraph<index_traits_t>;

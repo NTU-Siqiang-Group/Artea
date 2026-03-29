@@ -48,7 +48,7 @@ class PropagateEngine {
     using log_container_t = typename EdgeGeneratorTraitsT::log_container_t;
     using log_table_t = typename EdgeGeneratorTraitsT::log_table_t;
     using word_aligned_bitmap_t = typename EdgeGeneratorTraitsT::word_aligned_bitmap_t;
-    using flat_graph_t = typename EdgeGeneratorTraitsT::flat_graph_t;
+    using conv_graph_index_t = typename EdgeGeneratorTraitsT::conv_graph_index_t;
     using dist_func_t = typename EdgeGeneratorTraitsT::dist_func_t;
 
     template <typename DerivedClassT>
@@ -67,7 +67,7 @@ public:
 
     /** @brief Set the flat graph to operate on. */
     __attribute__((always_inline))
-    auto set_graph(flat_graph_t& flat_graph) -> void {
+    auto set_graph(conv_graph_index_t& flat_graph) -> void {
         _flat_graph = &flat_graph;
 
         // Initialize executor bitmap for selective scheduling
@@ -346,7 +346,7 @@ private:
     word_aligned_bitmap_t _executor_bitmap;
 
     /** @brief Pointer to the flat graph being operated on. */
-    flat_graph_t* _flat_graph;
+    conv_graph_index_t* _flat_graph;
 
     /** @brief Distance function reference. */
     const dist_func_t& _dist_func;

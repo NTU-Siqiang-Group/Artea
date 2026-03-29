@@ -92,7 +92,7 @@ public:
         layer_config_t layer_cfg(16, 24);
         conv_graph::pruning_config_t pruning_cfg(1.0f, 0.0f);
         conv_graph::propagate_config_t propagate_cfg(4, 14, 0.6f);
-        flat_graph_ = std::make_unique<flat_graph_t>(
+        flat_graph_ = std::make_unique<conv_graph_index_t>(
             conv_graph_factory_t::construct_graph(base_vecs, layer_cfg, pruning_cfg, propagate_cfg)
         );
 
@@ -106,7 +106,7 @@ public:
 
     vector_dataset_t&    get_dataset()          { return *dataset_; }
     dist_func_t&         get_dist_func()         { return *dist_func_; }
-    flat_graph_t&        get_flat_graph()         { return *flat_graph_; }
+    conv_graph_index_t&        get_flat_graph()         { return *flat_graph_; }
     flat_search_graph_t& get_flat_search_graph() { return *flat_search_graph_; }
     const idlist_array_t& get_gt()              { return dataset_->get_gt_vecs(); }
 
@@ -114,7 +114,7 @@ private:
     DataProvider() = default;
     std::unique_ptr<vector_dataset_t>    dataset_;
     std::unique_ptr<dist_func_t>         dist_func_;
-    std::unique_ptr<flat_graph_t>        flat_graph_;
+    std::unique_ptr<conv_graph_index_t>        flat_graph_;
     std::unique_ptr<flat_search_graph_t> flat_search_graph_;
 };
 

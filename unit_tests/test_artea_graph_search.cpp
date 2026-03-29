@@ -101,7 +101,7 @@ public:
         auto probe = prober.probe(base_vecs, 0.001f, 0.95f, 0.05f);
         greedy_vertices_builder_config_t vb_cfg(probe.radius, 1.44f, 0.999f, 0.95f, 0.2f, 2048);
 
-        hgraph_ = std::make_unique<hierarchical_graph_t>(
+        hgraph_ = std::make_unique<artea_graph_index_t>(
             artea_graph_factory_t::construct_graph(
                 base_vecs, bottom_cfg, upper_cfg, bottom_pruning, upper_pruning, propagate_cfg, vb_cfg
             )
@@ -118,7 +118,7 @@ public:
 
     vector_dataset_t&            get_dataset()        { return *dataset_; }
     dist_func_t&                 get_dist_func()       { return *dist_func_; }
-    hierarchical_graph_t&        get_hgraph()          { return *hgraph_; }
+    artea_graph_index_t&        get_hgraph()          { return *hgraph_; }
     hierarchical_search_graph_t& get_hsearch_graph()  { return *hsearch_graph_; }
     const idlist_array_t&        get_gt()              { return dataset_->get_gt_vecs(); }
 
@@ -126,7 +126,7 @@ private:
     DataProvider() = default;
     std::unique_ptr<vector_dataset_t>            dataset_;
     std::unique_ptr<dist_func_t>                 dist_func_;
-    std::unique_ptr<hierarchical_graph_t>        hgraph_;
+    std::unique_ptr<artea_graph_index_t>        hgraph_;
     std::unique_ptr<hierarchical_search_graph_t> hsearch_graph_;
 };
 

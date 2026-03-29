@@ -49,9 +49,11 @@
 #include <artea/cpu/configs/vertices_builder_config.hpp>
 #include <artea/cpu/index/neighbor.hpp>
 #include <artea/cpu/index/flat_graph.hpp>
+#include <artea/cpu/index/conv_graph_index.hpp>
 #include <artea/cpu/index/flat_search_graph.hpp>
 #include <artea/cpu/index/inter_layer_links.hpp>
 #include <artea/cpu/index/hierarchical_graph.hpp>
+#include <artea/cpu/index/artea_graph_index.hpp>
 #include <artea/cpu/index/hierarchical_search_graph.hpp>
 #include <artea/cpu/index/hierarchical_vecs_manager.hpp>
 #include <artea/cpu/index/search_graph_converter.hpp>
@@ -59,9 +61,7 @@
 #include <artea/cpu/index/persistence/flat_graph_file_manager.hpp>
 #include <artea/cpu/index/persistence/hierarchical_graph_file_manager.hpp>
 
-#include <artea/cpu/graph_factory/flat_graph_factory.hpp>
 #include <artea/cpu/graph_factory/conv_graph_factory.hpp>
-#include <artea/cpu/graph_factory/hierarchical_graph_factory.hpp>
 #include <artea/cpu/graph_factory/artea_graph_factory.hpp>
 
 #include <artea/cpu/router/vector_router.hpp>

@@ -44,7 +44,7 @@ class FlatGraphFileManager {
     using nbr_t = typename IndexTraitsT::nbr_t;
     using nbr_arr_t = typename IndexTraitsT::nbr_arr_t;
     using vector_array_t = typename IndexTraitsT::vector_array_t;
-    using flat_graph_t = typename IndexTraitsT::flat_graph_t;
+    using conv_graph_index_t = typename IndexTraitsT::conv_graph_index_t;
     using iter_t = typename IndexTraitsT::iter_t;
     using ratio_t = typename IndexTraitsT::ratio_t;
     using layer_config_t = typename IndexTraitsT::layer_config_t;
@@ -59,7 +59,7 @@ public:
      * @param metadata Optional metadata to include in metadata.json.
      */
     static auto snapshot(
-        const flat_graph_t& flat_graph,
+        const conv_graph_index_t& flat_graph,
         const std::string& index_dir,
         const nlohmann::json& metadata = nlohmann::json::object()
     ) -> void {
@@ -147,7 +147,7 @@ public:
     static auto restore(
         const std::string& index_dir,
         const vector_array_t& vecs_data
-    ) -> flat_graph_t {
+    ) -> conv_graph_index_t {
         static_assert(
             std::is_trivially_copyable_v<vertex_id_t> && std::is_trivially_copyable_v<distance_t>,
             "vertex_id_t and distance_t must be trivially copyable for binary loading."
@@ -214,7 +214,7 @@ public:
             meta["propagate_config"]["num_routing_loops"].get<iter_t>()
         );
 
-        flat_graph_t flat_graph(vecs_data, layer_config, pruning_config, propagate_config);
+        conv_graph_index_t flat_graph(vecs_data, layer_config, pruning_config, propagate_config);
 
         // Check if the number of vertices matches
         if (flat_graph.get_num_vertices() != num_vertices) {

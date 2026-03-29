@@ -24,8 +24,6 @@ namespace artea {
 namespace cpu {
 
 /** ------ Forward Declaration  ------ **/
-template <typename GraphFactoryTraitsT, typename DerivedClassT> class FlatGraphFactory;
-template <typename GraphFactoryTraitsT, typename DerivedClassT> class HierarchicalGraphFactory;
 template <typename GraphFactoryTraitsT> class ConvGraphFactory;
 template <typename GraphFactoryTraitsT> class RoutingUpdater;
 template <typename GraphFactoryTraitsT> class ArteaGraphFactory;
@@ -41,15 +39,10 @@ struct GraphFactoryTraits :
 {
     using graph_factory_traits_t = GraphFactoryTraits<VertexGeneratorTraitsT, EdgeGeneratorTraitsT, RouterTraitsT>;
 
-    /** @brief Type for graph factory. */
-    template <typename DerivedClassT>
-    using flat_graph_factory_t = FlatGraphFactory<graph_factory_traits_t, DerivedClassT>;
-
-    template <typename DerivedClassT>
-    using hierarchical_graph_factory_t = HierarchicalGraphFactory<graph_factory_traits_t, DerivedClassT>;
-
+    /** @brief Convergent graph factory type. */
     using conv_graph_factory_t = ConvGraphFactory<graph_factory_traits_t>;
 
+    /** @brief Artea graph factory type. */
     using artea_graph_factory_t = ArteaGraphFactory<graph_factory_traits_t>;
 
 };  // struct GraphFactoryTraits

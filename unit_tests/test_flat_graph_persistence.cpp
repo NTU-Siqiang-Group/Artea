@@ -95,7 +95,7 @@ TEST_F(FlatGraphPersistenceTest, FlatGraphSnapshotRestore) {
     ARTEA_INFO("Building flat graph for persistence test...");
 
     // Build original flat graph
-    flat_graph_t original_graph = conv_graph_factory_t::construct_graph(
+    conv_graph_index_t original_graph = conv_graph_factory_t::construct_graph(
         base_vecs,
         g_config.layer_config,
         g_config.pruning_config,
@@ -115,7 +115,7 @@ TEST_F(FlatGraphPersistenceTest, FlatGraphSnapshotRestore) {
 
     // Restore the graph
     ARTEA_INFO("Restoring graph from snapshot...");
-    flat_graph_t restored_graph = flat_graph_file_manager_t::restore(snapshot_dir, base_vecs);
+    conv_graph_index_t restored_graph = flat_graph_file_manager_t::restore(snapshot_dir, base_vecs);
 
     // Verify consistency
     ARTEA_INFO("Verifying graph consistency...");

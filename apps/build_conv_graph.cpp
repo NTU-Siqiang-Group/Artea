@@ -156,8 +156,8 @@ int main(int argc, char** argv) {
         params.num_routing_loops
     );
 
-    flat_graph_t flat_graph = conv_graph_factory_t::profile_search_quality(
-        dataset,
+    conv_graph_index_t flat_graph = conv_graph_factory_t::construct_graph(
+        dataset.get_base_vecs(),
         layer_config,
         pruning_config,
         propagate_config

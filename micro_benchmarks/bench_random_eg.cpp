@@ -79,7 +79,7 @@ static void BM_RandomEG(benchmark::State& state) {
 
     for (auto _ : state) {
         // Create a new flat_graph (included in timing)
-        flat_graph_t flat_graph(
+        conv_graph_index_t flat_graph(
             base_vecs,
             g_config.layer_config,
             g_config.pruning_config,

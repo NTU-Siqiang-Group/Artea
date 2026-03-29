@@ -39,16 +39,14 @@ namespace artea {
 namespace cpu {
 
 template <typename GraphFactoryTraitsT>
-class ConvGraphFactory :
-    public GraphFactoryTraitsT::template flat_graph_factory_t<ConvGraphFactory<GraphFactoryTraitsT>>
-{
+class ConvGraphFactory {
 
     using vertex_num_t = typename GraphFactoryTraitsT::vertex_num_t;
     using vertex_id_t = typename GraphFactoryTraitsT::vertex_id_t;
     using vec_ele_t = typename GraphFactoryTraitsT::vec_ele_t;
     using iter_t = typename GraphFactoryTraitsT::iter_t;
     using ratio_t = typename GraphFactoryTraitsT::ratio_t;
-    using flat_graph_t = typename GraphFactoryTraitsT::flat_graph_t;
+    using conv_graph_index_t = typename GraphFactoryTraitsT::conv_graph_index_t;
     using vector_dataset_t = typename GraphFactoryTraitsT::vector_dataset_t;
     using dist_func_t = typename GraphFactoryTraitsT::dist_func_t;
     using layer_config_t = typename GraphFactoryTraitsT::layer_config_t;
@@ -70,30 +68,30 @@ class ConvGraphFactory :
 
 public:
     /** @brief construct a new convergent graph from vector array */
-    static auto construct_graph_impl(
+    static auto construct_graph(
         const vector_array_t& base_vecs,
         const layer_config_t layer_config,
         const pruning_config_t pruning_config,
         const propagate_config_t propagate_config
-    ) -> flat_graph_t {
-        flat_graph_t flat_graph(base_vecs, layer_config, pruning_config, propagate_config);
+    ) -> conv_graph_index_t {
+        conv_graph_index_t flat_graph(base_vecs, layer_config, pruning_config, propagate_config);
         dist_func_t dist_func(base_vecs.get_vec_dim());
         _build_loop(flat_graph, dist_func, pruning_config, propagate_config);
         return flat_graph;
     }
 
     /** @brief construct a new convergent graph from dataset, with per-build-loop recall/throughput profiling */
-    static auto profile_search_quality_impl(
+    static auto profile_search_quality(
         const vector_dataset_t& dataset,
         const layer_config_t layer_config,
         const pruning_config_t pruning_config,
         const propagate_config_t propagate_config
-    ) -> flat_graph_t {
+    ) -> void {
         const vector_array_t& base_vecs = dataset.get_base_vecs();
         const query_vecs_t& query_vecs = dataset.get_query_vecs();
         const ground_truth_t& groundtruth = dataset.get_gt_vecs();
 
-        flat_graph_t flat_graph(base_vecs, layer_config, pruning_config, propagate_config);
+        conv_graph_index_t flat_graph(base_vecs, layer_config, pruning_config, propagate_config);
         dist_func_t dist_func(base_vecs.get_vec_dim());
 
         recall_estimator_t recall_estimator;
@@ -116,14 +114,12 @@ public:
                 ));
             }
         );
-
-        return flat_graph;
     }
 
 private:
 
     /**
-     * @brief Core build loop shared by all construct_graph_impl overloads.
+     * @brief Core build loop shared by all construct_graph overloads.
      *
      * Initializes random edges, creates all updaters, then runs the iteration
      * schedule. An optional per-iter callback is invoked at the end of each
@@ -137,7 +133,7 @@ private:
      *                         the current build loop index. Pass nullptr to skip.
      */
     static auto _build_loop(
-        flat_graph_t& flat_graph,
+        conv_graph_index_t& flat_graph,
         const dist_func_t& dist_func,
         const pruning_config_t& pruning_config,
         const propagate_config_t& propagate_config,

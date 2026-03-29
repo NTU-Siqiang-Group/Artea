@@ -47,7 +47,7 @@ class RoutingUpdater :
     using nbr_arr_t = typename EdgeGeneratorTraitsT::nbr_arr_t;
     using log_table_t = typename EdgeGeneratorTraitsT::log_table_t;
     using dist_func_t = typename EdgeGeneratorTraitsT::dist_func_t;
-    using flat_graph_t = typename EdgeGeneratorTraitsT::flat_graph_t;
+    using conv_graph_index_t = typename EdgeGeneratorTraitsT::conv_graph_index_t;
     using graph_mode_t = typename EdgeGeneratorTraitsT::graph_mode_t;
     using router_t = typename EdgeGeneratorTraitsT::template monolayer_graph_router_t<graph_mode_t::construct_mode>;
     using base_class_t = typename EdgeGeneratorTraitsT::template neighbor_updater_t<RoutingUpdater<EdgeGeneratorTraitsT>>;
@@ -68,7 +68,7 @@ public:
         const dist_func_t& dist_func,
         const vector_array_t& vecs_data,
         log_table_t& log_table,
-        const flat_graph_t& flat_graph,
+        const conv_graph_index_t& flat_graph,
         const vertex_num_t topk,
         const vertex_num_t candidate_queue_size
     ) : base_class_t(dist_func, vecs_data, log_table, flat_graph),

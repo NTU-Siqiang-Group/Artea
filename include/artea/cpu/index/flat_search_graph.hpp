@@ -26,7 +26,6 @@ class FlatSearchGraph {
     using distance_t = typename IndexTraitsT::distance_t;
     using vector_array_t = typename IndexTraitsT::vector_array_t;
     using csr_vids_t = typename IndexTraitsT::csr_vids_t;
-    using flat_graph_t = typename IndexTraitsT::flat_graph_t;
 
 public:
     /**

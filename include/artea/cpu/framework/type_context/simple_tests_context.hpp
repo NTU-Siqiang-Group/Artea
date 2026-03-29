@@ -104,8 +104,9 @@ using random_vertices_builder_config_t = typename base_traits_t::random_vertices
 using vertices_builder_config_t = typename base_traits_t::vertices_builder_config_t;
 
 // Index types from IndexTraits
-using flat_graph_t = typename index_traits_t::flat_graph_t;
+using conv_graph_index_t = typename index_traits_t::conv_graph_index_t;
 using flat_search_graph_t = typename index_traits_t::flat_search_graph_t;
+using artea_graph_index_t = typename index_traits_t::artea_graph_index_t;
 using hierarchical_vecs_manager_t = typename index_traits_t::hierarchical_vecs_manager_t;
 using search_graph_converter_t = typename index_traits_t::search_graph_converter_t;
 using flat_graph_file_manager_t = typename index_traits_t::flat_graph_file_manager_t;
@@ -140,13 +141,13 @@ using propagate_engine_t = propagate_engine_noss_t;
 
 // Propagate and pruning config types in namespaces
 namespace conv_graph {
-    using graph_index_t = typename index_traits_t::flat_graph_t;
+    using graph_index_t = typename index_traits_t::conv_graph_index_t;
     using propagate_config_t = typename base_traits_t::conv_graph::propagate_config_t;
     using pruning_config_t = typename base_traits_t::conv_graph::pruning_config_t;
 }
 
 namespace artea_graph {
-    using graph_index_t = typename index_traits_t::hierarchical_graph_t;
+    using graph_index_t = typename index_traits_t::artea_graph_index_t;
     using propagate_config_t = typename base_traits_t::artea_graph::propagate_config_t;
     using pruning_config_t = typename base_traits_t::artea_graph::pruning_config_t;
 }

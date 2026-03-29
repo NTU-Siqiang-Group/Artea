@@ -43,9 +43,9 @@ class HierarchicalGraphFileManager {
     using layer_id_t = typename IndexTraitsT::layer_id_t;
     using layer_num_t = typename IndexTraitsT::layer_num_t;
     using distance_t = typename IndexTraitsT::distance_t;
-    using hierarchical_graph_t = typename IndexTraitsT::hierarchical_graph_t;
+    using artea_graph_index_t = typename IndexTraitsT::artea_graph_index_t;
     using hierarchical_vecs_manager_t = typename IndexTraitsT::hierarchical_vecs_manager_t;
-    using flat_graph_t = typename IndexTraitsT::flat_graph_t;
+    using conv_graph_index_t = typename IndexTraitsT::conv_graph_index_t;
     using flat_graph_file_manager_t = typename IndexTraitsT::flat_graph_file_manager_t;
     using iter_t = typename IndexTraitsT::iter_t;
     using ratio_t = typename IndexTraitsT::ratio_t;
@@ -65,7 +65,7 @@ public:
      * @param metadata Optional metadata to include in metadata.json.
      */
     static auto snapshot(
-        const hierarchical_graph_t& hierarchical_graph,
+        const artea_graph_index_t& hierarchical_graph,
         const std::string& index_dir,
         const nlohmann::json& metadata = nlohmann::json::object()
     ) -> void {
@@ -195,7 +195,7 @@ public:
     static auto restore(
         const std::string& index_dir,
         const vector_array_t& base_vecs
-    ) -> hierarchical_graph_t {
+    ) -> artea_graph_index_t {
         // Read root metadata.json
         std::string metadata_path = index_dir + "/metadata.json";
         std::ifstream meta_ifs(metadata_path);
@@ -261,7 +261,7 @@ public:
         }();
 
         // Create hierarchical graph with base_vecs
-        hierarchical_graph_t hier_graph(
+        artea_graph_index_t hier_graph(
             base_vecs,
             bottom_layer_config,
             upper_layer_config,

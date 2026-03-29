@@ -61,7 +61,7 @@ public:
 
         // Initialize flat graph with random edges
         ARTEA_INFO("Initializing flat graph with random edges...");
-        flat_graph_ = std::make_unique<flat_graph_t>(
+        flat_graph_ = std::make_unique<conv_graph_index_t>(
             base_vecs_,
             g_config.layer_config,
             g_config.pruning_config,
@@ -82,7 +82,7 @@ public:
     vec_num_t get_num_base_vecs() const { return num_base_vecs_; }
     const vector_array_t& get_base_vecs() const { return base_vecs_; }
     const dist_func_t& get_dist_func() const { return *dist_func_; }
-    flat_graph_t& get_flat_graph() const { return *flat_graph_; }
+    conv_graph_index_t& get_flat_graph() const { return *flat_graph_; }
 
     // Reset graph to initial state
     void reset_graph() {
@@ -105,7 +105,7 @@ private:
     vec_num_t num_base_vecs_;
     vector_array_t base_vecs_;
     std::unique_ptr<dist_func_t> dist_func_;
-    std::unique_ptr<flat_graph_t> flat_graph_;
+    std::unique_ptr<conv_graph_index_t> flat_graph_;
     std::vector<nbr_arr_t> initial_nbrs_;
 };
 
@@ -113,7 +113,7 @@ private:
 static void BM_TriangleUpdater(benchmark::State& state) {
     auto& provider = DataProvider::instance();
     const auto& dist_func = provider.get_dist_func();
-    flat_graph_t& flat_graph = provider.get_flat_graph();
+    conv_graph_index_t& flat_graph = provider.get_flat_graph();
     const vec_num_t num_vertices = provider.get_num_base_vecs();
 
     // Set max_nbr_size on the flat graph
@@ -156,7 +156,7 @@ static void BM_TriangleUpdater(benchmark::State& state) {
 static void BM_TriangleUpdater_NoSS(benchmark::State& state) {
     auto& provider = DataProvider::instance();
     const auto& dist_func = provider.get_dist_func();
-    flat_graph_t& flat_graph = provider.get_flat_graph();
+    conv_graph_index_t& flat_graph = provider.get_flat_graph();
     const vec_num_t num_vertices = provider.get_num_base_vecs();
 
     // Set max_nbr_size on the flat graph
@@ -199,7 +199,7 @@ static void BM_TriangleUpdater_NoSS(benchmark::State& state) {
 static void BM_ReverseUpdater(benchmark::State& state) {
     auto& provider = DataProvider::instance();
     const auto& dist_func = provider.get_dist_func();
-    flat_graph_t& flat_graph = provider.get_flat_graph();
+    conv_graph_index_t& flat_graph = provider.get_flat_graph();
     const vec_num_t num_vertices = provider.get_num_base_vecs();
 
     // Create PropagateEngine instance
@@ -236,7 +236,7 @@ static void BM_ReverseUpdater(benchmark::State& state) {
 static void BM_ReverseUpdater_NoSS(benchmark::State& state) {
     auto& provider = DataProvider::instance();
     const auto& dist_func = provider.get_dist_func();
-    flat_graph_t& flat_graph = provider.get_flat_graph();
+    conv_graph_index_t& flat_graph = provider.get_flat_graph();
     const vec_num_t num_vertices = provider.get_num_base_vecs();
 
     // Create PropagateEngine instance without selective scheduling
@@ -273,7 +273,7 @@ static void BM_ReverseUpdater_NoSS(benchmark::State& state) {
 static void BM_RandomUpdater(benchmark::State& state) {
     auto& provider = DataProvider::instance();
     const auto& dist_func = provider.get_dist_func();
-    flat_graph_t& flat_graph = provider.get_flat_graph();
+    conv_graph_index_t& flat_graph = provider.get_flat_graph();
     const vec_num_t num_vertices = provider.get_num_base_vecs();
 
     // Create PropagateEngine instance
@@ -310,7 +310,7 @@ static void BM_RandomUpdater(benchmark::State& state) {
 static void BM_RandomUpdater_NoSS(benchmark::State& state) {
     auto& provider = DataProvider::instance();
     const auto& dist_func = provider.get_dist_func();
-    flat_graph_t& flat_graph = provider.get_flat_graph();
+    conv_graph_index_t& flat_graph = provider.get_flat_graph();
     const vec_num_t num_vertices = provider.get_num_base_vecs();
 
     // Create PropagateEngine instance without selective scheduling

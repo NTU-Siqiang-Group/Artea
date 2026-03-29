@@ -20,9 +20,8 @@ namespace artea {
 namespace cpu {
 
 template <typename GraphFactoryTraitsT>
-class ArteaGraphFactory :
-    public GraphFactoryTraitsT::template hierarchical_graph_factory_t<ArteaGraphFactory<GraphFactoryTraitsT>>
-{
+class ArteaGraphFactory {
+
     using vertex_num_t = typename GraphFactoryTraitsT::vertex_num_t;
     using vertex_id_t = typename GraphFactoryTraitsT::vertex_id_t;
     using layer_id_t = typename GraphFactoryTraitsT::layer_id_t;
@@ -30,9 +29,8 @@ class ArteaGraphFactory :
     using ratio_t = typename GraphFactoryTraitsT::ratio_t;
     using distance_t = typename GraphFactoryTraitsT::distance_t;
     using dist_func_t = typename GraphFactoryTraitsT::dist_func_t;
-    using flat_graph_t = typename GraphFactoryTraitsT::flat_graph_t;
     using conv_graph_factory_t = typename GraphFactoryTraitsT::conv_graph_factory_t;
-    using hierarchical_graph_t = typename GraphFactoryTraitsT::hierarchical_graph_t;
+    using artea_graph_index_t = typename GraphFactoryTraitsT::artea_graph_index_t;
     using vector_array_t = typename GraphFactoryTraitsT::vector_array_t;
     using vertex_subset_t = typename GraphFactoryTraitsT::vertex_subset_t;
     using lb_greedy_vg_t = typename GraphFactoryTraitsT::lb_greedy_vg_t;
@@ -47,7 +45,7 @@ class ArteaGraphFactory :
 
 public:
 
-    static auto construct_graph_impl(
+    static auto construct_graph(
         const vector_array_t& base_vecs,
         layer_config_t bottom_layer_config,
         layer_config_t upper_layer_config,
@@ -55,10 +53,10 @@ public:
         pruning_config_t upper_pruning_config,
         propagate_config_t propagate_config,
         greedy_vertices_builder_config_t vertices_builder_config
-    ) -> hierarchical_graph_t {
+    ) -> artea_graph_index_t {
         dist_func_t dist_func(base_vecs.get_vec_dim());
 
-        hierarchical_graph_t hierarchical_graph(
+        artea_graph_index_t hierarchical_graph(
             base_vecs,
             bottom_layer_config,
             upper_layer_config,
