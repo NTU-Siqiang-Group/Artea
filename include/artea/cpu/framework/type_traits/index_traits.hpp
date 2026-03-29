@@ -24,9 +24,13 @@ namespace artea {
 namespace cpu {
 
 /** ------ Forward Declaration  ------ **/
-template <typename IndexTraitsT> class FlatGraph;
+namespace conv_graph {
+    template <typename IndexTraitsT> class GraphIndex;
+}
+namespace artea_graph {
+    template <typename IndexTraitsT> class GraphIndex;
+}
 template <typename IndexTraitsT> class FlatSearchGraph;
-template <typename IndexTraitsT> class HierarchicalGraph;
 template <typename IndexTraitsT> class HierarchicalSearchGraph;
 template <typename IndexTraitsT> class InterLayerLinks;
 template <typename IndexTraitsT> class HierarchicalVecsManager;
@@ -44,14 +48,14 @@ struct IndexTraits : virtual public BaseTraitsT {
     /** @brief Base traits type. */
     using base_traits_t = BaseTraitsT;
 
-    /** @brief Flat graph type. */
-    using flat_graph_t = FlatGraph<index_traits_t>;
+    /** @brief Convergent graph index type. */
+    using flat_graph_t = conv_graph::GraphIndex<index_traits_t>;
 
     /** @brief Flat search graph type (CSR format). */
     using flat_search_graph_t = FlatSearchGraph<index_traits_t>;
 
-    /** @brief Hierarchical graph type. */
-    using hierarchical_graph_t = HierarchicalGraph<index_traits_t>;
+    /** @brief Artea hierarchical graph index type. */
+    using hierarchical_graph_t = artea_graph::GraphIndex<index_traits_t>;
 
     /** @brief Hierarchical search graph type. */
     using hierarchical_search_graph_t = HierarchicalSearchGraph<index_traits_t>;

@@ -13,13 +13,14 @@
 
 namespace artea {
 namespace cpu {
+namespace conv_graph {
 
 /**
- * @brief Flat graph structure for graph-based index.
+ * @brief Convergent graph index structure.
  * @tparam IndexTraitsT The index traits type.
  */
 template <typename IndexTraitsT>
-class FlatGraph {
+class GraphIndex {
 
     using vertex_num_t = typename IndexTraitsT::vertex_num_t;
     using vertex_id_t = typename IndexTraitsT::vertex_id_t;
@@ -39,7 +40,7 @@ public:
      * @param pruning_config Pruning configuration (scale_coeffs and shifted_coeffs).
      * @param propagate_config Propagation configuration (num_build_loops, num_triangle_updater_iters, prefill_ratio).
      */
-    FlatGraph(
+    GraphIndex(
         const vector_array_t& vecs_data,
         const layer_config_t layer_config,
         const pruning_config_t pruning_config,
@@ -58,12 +59,12 @@ public:
     }
 
     // Copying is deleted
-    FlatGraph(const FlatGraph&) = delete;
-    FlatGraph& operator=(const FlatGraph&) = delete;
+    GraphIndex(const GraphIndex&) = delete;
+    GraphIndex& operator=(const GraphIndex&) = delete;
 
     // default move constructor and assignment
-    FlatGraph(FlatGraph&&) noexcept = default;
-    FlatGraph& operator=(FlatGraph&&) noexcept = default;
+    GraphIndex(GraphIndex&&) noexcept = default;
+    GraphIndex& operator=(GraphIndex&&) noexcept = default;
 
     // --- Public Interface ---
 
@@ -146,7 +147,8 @@ protected:
     /** @brief Const reference to vector data for this layer. */
     const vector_array_t& _vecs_data;
 
-};  // class FlatGraph
+};  // class GraphIndex
 
+}   // namespace conv_graph
 }   // namespace cpu
 }   // namespace artea

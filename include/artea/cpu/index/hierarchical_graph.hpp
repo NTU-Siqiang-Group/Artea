@@ -30,9 +30,10 @@
 
 namespace artea {
 namespace cpu {
+namespace artea_graph {
 
 /**
- * @brief Hierarchical graph structure for HNSW-like index.
+ * @brief Artea hierarchical graph index structure.
  * @tparam IndexTraitsT The index traits type.
  *
  * @note Layer ID mapping:
@@ -41,7 +42,7 @@ namespace cpu {
  *   - Direct mapping: _layer_graphs[layer_id]
  */
 template <typename IndexTraitsT>
-class HierarchicalGraph {
+class GraphIndex {
 
     using vertex_num_t = typename IndexTraitsT::vertex_num_t;
     using vertex_id_t = typename IndexTraitsT::vertex_id_t;
@@ -72,7 +73,7 @@ public:
      * @param propagate_config Propagation configuration (shared between layers).
      * @param vertices_builder_config Configuration for vertices builder (greedy or random).
      */
-    HierarchicalGraph(
+    GraphIndex(
         const vector_array_t& base_vecs,
         const layer_config_t bottom_layer_config,
         const layer_config_t upper_layer_config,
@@ -94,12 +95,12 @@ public:
     }
 
     // Copying is deleted
-    HierarchicalGraph(const HierarchicalGraph&) = delete;
-    HierarchicalGraph& operator=(const HierarchicalGraph&) = delete;
+    GraphIndex(const GraphIndex&) = delete;
+    GraphIndex& operator=(const GraphIndex&) = delete;
 
     // Default move constructor and assignment
-    HierarchicalGraph(HierarchicalGraph&&) noexcept = default;
-    HierarchicalGraph& operator=(HierarchicalGraph&&) noexcept = default;
+    GraphIndex(GraphIndex&&) noexcept = default;
+    GraphIndex& operator=(GraphIndex&&) noexcept = default;
 
     // --- Public Interface ---
 
@@ -313,7 +314,8 @@ protected:
     /** @brief Entry point vertex ID for hierarchical search. */
     vertex_id_t _entry_point;
 
-};  // class HierarchicalGraph
+};  // class GraphIndex
 
+}   // namespace artea_graph
 }   // namespace cpu
 }   // namespace artea

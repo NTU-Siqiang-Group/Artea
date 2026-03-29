@@ -171,11 +171,13 @@ using propagate_engine_t = propagate_engine_noss_t;
 
 // Propagate and pruning config types in namespaces
 namespace conv_graph {
+    using graph_index_t = typename index_traits_t::flat_graph_t;
     using propagate_config_t = typename base_traits_t::conv_graph::propagate_config_t;
     using pruning_config_t = typename base_traits_t::conv_graph::pruning_config_t;
 }
 
 namespace artea_graph {
+    using graph_index_t = typename index_traits_t::hierarchical_graph_t;
     using propagate_config_t = typename base_traits_t::artea_graph::propagate_config_t;
     using pruning_config_t = typename base_traits_t::artea_graph::pruning_config_t;
 }
