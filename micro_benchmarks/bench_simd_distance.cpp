@@ -51,7 +51,27 @@ private:
     std::vector<float> query_vec_, target_vec_;
 };
 
-// 0. Baseline: std::experimental::simd L2 squared distance with unroll factor U
+// 0. SimpleForLoop: scalar for-loop with #pragma simd hint
+static float simple_L2sqr(const float* a, const float* b, uint32_t dim) {
+    float result = 0.0f;
+    #pragma omp simd reduction(+:result)
+    for (uint32_t i = 0; i < dim; ++i) {
+        float diff = a[i] - b[i];
+        result += diff * diff;
+    }
+    return result;
+}
+
+static void BM_SimpleForLoop(benchmark::State& state) {
+    auto& p = DataProvider::instance();
+    for (auto _ : state) {
+        benchmark::DoNotOptimize(simple_L2sqr(p.get_q(), p.get_t(), p.get_dim()));
+    }
+    state.SetItemsProcessed(state.iterations());
+}
+BENCHMARK(BM_SimpleForLoop)->Name("SimpleForLoop_L2");
+
+// 1. StdSimd: std::experimental::simd L2 squared distance with unroll factor U
 namespace stdx = std::experimental;
 template <std::size_t U>
 static float stdsimd_L2sqr(const float* a, const float* b, uint32_t dim) {
