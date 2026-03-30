@@ -16,7 +16,6 @@
 #include <argparse/argparse.hpp>
 #include <artea/cpu/framework/artea.hpp>
 #include <artea/cpu/framework/type_context/default_context.hpp>
-#include <hnswlib/hnswlib.h>
 #include <tbb/parallel_for.h>
 #include <tbb/blocked_range.h>
 #include <experimental/simd>
@@ -197,23 +196,6 @@ BENCHMARK_TEMPLATE(BM_Artea, 1)->Name("Artea_L2_U1");
 BENCHMARK_TEMPLATE(BM_Artea, 2)->Name("Artea_L2_U2");
 BENCHMARK_TEMPLATE(BM_Artea, 4)->Name("Artea_L2_U4");
 
-// 4. HNSWLib
-static void BM_HNSWLib(benchmark::State& state) {
-    auto& p = DataProvider::instance();
-    hnswlib::L2Space space(p.get_dim());
-    auto f = space.get_dist_func();
-    void* param = space.get_dist_func_param();
-    uint32_t idx = 0;
-    for (auto _ : state) {
-        const float* q = p.get_vec(p.get_id_a(idx));
-        const float* t = p.get_vec(p.get_id_b(idx));
-        benchmark::DoNotOptimize(f(q, t, param));
-        ++idx;
-    }
-    state.SetItemsProcessed(state.iterations());
-}
-BENCHMARK(BM_HNSWLib)->Name("HNSWLib_L2");
-
 // ============================================================
 // Parallel benchmarks (TBB)
 // ============================================================
@@ -301,27 +283,6 @@ static void BM_Artea_Parallel(benchmark::State& state) {
 BENCHMARK_TEMPLATE(BM_Artea_Parallel, 1)->Name("Par_Artea_L2_U1")->UseRealTime();
 BENCHMARK_TEMPLATE(BM_Artea_Parallel, 2)->Name("Par_Artea_L2_U2")->UseRealTime();
 BENCHMARK_TEMPLATE(BM_Artea_Parallel, 4)->Name("Par_Artea_L2_U4")->UseRealTime();
-
-static void BM_HNSWLib_Parallel(benchmark::State& state) {
-    auto& p = DataProvider::instance();
-    hnswlib::L2Space space(p.get_dim());
-    auto f = space.get_dist_func();
-    void* param = space.get_dist_func_param();
-    for (auto _ : state) {
-        tbb::parallel_for(
-            tbb::blocked_range<uint32_t>(0, PARALLEL_BATCH),
-            [&](const tbb::blocked_range<uint32_t>& r) {
-                for (uint32_t i = r.begin(); i != r.end(); ++i) {
-                    const float* q = p.get_vec(p.get_id_a(i));
-                    const float* t = p.get_vec(p.get_id_b(i));
-                    benchmark::DoNotOptimize(f(q, t, param));
-                }
-            }
-        );
-    }
-    state.SetItemsProcessed(state.iterations() * PARALLEL_BATCH);
-}
-BENCHMARK(BM_HNSWLib_Parallel)->Name("Par_HNSWLib_L2")->UseRealTime();
 
 int main(int argc, char** argv) {
     argparse::ArgumentParser program("bench_simd_distance");

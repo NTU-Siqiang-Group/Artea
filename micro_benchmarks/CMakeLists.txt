@@ -35,7 +35,6 @@ foreach(sourcefile ${MICROBENCH_SOURCES})
     target_link_libraries(${bench_target} PRIVATE
         artea
         benchmark::benchmark
-        hnswlib
     )
 
     # Explicit optimization flags for Release builds

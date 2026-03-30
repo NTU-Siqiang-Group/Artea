@@ -28,8 +28,6 @@
 #include <gtest/gtest.h>
 #include <artea/cpu/framework/artea.hpp>
 #include <artea/cpu/framework/type_context/default_context.hpp>
-#include <hnswlib/hnswlib.h>
-
 using namespace artea;
 using namespace artea::cpu;
 
@@ -91,11 +89,6 @@ TEST(DistanceCorrectness, VerifyMultiTargetAndEngines) {
         EXPECT_NEAR(u1(q, t), gt, 1e-3) << "Artea U1 failed at target " << i;
         EXPECT_NEAR(u2(q, t), gt, 1e-3) << "Artea U2 failed at target " << i;
         EXPECT_NEAR(u4(q, t), gt, 1e-3) << "Artea U4 failed at target " << i;
-
-        // 2. HNSWLib
-        hnswlib::L2Space l2space(dim);
-        float hnsw_res = l2space.get_dist_func()(q, t, l2space.get_dist_func_param());
-        EXPECT_NEAR(hnsw_res, gt, 1e-3) << "HNSWLib failed at target " << i;
     }
 }
 

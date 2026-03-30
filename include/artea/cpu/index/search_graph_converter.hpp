@@ -24,6 +24,7 @@
 #include <algorithm>
 #include <stdexcept>
 #include <string>
+#include <utility>
 #include <tbb/parallel_for.h>
 #include <tbb/blocked_range.h>
 #include <artea/common/logger.hpp>
@@ -93,12 +94,6 @@ public:
                         ARTEA_ERROR("Error: Invalid search graph row suffix layout.");
                     }
                     #endif
-
-                    #ifndef NDEBUG
-                    if (!nbr_arr_checker_t::invalid_id_suffix_check(dst_nbrs, extracted_nbr_size)) {
-                        ARTEA_ERROR("Error: Invalid search graph row suffix layout.");
-                    }
-                    #endif
                 }
             }
         );
@@ -109,13 +104,15 @@ public:
     /**
      * @brief Convert HierarchicalGraph to HierarchicalSearchGraph.
      * @param hierarchical_graph The source hierarchical graph to convert from.
+     *        When passed as an rvalue (std::move), inter-layer links are moved
+     *        instead of copied.
      * @param bl_extracted_nbr_size Fixed number of neighbors for bottom layer.
      * @param ul_extracted_nbr_size Fixed number of neighbors for upper layers.
      * @return A new HierarchicalSearchGraph instance.
      */
     template <typename HierGraphT>
     static auto from_hierarchical_graph(
-        const HierGraphT& hierarchical_graph,
+        HierGraphT&& hierarchical_graph,
         const vertex_num_t bl_extracted_nbr_size,
         const vertex_num_t ul_extracted_nbr_size
     ) -> hierarchical_search_graph_t {
@@ -148,8 +145,9 @@ public:
             hier_search_graph.set_layer_graph(layer_id, std::move(upper_search_graph));
         }
 
-        // Copy inter-layer links and entry point
-        hier_search_graph.get_inter_layer_links() = hierarchical_graph.get_inter_layer_links();
+        // Transfer inter-layer links (move when rvalue, copy when lvalue) and entry point
+        hier_search_graph.get_inter_layer_links() =
+            std::move(std::forward<HierGraphT>(hierarchical_graph).get_inter_layer_links());
         hier_search_graph.set_entry_point(hierarchical_graph.get_entry_point());
 
         return hier_search_graph;

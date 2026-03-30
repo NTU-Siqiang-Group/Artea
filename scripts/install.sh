@@ -30,8 +30,8 @@ BUILD_TYPE="${BUILD_TYPE:-Release}"
 JOBS="${JOBS:-64}"
 MIN_CMAKE_VERSION="${MIN_CMAKE_VERSION:-3.24.0}"
 CMAKE_BIN="${CMAKE_BIN:-cmake}"
-CXX_COMPILER="${CXX_COMPILER:-/usr/local/gcc-14/bin/g++}"
-C_COMPILER="${C_COMPILER:-/usr/local/gcc-14/bin/gcc}"
+CXX_COMPILER="${CXX_COMPILER:-$HOME/.local/bin/g++}"
+C_COMPILER="${C_COMPILER:-$HOME/.local/bin/gcc}"
 PROFILING_DEFS=""
 
 # Parse command line arguments

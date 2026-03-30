@@ -42,6 +42,8 @@ public:
         _vecs_data(vecs_data)
     {
         // Allocate CSR storage: num_vertices * extracted_nbr_size
+        // Note: AlignedAllocator::construct skips zero-init for trivial types,
+        // so resize() only allocates without the single-threaded zero-fill overhead.
         _csr_nbrs.resize(static_cast<size_t>(_num_vertices) * extracted_nbr_size);
     }
 

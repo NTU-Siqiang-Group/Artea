@@ -1,9 +1,0 @@
-[submodule "third_party/faiss"]
-	path = third_party/faiss
-	url = git@github.com:facebookresearch/faiss.git
-[submodule "third_party/hnswlib"]
-	path = third_party/hnswlib
-	url = git@github.com:nmslib/hnswlib.git
-[submodule "third_party/NumKong"]
-	path = third_party/NumKong
-	url = git@github.com:ashvardanian/NumKong.git

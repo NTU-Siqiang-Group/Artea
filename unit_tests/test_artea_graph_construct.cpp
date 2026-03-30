@@ -376,7 +376,7 @@ TEST_F(ArteaGraphConstructTest, QueryRecall) {
     auto start_time = std::chrono::high_resolution_clock::now();
 
     auto hierarchical_search_graph = search_graph_converter_t::from_hierarchical_graph(
-        hierarchical_graph,
+        std::move(hierarchical_graph),
         g_config.bl_extracted_nbr_size,
         g_config.ul_extracted_nbr_size
     );

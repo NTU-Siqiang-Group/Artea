@@ -21,6 +21,7 @@
 #pragma once
 
 #include <cstdint>
+#include <type_traits>
 #include <utility>
 #include <stdexcept>
 #include <immintrin.h>
@@ -81,6 +82,22 @@ public:
      */
     void deallocate(T* p, std::size_t /*n*/) noexcept {
         _mm_free(p);
+    }
+
+    /**
+     * @brief Construct an object at the given address.
+     *
+     * For trivial types with default construction (zero-arg), skip initialization
+     * entirely so that std::vector::resize() does not zero-fill the buffer.
+     * This eliminates the single-threaded zero-init bottleneck on large arrays.
+     */
+    template <typename U, typename... Args>
+    void construct(U* p, Args&&... args) {
+        if constexpr (sizeof...(Args) == 0 && std::is_trivial_v<U>) {
+            return;
+        } else {
+            ::new (static_cast<void*>(p)) U(std::forward<Args>(args)...);
+        }
     }
 };
 

@@ -35,9 +35,7 @@ foreach(sourcefile ${BENCH_SOURCES})
     target_link_libraries(${bench_target} PRIVATE
         artea
         benchmark::benchmark
-argparse::argparse
-        hnswlib
-	    faiss
+        argparse::argparse
     )
 
     # Explicit optimization flags for Release builds

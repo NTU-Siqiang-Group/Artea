@@ -296,11 +296,15 @@ int main(int argc, char** argv) {
 
     // Convert to hierarchical search graph
     ARTEA_INFO("Converting to hierarchical search graph...");
+    auto conv_start = std::chrono::high_resolution_clock::now();
     auto hierarchical_search_graph = search_graph_converter_t::from_hierarchical_graph(
-        hierarchical_graph,
+        std::move(hierarchical_graph),
         bl_extracted_nbr_size,
         ul_extracted_nbr_size
     );
+    auto conv_end = std::chrono::high_resolution_clock::now();
+    double conv_ms = std::chrono::duration_cast<std::chrono::microseconds>(conv_end - conv_start).count() / 1000.0;
+    ARTEA_INFO(fmt::format("Conversion time: {:.2f} ms", conv_ms));
 
     // Create router
     hierarchical_graph_router_t<graph_mode_t::search_mode> router(

@@ -45,14 +45,11 @@ public:
     SIMDDistance(const vec_dim_t vec_dim) :
         _vec_dim(vec_dim),
         NUM_SIMD_CHUNKS(_vec_dim / SIMD_CHUNK_SIZE),
-        NUM_REMAINING_ELES(_vec_dim % SIMD_CHUNK_SIZE)
-    {
-        if (vec_dim % SIMD_CHUNK_SIZE != 0) {
-            ARTEA_ERROR(
-                "Vector dimension must be a multiple of SIMD chunk size (e.g. 16 for float type)"
-            );
-        }
-    }
+        NUM_REMAINING_ELES(_vec_dim % SIMD_CHUNK_SIZE),
+        _tail_mask(NUM_REMAINING_ELES > 0
+            ? static_cast<__mmask16>((1u << NUM_REMAINING_ELES) - 1)
+            : 0)
+    {}
 
     __attribute__((always_inline))
     auto operator()(const vec_ele_t* vec1, const vec_ele_t* vec2) const -> distance_t {
@@ -74,6 +71,8 @@ private:
     const std::size_t NUM_SIMD_CHUNKS;
     /** @brief Number of remaining elements that cannot be processed in parallel */
     const std::size_t NUM_REMAINING_ELES;
+    /** @brief AVX-512 mask for tail elements (lanes beyond count are zeroed) */
+    const __mmask16 _tail_mask;
 
     __attribute__((always_inline))
     auto _impl_euclidean(const vec_ele_t* vec1, const vec_ele_t* vec2) const -> distance_t {
@@ -174,12 +173,14 @@ private:
             }
         }
 
-        // // Process remaining elements (non-multiple of 16)
-        // if (NUM_REMAINING_ELES > 0) {
-        //     throw std::runtime_error(
-        //         "Currently vector dimension must be a multiple of SIMD chunk size (e.g. 16 for float type)"
-        //     );
-        // }
+        // Process remaining elements using masked AVX-512 load
+        if (NUM_REMAINING_ELES > 0) {
+            const std::size_t tail_offset = NUM_SIMD_CHUNKS * SIMD_CHUNK_SIZE;
+            vec1_chunk = _mm512_maskz_loadu_ps(_tail_mask, vec1 + tail_offset);
+            vec2_chunk = _mm512_maskz_loadu_ps(_tail_mask, vec2 + tail_offset);
+            diff_chunk = _mm512_sub_ps(vec1_chunk, vec2_chunk);
+            sum_chunk = _mm512_fmadd_ps(diff_chunk, diff_chunk, sum_chunk);
+        }
 
         return _mm512_reduce_add_ps(sum_chunk);
     }
