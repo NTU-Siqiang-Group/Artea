@@ -1,7 +1,7 @@
 /*
  * @FilePath: /Artea/include/artea/cpu/utils/simd_distance.hpp
  * @Author: Chandler (Weitang Ye) <weitang.ye@ntu.edu.sg>
- * @LastEditTime: 2026-01-23 18:59:02
+ * @LastEditTime: 2026-03-30 16:41:05
  * @Date: 2025-10-18 19:10:57
  * @Description: SIMD-accelerated distance computation utilities.
  */

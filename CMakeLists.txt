@@ -103,19 +103,6 @@ set(BENCHMARK_INSTALL_DOCS OFF CACHE BOOL "Disable benchmark docs" FORCE)
 add_subdirectory(third_party/hnswlib)
 
 
-# --- NumKong Configuration ---
-set(NK_BUILD_TEST OFF CACHE BOOL "Disable NumKong tests" FORCE)
-set(NK_BUILD_BENCH OFF CACHE BOOL "Disable NumKong benchmarks" FORCE)
-add_subdirectory(third_party/NumKong)
-
-# --- Faiss Submodule Configuration ---
-# Set options to build a minimal CPU version of Faiss
-set(FAISS_ENABLE_GPU OFF CACHE BOOL "Disable Faiss GPU support")
-set(FAISS_ENABLE_PYTHON OFF CACHE BOOL "Disable Faiss Python wrappers")
-set(BUILD_TESTING OFF CACHE BOOL "Disable building Faiss's own tests")
-set(FAISS_OPT_LEVEL "avx512" CACHE STRING "Optimize Faiss with AVX-512 instructions")
-add_subdirectory(third_party/faiss)
-
 # --- Aigen Configuration ---
 set(EIGEN_BUILD_DOC OFF CACHE BOOL "" FORCE)
 set(EIGEN_BUILD_PKGCONFIG OFF CACHE BOOL "" FORCE)
@@ -139,8 +126,8 @@ target_include_directories(artea INTERFACE
   	"${CMAKE_CURRENT_SOURCE_DIR}/include"
 )
 
-# Add compiler flag for AVX512 support to artea library
-target_compile_options(artea INTERFACE -mavx512f -march=native -Wno-deprecated-literal-operator)
+# Add compiler flags for SIMD and architecture-specific optimization
+target_compile_options(artea INTERFACE -march=native -mavx512f -mfma -funroll-loops)
 
 # --- Compile Definitions (Macros) ---
 target_compile_definitions(artea INTERFACE

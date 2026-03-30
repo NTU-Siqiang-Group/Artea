@@ -36,8 +36,6 @@ foreach(sourcefile ${MICROBENCH_SOURCES})
         artea
         benchmark::benchmark
         hnswlib
-	    faiss
-        numkong
     )
 
     # Explicit optimization flags for Release builds

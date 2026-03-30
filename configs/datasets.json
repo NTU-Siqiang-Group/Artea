@@ -1,5 +1,5 @@
 {
-  "root_dir": "third_party/ann-datasets",
+  "root_dir": "../artea-benchmark/third_party/ann-dataset",
   "datasets": {
     "sift-1m": {
       "dataset_dir": "sift-1m",

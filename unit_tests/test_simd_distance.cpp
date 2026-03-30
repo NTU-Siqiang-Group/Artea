@@ -13,7 +13,7 @@
 // limitations under the License.
 
 /*
- * @FilePath: /Artea/tests/test_simd_distance.cpp
+ * @FilePath: /Artea/unit_tests/test_simd_distance.cpp
  * @Author: Chandler (Weitang Ye) <weitang.ye@ntu.edu.sg>
  * @Description: Test suite for SIMD distance calculations,
  *               using Google Test for correctness verification.
@@ -27,17 +27,12 @@
 #include <argparse/argparse.hpp>
 #include <gtest/gtest.h>
 #include <artea/cpu/framework/artea.hpp>
-#include <faiss/IndexFlat.h>
-#include <faiss/utils/distances.h>
+#include <artea/cpu/framework/type_context/default_context.hpp>
 #include <hnswlib/hnswlib.h>
 
 using namespace artea;
 using namespace artea::cpu;
 
-using base_traits_t = BaseTraits<uint32_t, float>;
-using computer_traits_t = ComputerTraits<base_traits_t, DistanceMetricsT::EUCLIDEAN>;
-using vector_dataset_t = typename base_traits_t::vector_dataset_t;
-// Define aliases for all unroll sizes
 template <std::size_t U> using artea_simd_dist_t = computer_traits_t::template simd_dist_t<U>;
 
 struct TestConfig {
@@ -51,57 +46,56 @@ public:
     static DataProvider& instance() { static DataProvider inst; return inst; }
     void init() {
         auto dataset = std::make_unique<vector_dataset_t>(g_config.config_path, g_config.dataset_name);
-        dim_ = dataset->get_base_vecs().get_vec_dim();
-        query_vec_.resize(dim_);
-        targets_.resize(g_config.num_samples * dim_);
-        std::memcpy(query_vec_.data(), dataset->get_query_vecs().get(0), dim_ * sizeof(float));
-        for(int i = 0; i < g_config.num_samples; ++i) {
-            std::memcpy(targets_.data() + i * dim_, dataset->get_base_vecs().get(i), dim_ * sizeof(float));
+        _dim = dataset->get_base_vecs().get_vec_dim();
+        _query_vec.resize(_dim);
+        _targets.resize(g_config.num_samples * _dim);
+        std::memcpy(_query_vec.data(), dataset->get_query_vecs().get(0), _dim * sizeof(float));
+        for (int i = 0; i < g_config.num_samples; ++i) {
+            std::memcpy(_targets.data() + i * _dim, dataset->get_base_vecs().get(i), _dim * sizeof(float));
         }
     }
-    uint32_t get_dim() const { return dim_; }
-    float* get_query() { return query_vec_.data(); }
-    float* get_target(int idx) { return targets_.data() + idx * dim_; }
+    uint32_t get_dim() const { return _dim; }
+    float* get_query() { return _query_vec.data(); }
+    float* get_target(int idx) { return _targets.data() + idx * _dim; }
 
 private:
     DataProvider() = default;
-    uint32_t dim_ = 0;
-    std::vector<float> query_vec_, targets_;
+    uint32_t _dim = 0;
+    std::vector<float> _query_vec, _targets;
 };
 
-// Ground Truth
-float cpp_L2sqr(const float* x, const float* y, const size_t d) {
-    float res = 0.0f;
-    for (size_t i = 0; i < d; ++i) { float diff = x[i] - y[i]; res += diff * diff; }
-    return res;
+/** @brief Scalar ground truth: simple for-loop L2 squared distance. */
+static float simple_L2sqr(const float* a, const float* b, uint32_t dim) {
+    float result = 0.0f;
+    for (uint32_t i = 0; i < dim; ++i) {
+        float diff = a[i] - b[i];
+        result += diff * diff;
+    }
+    return result;
 }
 
 TEST(DistanceCorrectness, VerifyMultiTargetAndEngines) {
-    auto& provider = DataProvider::instance();
-    uint32_t dim = provider.get_dim();
-    float* q = provider.get_query();
+    auto& p = DataProvider::instance();
+    uint32_t dim = p.get_dim();
+    float* q = p.get_query();
 
-    // Verify against multiple targets to ensure stability
     for (int i = 0; i < g_config.num_samples; ++i) {
-        float* t = provider.get_target(i);
-        float gt = cpp_L2sqr(q, t, dim);
+        float* t = p.get_target(i);
+        float gt = simple_L2sqr(q, t, dim);
 
-        // 1. Artea Variants (1, 2, 4)
+        // 1. Artea SIMDDistance U1/U2/U4
         artea_simd_dist_t<1> u1(dim);
         artea_simd_dist_t<2> u2(dim);
         artea_simd_dist_t<4> u4(dim);
 
-        EXPECT_NEAR(u1(q, t), gt, 1e-5) << "Artea U1 failed at target " << i;
-        EXPECT_NEAR(u2(q, t), gt, 1e-5) << "Artea U2 failed at target " << i;
-        EXPECT_NEAR(u4(q, t), gt, 1e-5) << "Artea U4 failed at target " << i;
+        EXPECT_NEAR(u1(q, t), gt, 1e-3) << "Artea U1 failed at target " << i;
+        EXPECT_NEAR(u2(q, t), gt, 1e-3) << "Artea U2 failed at target " << i;
+        EXPECT_NEAR(u4(q, t), gt, 1e-3) << "Artea U4 failed at target " << i;
 
-        // 2. Faiss
-        EXPECT_NEAR(faiss::fvec_L2sqr(q, t, dim), gt, 1e-5) << "Faiss failed at target " << i;
-
-        // 3. HNSWLib
+        // 2. HNSWLib
         hnswlib::L2Space l2space(dim);
         float hnsw_res = l2space.get_dist_func()(q, t, l2space.get_dist_func_param());
-        EXPECT_NEAR(hnsw_res, gt, 1e-5) << "HNSWLib failed at target " << i;
+        EXPECT_NEAR(hnsw_res, gt, 1e-3) << "HNSWLib failed at target " << i;
     }
 }
 

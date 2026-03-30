@@ -16,13 +16,10 @@
 #include <argparse/argparse.hpp>
 #include <artea/cpu/framework/artea.hpp>
 #include <artea/cpu/framework/type_context/default_context.hpp>
-#include <faiss/utils/distances.h>
 #include <hnswlib/hnswlib.h>
-#include <numkong/spatial.h>
 #include <tbb/parallel_for.h>
 #include <tbb/blocked_range.h>
 #include <experimental/simd>
-#include <atomic>
 #include <memory>
 #include <vector>
 #include <cstring>
@@ -44,7 +41,6 @@ public:
         _dim = _dataset->get_base_vecs().get_vec_dim();
         _num_vecs = _dataset->get_base_vecs().get_num_vecs();
 
-        // Pre-generate random ID pairs for benchmark iterations
         random_seq_t rng_a(_num_vecs);
         random_seq_t rng_b(_num_vecs);
         _ids_a.resize(NUM_PAIRS);
@@ -64,6 +60,10 @@ private:
     std::vector<uint32_t> _ids_a;
     std::vector<uint32_t> _ids_b;
 };
+
+// ============================================================
+// Single-thread benchmarks
+// ============================================================
 
 // 0. SimpleForLoop: scalar for-loop with #pragma simd hint
 static float simple_L2sqr(const float* a, const float* b, uint32_t dim) {
@@ -89,7 +89,7 @@ static void BM_SimpleForLoop(benchmark::State& state) {
 }
 BENCHMARK(BM_SimpleForLoop)->Name("SimpleForLoop_L2");
 
-// 1. StdSimd: std::experimental::simd L2 squared distance with unroll factor U
+// 1. StdSimd (no tail processing, requires SIMD-aligned dim)
 namespace stdx = std::experimental;
 template <std::size_t U>
 static float stdsimd_L2sqr(const float* a, const float* b, uint32_t dim) {
@@ -131,9 +131,55 @@ static void BM_StdSimd(benchmark::State& state) {
 BENCHMARK_TEMPLATE(BM_StdSimd, 1)->Name("StdSimd_L2_U1");
 BENCHMARK_TEMPLATE(BM_StdSimd, 2)->Name("StdSimd_L2_U2");
 BENCHMARK_TEMPLATE(BM_StdSimd, 4)->Name("StdSimd_L2_U4");
-BENCHMARK_TEMPLATE(BM_StdSimd, 8)->Name("StdSimd_L2_U8");
 
-// 2. Artea SIMD distance
+// 2. StdSimdTail (with scalar tail processing, supports any dim)
+template <std::size_t U>
+static float stdsimd_L2sqr_tail(const float* a, const float* b, uint32_t dim) {
+    using simd_t = stdx::native_simd<float>;
+    constexpr std::size_t W = simd_t::size();
+    constexpr std::size_t stride = W * U;
+    simd_t sums[U] = {};
+    std::size_t i = 0;
+    for (; i + stride <= dim; i += stride) {
+        for (std::size_t u = 0; u < U; ++u) {
+            simd_t va(a + i + u * W, stdx::element_aligned);
+            simd_t vb(b + i + u * W, stdx::element_aligned);
+            simd_t diff = va - vb;
+            sums[u] += diff * diff;
+        }
+    }
+    for (; i + W <= dim; i += W) {
+        simd_t va(a + i, stdx::element_aligned);
+        simd_t vb(b + i, stdx::element_aligned);
+        simd_t diff = va - vb;
+        sums[0] += diff * diff;
+    }
+    for (std::size_t u = 1; u < U; ++u) sums[0] += sums[u];
+    float result = stdx::reduce(sums[0]);
+    for (; i < dim; ++i) {
+        float diff = a[i] - b[i];
+        result += diff * diff;
+    }
+    return result;
+}
+
+template <std::size_t U>
+static void BM_StdSimdTail(benchmark::State& state) {
+    auto& p = DataProvider::instance();
+    uint32_t idx = 0;
+    for (auto _ : state) {
+        const float* q = p.get_vec(p.get_id_a(idx));
+        const float* t = p.get_vec(p.get_id_b(idx));
+        benchmark::DoNotOptimize(stdsimd_L2sqr_tail<U>(q, t, p.get_dim()));
+        ++idx;
+    }
+    state.SetItemsProcessed(state.iterations());
+}
+BENCHMARK_TEMPLATE(BM_StdSimdTail, 1)->Name("StdSimdTail_L2_U1");
+BENCHMARK_TEMPLATE(BM_StdSimdTail, 2)->Name("StdSimdTail_L2_U2");
+BENCHMARK_TEMPLATE(BM_StdSimdTail, 4)->Name("StdSimdTail_L2_U4");
+
+// 3. Artea SIMDDistance (class wrapper, runtime dim)
 template <std::size_t U>
 static void BM_Artea(benchmark::State& state) {
     auto& p = DataProvider::instance();
@@ -150,20 +196,6 @@ static void BM_Artea(benchmark::State& state) {
 BENCHMARK_TEMPLATE(BM_Artea, 1)->Name("Artea_L2_U1");
 BENCHMARK_TEMPLATE(BM_Artea, 2)->Name("Artea_L2_U2");
 BENCHMARK_TEMPLATE(BM_Artea, 4)->Name("Artea_L2_U4");
-
-// 3. Faiss
-static void BM_Faiss(benchmark::State& state) {
-    auto& p = DataProvider::instance();
-    uint32_t idx = 0;
-    for (auto _ : state) {
-        const float* q = p.get_vec(p.get_id_a(idx));
-        const float* t = p.get_vec(p.get_id_b(idx));
-        benchmark::DoNotOptimize(faiss::fvec_L2sqr(q, t, p.get_dim()));
-        ++idx;
-    }
-    state.SetItemsProcessed(state.iterations());
-}
-BENCHMARK(BM_Faiss)->Name("Faiss_L2_fvec");
 
 // 4. HNSWLib
 static void BM_HNSWLib(benchmark::State& state) {
@@ -182,28 +214,71 @@ static void BM_HNSWLib(benchmark::State& state) {
 }
 BENCHMARK(BM_HNSWLib)->Name("HNSWLib_L2");
 
-// 5. NumKong
-static void BM_NumKong(benchmark::State& state) {
-    auto& p = DataProvider::instance();
-    uint32_t idx = 0;
-    for (auto _ : state) {
-        const float* q = p.get_vec(p.get_id_a(idx));
-        const float* t = p.get_vec(p.get_id_b(idx));
-        nk_f64_t result = 0;
-        nk_sqeuclidean_f32(q, t, p.get_dim(), &result);
-        benchmark::DoNotOptimize(result);
-        ++idx;
-    }
-    state.SetItemsProcessed(state.iterations());
-}
-BENCHMARK(BM_NumKong)->Name("NumKong_L2_sqeuclidean");
-
 // ============================================================
-// Parallel benchmarks (TBB): measure throughput under contention
-// Each iteration dispatches NUM_PAIRS distance computations across all cores.
+// Parallel benchmarks (TBB)
 // ============================================================
 
 static constexpr uint32_t PARALLEL_BATCH = NUM_PAIRS;
+
+static void BM_SimpleForLoop_Parallel(benchmark::State& state) {
+    auto& p = DataProvider::instance();
+    for (auto _ : state) {
+        tbb::parallel_for(
+            tbb::blocked_range<uint32_t>(0, PARALLEL_BATCH),
+            [&](const tbb::blocked_range<uint32_t>& r) {
+                for (uint32_t i = r.begin(); i != r.end(); ++i) {
+                    const float* q = p.get_vec(p.get_id_a(i));
+                    const float* t = p.get_vec(p.get_id_b(i));
+                    benchmark::DoNotOptimize(simple_L2sqr(q, t, p.get_dim()));
+                }
+            }
+        );
+    }
+    state.SetItemsProcessed(state.iterations() * PARALLEL_BATCH);
+}
+BENCHMARK(BM_SimpleForLoop_Parallel)->Name("Par_SimpleForLoop_L2")->UseRealTime();
+
+template <std::size_t U>
+static void BM_StdSimd_Parallel(benchmark::State& state) {
+    auto& p = DataProvider::instance();
+    for (auto _ : state) {
+        tbb::parallel_for(
+            tbb::blocked_range<uint32_t>(0, PARALLEL_BATCH),
+            [&](const tbb::blocked_range<uint32_t>& r) {
+                for (uint32_t i = r.begin(); i != r.end(); ++i) {
+                    const float* q = p.get_vec(p.get_id_a(i));
+                    const float* t = p.get_vec(p.get_id_b(i));
+                    benchmark::DoNotOptimize(stdsimd_L2sqr<U>(q, t, p.get_dim()));
+                }
+            }
+        );
+    }
+    state.SetItemsProcessed(state.iterations() * PARALLEL_BATCH);
+}
+BENCHMARK_TEMPLATE(BM_StdSimd_Parallel, 1)->Name("Par_StdSimd_L2_U1")->UseRealTime();
+BENCHMARK_TEMPLATE(BM_StdSimd_Parallel, 2)->Name("Par_StdSimd_L2_U2")->UseRealTime();
+BENCHMARK_TEMPLATE(BM_StdSimd_Parallel, 4)->Name("Par_StdSimd_L2_U4")->UseRealTime();
+
+template <std::size_t U>
+static void BM_StdSimdTail_Parallel(benchmark::State& state) {
+    auto& p = DataProvider::instance();
+    for (auto _ : state) {
+        tbb::parallel_for(
+            tbb::blocked_range<uint32_t>(0, PARALLEL_BATCH),
+            [&](const tbb::blocked_range<uint32_t>& r) {
+                for (uint32_t i = r.begin(); i != r.end(); ++i) {
+                    const float* q = p.get_vec(p.get_id_a(i));
+                    const float* t = p.get_vec(p.get_id_b(i));
+                    benchmark::DoNotOptimize(stdsimd_L2sqr_tail<U>(q, t, p.get_dim()));
+                }
+            }
+        );
+    }
+    state.SetItemsProcessed(state.iterations() * PARALLEL_BATCH);
+}
+BENCHMARK_TEMPLATE(BM_StdSimdTail_Parallel, 1)->Name("Par_StdSimdTail_L2_U1")->UseRealTime();
+BENCHMARK_TEMPLATE(BM_StdSimdTail_Parallel, 2)->Name("Par_StdSimdTail_L2_U2")->UseRealTime();
+BENCHMARK_TEMPLATE(BM_StdSimdTail_Parallel, 4)->Name("Par_StdSimdTail_L2_U4")->UseRealTime();
 
 template <std::size_t U>
 static void BM_Artea_Parallel(benchmark::State& state) {
@@ -227,24 +302,6 @@ BENCHMARK_TEMPLATE(BM_Artea_Parallel, 1)->Name("Par_Artea_L2_U1")->UseRealTime()
 BENCHMARK_TEMPLATE(BM_Artea_Parallel, 2)->Name("Par_Artea_L2_U2")->UseRealTime();
 BENCHMARK_TEMPLATE(BM_Artea_Parallel, 4)->Name("Par_Artea_L2_U4")->UseRealTime();
 
-static void BM_Faiss_Parallel(benchmark::State& state) {
-    auto& p = DataProvider::instance();
-    for (auto _ : state) {
-        tbb::parallel_for(
-            tbb::blocked_range<uint32_t>(0, PARALLEL_BATCH),
-            [&](const tbb::blocked_range<uint32_t>& r) {
-                for (uint32_t i = r.begin(); i != r.end(); ++i) {
-                    const float* q = p.get_vec(p.get_id_a(i));
-                    const float* t = p.get_vec(p.get_id_b(i));
-                    benchmark::DoNotOptimize(faiss::fvec_L2sqr(q, t, p.get_dim()));
-                }
-            }
-        );
-    }
-    state.SetItemsProcessed(state.iterations() * PARALLEL_BATCH);
-}
-BENCHMARK(BM_Faiss_Parallel)->Name("Par_Faiss_L2")->UseRealTime();
-
 static void BM_HNSWLib_Parallel(benchmark::State& state) {
     auto& p = DataProvider::instance();
     hnswlib::L2Space space(p.get_dim());
@@ -266,66 +323,6 @@ static void BM_HNSWLib_Parallel(benchmark::State& state) {
 }
 BENCHMARK(BM_HNSWLib_Parallel)->Name("Par_HNSWLib_L2")->UseRealTime();
 
-static void BM_NumKong_Parallel(benchmark::State& state) {
-    auto& p = DataProvider::instance();
-    for (auto _ : state) {
-        tbb::parallel_for(
-            tbb::blocked_range<uint32_t>(0, PARALLEL_BATCH),
-            [&](const tbb::blocked_range<uint32_t>& r) {
-                for (uint32_t i = r.begin(); i != r.end(); ++i) {
-                    const float* q = p.get_vec(p.get_id_a(i));
-                    const float* t = p.get_vec(p.get_id_b(i));
-                    nk_f64_t result = 0;
-                    nk_sqeuclidean_f32(q, t, p.get_dim(), &result);
-                    benchmark::DoNotOptimize(result);
-                }
-            }
-        );
-    }
-    state.SetItemsProcessed(state.iterations() * PARALLEL_BATCH);
-}
-BENCHMARK(BM_NumKong_Parallel)->Name("Par_NumKong_L2")->UseRealTime();
-
-template <std::size_t U>
-static void BM_StdSimd_Parallel(benchmark::State& state) {
-    auto& p = DataProvider::instance();
-    for (auto _ : state) {
-        tbb::parallel_for(
-            tbb::blocked_range<uint32_t>(0, PARALLEL_BATCH),
-            [&](const tbb::blocked_range<uint32_t>& r) {
-                for (uint32_t i = r.begin(); i != r.end(); ++i) {
-                    const float* q = p.get_vec(p.get_id_a(i));
-                    const float* t = p.get_vec(p.get_id_b(i));
-                    benchmark::DoNotOptimize(stdsimd_L2sqr<U>(q, t, p.get_dim()));
-                }
-            }
-        );
-    }
-    state.SetItemsProcessed(state.iterations() * PARALLEL_BATCH);
-}
-BENCHMARK_TEMPLATE(BM_StdSimd_Parallel, 1)->Name("Par_StdSimd_L2_U1")->UseRealTime();
-BENCHMARK_TEMPLATE(BM_StdSimd_Parallel, 2)->Name("Par_StdSimd_L2_U2")->UseRealTime();
-BENCHMARK_TEMPLATE(BM_StdSimd_Parallel, 4)->Name("Par_StdSimd_L2_U4")->UseRealTime();
-BENCHMARK_TEMPLATE(BM_StdSimd_Parallel, 8)->Name("Par_StdSimd_L2_U8")->UseRealTime();
-
-static void BM_SimpleForLoop_Parallel(benchmark::State& state) {
-    auto& p = DataProvider::instance();
-    for (auto _ : state) {
-        tbb::parallel_for(
-            tbb::blocked_range<uint32_t>(0, PARALLEL_BATCH),
-            [&](const tbb::blocked_range<uint32_t>& r) {
-                for (uint32_t i = r.begin(); i != r.end(); ++i) {
-                    const float* q = p.get_vec(p.get_id_a(i));
-                    const float* t = p.get_vec(p.get_id_b(i));
-                    benchmark::DoNotOptimize(simple_L2sqr(q, t, p.get_dim()));
-                }
-            }
-        );
-    }
-    state.SetItemsProcessed(state.iterations() * PARALLEL_BATCH);
-}
-BENCHMARK(BM_SimpleForLoop_Parallel)->Name("Par_SimpleForLoop_L2")->UseRealTime();
-
 int main(int argc, char** argv) {
     argparse::ArgumentParser program("bench_simd_distance");
     program.add_argument("-c", "--config").default_value(std::string("./configs/datasets.json"));
@@ -334,14 +331,6 @@ int main(int argc, char** argv) {
     g_config.config_path = program.get<std::string>("--config");
     g_config.dataset_name = program.get<std::string>("--dataset");
     DataProvider::instance().init();
-
-#if NK_TARGET_SKYLAKE
-    printf("[NumKong] Using Skylake (AVX-512)\n");
-#elif NK_TARGET_HASWELL
-    printf("[NumKong] Using Haswell (AVX2)\n");
-#else
-    printf("[NumKong] Using serial fallback\n");
-#endif
 
     ::benchmark::Initialize(&argc, argv);
     ::benchmark::RunSpecifiedBenchmarks();

@@ -24,7 +24,6 @@ foreach(sourcefile ${TEST_SOURCES})
         benchmark::benchmark
         Threads::Threads
         hnswlib
-	    faiss
     )
     add_test(NAME ${test_target} COMMAND ${test_target})
 endforeach()

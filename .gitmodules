@@ -4,9 +4,6 @@
 [submodule "third_party/hnswlib"]
 	path = third_party/hnswlib
 	url = git@github.com:nmslib/hnswlib.git
-[submodule "third_party/ann-datasets"]
-	path = third_party/ann-datasets
-	url = git@github.com:WittenYeh/ann-datasets.git
 [submodule "third_party/NumKong"]
 	path = third_party/NumKong
 	url = git@github.com:ashvardanian/NumKong.git
