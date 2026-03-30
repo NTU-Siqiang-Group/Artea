@@ -393,6 +393,9 @@ TEST_F(ArteaGraphConstructTest, QueryRecall) {
 
     recall_estimator_t recall_estimator;
 
+    constexpr uint32_t NUM_WARMUP_RUNS = 10;
+    constexpr uint32_t NUM_TEST_RUNS = 50;
+
     for (uint32_t queue_size = g_config.queue_start; queue_size <= g_config.queue_end; queue_size += g_config.queue_step) {
         // Create hierarchical router with current queue size
         hierarchical_graph_router_t<graph_mode_t::search_mode> router(
@@ -404,25 +407,38 @@ TEST_F(ArteaGraphConstructTest, QueryRecall) {
         );
         router.initialize();
 
-        // Query all vectors
-        start_time = std::chrono::high_resolution_clock::now();
-        knn_results_t results = router.batch_query(query_vecs);
-        end_time = std::chrono::high_resolution_clock::now();
+        // Warm-up runs
+        for (uint32_t w = 0; w < NUM_WARMUP_RUNS; ++w) {
+            [[maybe_unused]] auto warmup_results = router.batch_query(query_vecs);
+        }
 
-        duration = std::chrono::duration_cast<std::chrono::microseconds>(end_time - start_time);
+        // Test runs
+        double total_time_us = 0.0;
+        float total_recall = 0.0f;
+        for (uint32_t r = 0; r < NUM_TEST_RUNS; ++r) {
+            start_time = std::chrono::high_resolution_clock::now();
+            knn_results_t results = router.batch_query(query_vecs);
+            end_time = std::chrono::high_resolution_clock::now();
 
-        // Compute metrics
+            duration = std::chrono::duration_cast<std::chrono::microseconds>(end_time - start_time);
+            total_time_us += duration.count();
+            total_recall += recall_estimator.calculate_recall_at_k(results, groundtruth, g_config.topk, query_vecs.get_num_vecs());
+        }
+
+        double avg_time_us = total_time_us / NUM_TEST_RUNS;
+
         QueryResult result;
         result.candidate_queue_size = queue_size;
-        result.query_time_ms = duration.count() / 1000.0;
-        result.avg_query_time_us = static_cast<double>(duration.count()) / query_vecs.get_num_vecs();
-        result.throughput_qps = query_vecs.get_num_vecs() * 1000000.0 / duration.count();
-        result.recall = recall_estimator.calculate_recall_at_k(results, groundtruth, g_config.topk, query_vecs.get_num_vecs());
+        result.query_time_ms = avg_time_us / 1000.0;
+        result.avg_query_time_us = avg_time_us / query_vecs.get_num_vecs();
+        result.throughput_qps = query_vecs.get_num_vecs() * 1000000.0 / avg_time_us;
+        result.recall = total_recall / NUM_TEST_RUNS;
 
         g_results.query_results.push_back(result);
 
-        ARTEA_INFO(fmt::format("CandidateQueue={:3}: Recall@{}={:.4f}, QPS={:8.2f}, AvgTime={:.2f}ms",
-            queue_size, g_config.topk, result.recall, result.throughput_qps, result.query_time_ms));
+        ARTEA_INFO(fmt::format("CandidateQueue={:3}: Recall@{}={:.4f}, QPS={:8.2f}, AvgTime={:.2f}ms ({}w+{}r)",
+            queue_size, g_config.topk, result.recall, result.throughput_qps, result.query_time_ms,
+            NUM_WARMUP_RUNS, NUM_TEST_RUNS));
     }
 
     // Expect reasonable recall for at least one configuration
