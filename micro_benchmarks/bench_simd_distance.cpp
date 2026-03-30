@@ -15,6 +15,7 @@
 #include <benchmark/benchmark.h>
 #include <argparse/argparse.hpp>
 #include <artea/cpu/framework/artea.hpp>
+#include <artea/cpu/framework/type_context/default_context.hpp>
 #include <faiss/utils/distances.h>
 #include <hnswlib/hnswlib.h>
 #include <numkong/spatial.h>
@@ -26,9 +27,9 @@
 using namespace artea;
 using namespace artea::cpu;
 
-using base_traits_t = BaseTraits<uint32_t, float>;
-using computer_traits_t = ComputerTraits<base_traits_t, DistanceMetricsT::EUCLIDEAN>;
 template <std::size_t U> using artea_simd_dist_t = computer_traits_t::template simd_dist_t<U>;
+
+static constexpr uint32_t NUM_PAIRS = 65536;
 
 struct TestConfig { std::string config_path, dataset_name; } g_config;
 
@@ -36,19 +37,29 @@ class DataProvider {
 public:
     static DataProvider& instance() { static DataProvider inst; return inst; }
     void init() {
-        auto dataset = std::make_unique<typename base_traits_t::vector_dataset_t>(g_config.config_path, g_config.dataset_name);
-        dim_ = dataset->get_base_vecs().get_vec_dim();
-        query_vec_.resize(dim_);
-        target_vec_.resize(dim_); // For benchmark, we just need one hot pair usually, or could use array
-        std::memcpy(query_vec_.data(), dataset->get_query_vecs().get(0), dim_ * sizeof(float));
-        std::memcpy(target_vec_.data(), dataset->get_base_vecs().get(0), dim_ * sizeof(float));
+        _dataset = std::make_unique<typename base_traits_t::vector_dataset_t>(g_config.config_path, g_config.dataset_name);
+        _dim = _dataset->get_base_vecs().get_vec_dim();
+        _num_vecs = _dataset->get_base_vecs().get_num_vecs();
+
+        // Pre-generate random ID pairs for benchmark iterations
+        random_seq_t rng_a(_num_vecs);
+        random_seq_t rng_b(_num_vecs);
+        _ids_a.resize(NUM_PAIRS);
+        _ids_b.resize(NUM_PAIRS);
+        rng_a.generate(_ids_a, NUM_PAIRS);
+        rng_b.generate(_ids_b, NUM_PAIRS);
     }
-    uint32_t get_dim() const { return dim_; }
-    float* get_q() { return query_vec_.data(); }
-    float* get_t() { return target_vec_.data(); }
+    uint32_t get_dim() const { return _dim; }
+    uint32_t get_num_vecs() const { return _num_vecs; }
+    const float* get_vec(uint32_t id) const { return _dataset->get_base_vecs().get(id); }
+    uint32_t get_id_a(uint32_t idx) const { return _ids_a[idx % NUM_PAIRS]; }
+    uint32_t get_id_b(uint32_t idx) const { return _ids_b[idx % NUM_PAIRS]; }
 private:
-    uint32_t dim_;
-    std::vector<float> query_vec_, target_vec_;
+    std::unique_ptr<typename base_traits_t::vector_dataset_t> _dataset;
+    uint32_t _dim;
+    uint32_t _num_vecs;
+    std::vector<uint32_t> _ids_a;
+    std::vector<uint32_t> _ids_b;
 };
 
 // 0. SimpleForLoop: scalar for-loop with #pragma simd hint
@@ -64,8 +75,12 @@ static float simple_L2sqr(const float* a, const float* b, uint32_t dim) {
 
 static void BM_SimpleForLoop(benchmark::State& state) {
     auto& p = DataProvider::instance();
+    uint32_t idx = 0;
     for (auto _ : state) {
-        benchmark::DoNotOptimize(simple_L2sqr(p.get_q(), p.get_t(), p.get_dim()));
+        const float* q = p.get_vec(p.get_id_a(idx));
+        const float* t = p.get_vec(p.get_id_b(idx));
+        benchmark::DoNotOptimize(simple_L2sqr(q, t, p.get_dim()));
+        ++idx;
     }
     state.SetItemsProcessed(state.iterations());
 }
@@ -88,14 +103,12 @@ static float stdsimd_L2sqr(const float* a, const float* b, uint32_t dim) {
             sums[u] += diff * diff;
         }
     }
-    // Reduce remaining full SIMD lanes
     for (; i + W <= dim; i += W) {
         simd_t va(a + i, stdx::element_aligned);
         simd_t vb(b + i, stdx::element_aligned);
         simd_t diff = va - vb;
         sums[0] += diff * diff;
     }
-    // Merge accumulators and scalar tail
     for (std::size_t u = 1; u < U; ++u) sums[0] += sums[u];
     return stdx::reduce(sums[0]);
 }
@@ -103,8 +116,12 @@ static float stdsimd_L2sqr(const float* a, const float* b, uint32_t dim) {
 template <std::size_t U>
 static void BM_StdSimd(benchmark::State& state) {
     auto& p = DataProvider::instance();
+    uint32_t idx = 0;
     for (auto _ : state) {
-        benchmark::DoNotOptimize(stdsimd_L2sqr<U>(p.get_q(), p.get_t(), p.get_dim()));
+        const float* q = p.get_vec(p.get_id_a(idx));
+        const float* t = p.get_vec(p.get_id_b(idx));
+        benchmark::DoNotOptimize(stdsimd_L2sqr<U>(q, t, p.get_dim()));
+        ++idx;
     }
     state.SetItemsProcessed(state.iterations());
 }
@@ -112,13 +129,17 @@ BENCHMARK_TEMPLATE(BM_StdSimd, 1)->Name("StdSimd_L2_U1");
 BENCHMARK_TEMPLATE(BM_StdSimd, 2)->Name("StdSimd_L2_U2");
 BENCHMARK_TEMPLATE(BM_StdSimd, 4)->Name("StdSimd_L2_U4");
 
-// 1. Artea Benchmarks (1, 2, 4)
+// 2. Artea SIMD distance
 template <std::size_t U>
 static void BM_Artea(benchmark::State& state) {
     auto& p = DataProvider::instance();
     artea_simd_dist_t<U> func(p.get_dim());
+    uint32_t idx = 0;
     for (auto _ : state) {
-        benchmark::DoNotOptimize(func(p.get_q(), p.get_t()));
+        const float* q = p.get_vec(p.get_id_a(idx));
+        const float* t = p.get_vec(p.get_id_b(idx));
+        benchmark::DoNotOptimize(func(q, t));
+        ++idx;
     }
     state.SetItemsProcessed(state.iterations());
 }
@@ -126,36 +147,48 @@ BENCHMARK_TEMPLATE(BM_Artea, 1)->Name("Artea_L2_U1");
 BENCHMARK_TEMPLATE(BM_Artea, 2)->Name("Artea_L2_U2");
 BENCHMARK_TEMPLATE(BM_Artea, 4)->Name("Artea_L2_U4");
 
-// 2. Faiss
+// 3. Faiss
 static void BM_Faiss(benchmark::State& state) {
     auto& p = DataProvider::instance();
+    uint32_t idx = 0;
     for (auto _ : state) {
-        benchmark::DoNotOptimize(faiss::fvec_L2sqr(p.get_q(), p.get_t(), p.get_dim()));
+        const float* q = p.get_vec(p.get_id_a(idx));
+        const float* t = p.get_vec(p.get_id_b(idx));
+        benchmark::DoNotOptimize(faiss::fvec_L2sqr(q, t, p.get_dim()));
+        ++idx;
     }
     state.SetItemsProcessed(state.iterations());
 }
 BENCHMARK(BM_Faiss)->Name("Faiss_L2_fvec");
 
-// 3. HNSWLib
+// 4. HNSWLib
 static void BM_HNSWLib(benchmark::State& state) {
     auto& p = DataProvider::instance();
     hnswlib::L2Space space(p.get_dim());
     auto f = space.get_dist_func();
     void* param = space.get_dist_func_param();
+    uint32_t idx = 0;
     for (auto _ : state) {
-        benchmark::DoNotOptimize(f(p.get_q(), p.get_t(), param));
+        const float* q = p.get_vec(p.get_id_a(idx));
+        const float* t = p.get_vec(p.get_id_b(idx));
+        benchmark::DoNotOptimize(f(q, t, param));
+        ++idx;
     }
     state.SetItemsProcessed(state.iterations());
 }
 BENCHMARK(BM_HNSWLib)->Name("HNSWLib_L2");
 
-// 4. NumKong
+// 5. NumKong
 static void BM_NumKong(benchmark::State& state) {
     auto& p = DataProvider::instance();
+    uint32_t idx = 0;
     for (auto _ : state) {
+        const float* q = p.get_vec(p.get_id_a(idx));
+        const float* t = p.get_vec(p.get_id_b(idx));
         nk_f64_t result = 0;
-        nk_sqeuclidean_f32(p.get_q(), p.get_t(), p.get_dim(), &result);
+        nk_sqeuclidean_f32(q, t, p.get_dim(), &result);
         benchmark::DoNotOptimize(result);
+        ++idx;
     }
     state.SetItemsProcessed(state.iterations());
 }

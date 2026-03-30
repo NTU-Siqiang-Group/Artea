@@ -221,8 +221,8 @@ int main(int argc, char** argv) {
     program.add_argument("--num-routing-loops").default_value(1u).scan<'u', uint32_t>();
     program.add_argument("-k", "--topk").default_value(20u).scan<'u', uint32_t>();
     program.add_argument("--candidate-queue-config")
-        .default_value(std::string("40,100,20"))
-        .help("Candidate queue size grid search: start,end,step (default: 40,100,20)");
+        .default_value(std::string("40,200,20"))
+        .help("Candidate queue size grid search: start,end,step (default: 40,200,20)");
     program.add_argument("-v", "--verbose").default_value(false).implicit_value(true);
 
     try {

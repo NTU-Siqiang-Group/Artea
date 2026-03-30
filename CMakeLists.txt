@@ -4,18 +4,12 @@ cmake_policy(SET CMP0135 NEW) # Use modern timestamp behavior
 project(Artea LANGUAGES C CXX)
 
 
-# --- Require Intel icpx compiler ---
-if(NOT CMAKE_CXX_COMPILER_ID MATCHES "IntelLLVM")
-    message(FATAL_ERROR
-        "Artea requires the Intel icpx compiler (IntelLLVM). "
-        "Detected: ${CMAKE_CXX_COMPILER_ID}. "
-        "Set -DCMAKE_CXX_COMPILER=icpx -DCMAKE_C_COMPILER=icx.")
-endif()
-add_compile_options(-Wno-unknown-warning-option)
-add_compile_options(-diag-disable=10430)
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
+
+# Link against GCC-14's libstdc++ at runtime
+add_link_options("-Wl,-rpath,/usr/local/gcc-14/lib64")
 
 set(CMAKE_INSTALL_RPATH_USE_LINK_PATH ON)
 set(CMAKE_BUILD_WITH_INSTALL_RPATH ON)
