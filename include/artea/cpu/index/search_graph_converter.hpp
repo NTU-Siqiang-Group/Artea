@@ -39,7 +39,7 @@ class SearchGraphConverter {
     using vertex_id_t = typename IndexTraitsT::vertex_id_t;
     using layer_id_t = typename IndexTraitsT::layer_id_t;
     using vector_array_t = typename IndexTraitsT::vector_array_t;
-    using conv_graph_index_t = typename IndexTraitsT::conv_graph_index_t;
+    using index_t = typename IndexTraitsT::conv_graph::index_t;
     using flat_search_graph_t = typename IndexTraitsT::flat_search_graph_t;
     using hierarchical_search_graph_t = typename IndexTraitsT::hierarchical_search_graph_t;
     using nbr_arr_checker_t = typename IndexTraitsT::nbr_arr_checker_t;
@@ -166,7 +166,7 @@ public:
         const vector_array_t& vecs_data
     ) -> flat_search_graph_t {
         // Load FlatGraph from file
-        conv_graph_index_t flat_graph = conv_graph_index_t::restore(file_path, vecs_data);
+        index_t flat_graph = index_t::restore(file_path, vecs_data);
 
         // Convert to FlatSearchGraph
         return from_flat_graph(flat_graph, extracted_nbr_size);

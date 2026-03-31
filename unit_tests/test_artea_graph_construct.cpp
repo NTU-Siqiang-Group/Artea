@@ -139,11 +139,11 @@ public:
     vector_dataset_t& get_dataset() { return *dataset_; }
     dist_func_t& get_dist_func() { return *dist_func_; }
     float get_min_radius() const { return _min_radius; }
-    artea_graph_index_t& get_hierarchical_graph() { return *hierarchical_graph_; }
+    artea_graph::index_t& get_hierarchical_graph() { return *hierarchical_graph_; }
     hierarchical_vecs_manager_t& get_hier_vecs_manager() { return hierarchical_graph_->get_hier_vecs_manager(); }
 
     void set_hierarchical_graph(
-        std::unique_ptr<artea_graph_index_t> graph
+        std::unique_ptr<artea_graph::index_t> graph
     ) {
         hierarchical_graph_ = std::move(graph);
     }
@@ -156,7 +156,7 @@ private:
     DataProvider() = default;
     std::unique_ptr<vector_dataset_t> dataset_;
     std::unique_ptr<dist_func_t> dist_func_;
-    std::unique_ptr<artea_graph_index_t> hierarchical_graph_;
+    std::unique_ptr<artea_graph::index_t> hierarchical_graph_;
     float _min_radius = 0.0f;
 };
 
@@ -217,7 +217,7 @@ protected:
         ARTEA_INFO("Constructing hierarchical Artea graph...");
         auto construction_start = std::chrono::high_resolution_clock::now();
 
-        auto graph = artea_graph_factory_t::construct_graph(
+        auto graph = artea_graph::factory_t::construct_graph(
             base_vecs,
             bottom_layer_config,
             upper_layer_config,
@@ -226,7 +226,7 @@ protected:
             propagate_config,
             vertices_builder_config
         );
-        auto hierarchical_graph = std::make_unique<artea_graph_index_t>(std::move(graph));
+        auto hierarchical_graph = std::make_unique<artea_graph::index_t>(std::move(graph));
 
         auto construction_end = std::chrono::high_resolution_clock::now();
         auto construction_duration = std::chrono::duration_cast<std::chrono::microseconds>(construction_end - construction_start);

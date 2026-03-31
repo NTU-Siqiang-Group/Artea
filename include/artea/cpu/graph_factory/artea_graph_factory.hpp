@@ -30,9 +30,9 @@ class IndexFactory {
     using ratio_t = typename GraphFactoryTraitsT::ratio_t;
     using distance_t = typename GraphFactoryTraitsT::distance_t;
     using dist_func_t = typename GraphFactoryTraitsT::dist_func_t;
-    using conv_graph_index_t = typename GraphFactoryTraitsT::conv_graph_index_t;
-    using conv_graph_factory_t = typename GraphFactoryTraitsT::conv_graph_factory_t;
-    using artea_graph_index_t = typename GraphFactoryTraitsT::template artea_graph_index_t<conv_graph_index_t>;
+    using layer_graph_t = typename GraphFactoryTraitsT::conv_graph::index_t;
+    using layer_factory_t = typename GraphFactoryTraitsT::conv_graph::factory_t;
+    using index_t = typename GraphFactoryTraitsT::artea_graph::template index_t<layer_graph_t>;
     using vector_array_t = typename GraphFactoryTraitsT::vector_array_t;
     using vertex_subset_t = typename GraphFactoryTraitsT::vertex_subset_t;
     using lb_greedy_vg_t = typename GraphFactoryTraitsT::lb_greedy_vg_t;
@@ -55,10 +55,10 @@ public:
         pruning_config_t upper_pruning_config,
         propagate_config_t propagate_config,
         greedy_vertices_builder_config_t vertices_builder_config
-    ) -> artea_graph_index_t {
+    ) -> index_t {
         dist_func_t dist_func(base_vecs.get_vec_dim());
 
-        artea_graph_index_t hierarchical_graph(
+        index_t hierarchical_graph(
             base_vecs,
             bottom_layer_config,
             upper_layer_config,
@@ -73,7 +73,7 @@ public:
 
         // Build bottom layer edges
         hierarchical_graph.resize(1);
-        hierarchical_graph.set_layer_graph(0, conv_graph_factory_t::construct_graph(
+        hierarchical_graph.set_layer_graph(0, layer_factory_t::construct_graph(
             base_vecs, bottom_layer_config, bottom_pruning_config, propagate_config));
 
         // Iteratively extract upper layer vertices and build edges
@@ -108,7 +108,7 @@ public:
 
             // Build edges for this upper layer
             hierarchical_graph.resize(layer_id + 1);
-            hierarchical_graph.set_layer_graph(layer_id, conv_graph_factory_t::construct_graph(
+            hierarchical_graph.set_layer_graph(layer_id, layer_factory_t::construct_graph(
                 *current_layer_vecs, upper_layer_config, upper_pruning_config, propagate_config));
         }
 

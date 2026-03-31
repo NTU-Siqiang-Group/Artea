@@ -23,14 +23,12 @@
 #include <cstddef>
 #include <vector>
 #include <utility>
-#include <type_traits>
 
 namespace artea {
 namespace cpu {
 
 /** ------ Forward Declaration  ------ **/
 template <typename ComputerTraitsT, std::size_t UnrollSize> class SIMDDistance;
-template <typename ComputerTraitsT, int Dummy> class SimpleEuclideanDistance;
 template <typename ComputerTraitsT, std::size_t UnrollSize> class SIMDFMA;
 template <typename ComputerTraitsT, std::size_t UnrollSize> class SIMDLinear;
 template <typename ComputerTraitsT> class RecallEstimator;
@@ -40,8 +38,7 @@ template <typename ComputerTraitsT> class DistanceProber;
 enum class DistanceMetricsT : uint8_t {
     EUCLIDEAN,
     DOT,
-    COSINE,
-    SIMPLE_EUCLIDEAN  // Simple Euclidean distance for low-dimensional vectors (no SIMD)
+    COSINE
 };  // enum class DistanceMetricsT
 
 /** @brief Traits for computing distances between vectors */
@@ -60,37 +57,14 @@ public:
 
     using distance_metrics_t = DistanceMetricsT;
 
-    // Conditional distance function type selection
+    // Distance function type selection
     template <std::size_t UnrollSize = 1>
-    using simd_dist_t = std::conditional_t<
-        DistanceMetrics == DistanceMetricsT::SIMPLE_EUCLIDEAN,
-        SimpleEuclideanDistance<computer_traits_t, 0>,
-        SIMDDistance<computer_traits_t, UnrollSize>
-    >;
+    using simd_dist_t = SIMDDistance<computer_traits_t, UnrollSize>;
 
-    using simdu1_dist_t = std::conditional_t<
-        DistanceMetrics == DistanceMetricsT::SIMPLE_EUCLIDEAN,
-        SimpleEuclideanDistance<computer_traits_t, 0>,
-        SIMDDistance<computer_traits_t, 1>
-    >;
-
-    using simdu2_dist_t = std::conditional_t<
-        DistanceMetrics == DistanceMetricsT::SIMPLE_EUCLIDEAN,
-        SimpleEuclideanDistance<computer_traits_t, 0>,
-        SIMDDistance<computer_traits_t, 2>
-    >;
-
-    using simdu4_dist_t = std::conditional_t<
-        DistanceMetrics == DistanceMetricsT::SIMPLE_EUCLIDEAN,
-        SimpleEuclideanDistance<computer_traits_t, 0>,
-        SIMDDistance<computer_traits_t, 4>
-    >;
-
-    using dist_func_t = std::conditional_t<
-        DistanceMetrics == DistanceMetricsT::SIMPLE_EUCLIDEAN,
-        SimpleEuclideanDistance<computer_traits_t, 0>,
-        SIMDDistance<computer_traits_t, 1>  // TODO: test different unroll size
-    >;
+    using simdu1_dist_t = SIMDDistance<computer_traits_t, 1>;
+    using simdu2_dist_t = SIMDDistance<computer_traits_t, 2>;
+    using simdu4_dist_t = SIMDDistance<computer_traits_t, 4>;
+    using dist_func_t = SIMDDistance<computer_traits_t, 1>;
 
     template <std::size_t UnrollSize = 1>
     using simd_fma_t = SIMDFMA<computer_traits_t, UnrollSize>;

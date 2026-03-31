@@ -102,8 +102,8 @@ public:
 
         ARTEA_INFO("Building convergent graph...");
         auto t0 = std::chrono::high_resolution_clock::now();
-        flat_graph_ = std::make_unique<conv_graph_index_t>(
-            conv_graph_factory_t::construct_graph(base_vecs, layer_cfg, pruning_cfg, propagate_cfg)
+        flat_graph_ = std::make_unique<conv_graph::index_t>(
+            conv_graph::factory_t::construct_graph(base_vecs, layer_cfg, pruning_cfg, propagate_cfg)
         );
         auto t1 = std::chrono::high_resolution_clock::now();
         g_results.build_time_s =
@@ -127,7 +127,7 @@ public:
 
     vector_dataset_t&    get_dataset()           { return *dataset_; }
     dist_func_t&         get_dist_func()          { return *dist_func_; }
-    conv_graph_index_t&        get_flat_graph()          { return *flat_graph_; }
+    conv_graph::index_t&        get_flat_graph()          { return *flat_graph_; }
     flat_search_graph_t& get_flat_search_graph()  { return *flat_search_graph_; }
     const idlist_array_t& get_gt()               { return dataset_->get_gt_vecs(); }
 
@@ -135,7 +135,7 @@ private:
     DataProvider() = default;
     std::unique_ptr<vector_dataset_t>    dataset_;
     std::unique_ptr<dist_func_t>         dist_func_;
-    std::unique_ptr<conv_graph_index_t>        flat_graph_;
+    std::unique_ptr<conv_graph::index_t>        flat_graph_;
     std::unique_ptr<flat_search_graph_t> flat_search_graph_;
 };
 

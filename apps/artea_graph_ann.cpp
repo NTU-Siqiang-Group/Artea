@@ -206,7 +206,7 @@ int main(int argc, char** argv) {
     // Load hierarchical graph
     ARTEA_INFO(fmt::format("Loading hierarchical graph from {}...", index_path));
 
-    artea_graph_index_t hierarchical_graph = hierarchical_graph_file_manager_t::restore<artea_graph_index_t>(
+    artea_graph::index_t hierarchical_graph = hierarchical_graph_file_manager_t::restore<artea_graph::index_t>(
         index_path,
         base_vecs
     );

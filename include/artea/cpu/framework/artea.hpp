@@ -105,7 +105,6 @@
 #include <artea/cpu/utils/random_seq.hpp>
 #include <artea/cpu/utils/distance_prober.hpp>
 #include <artea/cpu/utils/index_register_util.hpp>
-#include <artea/cpu/utils/simple_distance.hpp>
 #include <artea/cpu/utils/simd_distance.hpp>
 #include <artea/cpu/utils/simd_fma.hpp>
 #include <artea/cpu/utils/simd_linear.hpp>

@@ -92,7 +92,7 @@ public:
         ARTEA_INFO("Building convergent graph...");
         auto start_time = std::chrono::high_resolution_clock::now();
 
-        flat_graph_ = std::make_unique<conv_graph_index_t>(conv_graph_factory_t::construct_graph(
+        flat_graph_ = std::make_unique<conv_graph::index_t>(conv_graph::factory_t::construct_graph(
             base_vecs,
             g_config.layer_config,
             g_config.pruning_config,
@@ -137,7 +137,7 @@ private:
     DataProvider() = default;
     std::unique_ptr<vector_dataset_t> dataset_;
     std::unique_ptr<dist_func_t> dist_func_;
-    std::unique_ptr<conv_graph_index_t> flat_graph_;
+    std::unique_ptr<conv_graph::index_t> flat_graph_;
     std::unique_ptr<flat_search_graph_t> flat_search_graph_;
 };
 
