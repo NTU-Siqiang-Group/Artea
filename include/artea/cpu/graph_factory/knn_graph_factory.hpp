@@ -37,7 +37,7 @@
 
 namespace artea {
 namespace cpu {
-namespace conv_graph {
+namespace knn_graph {
 
 template <typename GraphFactoryTraitsT>
 class IndexFactory {
@@ -47,13 +47,12 @@ class IndexFactory {
     using vec_ele_t = typename GraphFactoryTraitsT::vec_ele_t;
     using iter_t = typename GraphFactoryTraitsT::iter_t;
     using ratio_t = typename GraphFactoryTraitsT::ratio_t;
-    using index_t = typename GraphFactoryTraitsT::conv_graph::index_t;
     using vector_dataset_t = typename GraphFactoryTraitsT::vector_dataset_t;
     using dist_func_t = typename GraphFactoryTraitsT::dist_func_t;
     using layer_config_t = typename GraphFactoryTraitsT::layer_config_t;
-    using propagate_config_t = typename GraphFactoryTraitsT::conv_graph::propagate_config_t;
-    using pruning_config_t = typename GraphFactoryTraitsT::conv_graph::pruning_config_t;
-    // Edge generator types parameterized on index_t
+    using index_t = typename GraphFactoryTraitsT::knn_graph::index_t;
+    using propagate_config_t = typename GraphFactoryTraitsT::knn_graph::propagate_config_t;
+    using pruning_config_t = typename GraphFactoryTraitsT::knn_graph::pruning_config_t;
     using random_eg_t = typename GraphFactoryTraitsT::random_eg_t;
     using propagate_engine_t = typename GraphFactoryTraitsT::template propagate_engine_t<index_t, false>;
     using triangle_updater_t = typename GraphFactoryTraitsT::template triangle_updater_t<index_t>;
@@ -163,15 +162,13 @@ private:
         }
 
         for (iter_t routing_loop = 0; routing_loop < propagate_config.num_routing_loops(); ++routing_loop) {
-            propagate_engine.next(routing_updater).next(truncate_updater)
-                            .next(triangle_updater).next(truncate_updater)
-                            .next(reverse_updater).next(truncate_updater);
+            propagate_engine.next(routing_updater).next(truncate_updater);
             if (on_iter_end) { on_iter_end(propagate_config.num_build_loops() + routing_loop); }
         }
     }
 
 };  // class IndexFactory
 
-}   // namespace conv_graph
+}   // namespace knn_graph
 }   // namespace cpu
 }   // namespace artea

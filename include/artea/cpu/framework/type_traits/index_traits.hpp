@@ -67,6 +67,12 @@ struct IndexTraits : virtual public BaseTraitsT {
         using index_t = cpu::conv_graph::IndexStructure<index_traits_t>;
     };
 
+    /** @brief Namespace-scoped index types for knn_graph, extending BaseTraits::knn_graph. */
+    struct knn_graph : BaseTraitsT::knn_graph {
+        knn_graph() = delete;
+        using index_t = cpu::conv_graph::IndexStructure<index_traits_t>;
+    };
+
     /** @brief Namespace-scoped index types for artea_graph, extending BaseTraits::artea_graph. */
     struct artea_graph : BaseTraitsT::artea_graph {
         artea_graph() = delete;

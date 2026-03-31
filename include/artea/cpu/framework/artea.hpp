@@ -62,6 +62,7 @@
 #include <artea/cpu/index/persistence/hierarchical_graph_file_manager.hpp>
 
 #include <artea/cpu/graph_factory/conv_graph_factory.hpp>
+#include <artea/cpu/graph_factory/knn_graph_factory.hpp>
 #include <artea/cpu/graph_factory/artea_graph_factory.hpp>
 
 #include <artea/cpu/router/vector_router.hpp>

@@ -70,5 +70,13 @@ using PruningConfig = conv_graph::PruningConfig<BaseTraitsT>;
 
 }   // namespace artea_graph
 
+namespace knn_graph {
+
+/** @brief KNN graph uses the same PruningConfig as conv_graph. */
+template <typename BaseTraitsT>
+using PruningConfig = conv_graph::PruningConfig<BaseTraitsT>;
+
+}   // namespace knn_graph
+
 }   // namespace cpu
 }   // namespace artea

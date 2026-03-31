@@ -90,5 +90,13 @@ using PropagateConfig = conv_graph::PropagateConfig<BaseTraitsT>;
 
 }   // namespace artea_graph
 
+namespace knn_graph {
+
+/** @brief KNN graph uses the same PropagateConfig as conv_graph. */
+template <typename BaseTraitsT>
+using PropagateConfig = conv_graph::PropagateConfig<BaseTraitsT>;
+
+}   // namespace knn_graph
+
 }   // namespace cpu
 }   // namespace artea

@@ -171,6 +171,13 @@ namespace conv_graph {
     using pruning_config_t = typename graph_factory_traits_t::conv_graph::pruning_config_t;
 }
 
+namespace knn_graph {
+    using index_t = typename graph_factory_traits_t::knn_graph::index_t;
+    using factory_t = typename graph_factory_traits_t::knn_graph::factory_t;
+    using propagate_config_t = typename graph_factory_traits_t::knn_graph::propagate_config_t;
+    using pruning_config_t = typename graph_factory_traits_t::knn_graph::pruning_config_t;
+}
+
 namespace artea_graph {
     using index_t = typename graph_factory_traits_t::artea_graph::template index_t<conv_graph::index_t>;
     using factory_t = typename graph_factory_traits_t::artea_graph::factory_t;
