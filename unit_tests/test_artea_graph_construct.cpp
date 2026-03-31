@@ -126,7 +126,7 @@ public:
 
         // Probe min_radius from dataset
         ARTEA_INFO("Probing min_radius from dataset...");
-        radius_prober_t prober(*dist_func_);
+        distance_prober_t prober(*dist_func_);
         auto probe_result = prober.probe(base_vecs, 0.001f, 0.95f, 0.05f);
         _min_radius = probe_result.radius;
         ARTEA_INFO(fmt::format("Probed min_radius: {:.6f}", _min_radius));

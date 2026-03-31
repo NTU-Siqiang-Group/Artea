@@ -105,7 +105,7 @@ int main(int argc, char** argv) {
     dist_func_t dist_func(dim);
 
     // Create radius prober
-    radius_prober_t prober(dist_func);
+    distance_prober_t prober(dist_func);
 
     // Check if multi-quantile mode
     if (!has_quantile) {
@@ -169,7 +169,7 @@ int main(int argc, char** argv) {
         // Mode 2: Auto-compute from confidence and relative error
         confidence = program.get<float>("--confidence");
         relative_err = program.get<float>("--relative-err");
-        num_distances = radius_prober_t::compute_num_dists_sampled(quantile, confidence, relative_err);
+        num_distances = distance_prober_t::compute_num_dists_sampled(quantile, confidence, relative_err);
 
         ARTEA_INFO(fmt::format("Radius Probing Configuration:"));
         ARTEA_INFO(fmt::format("  Dataset: {}", dataset_name));
@@ -182,7 +182,7 @@ int main(int argc, char** argv) {
         // Default mode: use default confidence and relative error
         confidence = program.get<float>("--confidence");
         relative_err = program.get<float>("--relative-err");
-        num_distances = radius_prober_t::compute_num_dists_sampled(quantile, confidence, relative_err);
+        num_distances = distance_prober_t::compute_num_dists_sampled(quantile, confidence, relative_err);
 
         ARTEA_INFO(fmt::format("Radius Probing Configuration:"));
         ARTEA_INFO(fmt::format("  Dataset: {}", dataset_name));

@@ -34,7 +34,7 @@ template <typename ComputerTraitsT, int Dummy> class SimpleEuclideanDistance;
 template <typename ComputerTraitsT, std::size_t UnrollSize> class SIMDFMA;
 template <typename ComputerTraitsT, std::size_t UnrollSize> class SIMDLinear;
 template <typename ComputerTraitsT> class RecallEstimator;
-template <typename ComputerTraitsT> class RadiusProber;
+template <typename ComputerTraitsT> class DistanceProber;
 
 /** @brief Distance metrics used for computing distances between vectors */
 enum class DistanceMetricsT : uint8_t {
@@ -111,7 +111,7 @@ public:
 
     using recall_estimator_t = RecallEstimator<computer_traits_t>;
 
-    using radius_prober_t = RadiusProber<computer_traits_t>;
+    using distance_prober_t = DistanceProber<computer_traits_t>;
 
     static constexpr distance_metrics_t distance_metrics = DistanceMetrics;
 

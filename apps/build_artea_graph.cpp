@@ -111,7 +111,7 @@ int main(int argc, char** argv) {
     constexpr float CONFIDENCE = 0.95f;
     constexpr float RELATIVE_ERR = 0.05f;
 
-    radius_prober_t prober(dist_func);
+    distance_prober_t prober(dist_func);
     auto probe_start = std::chrono::high_resolution_clock::now();
     auto probe_result = prober.probe(base_vecs, QUANTILE, CONFIDENCE, RELATIVE_ERR);
     auto probe_end = std::chrono::high_resolution_clock::now();

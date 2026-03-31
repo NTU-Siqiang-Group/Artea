@@ -97,7 +97,7 @@ public:
         artea_graph::propagate_config_t propagate_cfg(5, 12, 0.34f);
 
         ARTEA_INFO("Probing min_radius...");
-        radius_prober_t prober(*dist_func_);
+        distance_prober_t prober(*dist_func_);
         auto probe = prober.probe(base_vecs, 0.001f, 0.95f, 0.05f);
         greedy_vertices_builder_config_t vb_cfg(probe.radius, 1.44f, 0.999f, 0.95f, 0.2f, 2048);
 

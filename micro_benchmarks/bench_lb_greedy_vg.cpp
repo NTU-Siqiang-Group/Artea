@@ -142,7 +142,7 @@ int main(int argc, char** argv) {
     program.add_argument("-r", "--min-radius")
         .default_value(90000.0f)
         .help("Minimum radius (squared) for approximate r-net construction. "
-              "Use RadiusProber with quantile=0.05 for 95% coverage target.")
+              "Use DistanceProber with quantile=0.05 for 95% coverage target.")
         .scan<'g', float>();
 
     program.add_argument("-m", "--max-result-size")

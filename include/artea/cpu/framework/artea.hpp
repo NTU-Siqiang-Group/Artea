@@ -103,7 +103,7 @@
 #include <artea/cpu/utils/nbr_arr_checker.hpp>
 #include <artea/cpu/utils/parallel.hpp>
 #include <artea/cpu/utils/random_seq.hpp>
-#include <artea/cpu/utils/radius_prober.hpp>
+#include <artea/cpu/utils/distance_prober.hpp>
 #include <artea/cpu/utils/index_register_util.hpp>
 #include <artea/cpu/utils/simple_distance.hpp>
 #include <artea/cpu/utils/simd_distance.hpp>

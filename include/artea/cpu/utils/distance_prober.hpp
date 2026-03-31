@@ -13,7 +13,7 @@
 // limitations under the License.
 
 /*
- * @FilePath: /Artea/include/artea/cpu/utils/radius_prober.hpp
+ * @FilePath: /Artea/include/artea/cpu/utils/distance_prober.hpp
  * @Author: Chandler (Weitang Ye) <weitang.ye@ntu.edu.sg>
  * @Description: Probe distance distribution quantiles by sampling independent vector pairs
  */
@@ -36,7 +36,7 @@ namespace artea {
 namespace cpu {
 
 template <typename ComputerTraitsT>
-class RadiusProber {
+class DistanceProber {
 
     using vec_num_t = typename ComputerTraitsT::vec_num_t;
     using vec_id_t = typename ComputerTraitsT::vec_id_t;
@@ -69,10 +69,10 @@ public:
     };
 
     /**
-     * @brief Construct a new RadiusProber object
+     * @brief Construct a new DistanceProber object
      * @param dist_func Distance function for computing pairwise distances
      */
-    RadiusProber(const dist_func_t& dist_func) : _dist_func(dist_func) {}
+    DistanceProber(const dist_func_t& dist_func) : _dist_func(dist_func) {}
 
     /**
      * @brief Compute required number of distance samples
@@ -340,7 +340,7 @@ private:
         return distances;
     }
 
-};  // class RadiusProber
+};  // class DistanceProber
 
 }   // namespace cpu
 }   // namespace artea
