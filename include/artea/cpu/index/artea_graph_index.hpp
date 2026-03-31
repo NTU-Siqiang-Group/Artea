@@ -21,10 +21,10 @@ namespace artea_graph {
  * @tparam IndexTraitsT The index traits type.
  */
 template <typename IndexTraitsT, typename LayerGraphT>
-class GraphIndex :
-    public IndexTraitsT::template hierarchical_graph_t<GraphIndex<IndexTraitsT, LayerGraphT>, LayerGraphT>
+class IndexStructure :
+    public IndexTraitsT::template hierarchical_graph_t<IndexStructure<IndexTraitsT, LayerGraphT>, LayerGraphT>
 {
-    using base_t = typename IndexTraitsT::template hierarchical_graph_t<GraphIndex<IndexTraitsT, LayerGraphT>, LayerGraphT>;
+    using base_t = typename IndexTraitsT::template hierarchical_graph_t<IndexStructure<IndexTraitsT, LayerGraphT>, LayerGraphT>;
     using vector_array_t = typename IndexTraitsT::vector_array_t;
     using layer_config_t = typename IndexTraitsT::layer_config_t;
     using propagate_config_t = typename IndexTraitsT::artea_graph::propagate_config_t;
@@ -44,7 +44,7 @@ public:
      * @param propagate_config Propagation configuration (shared between layers).
      * @param vertices_builder_config Configuration for vertices builder (greedy or random).
      */
-    GraphIndex(
+    IndexStructure(
         const vector_array_t& base_vecs,
         const layer_config_t bottom_layer_config,
         const layer_config_t upper_layer_config,
@@ -59,11 +59,11 @@ public:
         _vertices_builder_config(vertices_builder_config)
     {}
 
-    GraphIndex(const GraphIndex&) = delete;
-    GraphIndex& operator=(const GraphIndex&) = delete;
+    IndexStructure(const IndexStructure&) = delete;
+    IndexStructure& operator=(const IndexStructure&) = delete;
 
-    GraphIndex(GraphIndex&&) noexcept = default;
-    GraphIndex& operator=(GraphIndex&&) noexcept = default;
+    IndexStructure(IndexStructure&&) noexcept = default;
+    IndexStructure& operator=(IndexStructure&&) noexcept = default;
 
     // --- Config accessors ---
 
@@ -136,7 +136,7 @@ public:
         const vector_array_t& base_vecs,
         const layer_config_t& bottom_layer_config,
         const layer_config_t& upper_layer_config
-    ) -> GraphIndex {
+    ) -> IndexStructure {
         using ratio_t = typename IndexTraitsT::ratio_t;
         using iter_t = typename IndexTraitsT::iter_t;
         using distance_t = typename IndexTraitsT::distance_t;
@@ -177,7 +177,7 @@ public:
             __builtin_unreachable();
         }();
 
-        return GraphIndex(
+        return IndexStructure(
             base_vecs, bottom_layer_config, upper_layer_config,
             bottom_pruning_config, upper_pruning_config,
             propagate_config, vertices_builder_config
@@ -197,7 +197,7 @@ private:
     /** @brief Vertices builder configuration (greedy or random). */
     vertices_builder_config_t _vertices_builder_config;
 
-};  // class GraphIndex
+};  // class IndexStructure
 
 }   // namespace artea_graph
 }   // namespace cpu

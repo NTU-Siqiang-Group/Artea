@@ -15,7 +15,7 @@ namespace cpu {
 
 /**
  * @brief CRTP base flat graph structure storing only graph topology and layer config.
- *        Subclasses (e.g. conv_graph::GraphIndex) extend with algorithm-specific configs.
+ *        Subclasses (e.g. conv_graph::IndexStructure) extend with algorithm-specific configs.
  * @tparam IndexTraitsT The index traits type.
  * @tparam DerivedClassT The concrete derived graph type (CRTP).
  */
