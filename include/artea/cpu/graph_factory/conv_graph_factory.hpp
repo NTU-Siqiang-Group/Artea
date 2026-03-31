@@ -37,9 +37,10 @@
 
 namespace artea {
 namespace cpu {
+namespace conv_graph {
 
 template <typename GraphFactoryTraitsT>
-class ConvGraphFactory {
+class IndexFactory {
 
     using vertex_num_t = typename GraphFactoryTraitsT::vertex_num_t;
     using vertex_id_t = typename GraphFactoryTraitsT::vertex_id_t;
@@ -169,8 +170,8 @@ private:
         }
     }
 
-};  // class ConvGraphFactory
+};  // class IndexFactory
 
-
+}   // namespace conv_graph
 }   // namespace cpu
 }   // namespace artea

@@ -18,9 +18,10 @@
 
 namespace artea {
 namespace cpu {
+namespace artea_graph {
 
 template <typename GraphFactoryTraitsT>
-class ArteaGraphFactory {
+class IndexFactory {
 
     using vertex_num_t = typename GraphFactoryTraitsT::vertex_num_t;
     using vertex_id_t = typename GraphFactoryTraitsT::vertex_id_t;
@@ -122,7 +123,8 @@ public:
 
         return hierarchical_graph;
     }
-};
+};  // class IndexFactory
 
+}   // namespace artea_graph
 }   // namespace cpu
 }   // namespace artea

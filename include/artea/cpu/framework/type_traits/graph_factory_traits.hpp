@@ -24,8 +24,12 @@ namespace artea {
 namespace cpu {
 
 /** ------ Forward Declaration  ------ **/
-template <typename GraphFactoryTraitsT> class ConvGraphFactory;
-template <typename GraphFactoryTraitsT> class ArteaGraphFactory;
+namespace conv_graph {
+    template <typename GraphFactoryTraitsT> class IndexFactory;
+}
+namespace artea_graph {
+    template <typename GraphFactoryTraitsT> class IndexFactory;
+}
 
 template <
     typename VertexGeneratorTraitsT,
@@ -39,10 +43,10 @@ struct GraphFactoryTraits :
     using graph_factory_traits_t = GraphFactoryTraits<VertexGeneratorTraitsT, EdgeGeneratorTraitsT, RouterTraitsT>;
 
     /** @brief Convergent graph factory type. */
-    using conv_graph_factory_t = ConvGraphFactory<graph_factory_traits_t>;
+    using conv_graph_factory_t = conv_graph::IndexFactory<graph_factory_traits_t>;
 
     /** @brief Artea graph factory type. */
-    using artea_graph_factory_t = ArteaGraphFactory<graph_factory_traits_t>;
+    using artea_graph_factory_t = artea_graph::IndexFactory<graph_factory_traits_t>;
 
 };  // struct GraphFactoryTraits
 
