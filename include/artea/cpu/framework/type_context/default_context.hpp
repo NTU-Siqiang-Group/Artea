@@ -114,6 +114,7 @@ using search_graph_converter_t = typename index_traits_t::search_graph_converter
 using flat_graph_file_manager_t = typename index_traits_t::flat_graph_file_manager_t;
 using hierarchical_graph_file_manager_t = typename index_traits_t::hierarchical_graph_file_manager_t;
 using index_size_calculator_t = typename index_traits_t::index_size_calculator_t;
+using radius_prober_t = typename index_traits_t::radius_prober_t;
 
 // Edge generator types from EdgeGeneratorTraits
 using triangle_updater_t = typename edge_generator_traits_t::template triangle_updater_t<typename index_traits_t::conv_graph::index_t>;

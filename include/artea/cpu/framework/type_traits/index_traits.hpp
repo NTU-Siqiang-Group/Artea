@@ -44,6 +44,7 @@ template <typename IndexTraitsT> class SearchGraphConverter;
 template <typename IndexTraitsT> class FlatGraphFileManager;
 template <typename IndexTraitsT> class HierarchicalGraphFileManager;
 template <typename IndexTraitsT> class IndexSizeCalculator;
+template <typename IndexTraitsT> class RadiusProber;
 
 template <typename BaseTraitsT>
 struct IndexTraits : virtual public BaseTraitsT {
@@ -103,6 +104,9 @@ struct IndexTraits : virtual public BaseTraitsT {
 
     /** @brief Index size calculator type. */
     using index_size_calculator_t = IndexSizeCalculator<index_traits_t>;
+
+    /** @brief Radius prober type. */
+    using radius_prober_t = RadiusProber<index_traits_t>;
 
     /** @brief Minimum number of vertices required for a layer to continue building upper layers. */
     static constexpr uint32_t min_num_layer_vertex = 1024;
