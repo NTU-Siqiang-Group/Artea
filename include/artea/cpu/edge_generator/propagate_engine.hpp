@@ -222,9 +222,9 @@ public:
 
     template <typename UdfUpdaterT>
         requires std::derived_from<UdfUpdaterT, neighbor_updater_t<UdfUpdaterT>>
-    auto next(UdfUpdaterT& udf_updater, const bool do_merge_logs = true) -> PropagateEngine& {
+    auto next(UdfUpdaterT& udf_updater) -> PropagateEngine& {
         propagate<UdfUpdaterT>(udf_updater);
-        if (do_merge_logs) { merge_logs(); }
+        merge_logs();
         return *this;
     }
 
@@ -232,28 +232,19 @@ public:
         requires std::derived_from<UdfUpdaterT, neighbor_updater_t<UdfUpdaterT>>
     auto run(
         const iter_t num_iters,
-        UdfUpdaterT& udf_updater,
-        const bool do_merge_logs = true
+        UdfUpdaterT& udf_updater
     ) -> PropagateEngine& {
         for (iter_t iter = 0; iter < num_iters; ++iter) {
             propagate<UdfUpdaterT>(udf_updater);
-            if (do_merge_logs) { merge_logs(); }
+            merge_logs();
 
             if constexpr (profiling_mode) {
-                if (do_merge_logs) {
-                    ARTEA_INFO(fmt::format(
-                        "Updater Iter {} ({}): Merged {} logs",
-                        iter,
-                        UdfUpdaterT::updater_name,
-                        _merged_logs_count
-                    ));
-                } else {
-                    ARTEA_INFO(fmt::format(
-                        "Updater Iter {} ({}): do_merge_logs = false, no logs merged",
-                        iter,
-                        UdfUpdaterT::updater_name
-                    ));
-                }
+                ARTEA_INFO(fmt::format(
+                    "Updater Iter {} ({}): Merged {} logs",
+                    iter,
+                    UdfUpdaterT::updater_name,
+                    _merged_logs_count
+                ));
             }
         }
         return *this;
