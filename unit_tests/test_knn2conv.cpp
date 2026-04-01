@@ -267,6 +267,7 @@ int main(int argc, char** argv) {
     std::cout << fmt::format("  KNN prefill ratio:        {}", g_config.knn_propagate_config.prefill_ratio()) << std::endl;
     std::cout << fmt::format("  KNN routing loops:        {}", g_config.knn_propagate_config.num_routing_loops()) << std::endl;
     std::cout << "  --- Conv Refinement ---" << std::endl;
+    std::cout << fmt::format("  Conv max nbr size:        {} (inherited from KNN)", g_config.knn_layer_config.max_nbr_size()) << std::endl;
     std::cout << fmt::format("  Conv scale coeffs:        {}", g_config.conv_pruning_config.scale_coeffs()) << std::endl;
     std::cout << fmt::format("  Conv shifted coeffs:      {}", g_config.conv_pruning_config.shifted_coeffs()) << std::endl;
     std::cout << "  --- Search ---" << std::endl;
