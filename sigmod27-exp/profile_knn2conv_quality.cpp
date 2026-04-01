@@ -58,9 +58,6 @@ struct QueryResult {
 };
 
 struct TestResults {
-    double knn_build_time_s = 0.0;
-    double conv_build_time_s = 0.0;
-    double conversion_time_ms = 0.0;
     uint32_t num_vertices = 0;
     uint32_t num_queries = 0;
     std::vector<QueryResult> query_results;
@@ -85,9 +82,14 @@ public:
         g_test_results.num_vertices = static_cast<uint32_t>(base_vecs.get_num_vecs());
         g_test_results.num_queries = static_cast<uint32_t>(dataset_->get_query_vecs().get_num_vecs());
 
-        // Part 1: Build KNN graph
-        ARTEA_INFO("Part 1: Building KNN graph...");
-        auto t0 = std::chrono::high_resolution_clock::now();
+        // Part 1: Build KNN graph (with per-iter profiling)
+        ARTEA_INFO("Part 1: Building KNN graph (per-iter profiling)...");
+        knn_graph::factory_t::profile_graph_quality(
+            *dataset_,
+            g_config.knn_layer_config,
+            g_config.knn_pruning_config,
+            g_config.knn_propagate_config
+        );
 
         knn_graph::index_t knn_index = knn_graph::factory_t::construct_graph(
             base_vecs,
@@ -96,35 +98,18 @@ public:
             g_config.knn_propagate_config
         );
 
-        auto t1 = std::chrono::high_resolution_clock::now();
-        g_test_results.knn_build_time_s =
-            std::chrono::duration_cast<std::chrono::microseconds>(t1 - t0).count() / 1e6;
-        ARTEA_INFO(fmt::format("KNN graph built in {:.2f} s", g_test_results.knn_build_time_s));
-
         // Part 2: Convert knn_graph -> conv_graph via move
         ARTEA_INFO("Part 2: Converting KNN graph to conv_graph (move + triangle/reverse pruning)...");
-        t0 = std::chrono::high_resolution_clock::now();
-
         conv_graph_ = std::make_unique<conv_graph::index_t>(conv_graph::factory_t::construct_graph(
             std::move(knn_index),
             g_config.conv_pruning_config
         ));
 
-        t1 = std::chrono::high_resolution_clock::now();
-        g_test_results.conv_build_time_s =
-            std::chrono::duration_cast<std::chrono::microseconds>(t1 - t0).count() / 1e6;
-        ARTEA_INFO(fmt::format("Conv graph refined in {:.2f} s", g_test_results.conv_build_time_s));
-
         // Convert to flat search graph
         ARTEA_INFO("Converting to flat search graph...");
-        t0 = std::chrono::high_resolution_clock::now();
         flat_search_graph_ = std::make_unique<flat_search_graph_t>(
             search_graph_converter_t::from_flat_graph(*conv_graph_, g_config.extracted_nbr_size)
         );
-        t1 = std::chrono::high_resolution_clock::now();
-        g_test_results.conversion_time_ms =
-            std::chrono::duration_cast<std::chrono::microseconds>(t1 - t0).count() / 1000.0;
-        ARTEA_INFO(fmt::format("Conversion time: {:.2f} ms", g_test_results.conversion_time_ms));
     }
 
     vector_dataset_t& get_dataset() { return *dataset_; }
@@ -286,9 +271,6 @@ int main(int argc, char** argv) {
     std::cout << fmt::format("  Dataset:            {}", g_config.dataset_name) << std::endl;
     std::cout << fmt::format("  Num Vertices:       {}", g_test_results.num_vertices) << std::endl;
     std::cout << fmt::format("  Num Queries:        {}", g_test_results.num_queries) << std::endl;
-    std::cout << fmt::format("  KNN Build Time:     {:.2f} s", g_test_results.knn_build_time_s) << std::endl;
-    std::cout << fmt::format("  Conv Refine Time:   {:.2f} s", g_test_results.conv_build_time_s) << std::endl;
-    std::cout << fmt::format("  Conversion Time:    {:.2f} ms", g_test_results.conversion_time_ms) << std::endl;
     std::cout << "\n--- Grid Search Results ---" << std::endl;
     std::cout << fmt::format("{:<15} {:<12} {:<12} {:<12}",
         "CandidateQueue", "Recall@k", "QPS", "AvgTime(us)") << std::endl;

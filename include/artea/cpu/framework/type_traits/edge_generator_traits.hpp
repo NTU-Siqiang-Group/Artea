@@ -34,6 +34,7 @@ enum class IVFConstructPolicyT {
 // ----- Forward Declaration  ------ //
 template <typename EdgeGeneratorTraitsT, typename FlatGraphT, typename DerivedClassT> class NeighborUpdater;
 template <typename EdgeGeneratorTraitsT, typename FlatGraphT> class TriangleUpdater;
+template <typename EdgeGeneratorTraitsT, typename FlatGraphT> class SilentTriangleUpdater;
 template <typename EdgeGeneratorTraitsT, typename FlatGraphT> class ReverseUpdater;
 template <typename EdgeGeneratorTraitsT, typename FlatGraphT> class RandomUpdater;
 template <typename EdgeGeneratorTraitsT, typename FlatGraphT> class RoutingUpdater;
@@ -62,6 +63,10 @@ struct EdgeGeneratorTraits :
     /** @brief Triangle updater. */
     template <typename FlatGraphT>
     using triangle_updater_t = TriangleUpdater<edge_generator_traits_t, FlatGraphT>;
+
+    /** @brief Silent triangle updater (no log writes). */
+    template <typename FlatGraphT>
+    using silent_triangle_updater_t = SilentTriangleUpdater<edge_generator_traits_t, FlatGraphT>;
 
     /** @brief Reverse edge updater. */
     template <typename FlatGraphT>
