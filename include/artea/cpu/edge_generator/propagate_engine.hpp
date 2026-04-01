@@ -222,9 +222,9 @@ public:
 
     template <typename UdfUpdaterT>
         requires std::derived_from<UdfUpdaterT, neighbor_updater_t<UdfUpdaterT>>
-    auto next(UdfUpdaterT& udf_updater) -> PropagateEngine& {
+    auto next(UdfUpdaterT& udf_updater, const bool do_merge_logs = true) -> PropagateEngine& {
         propagate<UdfUpdaterT>(udf_updater);
-        merge_logs();
+        if (do_merge_logs) { merge_logs(); }
         return *this;
     }
 
@@ -242,14 +242,14 @@ public:
             if constexpr (profiling_mode) {
                 if (do_merge_logs) {
                     ARTEA_INFO(fmt::format(
-                        "Triangle Updater Iter {} ({}): Merged {} logs",
+                        "Updater Iter {} ({}): Merged {} logs",
                         iter,
                         UdfUpdaterT::updater_name,
                         _merged_logs_count
                     ));
                 } else {
                     ARTEA_INFO(fmt::format(
-                        "Triangle Updater Iter {} ({}): do_merge_logs = false, no logs merged",
+                        "Updater Iter {} ({}): do_merge_logs = false, no logs merged",
                         iter,
                         UdfUpdaterT::updater_name
                     ));
