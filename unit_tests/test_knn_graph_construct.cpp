@@ -213,8 +213,8 @@ int main(int argc, char** argv) {
     program.add_argument("-d", "--dataset").default_value(std::string("sift-1m"));
     program.add_argument("--max-nbr-size").default_value(64u).scan<'u', uint32_t>();
     program.add_argument("--extracted-nbr-size").default_value(64u).scan<'u', uint32_t>();
-    program.add_argument("--num-build-loops").default_value(4u).scan<'u', uint32_t>();
-    program.add_argument("--num-triu-iters").default_value(14u).scan<'u', uint32_t>();
+    program.add_argument("--num-build-loops").default_value(5u).scan<'u', uint32_t>();
+    program.add_argument("--num-triu-iters").default_value(12u).scan<'u', uint32_t>();
     program.add_argument("--prefill-ratio").default_value(0.5f).scan<'g', float>();
     program.add_argument("--num-routing-loops").default_value(1u).scan<'u', uint32_t>();
     program.add_argument("-k", "--topk").default_value(20u).scan<'u', uint32_t>();

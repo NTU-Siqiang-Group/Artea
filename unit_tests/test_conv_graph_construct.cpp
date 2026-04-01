@@ -215,8 +215,8 @@ int main(int argc, char** argv) {
     program.add_argument("--extracted-nbr-size").default_value(32u).scan<'u', uint32_t>();
     program.add_argument("--scale-coeffs").default_value(1.0f).scan<'g', float>();
     program.add_argument("--shifted-coeffs").default_value(0.0f).scan<'g', float>();
-    program.add_argument("--num-build-loops").default_value(4u).scan<'u', uint32_t>();
-    program.add_argument("--num-triu-iters").default_value(14u).scan<'u', uint32_t>();
+    program.add_argument("--num-build-loops").default_value(5u).scan<'u', uint32_t>();
+    program.add_argument("--num-triu-iters").default_value(12u).scan<'u', uint32_t>();
     program.add_argument("--prefill-ratio").default_value(0.6f).scan<'g', float>();
     program.add_argument("--num-routing-loops").default_value(1u).scan<'u', uint32_t>();
     program.add_argument("-k", "--topk").default_value(20u).scan<'u', uint32_t>();
