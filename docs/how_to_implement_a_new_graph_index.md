@@ -4,9 +4,9 @@ This guide uses `my_graph` as a placeholder name. The process consists of **6 st
 
 | Step | What | Where |
 |------|------|-------|
-| 1 | Define Configs | `include/artea/cpu/configs/` |
-| 2 | Define Index Structure | `include/artea/cpu/index/` |
-| 3 | Implement Index Factory | `include/artea/cpu/graph_factory/` |
+| 1 | Define Configs | `include/artea/cpu/index/my_graph/configs.hpp` |
+| 2 | Define Index Structure | `include/artea/cpu/index/my_graph/index_structure.hpp` |
+| 3 | Implement Index Factory | `include/artea/cpu/index/my_graph/index_factory.hpp` |
 | 4 | Register in the Type System | `include/artea/cpu/framework/type_traits/` |
 | 5 | Export via Context and Include | `type_context/default_context.hpp` + `artea.hpp` |
 | 6 | Write Tests | `unit_tests/` |
@@ -15,14 +15,23 @@ This guide uses `my_graph` as a placeholder name. The process consists of **6 st
 
 ## Step 1 : Define Configs
 
-**Directory:** `include/artea/cpu/configs/`
+**File:** `include/artea/cpu/index/my_graph/configs.hpp`
 
-Only **LayerConfig** is mandatory for every graph type. Other configs (e.g. PruningConfig, PropagateConfig) are added as needed by your construction algorithm. If a config you need already exists in another namespace, reuse it via alias:
+Each graph type has its own configs file. **LayerConfig** (in `configs/layer_config.hpp`) is shared and mandatory for every graph type. Graph-specific configs (e.g. PruningConfig, PropagateConfig) live in `index/my_graph/configs.hpp`.
+
+If a config you need already exists in another namespace, include it and reuse via alias:
 
 ```cpp
-namespace my_graph {
+#include <artea/cpu/index/conv_graph/configs.hpp>
+
+namespace artea::cpu::my_graph {
+
+template <typename BaseTraitsT>
+using PropagateConfig = conv_graph::PropagateConfig<BaseTraitsT>;
+
 template <typename BaseTraitsT>
 using PruningConfig = conv_graph::PruningConfig<BaseTraitsT>;
+
 }
 ```
 
@@ -32,11 +41,22 @@ If you need a config with different semantics, define a new struct templated on 
 
 ## Step 2 : Define Index Structure
 
-**Directory:** `include/artea/cpu/index/`
+**File:** `include/artea/cpu/index/my_graph/index_structure.hpp`
 
-If the new graph shares member variables with an existing one, skip this step and alias it in Step 4 (e.g. `knn_graph` reuses `conv_graph::IndexStructure`).
+If the new graph shares member variables with an existing one, create a thin alias file (e.g. `knn_graph/index_structure.hpp` reuses `conv_graph::IndexStructure`):
 
-Otherwise, create `my_graph_index.hpp` using the CRTP pattern:
+```cpp
+#include <artea/cpu/index/conv_graph/index_structure.hpp>
+
+namespace artea::cpu::my_graph {
+
+template <typename IndexTraitsT>
+using IndexStructure = conv_graph::IndexStructure<IndexTraitsT>;
+
+}
+```
+
+Otherwise, define a new class using the CRTP pattern:
 
 ```cpp
 namespace artea::cpu::my_graph {
@@ -75,7 +95,7 @@ private:
 
 ## Step 3 : Implement Index Factory
 
-**Directory:** `include/artea/cpu/graph_factory/`
+**File:** `include/artea/cpu/index/my_graph/index_factory.hpp`
 
 The factory is a static class containing the build algorithm. Key skeleton:
 
@@ -84,25 +104,25 @@ namespace artea::cpu::my_graph {
 
 template <typename GraphFactoryTraitsT>
 class IndexFactory {
-    using index_t            = typename GraphFactoryTraitsT::my_graph::index_t;
+    using this_index_t       = typename GraphFactoryTraitsT::my_graph::index_t;
     using propagate_config_t = typename GraphFactoryTraitsT::my_graph::propagate_config_t;
     using pruning_config_t   = typename GraphFactoryTraitsT::my_graph::pruning_config_t;
-    // Parameterize edge generators on index_t
-    using propagate_engine_t = typename GraphFactoryTraitsT::template propagate_engine_t<index_t, false>;
-    using triangle_updater_t = typename GraphFactoryTraitsT::template triangle_updater_t<index_t>;
-    using routing_updater_t  = typename GraphFactoryTraitsT::template routing_updater_t<index_t>;
+    // Parameterize edge generators on this_index_t
+    using propagate_engine_t = typename GraphFactoryTraitsT::template propagate_engine_t<this_index_t, false>;
+    using triangle_updater_t = typename GraphFactoryTraitsT::template triangle_updater_t<this_index_t>;
+    using routing_updater_t  = typename GraphFactoryTraitsT::template routing_updater_t<this_index_t>;
     // ... other updater types ...
 
 public:
-    static auto construct_graph(const vector_array_t& base_vecs, ...) -> index_t {
-        index_t flat_graph(base_vecs, layer_config, pruning_config, propagate_config);
+    static auto construct_graph(const vector_array_t& base_vecs, ...) -> this_index_t {
+        this_index_t flat_graph(base_vecs, layer_config, pruning_config, propagate_config);
         dist_func_t dist_func(base_vecs.get_vec_dim());
         _build_loop(flat_graph, dist_func, pruning_config, propagate_config);
         return flat_graph;
     }
 
 private:
-    static auto _build_loop(index_t& flat_graph, ...) -> void {
+    static auto _build_loop(this_index_t& flat_graph, ...) -> void {
         // 1. Initialize random edges
         // 2. Create propagate engine + updaters
         // 3. Run your build schedule  <-- THIS IS WHERE GRAPH TYPES DIVERGE
@@ -197,10 +217,11 @@ namespace my_graph {
 
 ### `artea.hpp`
 
-Add `#include` for new files:
+Add `#include` for the new graph's files:
 ```cpp
-#include <artea/cpu/index/my_graph_index.hpp>          // if new IndexStructure
-#include <artea/cpu/graph_factory/my_graph_factory.hpp>
+#include <artea/cpu/index/my_graph/configs.hpp>
+#include <artea/cpu/index/my_graph/index_structure.hpp>
+#include <artea/cpu/index/my_graph/index_factory.hpp>
 ```
 
 ---
@@ -244,9 +265,9 @@ Use `argparse` to expose all parameters as CLI arguments for reproducibility.
 
 ## Checklist
 
-- [ ] Configs in `configs/` (alias or new struct)
-- [ ] IndexStructure in `index/` (or reused via type alias)
-- [ ] IndexFactory in `graph_factory/`
+- [ ] Configs in `index/my_graph/configs.hpp` (alias or new struct)
+- [ ] IndexStructure in `index/my_graph/index_structure.hpp` (or reused via alias)
+- [ ] IndexFactory in `index/my_graph/index_factory.hpp`
 - [ ] `base_traits.hpp` -- forward declarations + nested struct
 - [ ] `index_traits.hpp` -- nested struct with `index_t`
 - [ ] `graph_factory_traits.hpp` -- forward declaration + nested struct with `factory_t`

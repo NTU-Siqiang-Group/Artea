@@ -1,5 +1,5 @@
 /*
- * @FilePath: /Artea/include/artea/cpu/index/conv_graph_index.hpp
+ * @FilePath: /Artea/include/artea/cpu/index/conv_graph/index_structure.hpp
  * @Author: Chandler (Weitang Ye) <weitang.ye@ntu.edu.sg>
  * @Description: Convergent graph index structure extending FlatGraph via CRTP.
  */

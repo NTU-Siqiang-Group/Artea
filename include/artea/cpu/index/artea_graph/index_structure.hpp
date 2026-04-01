@@ -1,5 +1,5 @@
 /*
- * @FilePath: /Artea/include/artea/cpu/index/artea_graph_index.hpp
+ * @FilePath: /Artea/include/artea/cpu/index/artea_graph/index_structure.hpp
  * @Author: Chandler (Weitang Ye) <weitang.ye@ntu.edu.sg>
  * @Description: Artea hierarchical graph index structure extending HierarchicalGraph via CRTP.
  */

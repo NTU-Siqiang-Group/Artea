@@ -29,6 +29,10 @@ template <typename IndexTraitsT, typename DerivedClassT, typename LayerGraphT> c
 namespace conv_graph {
     template <typename IndexTraitsT> class IndexStructure;
 }
+namespace knn_graph {
+    template <typename IndexTraitsT>
+    using IndexStructure = conv_graph::IndexStructure<IndexTraitsT>;
+}
 namespace artea_graph {
     template <typename IndexTraitsT> class IndexStructure;
 }
@@ -70,7 +74,7 @@ struct IndexTraits : virtual public BaseTraitsT {
     /** @brief Namespace-scoped index types for knn_graph, extending BaseTraits::knn_graph. */
     struct knn_graph : BaseTraitsT::knn_graph {
         knn_graph() = delete;
-        using index_t = cpu::conv_graph::IndexStructure<index_traits_t>;
+        using index_t = cpu::knn_graph::IndexStructure<index_traits_t>;
     };
 
     /** @brief Namespace-scoped index types for artea_graph, extending BaseTraits::artea_graph. */

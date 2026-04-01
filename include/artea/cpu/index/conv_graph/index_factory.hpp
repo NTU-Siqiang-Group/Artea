@@ -13,7 +13,7 @@
 // limitations under the License.
 
 /*
- * @FilePath: /Artea/include/artea/cpu/graph_factory/conv_graph_factory.hpp
+ * @FilePath: /Artea/include/artea/cpu/index/conv_graph/index_factory.hpp
  * @Author: Chandler (Weitang Ye) <weitang.ye@ntu.edu.sg>
  * @LastEditTime: 2026-02-11 09:56:36
  * @Date: 2025-11-15 20:36:29
