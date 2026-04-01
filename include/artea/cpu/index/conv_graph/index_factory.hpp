@@ -92,17 +92,14 @@ public:
      *
      * @param knn_graph_index  The knn_graph whose edges will be consumed (moved).
      * @param pruning_config   Pruning configuration for triangle updater.
-     * @param propagate_config Propagation configuration (only num_triu_iters is used).
      * @return A fully constructed convergent graph.
      */
     static auto construct_graph(
         typename knn_graph::index_t&& knn_graph_index,
-        const pruning_config_t pruning_config,
-        const propagate_config_t propagate_config
+        const pruning_config_t pruning_config
     ) -> this_index_t {
         this_index_t flat_graph(std::move(knn_graph_index));
         flat_graph.pruning_config() = pruning_config;
-        flat_graph.propagate_config() = propagate_config;
 
         const vertex_num_t num_vertices = flat_graph.get_num_vertices();
         dist_func_t dist_func(flat_graph.get_vecs_data().get_vec_dim());

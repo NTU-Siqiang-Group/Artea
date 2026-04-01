@@ -41,7 +41,6 @@ struct TestConfig {
 
     // Conv graph refinement params
     conv_graph::pruning_config_t conv_pruning_config{1.0f, 0.0f};
-    conv_graph::propagate_config_t conv_propagate_config{4, 14};
 
     uint32_t extracted_nbr_size;
     uint32_t topk;
@@ -108,8 +107,7 @@ public:
 
         conv_graph_ = std::make_unique<conv_graph::index_t>(conv_graph::factory_t::construct_graph(
             std::move(knn_index),
-            g_config.conv_pruning_config,
-            g_config.conv_propagate_config
+            g_config.conv_pruning_config
         ));
 
         t1 = std::chrono::high_resolution_clock::now();
@@ -203,7 +201,6 @@ int main(int argc, char** argv) {
     // Conv graph refinement params
     program.add_argument("--conv-scale-coeffs").default_value(1.0f).scan<'g', float>();
     program.add_argument("--conv-shifted-coeffs").default_value(0.0f).scan<'g', float>();
-    program.add_argument("--conv-num-triu-iters").default_value(14u).scan<'u', uint32_t>();
 
     // Search params
     program.add_argument("--extracted-nbr-size").default_value(32u).scan<'u', uint32_t>();
@@ -239,10 +236,6 @@ int main(int argc, char** argv) {
         program.get<float>("--conv-scale-coeffs"),
         program.get<float>("--conv-shifted-coeffs")
     );
-    g_config.conv_propagate_config = conv_graph::propagate_config_t(
-        0,  // num_build_loops (unused in knn->conv path)
-        program.get<uint32_t>("--conv-num-triu-iters")
-    );
 
     // Search config
     g_config.extracted_nbr_size = program.get<uint32_t>("--extracted-nbr-size");
@@ -276,7 +269,6 @@ int main(int argc, char** argv) {
     std::cout << "  --- Conv Refinement ---" << std::endl;
     std::cout << fmt::format("  Conv scale coeffs:        {}", g_config.conv_pruning_config.scale_coeffs()) << std::endl;
     std::cout << fmt::format("  Conv shifted coeffs:      {}", g_config.conv_pruning_config.shifted_coeffs()) << std::endl;
-    std::cout << fmt::format("  Conv triangle updater its:{}", g_config.conv_propagate_config.num_triu_iters()) << std::endl;
     std::cout << "  --- Search ---" << std::endl;
     std::cout << fmt::format("  Extracted nbr size:       {}", g_config.extracted_nbr_size) << std::endl;
     std::cout << fmt::format("  Top-k:                    {}", g_config.topk) << std::endl;
