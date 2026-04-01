@@ -47,19 +47,19 @@ class IndexFactory {
     using vec_ele_t = typename GraphFactoryTraitsT::vec_ele_t;
     using iter_t = typename GraphFactoryTraitsT::iter_t;
     using ratio_t = typename GraphFactoryTraitsT::ratio_t;
-    using index_t = typename GraphFactoryTraitsT::conv_graph::index_t;
+    using this_index_t = typename GraphFactoryTraitsT::conv_graph::index_t;
     using vector_dataset_t = typename GraphFactoryTraitsT::vector_dataset_t;
     using dist_func_t = typename GraphFactoryTraitsT::dist_func_t;
     using layer_config_t = typename GraphFactoryTraitsT::layer_config_t;
     using propagate_config_t = typename GraphFactoryTraitsT::conv_graph::propagate_config_t;
     using pruning_config_t = typename GraphFactoryTraitsT::conv_graph::pruning_config_t;
-    // Edge generator types parameterized on index_t
+    // Edge generator types parameterized on this_index_t
     using random_eg_t = typename GraphFactoryTraitsT::random_eg_t;
-    using propagate_engine_t = typename GraphFactoryTraitsT::template propagate_engine_t<index_t, false>;
-    using triangle_updater_t = typename GraphFactoryTraitsT::template triangle_updater_t<index_t>;
-    using reverse_updater_t = typename GraphFactoryTraitsT::template reverse_updater_t<index_t>;
-    using routing_updater_t = typename GraphFactoryTraitsT::template routing_updater_t<index_t>;
-    using truncate_updater_t = typename GraphFactoryTraitsT::template truncate_updater_t<index_t>;
+    using propagate_engine_t = typename GraphFactoryTraitsT::template propagate_engine_t<this_index_t, false>;
+    using triangle_updater_t = typename GraphFactoryTraitsT::template triangle_updater_t<this_index_t>;
+    using reverse_updater_t = typename GraphFactoryTraitsT::template reverse_updater_t<this_index_t>;
+    using routing_updater_t = typename GraphFactoryTraitsT::template routing_updater_t<this_index_t>;
+    using truncate_updater_t = typename GraphFactoryTraitsT::template truncate_updater_t<this_index_t>;
     using vector_array_t = typename GraphFactoryTraitsT::vector_array_t;
     using query_vecs_t = typename GraphFactoryTraitsT::query_vecs_t;
     using ground_truth_t = typename GraphFactoryTraitsT::ground_truth_t;
@@ -74,8 +74,8 @@ public:
         const layer_config_t layer_config,
         const pruning_config_t pruning_config,
         const propagate_config_t propagate_config
-    ) -> index_t {
-        index_t flat_graph(base_vecs, layer_config, pruning_config, propagate_config);
+    ) -> this_index_t {
+        this_index_t flat_graph(base_vecs, layer_config, pruning_config, propagate_config);
         dist_func_t dist_func(base_vecs.get_vec_dim());
         _build_loop(flat_graph, dist_func, pruning_config, propagate_config);
         return flat_graph;
@@ -92,7 +92,7 @@ public:
         const query_vecs_t& query_vecs = dataset.get_query_vecs();
         const ground_truth_t& groundtruth = dataset.get_gt_vecs();
 
-        index_t flat_graph(base_vecs, layer_config, pruning_config, propagate_config);
+        this_index_t flat_graph(base_vecs, layer_config, pruning_config, propagate_config);
         dist_func_t dist_func(base_vecs.get_vec_dim());
 
         recall_estimator_t recall_estimator;
@@ -134,7 +134,7 @@ private:
      *                         the current build loop index. Pass nullptr to skip.
      */
     static auto _build_loop(
-        index_t& flat_graph,
+        this_index_t& flat_graph,
         const dist_func_t& dist_func,
         const pruning_config_t& pruning_config,
         const propagate_config_t& propagate_config,

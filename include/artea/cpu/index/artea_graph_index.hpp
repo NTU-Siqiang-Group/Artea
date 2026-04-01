@@ -20,11 +20,13 @@ namespace artea_graph {
  *        pruning, propagation, and vertices builder configs.
  * @tparam IndexTraitsT The index traits type.
  */
-template <typename IndexTraitsT, typename LayerGraphT>
+template <typename IndexTraitsT>
 class IndexStructure :
-    public IndexTraitsT::template hierarchical_graph_t<IndexStructure<IndexTraitsT, LayerGraphT>, LayerGraphT>
+    public IndexTraitsT::template hierarchical_graph_t<
+        IndexStructure<IndexTraitsT>, typename IndexTraitsT::conv_graph::index_t>
 {
-    using base_t = typename IndexTraitsT::template hierarchical_graph_t<IndexStructure<IndexTraitsT, LayerGraphT>, LayerGraphT>;
+    using base_t = typename IndexTraitsT::template hierarchical_graph_t<
+        IndexStructure<IndexTraitsT>, typename IndexTraitsT::conv_graph::index_t>;
     using vector_array_t = typename IndexTraitsT::vector_array_t;
     using layer_config_t = typename IndexTraitsT::layer_config_t;
     using propagate_config_t = typename IndexTraitsT::artea_graph::propagate_config_t;
@@ -34,6 +36,7 @@ class IndexStructure :
     using vertices_builder_config_t = typename IndexTraitsT::vertices_builder_config_t;
 
 public:
+    using layer_graph_t = typename IndexTraitsT::conv_graph::index_t;
     /**
      * @brief Construct a new Artea hierarchical graph index.
      * @param base_vecs Reference to the base layer vector data.

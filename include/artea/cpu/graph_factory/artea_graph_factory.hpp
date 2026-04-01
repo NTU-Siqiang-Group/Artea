@@ -30,9 +30,9 @@ class IndexFactory {
     using ratio_t = typename GraphFactoryTraitsT::ratio_t;
     using distance_t = typename GraphFactoryTraitsT::distance_t;
     using dist_func_t = typename GraphFactoryTraitsT::dist_func_t;
-    using layer_graph_t = typename GraphFactoryTraitsT::conv_graph::index_t;
-    using layer_factory_t = typename GraphFactoryTraitsT::conv_graph::factory_t;
-    using index_t = typename GraphFactoryTraitsT::artea_graph::template index_t<layer_graph_t>;
+    using conv_graph  = typename GraphFactoryTraitsT::conv_graph;
+    using artea_graph = typename GraphFactoryTraitsT::artea_graph;
+    using this_index_t = typename artea_graph::index_t;
     using vector_array_t = typename GraphFactoryTraitsT::vector_array_t;
     using vertex_subset_t = typename GraphFactoryTraitsT::vertex_subset_t;
     using lb_greedy_vg_t = typename GraphFactoryTraitsT::lb_greedy_vg_t;
@@ -40,8 +40,6 @@ class IndexFactory {
     using bruteforce_router_t = typename GraphFactoryTraitsT::bruteforce_router_t;
     using layer_config_t = typename GraphFactoryTraitsT::layer_config_t;
     using greedy_vertices_builder_config_t = typename GraphFactoryTraitsT::greedy_vertices_builder_config_t;
-    using pruning_config_t = typename GraphFactoryTraitsT::artea_graph::pruning_config_t;
-    using propagate_config_t = typename GraphFactoryTraitsT::artea_graph::propagate_config_t;
 
     static constexpr vertex_num_t min_num_layer_vertex = GraphFactoryTraitsT::min_num_layer_vertex;
 
@@ -51,14 +49,14 @@ public:
         const vector_array_t& base_vecs,
         layer_config_t bottom_layer_config,
         layer_config_t upper_layer_config,
-        pruning_config_t bottom_pruning_config,
-        pruning_config_t upper_pruning_config,
-        propagate_config_t propagate_config,
+        typename artea_graph::pruning_config_t bottom_pruning_config,
+        typename artea_graph::pruning_config_t upper_pruning_config,
+        typename artea_graph::propagate_config_t propagate_config,
         greedy_vertices_builder_config_t vertices_builder_config
-    ) -> index_t {
+    ) -> this_index_t {
         dist_func_t dist_func(base_vecs.get_vec_dim());
 
-        index_t hierarchical_graph(
+        this_index_t hierarchical_graph(
             base_vecs,
             bottom_layer_config,
             upper_layer_config,
@@ -73,8 +71,10 @@ public:
 
         // Build bottom layer edges
         hierarchical_graph.resize(1);
-        hierarchical_graph.set_layer_graph(0, layer_factory_t::construct_graph(
-            base_vecs, bottom_layer_config, bottom_pruning_config, propagate_config));
+        hierarchical_graph.set_layer_graph(0, conv_graph::factory_t::construct_graph(
+            base_vecs, bottom_layer_config,
+            static_cast<typename conv_graph::pruning_config_t>(bottom_pruning_config),
+            static_cast<typename conv_graph::propagate_config_t>(propagate_config)));
 
         // Iteratively extract upper layer vertices and build edges
         const vector_array_t* current_layer_vecs = &base_vecs;
@@ -108,8 +108,10 @@ public:
 
             // Build edges for this upper layer
             hierarchical_graph.resize(layer_id + 1);
-            hierarchical_graph.set_layer_graph(layer_id, layer_factory_t::construct_graph(
-                *current_layer_vecs, upper_layer_config, upper_pruning_config, propagate_config));
+            hierarchical_graph.set_layer_graph(layer_id, conv_graph::factory_t::construct_graph(
+                *current_layer_vecs, upper_layer_config,
+                static_cast<typename conv_graph::pruning_config_t>(upper_pruning_config),
+                static_cast<typename conv_graph::propagate_config_t>(propagate_config)));
         }
 
         // Set entry point: vertex closest to centroid in top layer

@@ -30,7 +30,7 @@ namespace conv_graph {
     template <typename IndexTraitsT> class IndexStructure;
 }
 namespace artea_graph {
-    template <typename IndexTraitsT, typename LayerGraphT> class IndexStructure;
+    template <typename IndexTraitsT> class IndexStructure;
 }
 template <typename IndexTraitsT> class FlatSearchGraph;
 template <typename IndexTraitsT> class HierarchicalSearchGraph;
@@ -76,8 +76,7 @@ struct IndexTraits : virtual public BaseTraitsT {
     /** @brief Namespace-scoped index types for artea_graph, extending BaseTraits::artea_graph. */
     struct artea_graph : BaseTraitsT::artea_graph {
         artea_graph() = delete;
-        template <typename LayerGraphT>
-        using index_t = cpu::artea_graph::IndexStructure<index_traits_t, LayerGraphT>;
+        using index_t = cpu::artea_graph::IndexStructure<index_traits_t>;
     };
 
     /** @brief Hierarchical search graph type. */
