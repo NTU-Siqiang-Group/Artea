@@ -24,8 +24,15 @@ namespace artea {
 namespace cpu {
 
 /** ------ Forward Declaration  ------ **/
-template <typename GraphFactoryTraitsT> class ConvGraphFactory;
-template <typename GraphFactoryTraitsT> class ArteaGraphFactory;
+namespace conv_graph {
+    template <typename GraphFactoryTraitsT> class IndexFactory;
+}
+namespace artea_graph {
+    template <typename GraphFactoryTraitsT> class IndexFactory;
+}
+namespace knn_graph {
+    template <typename GraphFactoryTraitsT> class IndexFactory;
+}
 
 template <
     typename VertexGeneratorTraitsT,
@@ -38,11 +45,23 @@ struct GraphFactoryTraits :
 {
     using graph_factory_traits_t = GraphFactoryTraits<VertexGeneratorTraitsT, EdgeGeneratorTraitsT, RouterTraitsT>;
 
-    /** @brief Convergent graph factory type. */
-    using conv_graph_factory_t = ConvGraphFactory<graph_factory_traits_t>;
+    /** @brief Namespace-scoped factory types for conv_graph, extending IndexTraits::conv_graph. */
+    struct conv_graph : EdgeGeneratorTraitsT::conv_graph {
+        conv_graph() = delete;
+        using factory_t = cpu::conv_graph::IndexFactory<graph_factory_traits_t>;
+    };
 
-    /** @brief Artea graph factory type. */
-    using artea_graph_factory_t = ArteaGraphFactory<graph_factory_traits_t>;
+    /** @brief Namespace-scoped factory types for knn_graph, extending IndexTraits::knn_graph. */
+    struct knn_graph : EdgeGeneratorTraitsT::knn_graph {
+        knn_graph() = delete;
+        using factory_t = cpu::knn_graph::IndexFactory<graph_factory_traits_t>;
+    };
+
+    /** @brief Namespace-scoped factory types for artea_graph, extending IndexTraits::artea_graph. */
+    struct artea_graph : EdgeGeneratorTraitsT::artea_graph {
+        artea_graph() = delete;
+        using factory_t = cpu::artea_graph::IndexFactory<graph_factory_traits_t>;
+    };
 
 };  // struct GraphFactoryTraits
 

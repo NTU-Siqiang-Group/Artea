@@ -156,7 +156,7 @@ int main(int argc, char** argv) {
         params.num_routing_loops
     );
 
-    conv_graph_index_t flat_graph = conv_graph_factory_t::construct_graph(
+    conv_graph::index_t flat_graph = conv_graph::factory_t::construct_graph(
         dataset.get_base_vecs(),
         layer_config,
         pruning_config,

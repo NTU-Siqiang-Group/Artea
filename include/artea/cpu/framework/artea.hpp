@@ -44,16 +44,12 @@
 #include <artea/cpu/containers/four_ary_heap.hpp>
 
 #include <artea/cpu/configs/layer_config.hpp>
-#include <artea/cpu/configs/propagate_config.hpp>
-#include <artea/cpu/configs/pruning_config.hpp>
 #include <artea/cpu/configs/vertices_builder_config.hpp>
 #include <artea/cpu/index/neighbor.hpp>
 #include <artea/cpu/index/flat_graph.hpp>
-#include <artea/cpu/index/conv_graph_index.hpp>
 #include <artea/cpu/index/flat_search_graph.hpp>
 #include <artea/cpu/index/inter_layer_links.hpp>
 #include <artea/cpu/index/hierarchical_graph.hpp>
-#include <artea/cpu/index/artea_graph_index.hpp>
 #include <artea/cpu/index/hierarchical_search_graph.hpp>
 #include <artea/cpu/index/hierarchical_vecs_manager.hpp>
 #include <artea/cpu/index/search_graph_converter.hpp>
@@ -61,8 +57,15 @@
 #include <artea/cpu/index/persistence/flat_graph_file_manager.hpp>
 #include <artea/cpu/index/persistence/hierarchical_graph_file_manager.hpp>
 
-#include <artea/cpu/graph_factory/conv_graph_factory.hpp>
-#include <artea/cpu/graph_factory/artea_graph_factory.hpp>
+#include <artea/cpu/index/conv_graph/configs.hpp>
+#include <artea/cpu/index/conv_graph/index_structure.hpp>
+#include <artea/cpu/index/conv_graph/index_factory.hpp>
+#include <artea/cpu/index/knn_graph/configs.hpp>
+#include <artea/cpu/index/knn_graph/index_structure.hpp>
+#include <artea/cpu/index/knn_graph/index_factory.hpp>
+#include <artea/cpu/index/artea_graph/configs.hpp>
+#include <artea/cpu/index/artea_graph/index_structure.hpp>
+#include <artea/cpu/index/artea_graph/index_factory.hpp>
 
 #include <artea/cpu/router/vector_router.hpp>
 #include <artea/cpu/router/bruteforce_router.hpp>
@@ -89,6 +92,7 @@
 #include <artea/cpu/edge_generator/nbr_log_table.hpp>
 #include <artea/cpu/edge_generator/neighbor_updater.hpp>
 #include <artea/cpu/edge_generator/triangle_updater.hpp>
+#include <artea/cpu/edge_generator/silent_triangle_updater.hpp>
 #include <artea/cpu/edge_generator/reverse_updater.hpp>
 #include <artea/cpu/edge_generator/random_updater.hpp>
 #include <artea/cpu/edge_generator/random_eg.hpp>
@@ -103,9 +107,8 @@
 #include <artea/cpu/utils/nbr_arr_checker.hpp>
 #include <artea/cpu/utils/parallel.hpp>
 #include <artea/cpu/utils/random_seq.hpp>
-#include <artea/cpu/utils/radius_prober.hpp>
+#include <artea/cpu/utils/distance_prober.hpp>
 #include <artea/cpu/utils/index_register_util.hpp>
-#include <artea/cpu/utils/simple_distance.hpp>
 #include <artea/cpu/utils/simd_distance.hpp>
 #include <artea/cpu/utils/simd_fma.hpp>
 #include <artea/cpu/utils/simd_linear.hpp>

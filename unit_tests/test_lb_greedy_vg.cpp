@@ -42,7 +42,7 @@ using vector_dataset_t = typename vg_traits_t::vector_dataset_t;
 using dist_func_t = typename vg_traits_t::dist_func_t;
 using lb_greedy_vg_t = typename vg_traits_t::lb_greedy_vg_t;
 using approx_rnet_t = typename vg_traits_t::approx_rnet_t;
-using radius_prober_t = typename vg_traits_t::radius_prober_t;
+using distance_prober_t = typename vg_traits_t::distance_prober_t;
 
 struct TestConfig {
     std::string config_path;
@@ -100,7 +100,7 @@ public:
         constexpr float CONFIDENCE = 0.99f;
         constexpr float RELATIVE_ERR = 0.05f;
 
-        radius_prober_t prober(*dist_func_);
+        distance_prober_t prober(*dist_func_);
         auto probe_start = std::chrono::high_resolution_clock::now();
         auto probe_result = prober.probe(base_vecs, QUANTILE, CONFIDENCE, RELATIVE_ERR);
         auto probe_end = std::chrono::high_resolution_clock::now();

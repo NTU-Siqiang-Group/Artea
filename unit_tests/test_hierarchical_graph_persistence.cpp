@@ -78,7 +78,7 @@ TEST_F(HierarchicalGraphPersistenceTest, SnapshotAndRestore) {
     ARTEA_INFO("Constructing hierarchical graph...");
     auto start_time = std::chrono::high_resolution_clock::now();
 
-    auto original_graph = artea_graph_factory_t::construct_graph(
+    auto original_graph = artea_graph::factory_t::construct_graph(
         base_vecs,
         bottom_layer_config,
         upper_layer_config,
@@ -104,7 +104,7 @@ TEST_F(HierarchicalGraphPersistenceTest, SnapshotAndRestore) {
 
     // Restore the graph
     ARTEA_INFO("Restoring graph from snapshot...");
-    artea_graph_index_t restored_graph = hierarchical_graph_file_manager_t::restore<artea_graph_index_t>(
+    artea_graph::index_t restored_graph = hierarchical_graph_file_manager_t::restore<artea_graph::index_t>(
         test_index_dir,
         base_vecs
     );

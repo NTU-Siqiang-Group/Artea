@@ -232,28 +232,19 @@ public:
         requires std::derived_from<UdfUpdaterT, neighbor_updater_t<UdfUpdaterT>>
     auto run(
         const iter_t num_iters,
-        UdfUpdaterT& udf_updater,
-        const bool do_merge_logs = true
+        UdfUpdaterT& udf_updater
     ) -> PropagateEngine& {
         for (iter_t iter = 0; iter < num_iters; ++iter) {
             propagate<UdfUpdaterT>(udf_updater);
-            if (do_merge_logs) { merge_logs(); }
+            merge_logs();
 
             if constexpr (profiling_mode) {
-                if (do_merge_logs) {
-                    ARTEA_INFO(fmt::format(
-                        "Triangle Updater Iter {} ({}): Merged {} logs",
-                        iter,
-                        UdfUpdaterT::updater_name,
-                        _merged_logs_count
-                    ));
-                } else {
-                    ARTEA_INFO(fmt::format(
-                        "Triangle Updater Iter {} ({}): do_merge_logs = false, no logs merged",
-                        iter,
-                        UdfUpdaterT::updater_name
-                    ));
-                }
+                ARTEA_INFO(fmt::format(
+                    "Updater Iter {} ({}): Merged {} logs",
+                    iter,
+                    UdfUpdaterT::updater_name,
+                    _merged_logs_count
+                ));
             }
         }
         return *this;
@@ -301,6 +292,7 @@ public:
     template <typename UpdaterT, typename... Args>
     auto make_updater(Args&&... args) -> UpdaterT {
         using triangle_updater_t = typename EdgeGeneratorTraitsT::template triangle_updater_t<FlatGraphT>;
+        using silent_triangle_updater_t = typename EdgeGeneratorTraitsT::template silent_triangle_updater_t<FlatGraphT>;
         using reverse_updater_t = typename EdgeGeneratorTraitsT::template reverse_updater_t<FlatGraphT>;
         using random_updater_t = typename EdgeGeneratorTraitsT::template random_updater_t<FlatGraphT>;
         using routing_updater_t = typename EdgeGeneratorTraitsT::template routing_updater_t<FlatGraphT>;
@@ -312,8 +304,10 @@ public:
         const auto num_vertices = _flat_graph->get_num_vertices();
 
         if constexpr (std::is_same_v<UpdaterT, triangle_updater_t>) {
-            // TriangleUpdater constructor signature:
             // TriangleUpdater(dist_func, vecs_arr, log_table, flat_graph, scale_coeffs, shifted_coeffs)
+            return UpdaterT(_dist_func, vecs_arr, log_table, *_flat_graph, std::forward<Args>(args)...);
+        } else if constexpr (std::is_same_v<UpdaterT, silent_triangle_updater_t>) {
+            // SilentTriangleUpdater(dist_func, vecs_arr, log_table, flat_graph, scale_coeffs, shifted_coeffs)
             return UpdaterT(_dist_func, vecs_arr, log_table, *_flat_graph, std::forward<Args>(args)...);
         } else if constexpr (std::is_same_v<UpdaterT, reverse_updater_t>) {
             // ReverseUpdater constructor signature:

@@ -15,7 +15,7 @@ namespace cpu {
 
 /**
  * @brief CRTP base flat graph structure storing only graph topology and layer config.
- *        Subclasses (e.g. conv_graph::GraphIndex) extend with algorithm-specific configs.
+ *        Subclasses (e.g. conv_graph::IndexStructure) extend with algorithm-specific configs.
  * @tparam IndexTraitsT The index traits type.
  * @tparam DerivedClassT The concrete derived graph type (CRTP).
  */
@@ -54,8 +54,20 @@ public:
     FlatGraph(const FlatGraph&) = delete;
     FlatGraph& operator=(const FlatGraph&) = delete;
 
-    FlatGraph(FlatGraph&&) noexcept = default;
-    FlatGraph& operator=(FlatGraph&&) noexcept = default;
+    FlatGraph(FlatGraph&& other) noexcept
+        : _num_vertices(other._num_vertices),
+          _layer_config(other._layer_config),
+          _nbrs_arr(std::move(other._nbrs_arr)),
+          _vecs_data(other._vecs_data)
+    {}
+
+    FlatGraph& operator=(FlatGraph&& other) noexcept {
+        _num_vertices = other._num_vertices;
+        _layer_config = other._layer_config;
+        _nbrs_arr = std::move(other._nbrs_arr);
+        // _vecs_data is a reference, cannot be reseated
+        return *this;
+    }
 
     // --- Public Interface ---
 

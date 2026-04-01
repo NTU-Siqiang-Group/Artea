@@ -31,9 +31,17 @@ using namespace artea::cpu;
 struct TestConfig {
     std::string config_path;
     std::string dataset_name;
-    layer_config_t layer_config{16, 32};
-    conv_graph::pruning_config_t pruning_config{1.0f, 0.0f};
-    conv_graph::propagate_config_t propagate_config{4, 14};
+
+    // KNN graph build params
+    layer_config_t knn_layer_config{64, 96};
+    static constexpr float knn_scale_coeffs = 1.0f;
+    static constexpr float knn_shifted_coeffs = 0.0f;
+    knn_graph::pruning_config_t knn_pruning_config{knn_scale_coeffs, knn_shifted_coeffs};
+    knn_graph::propagate_config_t knn_propagate_config{4, 14};
+
+    // Conv graph refinement params
+    conv_graph::pruning_config_t conv_pruning_config{1.0f, 0.0f};
+
     uint32_t extracted_nbr_size;
     uint32_t topk;
     uint32_t queue_start;
@@ -50,6 +58,8 @@ struct QueryResult {
 };
 
 struct TestResults {
+    double knn_build_time_s = 0.0;
+    double conv_build_time_s = 0.0;
     double conversion_time_ms = 0.0;
     uint32_t num_vertices = 0;
     uint32_t num_queries = 0;
@@ -75,39 +85,43 @@ public:
         g_test_results.num_vertices = static_cast<uint32_t>(base_vecs.get_num_vecs());
         g_test_results.num_queries = static_cast<uint32_t>(dataset_->get_query_vecs().get_num_vecs());
 
-        if (g_config.verbose) {
-            ARTEA_INFO(fmt::format("Base vectors size: {}", base_vecs.get_num_vecs()));
-            ARTEA_INFO(fmt::format("Max nbr size: {}", g_config.layer_config.max_nbr_size()));
-            ARTEA_INFO(fmt::format("Extracted nbr size: {}", g_config.extracted_nbr_size));
-            ARTEA_INFO(fmt::format("Scale coeffs: {}", g_config.pruning_config.scale_coeffs()));
-            ARTEA_INFO(fmt::format("Shifted coeffs: {}", g_config.pruning_config.shifted_coeffs()));
-            ARTEA_INFO(fmt::format("Build loops: {}", g_config.propagate_config.num_build_loops()));
-            ARTEA_INFO(fmt::format("Triangle updater iterations: {}", g_config.propagate_config.num_triu_iters()));
-            ARTEA_INFO(fmt::format("Top-k: {}", g_config.topk));
-        }
+        // Part 1: Build KNN graph
+        ARTEA_INFO("Part 1: Building KNN graph...");
+        auto t0 = std::chrono::high_resolution_clock::now();
 
-        // Build convergent graph using dataset version (per-iter profiling logged inside)
-        ARTEA_INFO("Building convergent graph (dataset mode, per-iter profiling)...");
-        conv_graph_factory_t::profile_search_quality(
-            *dataset_,
-            g_config.layer_config,
-            g_config.pruning_config,
-            g_config.propagate_config
+        knn_graph::index_t knn_index = knn_graph::factory_t::construct_graph(
+            base_vecs,
+            g_config.knn_layer_config,
+            g_config.knn_pruning_config,
+            g_config.knn_propagate_config
         );
-        flat_graph_ = std::make_unique<conv_graph_index_t>(conv_graph_factory_t::construct_graph(
-            dataset_->get_base_vecs(),
-            g_config.layer_config,
-            g_config.pruning_config,
-            g_config.propagate_config
+
+        auto t1 = std::chrono::high_resolution_clock::now();
+        g_test_results.knn_build_time_s =
+            std::chrono::duration_cast<std::chrono::microseconds>(t1 - t0).count() / 1e6;
+        ARTEA_INFO(fmt::format("KNN graph built in {:.2f} s", g_test_results.knn_build_time_s));
+
+        // Part 2: Convert knn_graph -> conv_graph via move
+        ARTEA_INFO("Part 2: Converting KNN graph to conv_graph (move + triangle/reverse pruning)...");
+        t0 = std::chrono::high_resolution_clock::now();
+
+        conv_graph_ = std::make_unique<conv_graph::index_t>(conv_graph::factory_t::construct_graph(
+            std::move(knn_index),
+            g_config.conv_pruning_config
         ));
+
+        t1 = std::chrono::high_resolution_clock::now();
+        g_test_results.conv_build_time_s =
+            std::chrono::duration_cast<std::chrono::microseconds>(t1 - t0).count() / 1e6;
+        ARTEA_INFO(fmt::format("Conv graph refined in {:.2f} s", g_test_results.conv_build_time_s));
 
         // Convert to flat search graph
         ARTEA_INFO("Converting to flat search graph...");
-        auto t0 = std::chrono::high_resolution_clock::now();
+        t0 = std::chrono::high_resolution_clock::now();
         flat_search_graph_ = std::make_unique<flat_search_graph_t>(
-            search_graph_converter_t::from_flat_graph(*flat_graph_, g_config.extracted_nbr_size)
+            search_graph_converter_t::from_flat_graph(*conv_graph_, g_config.extracted_nbr_size)
         );
-        auto t1 = std::chrono::high_resolution_clock::now();
+        t1 = std::chrono::high_resolution_clock::now();
         g_test_results.conversion_time_ms =
             std::chrono::duration_cast<std::chrono::microseconds>(t1 - t0).count() / 1000.0;
         ARTEA_INFO(fmt::format("Conversion time: {:.2f} ms", g_test_results.conversion_time_ms));
@@ -122,13 +136,13 @@ private:
     DataProvider() = default;
     std::unique_ptr<vector_dataset_t> dataset_;
     std::unique_ptr<dist_func_t> dist_func_;
-    std::unique_ptr<conv_graph_index_t> flat_graph_;
+    std::unique_ptr<conv_graph::index_t> conv_graph_;
     std::unique_ptr<flat_search_graph_t> flat_search_graph_;
 };
 
-class ConvGraphQualityTest : public ::testing::Test {};
+class Knn2ConvTest : public ::testing::Test {};
 
-TEST_F(ConvGraphQualityTest, QueryRecall) {
+TEST_F(Knn2ConvTest, QueryRecall) {
     auto& provider = DataProvider::instance();
     auto& dataset = provider.get_dataset();
     auto& dist_func = provider.get_dist_func();
@@ -173,20 +187,26 @@ TEST_F(ConvGraphQualityTest, QueryRecall) {
 int main(int argc, char** argv) {
     ::testing::InitGoogleTest(&argc, argv);
 
-    argparse::ArgumentParser program("test_conv_graph_quality");
+    argparse::ArgumentParser program("test_knn2conv");
     program.add_argument("-c", "--config").default_value(std::string("./configs/datasets.json"));
     program.add_argument("-d", "--dataset").default_value(std::string("sift-1m"));
-    program.add_argument("--max-nbr-size").default_value(32u).scan<'u', uint32_t>();
+
+    // KNN graph params
+    program.add_argument("--knn-max-nbr-size").default_value(64u).scan<'u', uint32_t>();
+    program.add_argument("--knn-num-build-loops").default_value(4u).scan<'u', uint32_t>();
+    program.add_argument("--knn-num-triu-iters").default_value(14u).scan<'u', uint32_t>();
+    program.add_argument("--knn-prefill-ratio").default_value(0.5f).scan<'g', float>();
+    program.add_argument("--knn-num-routing-loops").default_value(1u).scan<'u', uint32_t>();
+
+    // Conv graph refinement params
+    program.add_argument("--conv-scale-coeffs").default_value(1.0f).scan<'g', float>();
+    program.add_argument("--conv-shifted-coeffs").default_value(0.0f).scan<'g', float>();
+
+    // Search params
     program.add_argument("--extracted-nbr-size").default_value(32u).scan<'u', uint32_t>();
-    program.add_argument("--scale-coeffs").default_value(1.0f).scan<'g', float>();
-    program.add_argument("--shifted-coeffs").default_value(0.0f).scan<'g', float>();
-    program.add_argument("--num-build-loops").default_value(4u).scan<'u', uint32_t>();
-    program.add_argument("--num-triu-iters").default_value(14u).scan<'u', uint32_t>();
-    program.add_argument("--prefill-ratio").default_value(0.6f).scan<'g', float>();
-    program.add_argument("--num-routing-loops").default_value(1u).scan<'u', uint32_t>();
     program.add_argument("-k", "--topk").default_value(20u).scan<'u', uint32_t>();
     program.add_argument("--candidate-queue-config")
-        .default_value(std::string("40,100,20"))
+        .default_value(std::string("40,200,20"))
         .help("start,end,step");
     program.add_argument("-v", "--verbose").default_value(false).implicit_value(true);
 
@@ -201,18 +221,23 @@ int main(int argc, char** argv) {
     g_config.config_path = program.get<std::string>("--config");
     g_config.dataset_name = program.get<std::string>("--dataset");
 
-    uint32_t max_nbr_size = program.get<uint32_t>("--max-nbr-size");
-    g_config.layer_config = layer_config_t(max_nbr_size, static_cast<uint32_t>(max_nbr_size * 1.5));
-    g_config.pruning_config = conv_graph::pruning_config_t(
-        program.get<float>("--scale-coeffs"),
-        program.get<float>("--shifted-coeffs")
+    // KNN graph config
+    uint32_t knn_max_nbr_size = program.get<uint32_t>("--knn-max-nbr-size");
+    g_config.knn_layer_config = layer_config_t(knn_max_nbr_size, static_cast<uint32_t>(knn_max_nbr_size * 1.5));
+    g_config.knn_propagate_config = knn_graph::propagate_config_t(
+        program.get<uint32_t>("--knn-num-build-loops"),
+        program.get<uint32_t>("--knn-num-triu-iters"),
+        program.get<float>("--knn-prefill-ratio"),
+        program.get<uint32_t>("--knn-num-routing-loops")
     );
-    g_config.propagate_config = conv_graph::propagate_config_t(
-        program.get<uint32_t>("--num-build-loops"),
-        program.get<uint32_t>("--num-triu-iters"),
-        program.get<float>("--prefill-ratio"),
-        program.get<uint32_t>("--num-routing-loops")
+
+    // Conv graph refinement config
+    g_config.conv_pruning_config = conv_graph::pruning_config_t(
+        program.get<float>("--conv-scale-coeffs"),
+        program.get<float>("--conv-shifted-coeffs")
     );
+
+    // Search config
     g_config.extracted_nbr_size = program.get<uint32_t>("--extracted-nbr-size");
     g_config.topk = program.get<uint32_t>("--topk");
     g_config.verbose = program.get<bool>("--verbose");
@@ -232,6 +257,26 @@ int main(int argc, char** argv) {
         g_config.queue_step = values[2];
     }
 
+    std::cout << "\n=== Configuration ===" << std::endl;
+    std::cout << fmt::format("  Dataset:                  {}", g_config.dataset_name) << std::endl;
+    std::cout << fmt::format("  Config path:              {}", g_config.config_path) << std::endl;
+    std::cout << "  --- KNN Graph ---" << std::endl;
+    std::cout << fmt::format("  KNN max nbr size:         {}", g_config.knn_layer_config.max_nbr_size()) << std::endl;
+    std::cout << fmt::format("  KNN build loops:          {}", g_config.knn_propagate_config.num_build_loops()) << std::endl;
+    std::cout << fmt::format("  KNN triangle updater its: {}", g_config.knn_propagate_config.num_triu_iters()) << std::endl;
+    std::cout << fmt::format("  KNN prefill ratio:        {}", g_config.knn_propagate_config.prefill_ratio()) << std::endl;
+    std::cout << fmt::format("  KNN routing loops:        {}", g_config.knn_propagate_config.num_routing_loops()) << std::endl;
+    std::cout << "  --- Conv Refinement ---" << std::endl;
+    std::cout << fmt::format("  Conv max nbr size:        {} (inherited from KNN)", g_config.knn_layer_config.max_nbr_size()) << std::endl;
+    std::cout << fmt::format("  Conv scale coeffs:        {}", g_config.conv_pruning_config.scale_coeffs()) << std::endl;
+    std::cout << fmt::format("  Conv shifted coeffs:      {}", g_config.conv_pruning_config.shifted_coeffs()) << std::endl;
+    std::cout << "  --- Search ---" << std::endl;
+    std::cout << fmt::format("  Extracted nbr size:       {}", g_config.extracted_nbr_size) << std::endl;
+    std::cout << fmt::format("  Top-k:                    {}", g_config.topk) << std::endl;
+    std::cout << fmt::format("  Queue config:             {},{},{}", g_config.queue_start, g_config.queue_end, g_config.queue_step) << std::endl;
+    std::cout << fmt::format("  Verbose:                  {}", g_config.verbose ? "true" : "false") << std::endl;
+    std::cout << "=====================\n" << std::endl;
+
     DataProvider::instance().init();
 
     int result = RUN_ALL_TESTS();
@@ -242,6 +287,9 @@ int main(int argc, char** argv) {
     std::cout << fmt::format("  Dataset:            {}", g_config.dataset_name) << std::endl;
     std::cout << fmt::format("  Num Vertices:       {}", g_test_results.num_vertices) << std::endl;
     std::cout << fmt::format("  Num Queries:        {}", g_test_results.num_queries) << std::endl;
+    std::cout << fmt::format("  KNN Build Time:     {:.2f} s", g_test_results.knn_build_time_s) << std::endl;
+    std::cout << fmt::format("  Conv Refine Time:   {:.2f} s", g_test_results.conv_build_time_s) << std::endl;
+    std::cout << fmt::format("  Total Build Time:   {:.2f} s", g_test_results.knn_build_time_s + g_test_results.conv_build_time_s) << std::endl;
     std::cout << fmt::format("  Conversion Time:    {:.2f} ms", g_test_results.conversion_time_ms) << std::endl;
     std::cout << "\n--- Grid Search Results ---" << std::endl;
     std::cout << fmt::format("{:<15} {:<12} {:<12} {:<12}",

@@ -34,7 +34,7 @@ using computer_traits_t = ComputerTraits<base_traits_t, DistanceMetricsT::EUCLID
 using vector_array_t = typename computer_traits_t::vector_array_t;
 using vector_dataset_t = typename computer_traits_t::vector_dataset_t;
 using dist_func_t = typename computer_traits_t::dist_func_t;
-using radius_prober_t = typename computer_traits_t::radius_prober_t;
+using distance_prober_t = typename computer_traits_t::distance_prober_t;
 
 struct TestConfig {
     std::string config_path;
@@ -68,9 +68,9 @@ private:
     std::unique_ptr<dist_func_t> dist_func_;
 };
 
-class RadiusProberTest : public ::testing::Test {};
+class DistanceProberTest : public ::testing::Test {};
 
-TEST_F(RadiusProberTest, ProbeQuantile) {
+TEST_F(DistanceProberTest, ProbeQuantile) {
     auto& provider = DataProvider::instance();
     auto& dataset = provider.get_dataset();
     auto& dist_func = provider.get_dist_func();
@@ -82,7 +82,7 @@ TEST_F(RadiusProberTest, ProbeQuantile) {
         ARTEA_INFO(fmt::format("Sampling {} distance pairs for probe", g_config.num_dists_sampled));
     }
 
-    radius_prober_t prober(dist_func);
+    distance_prober_t prober(dist_func);
 
     // Probe 1% quantile with specified number of distance samples
     float quantile = 0.01f;
@@ -100,7 +100,7 @@ TEST_F(RadiusProberTest, ProbeQuantile) {
     EXPECT_GT(result.radius, 0.0f);
 }
 
-TEST_F(RadiusProberTest, ProbeMultipleQuantiles) {
+TEST_F(DistanceProberTest, ProbeMultipleQuantiles) {
     auto& provider = DataProvider::instance();
     auto& dataset = provider.get_dataset();
     auto& dist_func = provider.get_dist_func();
@@ -112,13 +112,13 @@ TEST_F(RadiusProberTest, ProbeMultipleQuantiles) {
         ARTEA_INFO(fmt::format("Sampling {} distance pairs for probe", g_config.num_dists_sampled));
     }
 
-    radius_prober_t prober(dist_func);
+    distance_prober_t prober(dist_func);
 
     vec_num_t num_distances = g_config.num_dists_sampled;
 
     // Probe different quantiles
     std::vector<float> quantiles = {0.01f, 0.05f, 0.10f, 0.25f, 0.50f, 0.75f, 0.99f};
-    std::vector<typename radius_prober_t::ProbeResult> results;
+    std::vector<typename distance_prober_t::ProbeResult> results;
 
     ARTEA_INFO("Multiple Quantile Results:");
     for (float q : quantiles) {
@@ -135,7 +135,7 @@ TEST_F(RadiusProberTest, ProbeMultipleQuantiles) {
     }
 }
 
-TEST_F(RadiusProberTest, ProbeSmallQuantiles) {
+TEST_F(DistanceProberTest, ProbeSmallQuantiles) {
     auto& provider = DataProvider::instance();
     auto& dataset = provider.get_dataset();
     auto& dist_func = provider.get_dist_func();
@@ -147,13 +147,13 @@ TEST_F(RadiusProberTest, ProbeSmallQuantiles) {
         ARTEA_INFO(fmt::format("Sampling {} distance pairs for probe", g_config.num_dists_sampled));
     }
 
-    radius_prober_t prober(dist_func);
+    distance_prober_t prober(dist_func);
 
     vec_num_t num_distances = g_config.num_dists_sampled;
 
     // Probe very small quantiles (0.01%, 0.05%, 0.15%)
     std::vector<float> quantiles = {0.0001f, 0.0005f, 0.0015f};
-    std::vector<typename radius_prober_t::ProbeResult> results;
+    std::vector<typename distance_prober_t::ProbeResult> results;
 
     ARTEA_INFO("Small Quantile Results:");
     for (float q : quantiles) {

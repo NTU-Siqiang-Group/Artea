@@ -27,7 +27,7 @@ using vec_num_t = typename base_traits_t::vec_num_t;
 using dist_func_t = typename computer_traits_t::dist_func_t;
 using vector_array_t = typename computer_traits_t::vector_array_t;
 using vector_dataset_t = typename computer_traits_t::vector_dataset_t;
-using radius_prober_t = typename computer_traits_t::radius_prober_t;
+using distance_prober_t = typename computer_traits_t::distance_prober_t;
 
 struct BenchConfig {
     std::string config_path;
@@ -74,15 +74,15 @@ private:
     std::unique_ptr<dist_func_t> dist_func_;
 };
 
-// Benchmark for RadiusProber
-static void BM_RadiusProber(benchmark::State& state) {
+// Benchmark for DistanceProber
+static void BM_DistanceProber(benchmark::State& state) {
     auto& provider = DataProvider::instance();
     const auto& base_vecs = provider.get_base_vecs();
     const auto& dist_func = provider.get_dist_func();
 
     vec_num_t num_distances = g_config.num_dists_sampled;
 
-    radius_prober_t prober(dist_func);
+    distance_prober_t prober(dist_func);
 
     for (auto _ : state) {
         auto result = prober.probe(base_vecs, g_config.quantile, num_distances);
@@ -92,13 +92,13 @@ static void BM_RadiusProber(benchmark::State& state) {
     state.SetItemsProcessed(state.iterations());
 }
 
-BENCHMARK(BM_RadiusProber)
+BENCHMARK(BM_DistanceProber)
     ->Unit(benchmark::kMillisecond)
     ->Iterations(g_config.iterations);
 
 int main(int argc, char** argv) {
     argparse::ArgumentParser program("bench_radius_prober");
-    program.add_description("Benchmark for RadiusProber utility");
+    program.add_description("Benchmark for DistanceProber utility");
 
     // Dataset configuration
     program.add_argument("-c", "--config")

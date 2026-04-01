@@ -13,7 +13,7 @@
 // limitations under the License.
 
 /*
- * @FilePath: /Artea/include/artea/cpu/graph_factory/conv_graph_factory.hpp
+ * @FilePath: /Artea/include/artea/cpu/index/conv_graph/index_factory.hpp
  * @Author: Chandler (Weitang Ye) <weitang.ye@ntu.edu.sg>
  * @LastEditTime: 2026-02-11 09:56:36
  * @Date: 2025-11-15 20:36:29
@@ -37,34 +37,37 @@
 
 namespace artea {
 namespace cpu {
+namespace conv_graph {
 
 template <typename GraphFactoryTraitsT>
-class ConvGraphFactory {
+class IndexFactory {
 
     using vertex_num_t = typename GraphFactoryTraitsT::vertex_num_t;
     using vertex_id_t = typename GraphFactoryTraitsT::vertex_id_t;
     using vec_ele_t = typename GraphFactoryTraitsT::vec_ele_t;
     using iter_t = typename GraphFactoryTraitsT::iter_t;
     using ratio_t = typename GraphFactoryTraitsT::ratio_t;
-    using conv_graph_index_t = typename GraphFactoryTraitsT::conv_graph_index_t;
+    using this_index_t = typename GraphFactoryTraitsT::conv_graph::index_t;
     using vector_dataset_t = typename GraphFactoryTraitsT::vector_dataset_t;
     using dist_func_t = typename GraphFactoryTraitsT::dist_func_t;
     using layer_config_t = typename GraphFactoryTraitsT::layer_config_t;
     using propagate_config_t = typename GraphFactoryTraitsT::conv_graph::propagate_config_t;
     using pruning_config_t = typename GraphFactoryTraitsT::conv_graph::pruning_config_t;
-    // Edge generator types parameterized on conv_graph_index_t
+    // Edge generator types parameterized on this_index_t
     using random_eg_t = typename GraphFactoryTraitsT::random_eg_t;
-    using propagate_engine_t = typename GraphFactoryTraitsT::template propagate_engine_t<conv_graph_index_t, false>;
-    using triangle_updater_t = typename GraphFactoryTraitsT::template triangle_updater_t<conv_graph_index_t>;
-    using reverse_updater_t = typename GraphFactoryTraitsT::template reverse_updater_t<conv_graph_index_t>;
-    using routing_updater_t = typename GraphFactoryTraitsT::template routing_updater_t<conv_graph_index_t>;
-    using truncate_updater_t = typename GraphFactoryTraitsT::template truncate_updater_t<conv_graph_index_t>;
+    using propagate_engine_t = typename GraphFactoryTraitsT::template propagate_engine_t<this_index_t, false>;
+    using triangle_updater_t = typename GraphFactoryTraitsT::template triangle_updater_t<this_index_t>;
+    using silent_triangle_updater_t = typename GraphFactoryTraitsT::template silent_triangle_updater_t<this_index_t>;
+    using reverse_updater_t = typename GraphFactoryTraitsT::template reverse_updater_t<this_index_t>;
+    using routing_updater_t = typename GraphFactoryTraitsT::template routing_updater_t<this_index_t>;
+    using truncate_updater_t = typename GraphFactoryTraitsT::template truncate_updater_t<this_index_t>;
     using vector_array_t = typename GraphFactoryTraitsT::vector_array_t;
     using query_vecs_t = typename GraphFactoryTraitsT::query_vecs_t;
     using ground_truth_t = typename GraphFactoryTraitsT::ground_truth_t;
     using recall_estimator_t = typename GraphFactoryTraitsT::recall_estimator_t;
     using graph_mode_t = typename GraphFactoryTraitsT::graph_mode_t;
     using monolayer_graph_router_t = typename GraphFactoryTraitsT::template monolayer_graph_router_t<graph_mode_t::construct_mode>;
+    using knn_graph = typename GraphFactoryTraitsT::knn_graph;
 
 public:
     /** @brief construct a new convergent graph from vector array */
@@ -73,15 +76,51 @@ public:
         const layer_config_t layer_config,
         const pruning_config_t pruning_config,
         const propagate_config_t propagate_config
-    ) -> conv_graph_index_t {
-        conv_graph_index_t flat_graph(base_vecs, layer_config, pruning_config, propagate_config);
+    ) -> this_index_t {
+        this_index_t flat_graph(base_vecs, layer_config, pruning_config, propagate_config);
         dist_func_t dist_func(base_vecs.get_vec_dim());
         _build_loop(flat_graph, dist_func, pruning_config, propagate_config);
         return flat_graph;
     }
 
+    /**
+     * @brief Construct a convergent graph from an existing knn_graph by taking
+     *        ownership of its edges, then running triangle+reverse pruning.
+     *
+     * @warning This function moves from the input knn_graph. After the call,
+     *          the input is left in a valid but unspecified state — the caller
+     *          must not use it further.
+     *
+     * @param knn_graph_index  The knn_graph whose edges will be consumed (moved).
+     * @param pruning_config   Pruning configuration for triangle updater.
+     * @return A fully constructed convergent graph.
+     */
+    static auto construct_graph(
+        typename knn_graph::index_t&& knn_graph_index,
+        const pruning_config_t pruning_config
+    ) -> this_index_t {
+        this_index_t flat_graph(std::move(knn_graph_index));
+        flat_graph.pruning_config() = pruning_config;
+
+        const vertex_num_t num_vertices = flat_graph.get_num_vertices();
+        dist_func_t dist_func(flat_graph.get_vecs_data().get_vec_dim());
+
+        propagate_engine_t propagate_engine(num_vertices, dist_func);
+        propagate_engine.set_graph(flat_graph);
+
+        auto silent_triangle_updater = propagate_engine.template make_updater<silent_triangle_updater_t>(
+            pruning_config.scale_coeffs(), pruning_config.shifted_coeffs());
+        auto reverse_updater  = propagate_engine.template make_updater<reverse_updater_t>();
+        auto truncate_updater = propagate_engine.template make_updater<truncate_updater_t>();
+
+        propagate_engine.next(silent_triangle_updater).next(truncate_updater)
+                        .next(reverse_updater).next(truncate_updater);
+
+        return flat_graph;
+    }
+
     /** @brief construct a new convergent graph from dataset, with per-build-loop recall/throughput profiling */
-    static auto profile_search_quality(
+    static auto profile_graph_quality(
         const vector_dataset_t& dataset,
         const layer_config_t layer_config,
         const pruning_config_t pruning_config,
@@ -91,12 +130,13 @@ public:
         const query_vecs_t& query_vecs = dataset.get_query_vecs();
         const ground_truth_t& groundtruth = dataset.get_gt_vecs();
 
-        conv_graph_index_t flat_graph(base_vecs, layer_config, pruning_config, propagate_config);
+        this_index_t flat_graph(base_vecs, layer_config, pruning_config, propagate_config);
         dist_func_t dist_func(base_vecs.get_vec_dim());
 
         recall_estimator_t recall_estimator;
-        const vertex_num_t topk = groundtruth.get_vec_dim();
-        monolayer_graph_router_t router(base_vecs, dist_func, topk, topk);
+        const vertex_num_t topk = 20;
+        const vertex_num_t candidate_queue_size = 40;
+        monolayer_graph_router_t router(base_vecs, dist_func, topk, candidate_queue_size);
         router.initialize();
 
         _build_loop(flat_graph, dist_func, pruning_config, propagate_config,
@@ -109,8 +149,8 @@ public:
                 double recall = recall_estimator.calculate_recall_at_k(
                     results, groundtruth, topk, query_vecs.get_num_vecs());
                 ARTEA_INFO(fmt::format(
-                    "BuildLoop {}: Recall@{}={:.4f}, QPS={:.2f}",
-                    build_loop, topk, recall, qps
+                    "BuildLoop {}: Recall@{}={:.4f}, QPS={:.2f}, Candidate={}",
+                    build_loop, topk, recall, qps, candidate_queue_size
                 ));
             }
         );
@@ -133,7 +173,7 @@ private:
      *                         the current build loop index. Pass nullptr to skip.
      */
     static auto _build_loop(
-        conv_graph_index_t& flat_graph,
+        this_index_t& flat_graph,
         const dist_func_t& dist_func,
         const pruning_config_t& pruning_config,
         const propagate_config_t& propagate_config,
@@ -162,15 +202,17 @@ private:
         }
 
         for (iter_t routing_loop = 0; routing_loop < propagate_config.num_routing_loops(); ++routing_loop) {
+            auto silent_triangle_updater = propagate_engine.template make_updater<silent_triangle_updater_t>(
+                pruning_config.scale_coeffs(), pruning_config.shifted_coeffs());
             propagate_engine.next(routing_updater).next(truncate_updater)
-                            .next(triangle_updater).next(truncate_updater)
+                            .next(silent_triangle_updater).next(truncate_updater)
                             .next(reverse_updater).next(truncate_updater);
             if (on_iter_end) { on_iter_end(propagate_config.num_build_loops() + routing_loop); }
         }
     }
 
-};  // class ConvGraphFactory
+};  // class IndexFactory
 
-
+}   // namespace conv_graph
 }   // namespace cpu
 }   // namespace artea

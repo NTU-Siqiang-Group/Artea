@@ -91,7 +91,7 @@ using simdu1_linear_t = typename computer_traits_t::simdu1_linear_t;
 using simdu2_linear_t = typename computer_traits_t::simdu2_linear_t;
 using simdu4_linear_t = typename computer_traits_t::simdu4_linear_t;
 using recall_estimator_t = typename computer_traits_t::recall_estimator_t;
-using radius_prober_t = typename computer_traits_t::radius_prober_t;
+using distance_prober_t = typename computer_traits_t::distance_prober_t;
 
 // Buffer types from BufferTraits
 using buffer_policy_t = typename buffer_traits_t::buffer_policy_t;
@@ -106,9 +106,7 @@ using random_vertices_builder_config_t = typename base_traits_t::random_vertices
 using vertices_builder_config_t = typename base_traits_t::vertices_builder_config_t;
 
 // Index types from IndexTraits
-using conv_graph_index_t = typename index_traits_t::conv_graph_index_t;
 using flat_search_graph_t = typename index_traits_t::flat_search_graph_t;
-using artea_graph_index_t = typename index_traits_t::template artea_graph_index_t<conv_graph_index_t>;
 using hierarchical_search_graph_t = typename index_traits_t::hierarchical_search_graph_t;
 using inter_layer_links_t = typename index_traits_t::inter_layer_links_t;
 using hierarchical_vecs_manager_t = typename index_traits_t::hierarchical_vecs_manager_t;
@@ -118,11 +116,11 @@ using hierarchical_graph_file_manager_t = typename index_traits_t::hierarchical_
 using index_size_calculator_t = typename index_traits_t::index_size_calculator_t;
 
 // Edge generator types from EdgeGeneratorTraits
-using triangle_updater_t = typename edge_generator_traits_t::template triangle_updater_t<conv_graph_index_t>;
-using reverse_updater_t = typename edge_generator_traits_t::template reverse_updater_t<conv_graph_index_t>;
-using random_updater_t = typename edge_generator_traits_t::template random_updater_t<conv_graph_index_t>;
-using routing_updater_t = typename edge_generator_traits_t::template routing_updater_t<conv_graph_index_t>;
-using truncate_updater_t = typename edge_generator_traits_t::template truncate_updater_t<conv_graph_index_t>;
+using triangle_updater_t = typename edge_generator_traits_t::template triangle_updater_t<typename index_traits_t::conv_graph::index_t>;
+using reverse_updater_t = typename edge_generator_traits_t::template reverse_updater_t<typename index_traits_t::conv_graph::index_t>;
+using random_updater_t = typename edge_generator_traits_t::template random_updater_t<typename index_traits_t::conv_graph::index_t>;
+using routing_updater_t = typename edge_generator_traits_t::template routing_updater_t<typename index_traits_t::conv_graph::index_t>;
+using truncate_updater_t = typename edge_generator_traits_t::template truncate_updater_t<typename index_traits_t::conv_graph::index_t>;
 using random_eg_t = typename edge_generator_traits_t::random_eg_t;
 using ivf_partitions_t = typename edge_generator_traits_t::ivf_partitions_t;
 using ivf_construct_policy_t = typename edge_generator_traits_t::ivf_construct_policy_t;
@@ -135,10 +133,6 @@ using lsh_table_t = typename vertex_generator_traits_t::lsh_table_t;
 using lb_greedy_vg_t = typename vertex_generator_traits_t::lb_greedy_vg_t;
 using mb_greedy_vg_t = typename vertex_generator_traits_t::mb_greedy_vg_t;
 using random_vg_t = typename vertex_generator_traits_t::random_vg_t;
-
-// Graph factory types from GraphFactoryTraits
-using conv_graph_factory_t = typename graph_factory_traits_t::conv_graph_factory_t;
-using artea_graph_factory_t = typename graph_factory_traits_t::artea_graph_factory_t;
 
 // Router types from RouterTraits
 using candidate_entry_t = typename router_traits_t::candidate_entry_t;
@@ -164,22 +158,31 @@ using hierarchical_graph_router_t = typename router_traits_t::template hierarchi
 using index_register_util_t = IndexRegisterUtil;
 
 // Propagate engine from EdgeGeneratorTraits
-using propagate_engine_ss_t = typename edge_generator_traits_t::template propagate_engine_t<conv_graph_index_t, true>;
-using propagate_engine_noss_t = typename edge_generator_traits_t::template propagate_engine_t<conv_graph_index_t, false>;
+using propagate_engine_ss_t = typename edge_generator_traits_t::template propagate_engine_t<typename index_traits_t::conv_graph::index_t, true>;
+using propagate_engine_noss_t = typename edge_generator_traits_t::template propagate_engine_t<typename index_traits_t::conv_graph::index_t, false>;
 // Currently, NO SELECTIVE SCHEDULING is faster
 using propagate_engine_t = propagate_engine_noss_t;
 
-// Propagate and pruning config types in namespaces
+// Namespace-scoped types from GraphFactoryTraits (index_t, factory_t, config types)
 namespace conv_graph {
-    using graph_index_t = typename index_traits_t::conv_graph_index_t;
-    using propagate_config_t = typename base_traits_t::conv_graph::propagate_config_t;
-    using pruning_config_t = typename base_traits_t::conv_graph::pruning_config_t;
+    using index_t = typename graph_factory_traits_t::conv_graph::index_t;
+    using factory_t = typename graph_factory_traits_t::conv_graph::factory_t;
+    using propagate_config_t = typename graph_factory_traits_t::conv_graph::propagate_config_t;
+    using pruning_config_t = typename graph_factory_traits_t::conv_graph::pruning_config_t;
+}
+
+namespace knn_graph {
+    using index_t = typename graph_factory_traits_t::knn_graph::index_t;
+    using factory_t = typename graph_factory_traits_t::knn_graph::factory_t;
+    using propagate_config_t = typename graph_factory_traits_t::knn_graph::propagate_config_t;
+    using pruning_config_t = typename graph_factory_traits_t::knn_graph::pruning_config_t;
 }
 
 namespace artea_graph {
-    using graph_index_t = typename index_traits_t::template artea_graph_index_t<conv_graph_index_t>;
-    using propagate_config_t = typename base_traits_t::artea_graph::propagate_config_t;
-    using pruning_config_t = typename base_traits_t::artea_graph::pruning_config_t;
+    using index_t = typename graph_factory_traits_t::artea_graph::index_t;
+    using factory_t = typename graph_factory_traits_t::artea_graph::factory_t;
+    using propagate_config_t = typename graph_factory_traits_t::artea_graph::propagate_config_t;
+    using pruning_config_t = typename graph_factory_traits_t::artea_graph::pruning_config_t;
 }
 
 }   // namespace cpu

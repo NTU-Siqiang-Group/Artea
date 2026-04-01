@@ -61,7 +61,7 @@ protected:
         dist_func_ = std::make_unique<dist_func_t>(vec_dim_);
 
         // Initialize flat graph
-        flat_graph_ = std::make_unique<conv_graph_index_t>(
+        flat_graph_ = std::make_unique<conv_graph::index_t>(
             *vecs_,
             layer_config_,
             pruning_config_,
@@ -113,7 +113,7 @@ protected:
     conv_graph::propagate_config_t propagate_config_{4, 14};
     std::unique_ptr<vector_array_t> vecs_;
     std::unique_ptr<dist_func_t> dist_func_;
-    std::unique_ptr<conv_graph_index_t> flat_graph_;
+    std::unique_ptr<conv_graph::index_t> flat_graph_;
 };
 
 TEST_F(FlatSearchGraphTest, BasicConversion) {

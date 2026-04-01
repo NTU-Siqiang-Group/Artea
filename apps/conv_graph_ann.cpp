@@ -166,7 +166,7 @@ int main(int argc, char** argv) {
 
     // Load flat graph
     ARTEA_INFO(fmt::format("Loading flat graph from {}...", index_path));
-    conv_graph_index_t flat_graph = flat_graph_file_manager_t::restore<conv_graph_index_t>(index_path, base_vecs);
+    conv_graph::index_t flat_graph = flat_graph_file_manager_t::restore<conv_graph::index_t>(index_path, base_vecs);
 
     // Calculate and output index size
     index_size_calculator_t index_size_calc;

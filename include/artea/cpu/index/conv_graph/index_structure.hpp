@@ -1,5 +1,5 @@
 /*
- * @FilePath: /Artea/include/artea/cpu/index/conv_graph_index.hpp
+ * @FilePath: /Artea/include/artea/cpu/index/conv_graph/index_structure.hpp
  * @Author: Chandler (Weitang Ye) <weitang.ye@ntu.edu.sg>
  * @Description: Convergent graph index structure extending FlatGraph via CRTP.
  */
@@ -17,10 +17,10 @@ namespace conv_graph {
  * @tparam IndexTraitsT The index traits type.
  */
 template <typename IndexTraitsT>
-class GraphIndex :
-    public IndexTraitsT::template flat_graph_t<GraphIndex<IndexTraitsT>>
+class IndexStructure :
+    public IndexTraitsT::template flat_graph_t<IndexStructure<IndexTraitsT>>
 {
-    using base_t = typename IndexTraitsT::template flat_graph_t<GraphIndex<IndexTraitsT>>;
+    using base_t = typename IndexTraitsT::template flat_graph_t<IndexStructure<IndexTraitsT>>;
     using vector_array_t = typename IndexTraitsT::vector_array_t;
     using layer_config_t = typename IndexTraitsT::layer_config_t;
     using propagate_config_t = typename IndexTraitsT::conv_graph::propagate_config_t;
@@ -34,7 +34,7 @@ public:
      * @param pruning_config Pruning configuration (scale_coeffs and shifted_coeffs).
      * @param propagate_config Propagation configuration (num_build_loops, num_triu_iters, prefill_ratio).
      */
-    GraphIndex(
+    IndexStructure(
         const vector_array_t& vecs_data,
         const layer_config_t layer_config,
         const pruning_config_t pruning_config,
@@ -44,11 +44,21 @@ public:
         _propagate_config(propagate_config)
     {}
 
-    GraphIndex(const GraphIndex&) = delete;
-    GraphIndex& operator=(const GraphIndex&) = delete;
+    IndexStructure(const IndexStructure&) = delete;
+    IndexStructure& operator=(const IndexStructure&) = delete;
 
-    GraphIndex(GraphIndex&&) noexcept = default;
-    GraphIndex& operator=(GraphIndex&&) noexcept = default;
+    IndexStructure(IndexStructure&& other) noexcept
+        : base_t(std::move(other)),
+          _pruning_config(other._pruning_config),
+          _propagate_config(other._propagate_config)
+    {}
+
+    IndexStructure& operator=(IndexStructure&& other) noexcept {
+        base_t::operator=(std::move(other));
+        _pruning_config = other._pruning_config;
+        _propagate_config = other._propagate_config;
+        return *this;
+    }
 
     // --- Config accessors ---
 
@@ -85,7 +95,7 @@ public:
         const nlohmann::json& meta,
         const vector_array_t& vecs_data,
         const layer_config_t& layer_config
-    ) -> GraphIndex {
+    ) -> IndexStructure {
         pruning_config_t pruning_config(
             meta["pruning_config"]["scale_coeffs"].get<float>(),
             meta["pruning_config"]["shifted_coeffs"].get<float>()
@@ -96,7 +106,7 @@ public:
             meta["propagate_config"]["prefill_ratio"].get<float>(),
             meta["propagate_config"]["num_routing_loops"].get<uint32_t>()
         );
-        return GraphIndex(vecs_data, layer_config, pruning_config, propagate_config);
+        return IndexStructure(vecs_data, layer_config, pruning_config, propagate_config);
     }
 
 private:
@@ -106,7 +116,7 @@ private:
     /** @brief Propagation configuration. */
     propagate_config_t _propagate_config;
 
-};  // class GraphIndex
+};  // class IndexStructure
 
 }   // namespace conv_graph
 }   // namespace cpu

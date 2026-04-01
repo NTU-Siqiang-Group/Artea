@@ -27,10 +27,14 @@ namespace cpu {
 template <typename IndexTraitsT, typename DerivedClassT> class FlatGraph;
 template <typename IndexTraitsT, typename DerivedClassT, typename LayerGraphT> class HierarchicalGraph;
 namespace conv_graph {
-    template <typename IndexTraitsT> class GraphIndex;
+    template <typename IndexTraitsT> class IndexStructure;
+}
+namespace knn_graph {
+    template <typename IndexTraitsT>
+    using IndexStructure = conv_graph::IndexStructure<IndexTraitsT>;
 }
 namespace artea_graph {
-    template <typename IndexTraitsT, typename LayerGraphT> class GraphIndex;
+    template <typename IndexTraitsT> class IndexStructure;
 }
 template <typename IndexTraitsT> class FlatSearchGraph;
 template <typename IndexTraitsT> class HierarchicalSearchGraph;
@@ -54,9 +58,6 @@ struct IndexTraits : virtual public BaseTraitsT {
     template <typename DerivedClassT>
     using flat_graph_t = FlatGraph<index_traits_t, DerivedClassT>;
 
-    /** @brief Convergent graph index type (concrete, extends flat_graph_t). */
-    using conv_graph_index_t = conv_graph::GraphIndex<index_traits_t>;
-
     /** @brief Flat search graph type (CSR format). */
     using flat_search_graph_t = FlatSearchGraph<index_traits_t>;
 
@@ -64,9 +65,23 @@ struct IndexTraits : virtual public BaseTraitsT {
     template <typename DerivedClassT, typename LayerGraphT>
     using hierarchical_graph_t = HierarchicalGraph<index_traits_t, DerivedClassT, LayerGraphT>;
 
-    /** @brief Artea hierarchical graph index type (concrete, extends hierarchical_graph_t). */
-    template <typename LayerGraphT>
-    using artea_graph_index_t = artea_graph::GraphIndex<index_traits_t, LayerGraphT>;
+    /** @brief Namespace-scoped index types for conv_graph, extending BaseTraits::conv_graph. */
+    struct conv_graph : BaseTraitsT::conv_graph {
+        conv_graph() = delete;
+        using index_t = cpu::conv_graph::IndexStructure<index_traits_t>;
+    };
+
+    /** @brief Namespace-scoped index types for knn_graph, extending BaseTraits::knn_graph. */
+    struct knn_graph : BaseTraitsT::knn_graph {
+        knn_graph() = delete;
+        using index_t = cpu::knn_graph::IndexStructure<index_traits_t>;
+    };
+
+    /** @brief Namespace-scoped index types for artea_graph, extending BaseTraits::artea_graph. */
+    struct artea_graph : BaseTraitsT::artea_graph {
+        artea_graph() = delete;
+        using index_t = cpu::artea_graph::IndexStructure<index_traits_t>;
+    };
 
     /** @brief Hierarchical search graph type. */
     using hierarchical_search_graph_t = HierarchicalSearchGraph<index_traits_t>;
