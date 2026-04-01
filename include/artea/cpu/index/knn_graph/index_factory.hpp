@@ -95,8 +95,9 @@ public:
         dist_func_t dist_func(base_vecs.get_vec_dim());
 
         recall_estimator_t recall_estimator;
-        const vertex_num_t topk = groundtruth.get_vec_dim();
-        monolayer_graph_router_t router(base_vecs, dist_func, topk, topk);
+        const vertex_num_t topk = 20;
+        const vertex_num_t candidate_queue_size = 40;
+        monolayer_graph_router_t router(base_vecs, dist_func, topk, candidate_queue_size);
         router.initialize();
 
         _build_loop(flat_graph, dist_func, pruning_config, propagate_config,
@@ -109,8 +110,8 @@ public:
                 double recall = recall_estimator.calculate_recall_at_k(
                     results, groundtruth, topk, query_vecs.get_num_vecs());
                 ARTEA_INFO(fmt::format(
-                    "BuildLoop {}: Recall@{}={:.4f}, QPS={:.2f}",
-                    build_loop, topk, recall, qps
+                    "BuildLoop {}: Recall@{}={:.4f}, QPS={:.2f}, Candidate={}",
+                    build_loop, topk, recall, qps, candidate_queue_size
                 ));
             }
         );
@@ -143,6 +144,10 @@ private:
         const vertex_num_t max_nbr_size = flat_graph.layer_config().max_nbr_size();
         const vertex_num_t init_nbr_size = static_cast<vertex_num_t>(max_nbr_size * propagate_config.prefill_ratio());
 
+        /** -------------------- Optimazation -------------------------- ***/
+        flat_graph.layer_config().max_nbr_size(max_nbr_size / 2);
+        /** ------------------------------------------------------------ ***/
+
         random_eg_t random_eg(dist_func);
         random_eg.generate(flat_graph, init_nbr_size);
 
@@ -152,7 +157,7 @@ private:
         auto triangle_updater  = propagate_engine.template make_updater<triangle_updater_t>(
             pruning_config.scale_coeffs(), pruning_config.shifted_coeffs());
         auto reverse_updater   = propagate_engine.template make_updater<reverse_updater_t>();
-        auto routing_updater   = propagate_engine.template make_updater<routing_updater_t>(init_nbr_size, init_nbr_size * 2);
+        auto routing_updater   = propagate_engine.template make_updater<routing_updater_t>(max_nbr_size, max_nbr_size * 2);
         auto truncate_updater  = propagate_engine.template make_updater<truncate_updater_t>();
 
         for (iter_t build_loop = 0; build_loop < propagate_config.num_build_loops(); ++build_loop) {
@@ -160,6 +165,10 @@ private:
                             .next(reverse_updater).next(truncate_updater);
             if (on_iter_end) { on_iter_end(build_loop); }
         }
+
+        /** -------------------- Optimazation -------------------------- ***/
+        flat_graph.layer_config().max_nbr_size(max_nbr_size);
+        /** ------------------------------------------------------------ ***/
 
         for (iter_t routing_loop = 0; routing_loop < propagate_config.num_routing_loops(); ++routing_loop) {
             propagate_engine.next(routing_updater).next(truncate_updater);

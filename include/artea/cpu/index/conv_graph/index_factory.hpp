@@ -66,6 +66,7 @@ class IndexFactory {
     using recall_estimator_t = typename GraphFactoryTraitsT::recall_estimator_t;
     using graph_mode_t = typename GraphFactoryTraitsT::graph_mode_t;
     using monolayer_graph_router_t = typename GraphFactoryTraitsT::template monolayer_graph_router_t<graph_mode_t::construct_mode>;
+    using knn_graph = typename GraphFactoryTraitsT::knn_graph;
 
 public:
     /** @brief construct a new convergent graph from vector array */
@@ -78,6 +79,45 @@ public:
         this_index_t flat_graph(base_vecs, layer_config, pruning_config, propagate_config);
         dist_func_t dist_func(base_vecs.get_vec_dim());
         _build_loop(flat_graph, dist_func, pruning_config, propagate_config);
+        return flat_graph;
+    }
+
+    /**
+     * @brief Construct a convergent graph from an existing knn_graph by taking
+     *        ownership of its edges, then running triangle+reverse pruning.
+     *
+     * @warning This function moves from the input knn_graph. After the call,
+     *          the input is left in a valid but unspecified state — the caller
+     *          must not use it further.
+     *
+     * @param knn_graph_index  The knn_graph whose edges will be consumed (moved).
+     * @param pruning_config   Pruning configuration for triangle updater.
+     * @param propagate_config Propagation configuration (only num_triu_iters is used).
+     * @return A fully constructed convergent graph.
+     */
+    static auto construct_graph(
+        typename knn_graph::index_t&& knn_graph_index,
+        const pruning_config_t pruning_config,
+        const propagate_config_t propagate_config
+    ) -> this_index_t {
+        this_index_t flat_graph(std::move(knn_graph_index));
+        flat_graph.pruning_config() = pruning_config;
+        flat_graph.propagate_config() = propagate_config;
+
+        const vertex_num_t num_vertices = flat_graph.get_num_vertices();
+        dist_func_t dist_func(flat_graph.get_vecs_data().get_vec_dim());
+
+        propagate_engine_t propagate_engine(num_vertices, dist_func);
+        propagate_engine.set_graph(flat_graph);
+
+        auto triangle_updater = propagate_engine.template make_updater<triangle_updater_t>(
+            pruning_config.scale_coeffs(), pruning_config.shifted_coeffs());
+        auto reverse_updater  = propagate_engine.template make_updater<reverse_updater_t>();
+        auto truncate_updater = propagate_engine.template make_updater<truncate_updater_t>();
+
+        propagate_engine.next(triangle_updater).next(truncate_updater)
+                        .next(reverse_updater).next(truncate_updater);
+
         return flat_graph;
     }
 
@@ -96,8 +136,9 @@ public:
         dist_func_t dist_func(base_vecs.get_vec_dim());
 
         recall_estimator_t recall_estimator;
-        const vertex_num_t topk = groundtruth.get_vec_dim();
-        monolayer_graph_router_t router(base_vecs, dist_func, topk, topk);
+        const vertex_num_t topk = 20;
+        const vertex_num_t candidate_queue_size = 40;
+        monolayer_graph_router_t router(base_vecs, dist_func, topk, candidate_queue_size);
         router.initialize();
 
         _build_loop(flat_graph, dist_func, pruning_config, propagate_config,
@@ -110,8 +151,8 @@ public:
                 double recall = recall_estimator.calculate_recall_at_k(
                     results, groundtruth, topk, query_vecs.get_num_vecs());
                 ARTEA_INFO(fmt::format(
-                    "BuildLoop {}: Recall@{}={:.4f}, QPS={:.2f}",
-                    build_loop, topk, recall, qps
+                    "BuildLoop {}: Recall@{}={:.4f}, QPS={:.2f}, Candidate={}",
+                    build_loop, topk, recall, qps, candidate_queue_size
                 ));
             }
         );

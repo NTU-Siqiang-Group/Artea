@@ -54,8 +54,20 @@ public:
     FlatGraph(const FlatGraph&) = delete;
     FlatGraph& operator=(const FlatGraph&) = delete;
 
-    FlatGraph(FlatGraph&&) noexcept = default;
-    FlatGraph& operator=(FlatGraph&&) noexcept = default;
+    FlatGraph(FlatGraph&& other) noexcept
+        : _num_vertices(other._num_vertices),
+          _layer_config(other._layer_config),
+          _nbrs_arr(std::move(other._nbrs_arr)),
+          _vecs_data(other._vecs_data)
+    {}
+
+    FlatGraph& operator=(FlatGraph&& other) noexcept {
+        _num_vertices = other._num_vertices;
+        _layer_config = other._layer_config;
+        _nbrs_arr = std::move(other._nbrs_arr);
+        // _vecs_data is a reference, cannot be reseated
+        return *this;
+    }
 
     // --- Public Interface ---
 

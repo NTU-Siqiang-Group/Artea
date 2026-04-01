@@ -47,8 +47,18 @@ public:
     IndexStructure(const IndexStructure&) = delete;
     IndexStructure& operator=(const IndexStructure&) = delete;
 
-    IndexStructure(IndexStructure&&) noexcept = default;
-    IndexStructure& operator=(IndexStructure&&) noexcept = default;
+    IndexStructure(IndexStructure&& other) noexcept
+        : base_t(std::move(other)),
+          _pruning_config(other._pruning_config),
+          _propagate_config(other._propagate_config)
+    {}
+
+    IndexStructure& operator=(IndexStructure&& other) noexcept {
+        base_t::operator=(std::move(other));
+        _pruning_config = other._pruning_config;
+        _propagate_config = other._propagate_config;
+        return *this;
+    }
 
     // --- Config accessors ---
 
