@@ -193,10 +193,10 @@ int main(int argc, char** argv) {
     program.add_argument("-d", "--dataset").default_value(std::string("sift-1m"));
 
     // KNN graph params
-    program.add_argument("--knn-max-nbr-size").default_value(64u).scan<'u', uint32_t>();
+    program.add_argument("--knn-max-nbr-size").default_value(96u).scan<'u', uint32_t>();
     program.add_argument("--knn-num-build-loops").default_value(4u).scan<'u', uint32_t>();
     program.add_argument("--knn-num-triu-iters").default_value(14u).scan<'u', uint32_t>();
-    program.add_argument("--knn-prefill-ratio").default_value(0.5f).scan<'g', float>();
+    program.add_argument("--knn-prefill-ratio").default_value(0.34f).scan<'g', float>();
     program.add_argument("--knn-num-routing-loops").default_value(1u).scan<'u', uint32_t>();
 
     // Conv graph refinement params

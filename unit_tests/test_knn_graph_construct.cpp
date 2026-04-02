@@ -224,11 +224,11 @@ int main(int argc, char** argv) {
     argparse::ArgumentParser program("test_knn_graph");
     program.add_argument("-c", "--config").default_value(std::string("./configs/datasets.json"));
     program.add_argument("-d", "--dataset").default_value(std::string("sift-1m"));
-    program.add_argument("--max-nbr-size").default_value(64u).scan<'u', uint32_t>();
-    program.add_argument("--extracted-nbr-size").default_value(64u).scan<'u', uint32_t>();
+    program.add_argument("--max-nbr-size").default_value(96u).scan<'u', uint32_t>();
+    program.add_argument("--extracted-nbr-size").default_value(96u).scan<'u', uint32_t>();
     program.add_argument("--num-build-loops").default_value(5u).scan<'u', uint32_t>();
     program.add_argument("--num-triu-iters").default_value(12u).scan<'u', uint32_t>();
-    program.add_argument("--prefill-ratio").default_value(0.5f).scan<'g', float>();
+    program.add_argument("--prefill-ratio").default_value(0.34f).scan<'g', float>();
     program.add_argument("--num-routing-loops").default_value(1u).scan<'u', uint32_t>();
     program.add_argument("-k", "--topk").default_value(20u).scan<'u', uint32_t>();
     program.add_argument("--candidate-queue-config")

@@ -32,6 +32,7 @@ struct TestConfig {
     std::string config_path;
     std::string dataset_name;
     uint32_t max_nbr_size;
+    float prefill_ratio;
     uint32_t nbr_rank;
     float quantile;
     bool verbose;
@@ -67,7 +68,7 @@ public:
         // Build KNN graph
         layer_config_t layer_config(g_config.max_nbr_size, static_cast<uint32_t>(g_config.max_nbr_size * 1.5));
         knn_graph::pruning_config_t pruning_config(1.0f, 0.0f);
-        knn_graph::propagate_config_t propagate_config(5, 12, 0.5f, 1);
+        knn_graph::propagate_config_t propagate_config(5, 12, g_config.prefill_ratio, 1);
 
         ARTEA_INFO("Building KNN graph...");
         auto t0 = std::chrono::high_resolution_clock::now();
@@ -199,7 +200,8 @@ int main(int argc, char** argv) {
     argparse::ArgumentParser program("test_graph_mis_vg");
     program.add_argument("-c", "--config").default_value(std::string("./configs/datasets.json"));
     program.add_argument("-d", "--dataset").default_value(std::string("sift-1m"));
-    program.add_argument("--max-nbr-size").default_value(64u).scan<'u', uint32_t>();
+    program.add_argument("--max-nbr-size").default_value(96u).scan<'u', uint32_t>();
+    program.add_argument("--prefill-ratio").default_value(0.34f).scan<'g', float>();
     program.add_argument("--nbr-rank").default_value(16u).scan<'u', uint32_t>();
     program.add_argument("--quantile").default_value(0.5f).scan<'g', float>();
     program.add_argument("-v", "--verbose").default_value(false).implicit_value(true);
@@ -215,6 +217,7 @@ int main(int argc, char** argv) {
     g_config.config_path = program.get<std::string>("--config");
     g_config.dataset_name = program.get<std::string>("--dataset");
     g_config.max_nbr_size = program.get<uint32_t>("--max-nbr-size");
+    g_config.prefill_ratio = program.get<float>("--prefill-ratio");
     g_config.nbr_rank = program.get<uint32_t>("--nbr-rank");
     g_config.quantile = program.get<float>("--quantile");
     g_config.verbose = program.get<bool>("--verbose");
@@ -222,6 +225,7 @@ int main(int argc, char** argv) {
     std::cout << "\n=== Configuration ===" << std::endl;
     std::cout << fmt::format("  Dataset:        {}", g_config.dataset_name) << std::endl;
     std::cout << fmt::format("  Max nbr size:   {}", g_config.max_nbr_size) << std::endl;
+    std::cout << fmt::format("  Prefill ratio:  {}", g_config.prefill_ratio) << std::endl;
     std::cout << fmt::format("  Nbr rank:       {}", g_config.nbr_rank) << std::endl;
     std::cout << fmt::format("  Quantile:       {}", g_config.quantile) << std::endl;
     std::cout << "=====================\n" << std::endl;

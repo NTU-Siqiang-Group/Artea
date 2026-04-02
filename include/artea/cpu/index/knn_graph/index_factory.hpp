@@ -146,7 +146,7 @@ private:
 
         /** -------------------- Optimazation ------------------------------------- ***/
         /** @brief A sparse graph is effecient enough to search nearest neighbors     */
-        flat_graph.layer_config().max_nbr_size(max_nbr_size / 2);
+        flat_graph.layer_config().max_nbr_size(init_nbr_size);
         /** ----------------------------------------------------------------------- ***/
 
         random_eg_t random_eg(dist_func);
@@ -158,7 +158,7 @@ private:
         auto triangle_updater  = propagate_engine.template make_updater<triangle_updater_t>(
             pruning_config.scale_coeffs(), pruning_config.shifted_coeffs());
         auto reverse_updater   = propagate_engine.template make_updater<reverse_updater_t>();
-        auto routing_updater   = propagate_engine.template make_updater<routing_updater_t>(max_nbr_size, max_nbr_size * 2);
+        auto routing_updater   = propagate_engine.template make_updater<routing_updater_t>(max_nbr_size, max_nbr_size * 1.5);
         auto truncate_updater  = propagate_engine.template make_updater<truncate_updater_t>();
 
         for (iter_t build_loop = 0; build_loop < propagate_config.num_build_loops(); ++build_loop) {
