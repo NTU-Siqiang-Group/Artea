@@ -63,6 +63,9 @@
 #include <artea/cpu/index/knn_graph/configs.hpp>
 #include <artea/cpu/index/knn_graph/index_structure.hpp>
 #include <artea/cpu/index/knn_graph/index_factory.hpp>
+#include <artea/cpu/index/symmetric_knn_graph/configs.hpp>
+#include <artea/cpu/index/symmetric_knn_graph/index_structure.hpp>
+#include <artea/cpu/index/symmetric_knn_graph/index_factory.hpp>
 #include <artea/cpu/index/artea_graph/configs.hpp>
 #include <artea/cpu/index/artea_graph/index_structure.hpp>
 #include <artea/cpu/index/artea_graph/index_factory.hpp>

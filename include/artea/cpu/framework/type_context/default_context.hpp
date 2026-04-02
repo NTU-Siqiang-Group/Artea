@@ -180,6 +180,13 @@ namespace knn_graph {
     using pruning_config_t = typename graph_factory_traits_t::knn_graph::pruning_config_t;
 }
 
+namespace symmetric_knn_graph {
+    using index_t = typename graph_factory_traits_t::symmetric_knn_graph::index_t;
+    using factory_t = typename graph_factory_traits_t::symmetric_knn_graph::factory_t;
+    using propagate_config_t = typename graph_factory_traits_t::symmetric_knn_graph::propagate_config_t;
+    using pruning_config_t = typename graph_factory_traits_t::symmetric_knn_graph::pruning_config_t;
+}
+
 namespace artea_graph {
     using index_t = typename graph_factory_traits_t::artea_graph::index_t;
     using factory_t = typename graph_factory_traits_t::artea_graph::factory_t;
