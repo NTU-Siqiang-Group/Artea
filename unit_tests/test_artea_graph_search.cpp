@@ -50,6 +50,8 @@ struct TestConfig {
     uint32_t queue_size            = 90;
     uint32_t bl_extracted_nbr_size = 64;
     uint32_t ul_extracted_nbr_size = 32;
+    uint32_t warmup_runs           = 3;
+    uint32_t test_runs             = 5;
     bool verbose                   = false;
 } g_config;
 
@@ -151,15 +153,28 @@ TEST_F(ArteaGraphSearchTest, SearchModeBatchQuery) {
     );
     router.initialize();
 
-    auto t0 = std::chrono::high_resolution_clock::now();
-    knn_results_t results = router.batch_query(query_vecs);
-    auto t1 = std::chrono::high_resolution_clock::now();
-    double us = std::chrono::duration_cast<std::chrono::microseconds>(t1 - t0).count();
+    // Warmup runs
+    for (uint32_t w = 0; w < g_config.warmup_runs; ++w) {
+        [[maybe_unused]] auto _ = router.batch_query(query_vecs);
+    }
 
-    ASSERT_EQ(results.size(), static_cast<size_t>(g_results.num_queries * g_config.topk));
-
+    // Test runs
+    double total_us = 0.0;
+    float total_recall = 0.0f;
+    knn_results_t last_results;
     recall_estimator_t re;
-    g_results.search_batch_recall = re.calculate_recall_at_k(results, p.get_gt(), g_config.topk, g_results.num_queries);
+    for (uint32_t r = 0; r < g_config.test_runs; ++r) {
+        auto t0 = std::chrono::high_resolution_clock::now();
+        last_results = router.batch_query(query_vecs);
+        auto t1 = std::chrono::high_resolution_clock::now();
+        total_us += std::chrono::duration_cast<std::chrono::microseconds>(t1 - t0).count();
+        total_recall += re.calculate_recall_at_k(last_results, p.get_gt(), g_config.topk, g_results.num_queries);
+    }
+    double us = total_us / g_config.test_runs;
+
+    ASSERT_EQ(last_results.size(), static_cast<size_t>(g_results.num_queries * g_config.topk));
+
+    g_results.search_batch_recall = total_recall / g_config.test_runs;
     g_results.search_batch_qps    = g_results.num_queries * 1e6 / us;
 
     EXPECT_GT(g_results.search_batch_recall, 0.0f);
@@ -180,29 +195,50 @@ TEST_F(ArteaGraphSearchTest, SearchModeParallelSingleQuery) {
     );
     router.initialize();
 
+    // Warmup runs
+    for (uint32_t w = 0; w < g_config.warmup_runs; ++w) {
+        knn_results_t warmup_results(g_results.num_queries * g_config.topk);
+        tbb::parallel_for(
+            tbb::blocked_range<uint32_t>(0, g_results.num_queries),
+            [&](const tbb::blocked_range<uint32_t>& r) {
+                for (uint32_t i = r.begin(); i != r.end(); ++i) {
+                    knn_results_t res = router.query(query_vecs.get(i));
+                    std::copy(res.begin(), res.end(), warmup_results.begin() + i * g_config.topk);
+                }
+            }
+        );
+    }
+
+    // Test runs
+    double total_us = 0.0;
     std::atomic<int> error_count{0};
     knn_results_t all_results(g_results.num_queries * g_config.topk);
 
-    auto t0 = std::chrono::high_resolution_clock::now();
-    tbb::parallel_for(
-        tbb::blocked_range<uint32_t>(0, g_results.num_queries),
-        [&](const tbb::blocked_range<uint32_t>& r) {
-            for (uint32_t i = r.begin(); i != r.end(); ++i) {
-                knn_results_t res = router.query(query_vecs.get(i));
-                if (res.size() != g_config.topk) {
-                    error_count.fetch_add(1, std::memory_order_relaxed);
-                    continue;
-                }
-                for (const auto& e : res) {
-                    if (!e.is_invalid() && e.get_id() >= g_results.num_base)
+    for (uint32_t run = 0; run < g_config.test_runs; ++run) {
+        error_count.store(0, std::memory_order_relaxed);
+
+        auto t0 = std::chrono::high_resolution_clock::now();
+        tbb::parallel_for(
+            tbb::blocked_range<uint32_t>(0, g_results.num_queries),
+            [&](const tbb::blocked_range<uint32_t>& r) {
+                for (uint32_t i = r.begin(); i != r.end(); ++i) {
+                    knn_results_t res = router.query(query_vecs.get(i));
+                    if (res.size() != g_config.topk) {
                         error_count.fetch_add(1, std::memory_order_relaxed);
+                        continue;
+                    }
+                    for (const auto& e : res) {
+                        if (!e.is_invalid() && e.get_id() >= g_results.num_base)
+                            error_count.fetch_add(1, std::memory_order_relaxed);
+                    }
+                    std::copy(res.begin(), res.end(), all_results.begin() + i * g_config.topk);
                 }
-                std::copy(res.begin(), res.end(), all_results.begin() + i * g_config.topk);
             }
-        }
-    );
-    auto t1 = std::chrono::high_resolution_clock::now();
-    double us = std::chrono::duration_cast<std::chrono::microseconds>(t1 - t0).count();
+        );
+        auto t1 = std::chrono::high_resolution_clock::now();
+        total_us += std::chrono::duration_cast<std::chrono::microseconds>(t1 - t0).count();
+    }
+    double us = total_us / g_config.test_runs;
 
     EXPECT_EQ(error_count.load(), 0) << "Parallel single queries produced invalid results";
 
@@ -226,15 +262,28 @@ TEST_F(ArteaGraphSearchTest, ConstructModeBatchQuery) {
     );
     router.initialize();
 
-    auto t0 = std::chrono::high_resolution_clock::now();
-    knn_results_t results = router.batch_query(query_vecs, p.get_hgraph());
-    auto t1 = std::chrono::high_resolution_clock::now();
-    double us = std::chrono::duration_cast<std::chrono::microseconds>(t1 - t0).count();
+    // Warmup runs
+    for (uint32_t w = 0; w < g_config.warmup_runs; ++w) {
+        [[maybe_unused]] auto _ = router.batch_query(query_vecs, p.get_hgraph());
+    }
 
-    ASSERT_EQ(results.size(), static_cast<size_t>(g_results.num_queries * g_config.topk));
-
+    // Test runs
+    double total_us = 0.0;
+    float total_recall = 0.0f;
+    knn_results_t last_results;
     recall_estimator_t re;
-    g_results.construct_batch_recall = re.calculate_recall_at_k(results, p.get_gt(), g_config.topk, g_results.num_queries);
+    for (uint32_t r = 0; r < g_config.test_runs; ++r) {
+        auto t0 = std::chrono::high_resolution_clock::now();
+        last_results = router.batch_query(query_vecs, p.get_hgraph());
+        auto t1 = std::chrono::high_resolution_clock::now();
+        total_us += std::chrono::duration_cast<std::chrono::microseconds>(t1 - t0).count();
+        total_recall += re.calculate_recall_at_k(last_results, p.get_gt(), g_config.topk, g_results.num_queries);
+    }
+    double us = total_us / g_config.test_runs;
+
+    ASSERT_EQ(last_results.size(), static_cast<size_t>(g_results.num_queries * g_config.topk));
+
+    g_results.construct_batch_recall = total_recall / g_config.test_runs;
     g_results.construct_batch_qps    = g_results.num_queries * 1e6 / us;
 
     EXPECT_GT(g_results.construct_batch_recall, 0.0f);
@@ -254,6 +303,8 @@ int main(int argc, char** argv) {
     program.add_argument("--candidate-queue-size").default_value(90u).scan<'u', uint32_t>();
     program.add_argument("--bl-extracted-nbr-size").default_value(64u).scan<'u', uint32_t>();
     program.add_argument("--ul-extracted-nbr-size").default_value(32u).scan<'u', uint32_t>();
+    program.add_argument("--warmup-runs").default_value(5u).scan<'u', uint32_t>();
+    program.add_argument("--test-runs").default_value(10u).scan<'u', uint32_t>();
     program.add_argument("-v", "--verbose").default_value(false).implicit_value(true);
 
     try { program.parse_args(argc, argv); }
@@ -265,6 +316,8 @@ int main(int argc, char** argv) {
     g_config.queue_size            = program.get<uint32_t>("--candidate-queue-size");
     g_config.bl_extracted_nbr_size = program.get<uint32_t>("--bl-extracted-nbr-size");
     g_config.ul_extracted_nbr_size = program.get<uint32_t>("--ul-extracted-nbr-size");
+    g_config.warmup_runs           = program.get<uint32_t>("--warmup-runs");
+    g_config.test_runs             = program.get<uint32_t>("--test-runs");
     g_config.verbose               = program.get<bool>("--verbose");
 
     DataProvider::instance().init();
@@ -282,15 +335,18 @@ int main(int argc, char** argv) {
     std::cout << fmt::format("  Candidate queue size:     {}\n", g_config.queue_size);
     std::cout << fmt::format("  BL extracted nbr size:    {}\n", g_config.bl_extracted_nbr_size);
     std::cout << fmt::format("  UL extracted nbr size:    {}\n", g_config.ul_extracted_nbr_size);
+    std::cout << fmt::format("  Warmup runs:              {}\n", g_config.warmup_runs);
+    std::cout << fmt::format("  Test runs:                {}\n", g_config.test_runs);
     std::cout << "\n";
-    std::cout << fmt::format("  {:40s}  {:>10s}  {:>12s}\n", "Test", "Recall@k", "QPS");
-    std::cout << std::string(70, '-') << "\n";
-    std::cout << fmt::format("  {:40s}  {:>10.4f}  {:>12.1f}\n",
-        "search_mode  / BatchQuery",          g_results.search_batch_recall,    g_results.search_batch_qps);
-    std::cout << fmt::format("  {:40s}  {:>10.4f}  {:>12.1f}\n",
-        "search_mode  / ParallelSingleQuery", g_results.search_parallel_recall, g_results.search_parallel_qps);
-    std::cout << fmt::format("  {:40s}  {:>10.4f}  {:>12.1f}\n",
-        "construct_mode / BatchQuery",        g_results.construct_batch_recall,  g_results.construct_batch_qps);
+    std::cout << fmt::format("  {:40s}  {:>10s}  {:>12s}  {:>10s}\n", "Test", "Recall@k", "QPS", "Runs");
+    std::cout << std::string(80, '-') << "\n";
+    std::string runs_str = fmt::format("{}w+{}r", g_config.warmup_runs, g_config.test_runs);
+    std::cout << fmt::format("  {:40s}  {:>10.4f}  {:>12.1f}  {:>10s}\n",
+        "search_mode  / BatchQuery",          g_results.search_batch_recall,    g_results.search_batch_qps, runs_str);
+    std::cout << fmt::format("  {:40s}  {:>10.4f}  {:>12.1f}  {:>10s}\n",
+        "search_mode  / ParallelSingleQuery", g_results.search_parallel_recall, g_results.search_parallel_qps, runs_str);
+    std::cout << fmt::format("  {:40s}  {:>10.4f}  {:>12.1f}  {:>10s}\n",
+        "construct_mode / BatchQuery",        g_results.construct_batch_recall,  g_results.construct_batch_qps, runs_str);
     std::cout << std::string(70, '=') << "\n";
 
     return ret;

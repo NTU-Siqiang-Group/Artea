@@ -71,6 +71,9 @@ struct TestConfig {
     uint32_t bl_extracted_nbr_size;
     uint32_t ul_extracted_nbr_size;
 
+    uint32_t warmup_runs;
+    uint32_t test_runs;
+
     bool verbose;
 } g_config;
 
@@ -393,8 +396,8 @@ TEST_F(ArteaGraphConstructTest, QueryRecall) {
 
     recall_estimator_t recall_estimator;
 
-    constexpr uint32_t NUM_WARMUP_RUNS = 10;
-    constexpr uint32_t NUM_TEST_RUNS = 50;
+    const uint32_t NUM_WARMUP_RUNS = g_config.warmup_runs;
+    const uint32_t NUM_TEST_RUNS = g_config.test_runs;
 
     for (uint32_t queue_size = g_config.queue_start; queue_size <= g_config.queue_end; queue_size += g_config.queue_step) {
         // Create hierarchical router with current queue size
@@ -495,6 +498,8 @@ int main(int argc, char** argv) {
     program.add_argument("--ul-extracted-nbr-size").default_value(32u).scan<'u', uint32_t>()
         .help("Upper layer extracted neighbor size (defaults to 32)");
 
+    program.add_argument("--warmup-runs").default_value(5u).scan<'u', uint32_t>();
+    program.add_argument("--test-runs").default_value(10u).scan<'u', uint32_t>();
     program.add_argument("-v", "--verbose").default_value(false).implicit_value(true);
 
     try {
@@ -556,6 +561,9 @@ int main(int argc, char** argv) {
     g_config.bl_extracted_nbr_size = program.get<uint32_t>("--bl-extracted-nbr-size");
     g_config.ul_extracted_nbr_size = program.get<uint32_t>("--ul-extracted-nbr-size");
 
+    g_config.warmup_runs = program.get<uint32_t>("--warmup-runs");
+    g_config.test_runs = program.get<uint32_t>("--test-runs");
+
     g_config.verbose = program.get<bool>("--verbose");
 
     std::cout << "\n=== Test Configuration ===" << std::endl;
@@ -585,6 +593,8 @@ int main(int argc, char** argv) {
     std::cout << "Candidate queue config: " << g_config.queue_start << "," << g_config.queue_end << "," << g_config.queue_step << std::endl;
     std::cout << "Bottom layer extracted nbr size: " << g_config.bl_extracted_nbr_size << std::endl;
     std::cout << "Upper layer extracted nbr size: " << g_config.ul_extracted_nbr_size << std::endl;
+    std::cout << "Warmup runs: " << g_config.warmup_runs << std::endl;
+    std::cout << "Test runs: " << g_config.test_runs << std::endl;
     std::cout << "Verbose: " << (g_config.verbose ? "true" : "false") << std::endl;
     std::cout << "==========================\n" << std::endl;
 
