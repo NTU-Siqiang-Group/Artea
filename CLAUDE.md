@@ -65,6 +65,25 @@ class MyClass {
 
 **Use virtual inheritance** when composing multiple traits to prevent type duplication.
 
+### Graph Index Namespace Types
+
+Graph index types (conv_graph, knn_graph, artea_graph) are accessed via nested struct namespaces in traits. Always alias the **namespace struct**, then use `namespace::type`:
+
+```cpp
+// CORRECT: alias the namespace, then use namespace::type
+using knn_graph = typename TraitsT::knn_graph;
+using conv_graph = typename TraitsT::conv_graph;
+
+void foo(const typename knn_graph::index_t& graph);  // ✓
+auto cfg = typename conv_graph::pruning_config_t(...);  // ✓
+
+// WRONG: never flatten namespace types into top-level aliases
+// using knn_graph_index_t = typename TraitsT::knn_graph::index_t;  // ❌
+// using conv_pruning_config_t = typename TraitsT::conv_graph::pruning_config_t;  // ❌
+```
+
+For the factory's own index type, use `this_index_t` as the sole exception (see existing IndexFactory implementations).
+
 ### Adding New Types to Framework
 
 When adding a new type to the framework, follow these steps:

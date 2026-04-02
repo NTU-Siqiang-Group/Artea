@@ -33,11 +33,14 @@ template <typename VertexGeneratorTraitsT> class MBGreedyVG;
 template <typename VertexGeneratorTraitsT> class RandomVG;
 template <typename VertexGeneratorTraitsT> class GraphMISVG;
 
-template <typename ComputerTraitsT>
-struct VertexGeneratorTraits : virtual public ComputerTraitsT {
+template <typename ComputerTraitsT, typename IndexTraitsT>
+struct VertexGeneratorTraits :
+    virtual public ComputerTraitsT,
+    virtual public IndexTraitsT
+{
 
     /** ------ Self Traits ------ **/
-    using vertex_generator_traits_t = VertexGeneratorTraits<ComputerTraitsT>;
+    using vertex_generator_traits_t = VertexGeneratorTraits<ComputerTraitsT, IndexTraitsT>;
 
     /** @brief Vertex subset result type. */
     using vertex_subset_t = typename ComputerTraitsT::vertex_subset_t;

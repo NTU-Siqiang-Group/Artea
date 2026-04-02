@@ -54,7 +54,9 @@ class GraphMISVG : public VertexGeneratorTraitsT::template vertex_generator_t<Gr
     using distance_t = typename VertexGeneratorTraitsT::distance_t;
     using vec_dim_t = typename VertexGeneratorTraitsT::vec_dim_t;
     using vector_array_t = typename VertexGeneratorTraitsT::vector_array_t;
+    using nbr_arr_t = typename VertexGeneratorTraitsT::nbr_arr_t;
     using approx_rnet_t = typename VertexGeneratorTraitsT::approx_rnet_t;
+    using knn_graph = typename VertexGeneratorTraitsT::knn_graph;
 
     static constexpr uint8_t UNDECIDED = 0;
     static constexpr uint8_t IN = 1;
@@ -66,15 +68,13 @@ public:
     /**
      * @brief Generate an R-net from a KNN graph using parallel MIS.
      *
-     * @tparam GraphT A flat graph type with fetch_nbrs(vid) and get_num_vertices().
-     * @param graph The KNN graph (neighbors sorted by distance ascending).
+     * @param graph The KNN graph (knn_graph::index_t, neighbors sorted by distance ascending).
      * @param min_radius The radius threshold: neighbors with distance < min_radius
      *                   are considered "close" and mutually exclusive in the R-net.
      * @return approx_rnet_t containing the selected vertex IDs and their vector data.
      */
-    template <typename GraphT>
     auto generate_impl(
-        const GraphT& graph,
+        const typename knn_graph::index_t& graph,
         const distance_t min_radius
     ) -> approx_rnet_t {
         const vertex_num_t num_vertices = graph.get_num_vertices();

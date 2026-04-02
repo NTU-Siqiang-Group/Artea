@@ -10,6 +10,6 @@ debug-output.txt
 **/perf.data
 test_flat_graph_persistence_temp/
 test_hierarchical_graph_persistence_temp/
-/agent.md
+agent.md
 TODO.md
 backup/
