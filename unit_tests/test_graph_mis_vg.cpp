@@ -18,6 +18,7 @@
 #include <filesystem>
 #include <chrono>
 #include <unordered_set>
+#include <string>
 #include <fmt/format.h>
 #include <argparse/argparse.hpp>
 #include <gtest/gtest.h>
@@ -33,8 +34,6 @@ struct TestConfig {
     std::string dataset_name;
     uint32_t max_nbr_size;
     float prefill_ratio;
-    uint32_t nbr_rank;
-    float quantile;
     bool verbose;
 } g_config;
 
@@ -81,12 +80,15 @@ public:
         ARTEA_INFO(fmt::format("KNN graph built with {} vertices in {:.2f} s",
             g_results.num_vertices, g_results.knn_build_time_s));
 
-        // Probe min_radius
-        radius_prober_t prober;
-        auto probe_result = prober.probe(*knn_graph_, g_config.nbr_rank, g_config.quantile);
-        g_results.min_radius = probe_result.radius;
-        ARTEA_INFO(fmt::format("RadiusProber nbr_rank={}, quantile={:.2f}: min_radius={:.6f}",
-            g_config.nbr_rank, g_config.quantile, g_results.min_radius));
+        // Print radius quantile table for user selection
+        _print_radius_table();
+
+        // Interactive: ask user for min_radius
+        std::cout << "\nEnter the desired min_radius for MIS: " << std::flush;
+        std::string input;
+        std::getline(std::cin, input);
+        g_results.min_radius = std::stof(input);
+        ARTEA_INFO(fmt::format("User selected min_radius: {:.6f}", g_results.min_radius));
 
         // Run GraphMISVG
         graph_mis_vg_t mis_vg;
@@ -105,6 +107,43 @@ public:
 
 private:
     DataProvider() = default;
+
+    void _print_radius_table() {
+        radius_prober_t prober;
+
+        std::vector<uint32_t> nbr_ranks = {1, 2, 4, 8, 16, 32, 64};
+        std::vector<float> quantiles = {0.01f, 0.05f, 0.10f, 0.25f, 0.50f, 0.75f, 0.90f, 0.95f, 0.99f};
+
+        // Filter out nbr_ranks that exceed max_nbr_size
+        std::vector<uint32_t> valid_ranks;
+        for (auto rank : nbr_ranks) {
+            if (rank <= g_config.max_nbr_size) valid_ranks.push_back(rank);
+        }
+
+        // Print header
+        std::cout << "\n" << std::string(70, '=') << std::endl;
+        std::cout << "  Radius Quantile Table (distance at nbr_rank-th neighbor)" << std::endl;
+        std::cout << std::string(70, '=') << std::endl;
+
+        std::cout << fmt::format("{:<12}", "quantile");
+        for (auto rank : valid_ranks) {
+            std::cout << fmt::format(" {:>10}", fmt::format("rank={}", rank));
+        }
+        std::cout << std::endl;
+        std::cout << std::string(12 + 11 * valid_ranks.size(), '-') << std::endl;
+
+        for (float q : quantiles) {
+            std::cout << fmt::format("{:<12}", fmt::format("{:.2f}", q));
+            for (auto rank : valid_ranks) {
+                auto result = prober.probe(*knn_graph_, rank, q);
+                std::cout << fmt::format(" {:>10.4f}", result.radius);
+            }
+            std::cout << std::endl;
+        }
+
+        std::cout << std::string(70, '=') << std::endl;
+    }
+
     std::unique_ptr<vector_dataset_t> dataset_;
     std::unique_ptr<knn_graph::index_t> knn_graph_;
     std::unique_ptr<approx_rnet_t> rnet_;
@@ -141,10 +180,6 @@ TEST_F(GraphMISVGTest, VerifyIndependence) {
         }
     }
 
-    // Violations are counted per directed edge (A's nbr list has B, both IN).
-    // On an asymmetric approximate KNN graph, a vertex B may not see A in its
-    // neighbor list, so B can be marked IN even though A (also IN) considers B
-    // a close neighbor. This is inherent to approximate graphs.
     g_results.independence_violations = violations;
     double violation_ratio = (rnet.vec_ids.size() > 0)
         ? 100.0 * violations / rnet.vec_ids.size() : 0.0;
@@ -154,7 +189,15 @@ TEST_F(GraphMISVGTest, VerifyIndependence) {
 
 /**
  * @brief Verify coverage (maximality): every non-selected vertex should have
- * at least one selected close neighbor in its KNN neighbor list.
+ * at least one close IN vertex reachable via either direction of an edge.
+ *
+ * A non-selected vertex u is covered if:
+ *   (a) u sees an IN vertex in u's neighbor list (u→v exists, v is IN), OR
+ *   (b) an IN vertex v sees u in v's neighbor list (v→u exists, v is IN).
+ *
+ * Both directions are needed because the MIS algorithm marks vertices OUT
+ * via two mechanisms: (a) Phase 1 self-proposal when u sees an IN neighbor,
+ * and (b) Phase 3a Crush when an IN vertex v suppresses u along v→u.
  *
  * Note: coverage may be < 100% because the KNN graph is approximate.
  */
@@ -166,22 +209,36 @@ TEST_F(GraphMISVGTest, VerifyCoverage) {
 
     std::unordered_set<vertex_id_t> selected_set(rnet.vec_ids.begin(), rnet.vec_ids.end());
 
+    std::vector<bool> is_covered(num_vertices, false);
+
+    // Direction 1 (v→u): IN vertex v's out-edges cover its close neighbors
+    for (const auto& vid : rnet.vec_ids) {
+        const auto& nbrs = knn_graph.fetch_nbrs(vid);
+        for (vertex_num_t i = 0; i < nbrs.size(); ++i) {
+            if (nbrs[i].get_distance() >= min_radius) break;
+            is_covered[nbrs[i].get_id()] = true;
+        }
+    }
+
+    // Direction 2 (u→v): non-selected u sees an IN vertex in its own neighbor list
+    for (vertex_id_t u = 0; u < num_vertices; ++u) {
+        if (selected_set.count(u) || is_covered[u]) continue;
+        const auto& nbrs = knn_graph.fetch_nbrs(u);
+        for (vertex_num_t i = 0; i < nbrs.size(); ++i) {
+            if (nbrs[i].get_distance() >= min_radius) break;
+            if (selected_set.count(nbrs[i].get_id())) {
+                is_covered[u] = true;
+                break;
+            }
+        }
+    }
+
     uint32_t covered = 0;
     uint32_t non_selected = 0;
     for (vertex_id_t v = 0; v < num_vertices; ++v) {
         if (selected_set.count(v)) continue;
         non_selected++;
-
-        const auto& nbrs = knn_graph.fetch_nbrs(v);
-        bool is_covered = false;
-        for (vertex_num_t i = 0; i < nbrs.size(); ++i) {
-            if (nbrs[i].get_distance() >= min_radius) break;
-            if (selected_set.count(nbrs[i].get_id())) {
-                is_covered = true;
-                break;
-            }
-        }
-        if (is_covered) covered++;
+        if (is_covered[v]) covered++;
     }
 
     g_results.coverage_count = covered;
@@ -202,8 +259,6 @@ int main(int argc, char** argv) {
     program.add_argument("-d", "--dataset").default_value(std::string("sift-1m"));
     program.add_argument("--max-nbr-size").default_value(96u).scan<'u', uint32_t>();
     program.add_argument("--prefill-ratio").default_value(0.34f).scan<'g', float>();
-    program.add_argument("--nbr-rank").default_value(16u).scan<'u', uint32_t>();
-    program.add_argument("--quantile").default_value(0.5f).scan<'g', float>();
     program.add_argument("-v", "--verbose").default_value(false).implicit_value(true);
 
     try {
@@ -218,16 +273,12 @@ int main(int argc, char** argv) {
     g_config.dataset_name = program.get<std::string>("--dataset");
     g_config.max_nbr_size = program.get<uint32_t>("--max-nbr-size");
     g_config.prefill_ratio = program.get<float>("--prefill-ratio");
-    g_config.nbr_rank = program.get<uint32_t>("--nbr-rank");
-    g_config.quantile = program.get<float>("--quantile");
     g_config.verbose = program.get<bool>("--verbose");
 
     std::cout << "\n=== Configuration ===" << std::endl;
     std::cout << fmt::format("  Dataset:        {}", g_config.dataset_name) << std::endl;
     std::cout << fmt::format("  Max nbr size:   {}", g_config.max_nbr_size) << std::endl;
     std::cout << fmt::format("  Prefill ratio:  {}", g_config.prefill_ratio) << std::endl;
-    std::cout << fmt::format("  Nbr rank:       {}", g_config.nbr_rank) << std::endl;
-    std::cout << fmt::format("  Quantile:       {}", g_config.quantile) << std::endl;
     std::cout << "=====================\n" << std::endl;
 
     DataProvider::instance().init();

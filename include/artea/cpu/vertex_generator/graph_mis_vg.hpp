@@ -16,11 +16,14 @@
  * @FilePath: /Artea/include/artea/cpu/vertex_generator/graph_mis_vg.hpp
  * @Author: Chandler (Weitang Ye) <weitang.ye@ntu.edu.sg>
  * @Description: Graph-based MIS vertex generator for R-net construction.
+ *               Uses a 3-phase (Propose/Veto/Commit) algorithm to handle
+ *               asymmetric edges in approximate KNN graphs.
  */
 
 #pragma once
 
 #include <algorithm>
+#include <atomic>
 #include <vector>
 #include <random>
 #include <tbb/parallel_for.h>
@@ -38,9 +41,11 @@ namespace cpu {
  * Produces an R-net from a pre-built KNN graph by running a parallel MIS
  * algorithm on the "close neighbor" subgraph (neighbors with distance < min_radius).
  *
- * R-net guarantee (on the close-neighbor subgraph):
- *   - Independence: no two selected vertices are close neighbors (distance < min_radius).
- *   - Maximality: every non-selected vertex has at least one selected close neighbor.
+ * Uses a 3-phase approach per round to handle asymmetric edges:
+ *   - Phase 1 (Propose): Each vertex tentatively decides IN/OUT/UNDECIDED.
+ *   - Phase 2 (Veto): IN vertices veto conflicting IN neighbors along out-edges.
+ *   - Phase 3a (Commit & Crush): Non-vetoed IN vertices commit and suppress neighbors.
+ *   - Phase 3b (Frontier Rebuild): Collect remaining UNDECIDED vertices.
  *
  * @tparam VertexGeneratorTraitsT The vertex generator traits type.
  */
@@ -66,7 +71,7 @@ public:
     GraphMISVG() = default;
 
     /**
-     * @brief Generate an R-net from a KNN graph using parallel MIS.
+     * @brief Generate an R-net from a KNN graph using parallel 3-phase MIS.
      *
      * @param graph The KNN graph (knn_graph::index_t, neighbors sorted by distance ascending).
      * @param min_radius The radius threshold: neighbors with distance < min_radius
@@ -89,9 +94,20 @@ public:
             }
         }
 
-        // Double-buffered state arrays
-        std::vector<uint8_t> state(num_vertices, UNDECIDED);
-        std::vector<uint8_t> new_state(num_vertices, UNDECIDED);
+        // Atomic state array for lock-free parallel commit & crush
+        std::vector<std::atomic<uint8_t>> state(num_vertices);
+        for (vertex_num_t i = 0; i < num_vertices; ++i) {
+            state[i].store(UNDECIDED, std::memory_order_relaxed);
+        }
+
+        // Per-round proposal buffer (each thread writes a distinct index, no contention)
+        std::vector<uint8_t> proposal(num_vertices, UNDECIDED);
+
+        // Per-round veto flags (false→true single-direction, relaxed atomics)
+        std::vector<std::atomic<bool>> veto(num_vertices);
+        for (vertex_num_t i = 0; i < num_vertices; ++i) {
+            veto[i].store(false, std::memory_order_relaxed);
+        }
 
         // Frontier: vertices still UNDECIDED
         std::vector<vertex_id_t> frontier(num_vertices);
@@ -99,7 +115,21 @@ public:
 
         uint32_t round = 0;
         while (!frontier.empty()) {
-            // Phase 1: Tentative marking (read from state, write to new_state)
+
+            // Phase 0: Reset per-round buffers (parallel)
+            tbb::parallel_for(
+                tbb::blocked_range<size_t>(0, frontier.size()),
+                [&](const tbb::blocked_range<size_t>& r) {
+                    for (size_t fi = r.begin(); fi != r.end(); ++fi) {
+                        const vertex_id_t v = frontier[fi];
+                        proposal[v] = UNDECIDED;
+                        veto[v].store(false, std::memory_order_relaxed);
+                    }
+                }
+            );
+
+            // Phase 1: Propose (parallel)
+            // Read state[], write proposal[] (each thread writes distinct indices)
             tbb::parallel_for(
                 tbb::blocked_range<size_t>(0, frontier.size()),
                 [&](const tbb::blocked_range<size_t>& r) {
@@ -114,11 +144,13 @@ public:
                             if (nbrs[i].get_distance() >= min_radius) break;
 
                             const vertex_id_t u = nbrs[i].get_id();
-                            if (state[u] == IN) {
+                            const uint8_t u_state = state[u].load(std::memory_order_relaxed);
+
+                            if (u_state == IN) {
                                 any_nbr_in = true;
                                 break;
                             }
-                            if (state[u] == UNDECIDED &&
+                            if (u_state == UNDECIDED &&
                                 (priority[u] > priority[v] ||
                                  (priority[u] == priority[v] && u > v))) {
                                 has_higher_priority_undecided = true;
@@ -126,25 +158,88 @@ public:
                         }
 
                         if (any_nbr_in) {
-                            new_state[v] = OUT;
+                            proposal[v] = OUT;
                         } else if (!has_higher_priority_undecided) {
-                            new_state[v] = IN;
+                            proposal[v] = IN;
                         } else {
-                            new_state[v] = UNDECIDED;
+                            proposal[v] = UNDECIDED;
                         }
                     }
                 }
             );
 
-            // Phase 2: Commit state and build next frontier
-            std::vector<vertex_id_t> next_frontier;
-            next_frontier.reserve(frontier.size());
+            // Phase 2: Veto (parallel)
+            // IN proposers veto conflicting IN neighbors along out-edges
+            tbb::parallel_for(
+                tbb::blocked_range<size_t>(0, frontier.size()),
+                [&](const tbb::blocked_range<size_t>& r) {
+                    for (size_t fi = r.begin(); fi != r.end(); ++fi) {
+                        const vertex_id_t v = frontier[fi];
+                        if (proposal[v] != IN) continue;
 
-            for (const auto& v : frontier) {
-                state[v] = new_state[v];
-                if (state[v] == UNDECIDED) {
-                    next_frontier.push_back(v);
+                        const auto& nbrs = graph.fetch_nbrs(v);
+                        for (vertex_num_t i = 0; i < nbrs.size(); ++i) {
+                            if (nbrs[i].get_distance() >= min_radius) break;
+
+                            const vertex_id_t u = nbrs[i].get_id();
+                            if (proposal[u] == IN) {
+                                veto[u].store(true, std::memory_order_relaxed);
+                            }
+                        }
+                    }
                 }
+            );
+
+            // Phase 3a: Commit & Crush (parallel)
+            // Non-vetoed IN vertices commit and suppress close neighbors
+            tbb::parallel_for(
+                tbb::blocked_range<size_t>(0, frontier.size()),
+                [&](const tbb::blocked_range<size_t>& r) {
+                    for (size_t fi = r.begin(); fi != r.end(); ++fi) {
+                        const vertex_id_t v = frontier[fi];
+
+                        if (proposal[v] == OUT) {
+                            state[v].store(OUT, std::memory_order_relaxed);
+                        } else if (proposal[v] == IN && !veto[v].load(std::memory_order_relaxed)) {
+                            state[v].store(IN, std::memory_order_relaxed);
+                            // Crush: suppress all close neighbors along out-edges
+                            const auto& nbrs = graph.fetch_nbrs(v);
+                            for (vertex_num_t i = 0; i < nbrs.size(); ++i) {
+                                if (nbrs[i].get_distance() >= min_radius) break;
+                                state[nbrs[i].get_id()].store(OUT, std::memory_order_relaxed);
+                            }
+                        }
+                        // Vetoed IN and UNDECIDED: do not write state, remain UNDECIDED
+                    }
+                }
+            );
+
+            // Phase 3b: Build next frontier (parallel collect + sequential merge)
+            tbb::enumerable_thread_specific<std::vector<vertex_id_t>> tls_frontier;
+
+            tbb::parallel_for(
+                tbb::blocked_range<size_t>(0, frontier.size()),
+                [&](const tbb::blocked_range<size_t>& r) {
+                    auto& local = tls_frontier.local();
+                    for (size_t fi = r.begin(); fi != r.end(); ++fi) {
+                        const vertex_id_t v = frontier[fi];
+                        if (state[v].load(std::memory_order_relaxed) == UNDECIDED) {
+                            local.push_back(v);
+                        }
+                    }
+                }
+            );
+
+            // Pre-compute total size, single allocation, then copy
+            size_t total = 0;
+            for (const auto& local : tls_frontier) {
+                total += local.size();
+            }
+
+            std::vector<vertex_id_t> next_frontier;
+            next_frontier.reserve(total);
+            for (const auto& local : tls_frontier) {
+                next_frontier.insert(next_frontier.end(), local.begin(), local.end());
             }
 
             round++;
@@ -158,7 +253,7 @@ public:
         // Collect IN vertices
         approx_rnet_t result(vecs_data.get_vec_dim());
         for (vertex_id_t v = 0; v < num_vertices; ++v) {
-            if (state[v] == IN) {
+            if (state[v].load(std::memory_order_relaxed) == IN) {
                 result.vec_ids.push_back(v);
             }
         }

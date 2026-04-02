@@ -17,7 +17,7 @@ This guide uses `my_graph` as a placeholder name. The process consists of **6 st
 
 **File:** `include/artea/cpu/index/my_graph/configs.hpp`
 
-Each graph type has its own configs file. **LayerConfig** (in `configs/layer_config.hpp`) is shared and mandatory for every graph type. Graph-specific configs (e.g. PruningConfig, PropagateConfig) live in `index/my_graph/configs.hpp`.
+Each graph type has its own configs file. **LayerConfig** (in `index/layer_config.hpp`) is shared and mandatory for every graph type. Graph-specific configs (e.g. PruningConfig, PropagateConfig) live in `index/my_graph/configs.hpp`.
 
 If a config you need already exists in another namespace, include it and reuse via alias:
 

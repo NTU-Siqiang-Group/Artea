@@ -32,6 +32,7 @@ struct TestConfig {
     std::string config_path;
     std::string dataset_name;
     uint32_t max_nbr_size;
+    float prefill_ratio;
     uint32_t num_samples;
     bool verbose;
 } g_config;
@@ -55,7 +56,7 @@ public:
         const auto& base_vecs = dataset_->get_base_vecs();
         layer_config_t layer_config(g_config.max_nbr_size, static_cast<uint32_t>(g_config.max_nbr_size * 1.5));
         knn_graph::pruning_config_t pruning_config(1.0f, 0.0f);
-        knn_graph::propagate_config_t propagate_config(5, 12, 0.5f, 1);
+        knn_graph::propagate_config_t propagate_config(5, 12, g_config.prefill_ratio, 1);
 
         ARTEA_INFO("Building KNN graph...");
         auto t0 = std::chrono::high_resolution_clock::now();
@@ -240,7 +241,8 @@ int main(int argc, char** argv) {
     argparse::ArgumentParser program("test_radius_prober");
     program.add_argument("-c", "--config").default_value(std::string("./configs/datasets.json"));
     program.add_argument("-d", "--dataset").default_value(std::string("sift-1m"));
-    program.add_argument("--max-nbr-size").default_value(32u).scan<'u', uint32_t>();
+    program.add_argument("--max-nbr-size").default_value(96u).scan<'u', uint32_t>();
+    program.add_argument("--prefill-ratio").default_value(0.34f).scan<'g', float>();
     program.add_argument("--num-samples").default_value(100u).scan<'u', uint32_t>();
     program.add_argument("-v", "--verbose").default_value(false).implicit_value(true);
 
@@ -255,6 +257,7 @@ int main(int argc, char** argv) {
     g_config.config_path = program.get<std::string>("--config");
     g_config.dataset_name = program.get<std::string>("--dataset");
     g_config.max_nbr_size = program.get<uint32_t>("--max-nbr-size");
+    g_config.prefill_ratio = program.get<float>("--prefill-ratio");
     g_config.num_samples = program.get<uint32_t>("--num-samples");
     g_config.verbose = program.get<bool>("--verbose");
 

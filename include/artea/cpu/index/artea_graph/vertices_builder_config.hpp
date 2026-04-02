@@ -13,7 +13,7 @@
 // limitations under the License.
 
 /*
- * @FilePath: /Artea/include/artea/cpu/configs/vertices_builder_config.hpp
+ * @FilePath: /Artea/include/artea/cpu/index/artea_graph/vertices_builder_config.hpp
  * @Author: Chandler (Weitang Ye) <weitang.ye@ntu.edu.sg>
  * @Description: Configuration for vertices builder algorithm.
  */
