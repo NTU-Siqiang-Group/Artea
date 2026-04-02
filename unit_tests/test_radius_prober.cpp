@@ -105,7 +105,7 @@ TEST_F(RadiusProberTest, CompareWithBruteforce) {
     // Reads nbrs[0].distance for all vertices, returns the requested quantile.
     radius_prober_t prober;
     auto t0 = std::chrono::high_resolution_clock::now();
-    auto probe_result = prober.probe(knn_graph, 0.0f);
+    auto probe_result = prober.probe(knn_graph, 1, 0.0f);
     auto t1 = std::chrono::high_resolution_clock::now();
     double probe_time_ms = std::chrono::duration_cast<std::chrono::microseconds>(t1 - t0).count() / 1000.0;
     ARTEA_INFO(fmt::format("RadiusProber min NN distance: {:.6f} (probe time: {:.2f} ms)", probe_result.radius, probe_time_ms));
@@ -177,7 +177,7 @@ TEST_F(RadiusProberTest, CompareWithBruteforce) {
     double avg_relative_error = (valid_count > 0) ? total_relative_error / valid_count : 0.0;
     double match_ratio = (valid_count > 0) ? static_cast<double>(exact_match_count) / valid_count : 0.0;
 
-    ARTEA_INFO(fmt::format("Samples: {}, valid: {}, exact_match: {}, duplicate_vecs: {}",
+    ARTEA_INFO(fmt::format("Samples: {}, non-duplicate: {}, exact_match: {}, duplicate_vecs: {}",
         num_samples, valid_count, exact_match_count, duplicate_vec_count));
     ARTEA_INFO(fmt::format("Match ratio: {:.2f}% ({}/{})", match_ratio * 100.0, exact_match_count, valid_count));
     ARTEA_INFO(fmt::format("Average relative error over {} samples: {:.4f}%", valid_count, avg_relative_error * 100.0));
@@ -194,11 +194,38 @@ TEST_F(RadiusProberTest, QuantileOrdering) {
     std::vector<float> quantiles = {0.0f, 0.01f, 0.05f, 0.1f, 0.5f, 0.9f};
     std::vector<distance_t> radii;
 
-    ARTEA_INFO("Quantile results:");
+    ARTEA_INFO("Quantile results (nbr_rank=1, nearest neighbor):");
     for (float q : quantiles) {
-        auto result = prober.probe(knn_graph, q);
+        auto result = prober.probe(knn_graph, 1, q);
         radii.push_back(result.radius);
         ARTEA_INFO(fmt::format("  quantile={:.2f}: radius={:.6f}", q, result.radius));
+    }
+
+    // Verify monotonically non-decreasing
+    for (size_t i = 1; i < radii.size(); ++i) {
+        EXPECT_LE(radii[i - 1], radii[i]);
+    }
+}
+
+/**
+ * @brief Probe distance quantiles at nbr_rank=16 (the 16th nearest neighbor).
+ */
+TEST_F(RadiusProberTest, Rank16QuantileOrdering) {
+    auto& provider = DataProvider::instance();
+    auto& knn_graph = provider.get_knn_graph();
+
+    radius_prober_t prober;
+
+    const vertex_num_t nbr_rank = 16;
+    std::vector<float> quantiles = {0.0f, 0.01f, 0.05f, 0.1f, 0.5f, 0.9f};
+    std::vector<distance_t> radii;
+
+    ARTEA_INFO(fmt::format("Quantile results (nbr_rank={}):", nbr_rank));
+    for (float q : quantiles) {
+        auto result = prober.probe(knn_graph, nbr_rank, q);
+        radii.push_back(result.radius);
+        ARTEA_INFO(fmt::format("  quantile={:.2f}: radius={:.6f} (valid_vertices={})",
+            q, result.radius, result.num_vertices));
     }
 
     // Verify monotonically non-decreasing

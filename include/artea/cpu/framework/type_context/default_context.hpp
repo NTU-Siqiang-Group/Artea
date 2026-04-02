@@ -134,6 +134,7 @@ using lsh_table_t = typename vertex_generator_traits_t::lsh_table_t;
 using lb_greedy_vg_t = typename vertex_generator_traits_t::lb_greedy_vg_t;
 using mb_greedy_vg_t = typename vertex_generator_traits_t::mb_greedy_vg_t;
 using random_vg_t = typename vertex_generator_traits_t::random_vg_t;
+using graph_mis_vg_t = typename vertex_generator_traits_t::graph_mis_vg_t;
 
 // Router types from RouterTraits
 using candidate_entry_t = typename router_traits_t::candidate_entry_t;

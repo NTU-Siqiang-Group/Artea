@@ -88,6 +88,7 @@
 #include <artea/cpu/vertex_generator/lb_greedy_vg.hpp>
 #include <artea/cpu/vertex_generator/mb_greedy_vg.hpp>
 #include <artea/cpu/vertex_generator/random_vg.hpp>
+#include <artea/cpu/vertex_generator/graph_mis_vg.hpp>
 
 #include <artea/cpu/edge_generator/nbr_log_table.hpp>
 #include <artea/cpu/edge_generator/neighbor_updater.hpp>

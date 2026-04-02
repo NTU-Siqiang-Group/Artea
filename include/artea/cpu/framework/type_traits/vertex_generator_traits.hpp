@@ -31,6 +31,7 @@ template <typename VertexGeneratorTraitsT> class LSHTable;
 template <typename VertexGeneratorTraitsT> class LBGreedyVG;
 template <typename VertexGeneratorTraitsT> class MBGreedyVG;
 template <typename VertexGeneratorTraitsT> class RandomVG;
+template <typename VertexGeneratorTraitsT> class GraphMISVG;
 
 template <typename ComputerTraitsT>
 struct VertexGeneratorTraits : virtual public ComputerTraitsT {
@@ -61,6 +62,9 @@ struct VertexGeneratorTraits : virtual public ComputerTraitsT {
 
     /** @brief Random vertex generator. */
     using random_vg_t = RandomVG<vertex_generator_traits_t>;
+
+    /** @brief Graph-based MIS vertex generator. */
+    using graph_mis_vg_t = GraphMISVG<vertex_generator_traits_t>;
 
     template <typename DerivedClassT>
     using vertex_generator_t = VertexGenerator<vertex_generator_traits_t, DerivedClassT>;
