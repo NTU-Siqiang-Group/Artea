@@ -139,20 +139,7 @@ public:
                 }
             }
             else {
-                vertex_id_t sacrificed_vid = ori_nbr.get_id();
-
-                /** @brief add append operation
-                  * append edge [conflict_vid -- sacrificed_vid]
-                  */
-                const nbr_arr_t& conflict_vertex_nbrs = this->_flat_graph.fetch_nbrs(conflict_vid);
-                if (conflict_vertex_nbrs.size() < max_sz ||
-                    conflict_vertex_nbrs[max_sz - 1].get_distance() > conflict_dist) {
-                    this->_log_table.write_log(
-                        /* executor_vid = */conflict_vid,
-                        /* nbr_id = */sacrificed_vid,
-                        /* new_edge_dist = */conflict_dist
-                    );
-                }
+                this->_log_table.write_log(conflict_vid, ori_nbr.get_id(), conflict_dist);
             }
         }
 

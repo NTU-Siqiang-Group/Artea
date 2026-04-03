@@ -46,6 +46,7 @@ class IndexFactory {
     using rnet_config_t = typename artea_graph::rnet_config_t;
 
     static constexpr vertex_num_t min_num_layer_vertex = GraphFactoryTraitsT::min_num_layer_vertex;
+    static constexpr layer_num_t max_expected_layers = 16;
 
 public:
 
@@ -72,6 +73,11 @@ public:
 
         auto& hier_vecs_manager = hierarchical_graph.get_hier_vecs_manager();
         auto& inter_layer_links = hierarchical_graph.get_inter_layer_links();
+
+        // Pre-allocate upper layer storage to prevent vector reallocation.
+        // FlatGraph stores _vecs_data as a const reference; if the vector
+        // holding upper layer data reallocates, those references dangle.
+        hier_vecs_manager.get_upper_layer_vecs().reserve(max_expected_layers);
 
         const vector_array_t* current_layer_vecs = &base_vecs;
         distance_t rnet_radius = distance_t(0);
@@ -128,12 +134,12 @@ public:
             double knn_time_s = std::chrono::duration_cast<std::chrono::microseconds>(t1 - t0).count() / 1e6;
             double mis_time_s = std::chrono::duration_cast<std::chrono::microseconds>(t2 - t1).count() / 1e6;
             double refine_time_s = std::chrono::duration_cast<std::chrono::microseconds>(t3 - t2).count() / 1e6;
-            ARTEA_INFO(fmt::format("Layer {}: {} vertices, rnet_radius={:.4f}, knn={:.2f}s, mis={:.2f}s, refine={:.2f}s, selected={}",
-                layer_id, current_layer_vecs->get_num_vecs(), rnet_radius,
-                knn_time_s, mis_time_s, refine_time_s, next_layer_subset.get_num_vecs()));
+            ARTEA_INFO(fmt::format("Built layer {}: {} vertices, next_layer_selected={}, rnet_radius={:.4f}, knn={:.2f}s, mis={:.2f}s, refine={:.2f}s",
+                layer_id, current_layer_vecs->get_num_vecs(), next_layer_subset.get_num_vecs(),
+                rnet_radius, knn_time_s, mis_time_s, refine_time_s));
             #else
-            ARTEA_INFO(fmt::format("Layer {}: {} vertices, rnet_radius={:.4f}, selected={}",
-                layer_id, current_layer_vecs->get_num_vecs(), rnet_radius, next_layer_subset.get_num_vecs()));
+            ARTEA_INFO(fmt::format("Built layer {}: {} vertices, next_layer_selected={}, rnet_radius={:.4f}",
+                layer_id, current_layer_vecs->get_num_vecs(), next_layer_subset.get_num_vecs(), rnet_radius));
             #endif
 
             // Step 5: Check termination
