@@ -25,7 +25,7 @@ using base_traits_t = BaseTraits<vec_num_t, vec_ele_t>;
 using computer_traits_t = ComputerTraits<base_traits_t, DistanceMetricsT::EUCLIDEAN>;
 using buffer_traits_t = BufferTraits<base_traits_t, BufferPolicyT::LOCKED_BUFFER_WITH_MUTEX, 32>;
 using index_traits_t = IndexTraits<base_traits_t>;
-using vertex_generator_traits_t = VertexGeneratorTraits<computer_traits_t>;
+using vertex_generator_traits_t = VertexGeneratorTraits<computer_traits_t, index_traits_t>;
 using router_traits_t = RouterTraits<computer_traits_t, index_traits_t, false>;
 using edge_generator_traits_t = EdgeGeneratorTraits<computer_traits_t, buffer_traits_t, index_traits_t, router_traits_t>;
 using graph_factory_traits_t = GraphFactoryTraits<
@@ -114,6 +114,7 @@ using search_graph_converter_t = typename index_traits_t::search_graph_converter
 using flat_graph_file_manager_t = typename index_traits_t::flat_graph_file_manager_t;
 using hierarchical_graph_file_manager_t = typename index_traits_t::hierarchical_graph_file_manager_t;
 using index_size_calculator_t = typename index_traits_t::index_size_calculator_t;
+using radius_prober_t = typename index_traits_t::radius_prober_t;
 
 // Edge generator types from EdgeGeneratorTraits
 using triangle_updater_t = typename edge_generator_traits_t::template triangle_updater_t<typename index_traits_t::conv_graph::index_t>;
@@ -133,6 +134,7 @@ using lsh_table_t = typename vertex_generator_traits_t::lsh_table_t;
 using lb_greedy_vg_t = typename vertex_generator_traits_t::lb_greedy_vg_t;
 using mb_greedy_vg_t = typename vertex_generator_traits_t::mb_greedy_vg_t;
 using random_vg_t = typename vertex_generator_traits_t::random_vg_t;
+using graph_mis_vg_t = typename vertex_generator_traits_t::graph_mis_vg_t;
 
 // Router types from RouterTraits
 using candidate_entry_t = typename router_traits_t::candidate_entry_t;
@@ -176,6 +178,13 @@ namespace knn_graph {
     using factory_t = typename graph_factory_traits_t::knn_graph::factory_t;
     using propagate_config_t = typename graph_factory_traits_t::knn_graph::propagate_config_t;
     using pruning_config_t = typename graph_factory_traits_t::knn_graph::pruning_config_t;
+}
+
+namespace symmetric_knn_graph {
+    using index_t = typename graph_factory_traits_t::symmetric_knn_graph::index_t;
+    using factory_t = typename graph_factory_traits_t::symmetric_knn_graph::factory_t;
+    using propagate_config_t = typename graph_factory_traits_t::symmetric_knn_graph::propagate_config_t;
+    using pruning_config_t = typename graph_factory_traits_t::symmetric_knn_graph::pruning_config_t;
 }
 
 namespace artea_graph {

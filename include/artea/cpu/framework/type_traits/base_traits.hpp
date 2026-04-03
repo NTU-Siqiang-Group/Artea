@@ -69,6 +69,11 @@ namespace knn_graph {
     template <typename BaseTraitsT> using PruningConfig = conv_graph::PruningConfig<BaseTraitsT>;
 }
 
+namespace symmetric_knn_graph {
+    template <typename BaseTraitsT> using PropagateConfig = conv_graph::PropagateConfig<BaseTraitsT>;
+    template <typename BaseTraitsT> using PruningConfig = conv_graph::PruningConfig<BaseTraitsT>;
+}
+
 /* ------ Enumerations ------ */
 enum class PruningConditionT;
 
@@ -234,6 +239,13 @@ public:
         knn_graph() = delete;
         using propagate_config_t = cpu::knn_graph::PropagateConfig<base_traits_t>;
         using pruning_config_t = cpu::knn_graph::PruningConfig<base_traits_t>;
+    };
+
+    /** @brief Namespace-specific type aliases for symmetric_knn_graph. */
+    struct symmetric_knn_graph {
+        symmetric_knn_graph() = delete;
+        using propagate_config_t = cpu::symmetric_knn_graph::PropagateConfig<base_traits_t>;
+        using pruning_config_t = cpu::symmetric_knn_graph::PruningConfig<base_traits_t>;
     };
 
     #ifdef ARTEA_PROFILING

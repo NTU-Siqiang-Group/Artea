@@ -67,7 +67,7 @@ TEST_F(HierarchicalGraphPersistenceTest, SnapshotAndRestore) {
     // Create pruning configs
     artea_graph::pruning_config_t bottom_pruning_config(1.0f, 0.0f);
     artea_graph::pruning_config_t upper_pruning_config(1.0f, 0.0f);
-    artea_graph::propagate_config_t propagate_config(4, 14);
+    artea_graph::propagate_config_t propagate_config(5, 12);
 
     // Create vertices builder config
     greedy_vertices_builder_config_t vertices_builder_config(

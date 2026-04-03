@@ -33,6 +33,10 @@ namespace knn_graph {
     template <typename IndexTraitsT>
     using IndexStructure = conv_graph::IndexStructure<IndexTraitsT>;
 }
+namespace symmetric_knn_graph {
+    template <typename IndexTraitsT>
+    using IndexStructure = conv_graph::IndexStructure<IndexTraitsT>;
+}
 namespace artea_graph {
     template <typename IndexTraitsT> class IndexStructure;
 }
@@ -44,6 +48,7 @@ template <typename IndexTraitsT> class SearchGraphConverter;
 template <typename IndexTraitsT> class FlatGraphFileManager;
 template <typename IndexTraitsT> class HierarchicalGraphFileManager;
 template <typename IndexTraitsT> class IndexSizeCalculator;
+template <typename IndexTraitsT> class RadiusProber;
 
 template <typename BaseTraitsT>
 struct IndexTraits : virtual public BaseTraitsT {
@@ -77,6 +82,12 @@ struct IndexTraits : virtual public BaseTraitsT {
         using index_t = cpu::knn_graph::IndexStructure<index_traits_t>;
     };
 
+    /** @brief Namespace-scoped index types for symmetric_knn_graph, extending BaseTraits::symmetric_knn_graph. */
+    struct symmetric_knn_graph : BaseTraitsT::symmetric_knn_graph {
+        symmetric_knn_graph() = delete;
+        using index_t = cpu::symmetric_knn_graph::IndexStructure<index_traits_t>;
+    };
+
     /** @brief Namespace-scoped index types for artea_graph, extending BaseTraits::artea_graph. */
     struct artea_graph : BaseTraitsT::artea_graph {
         artea_graph() = delete;
@@ -103,6 +114,9 @@ struct IndexTraits : virtual public BaseTraitsT {
 
     /** @brief Index size calculator type. */
     using index_size_calculator_t = IndexSizeCalculator<index_traits_t>;
+
+    /** @brief Radius prober type. */
+    using radius_prober_t = RadiusProber<index_traits_t>;
 
     /** @brief Minimum number of vertices required for a layer to continue building upper layers. */
     static constexpr uint32_t min_num_layer_vertex = 1024;

@@ -23,7 +23,8 @@ using namespace artea::cpu;
 
 using base_traits_t = BaseTraits<uint32_t, float>;
 using computer_traits_t = ComputerTraits<base_traits_t, DistanceMetricsT::EUCLIDEAN>;
-using vg_traits_t = VertexGeneratorTraits<computer_traits_t>;
+using index_traits_t = IndexTraits<base_traits_t>;
+using vg_traits_t = VertexGeneratorTraits<computer_traits_t, index_traits_t>;
 using dist_func_t = typename vg_traits_t::dist_func_t;
 using vector_array_t = typename vg_traits_t::vector_array_t;
 using lb_greedy_vg_t = typename vg_traits_t::lb_greedy_vg_t;

@@ -13,7 +13,7 @@
 // limitations under the License.
 
 /*
- * @FilePath: /Artea/include/artea/cpu/configs/layer_config.hpp
+ * @FilePath: /Artea/include/artea/cpu/index/layer_config.hpp
  * @Author: Chandler (Weitang Ye) <weitang.ye@ntu.edu.sg>
  * @Description: Configuration for graph layer parameters.
  */
