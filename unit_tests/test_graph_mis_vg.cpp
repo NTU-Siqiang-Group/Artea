@@ -130,7 +130,7 @@ private:
         radius_prober_t prober;
 
         std::vector<uint32_t> nbr_ranks = {1, 2, 4, 8, 16, 32};
-        std::vector<float> quantiles = {0.01f, 0.05f, 0.10f, 0.25f, 0.50f, 0.75f, 0.90f, 0.95f, 0.99f};
+        std::vector<float> quantiles = {0.01f, 0.05f, 0.10f, 0.25f, 0.50f, 0.75f, 0.90f, 0.95f, 0.99f, 0.995f, 0.999f};
 
         // Filter out nbr_ranks that exceed max_nbr_size
         std::vector<uint32_t> valid_ranks;
@@ -151,7 +151,7 @@ private:
         std::cout << std::string(12 + 11 * valid_ranks.size(), '-') << std::endl;
 
         for (float q : quantiles) {
-            std::cout << fmt::format("{:<12}", fmt::format("{:.2f}", q));
+            std::cout << fmt::format("{:<12}", fmt::format("{:.3f}", q));
             for (auto rank : valid_ranks) {
                 auto result = prober.probe(*knn_graph_, rank, q);
                 std::cout << fmt::format(" {:>10.4f}", result.radius);

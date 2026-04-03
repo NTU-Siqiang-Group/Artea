@@ -146,7 +146,7 @@ private:
 
         /** -------------------- Optimazation ------------------------------------- ***/
         /** @brief A sparse graph is effecient enough to search nearest neighbors     */
-        flat_graph.layer_config().max_nbr_size(init_nbr_size);
+        flat_graph.layer_config().max_nbr_size(max_nbr_size / 3);
         /** ----------------------------------------------------------------------- ***/
 
         random_eg_t random_eg(dist_func);
