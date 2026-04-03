@@ -43,8 +43,8 @@
 #include <artea/cpu/containers/vertex_subset.hpp>
 #include <artea/cpu/containers/four_ary_heap.hpp>
 
-#include <artea/cpu/configs/layer_config.hpp>
-#include <artea/cpu/configs/vertices_builder_config.hpp>
+#include <artea/cpu/index/layer_config.hpp>
+#include <artea/cpu/index/artea_graph/vertices_builder_config.hpp>
 #include <artea/cpu/index/neighbor.hpp>
 #include <artea/cpu/index/flat_graph.hpp>
 #include <artea/cpu/index/flat_search_graph.hpp>
@@ -63,6 +63,9 @@
 #include <artea/cpu/index/knn_graph/configs.hpp>
 #include <artea/cpu/index/knn_graph/index_structure.hpp>
 #include <artea/cpu/index/knn_graph/index_factory.hpp>
+#include <artea/cpu/index/symmetric_knn_graph/configs.hpp>
+#include <artea/cpu/index/symmetric_knn_graph/index_structure.hpp>
+#include <artea/cpu/index/symmetric_knn_graph/index_factory.hpp>
 #include <artea/cpu/index/artea_graph/configs.hpp>
 #include <artea/cpu/index/artea_graph/index_structure.hpp>
 #include <artea/cpu/index/artea_graph/index_factory.hpp>
@@ -88,6 +91,7 @@
 #include <artea/cpu/vertex_generator/lb_greedy_vg.hpp>
 #include <artea/cpu/vertex_generator/mb_greedy_vg.hpp>
 #include <artea/cpu/vertex_generator/random_vg.hpp>
+#include <artea/cpu/vertex_generator/graph_mis_vg.hpp>
 
 #include <artea/cpu/edge_generator/nbr_log_table.hpp>
 #include <artea/cpu/edge_generator/neighbor_updater.hpp>
@@ -108,6 +112,7 @@
 #include <artea/cpu/utils/parallel.hpp>
 #include <artea/cpu/utils/random_seq.hpp>
 #include <artea/cpu/utils/distance_prober.hpp>
+#include <artea/cpu/utils/radius_prober.hpp>
 #include <artea/cpu/utils/index_register_util.hpp>
 #include <artea/cpu/utils/simd_distance.hpp>
 #include <artea/cpu/utils/simd_fma.hpp>

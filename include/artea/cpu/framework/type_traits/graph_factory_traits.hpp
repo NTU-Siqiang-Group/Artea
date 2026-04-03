@@ -33,6 +33,9 @@ namespace artea_graph {
 namespace knn_graph {
     template <typename GraphFactoryTraitsT> class IndexFactory;
 }
+namespace symmetric_knn_graph {
+    template <typename GraphFactoryTraitsT> class IndexFactory;
+}
 
 template <
     typename VertexGeneratorTraitsT,
@@ -55,6 +58,12 @@ struct GraphFactoryTraits :
     struct knn_graph : EdgeGeneratorTraitsT::knn_graph {
         knn_graph() = delete;
         using factory_t = cpu::knn_graph::IndexFactory<graph_factory_traits_t>;
+    };
+
+    /** @brief Namespace-scoped factory types for symmetric_knn_graph, extending IndexTraits::symmetric_knn_graph. */
+    struct symmetric_knn_graph : EdgeGeneratorTraitsT::symmetric_knn_graph {
+        symmetric_knn_graph() = delete;
+        using factory_t = cpu::symmetric_knn_graph::IndexFactory<graph_factory_traits_t>;
     };
 
     /** @brief Namespace-scoped factory types for artea_graph, extending IndexTraits::artea_graph. */

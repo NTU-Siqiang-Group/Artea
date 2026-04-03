@@ -41,6 +41,8 @@ struct TestConfig {
     uint32_t queue_start;
     uint32_t queue_end;
     uint32_t queue_step;
+    uint32_t warmup_runs;
+    uint32_t test_runs;
     bool verbose;
 } g_config;
 
@@ -173,25 +175,36 @@ TEST_F(KnnGraphTest, QueryRecall) {
         );
         router.initialize();
 
-        // Query all vectors
-        auto start_time = std::chrono::high_resolution_clock::now();
-        knn_results_t results = router.batch_query(query_vecs);
-        auto end_time = std::chrono::high_resolution_clock::now();
+        // Warmup runs
+        for (uint32_t w = 0; w < g_config.warmup_runs; ++w) {
+            [[maybe_unused]] auto _ = router.batch_query(query_vecs);
+        }
 
-        auto duration = std::chrono::duration_cast<std::chrono::microseconds>(end_time - start_time);
+        // Test runs with averaging
+        double total_time_us = 0.0;
+        float total_recall = 0.0f;
+        for (uint32_t r = 0; r < g_config.test_runs; ++r) {
+            auto start_time = std::chrono::high_resolution_clock::now();
+            knn_results_t results = router.batch_query(query_vecs);
+            auto end_time = std::chrono::high_resolution_clock::now();
+            total_time_us += std::chrono::duration_cast<std::chrono::microseconds>(end_time - start_time).count();
+            total_recall += recall_estimator.calculate_recall_at_k(results, groundtruth, g_config.topk, query_vecs.get_num_vecs());
+        }
+        double avg_time_us = total_time_us / g_config.test_runs;
 
         // Compute metrics
         QueryResult result;
         result.candidate_queue_size = queue_size;
-        result.query_time_ms = duration.count() / 1000.0;
-        result.avg_query_time_us = static_cast<double>(duration.count()) / query_vecs.get_num_vecs();
-        result.throughput_qps = query_vecs.get_num_vecs() * 1000000.0 / duration.count();
-        result.recall = recall_estimator.calculate_recall_at_k(results, groundtruth, g_config.topk, query_vecs.get_num_vecs());
+        result.query_time_ms = avg_time_us / 1000.0;
+        result.avg_query_time_us = avg_time_us / query_vecs.get_num_vecs();
+        result.throughput_qps = query_vecs.get_num_vecs() * 1000000.0 / avg_time_us;
+        result.recall = total_recall / g_config.test_runs;
 
         g_test_results.query_results.push_back(result);
 
-        ARTEA_INFO(fmt::format("CandidateQueue={:3}: Recall@{}={:.4f}, QPS={:8.2f}, AvgTime={:.2f}ms",
-            queue_size, g_config.topk, result.recall, result.throughput_qps, result.query_time_ms));
+        ARTEA_INFO(fmt::format("CandidateQueue={:3}: Recall@{}={:.4f}, QPS={:8.2f}, AvgTime={:.2f}ms ({}w+{}r)",
+            queue_size, g_config.topk, result.recall, result.throughput_qps, result.query_time_ms,
+            g_config.warmup_runs, g_config.test_runs));
     }
 
     // Expect reasonable recall for at least one configuration
@@ -211,16 +224,22 @@ int main(int argc, char** argv) {
     argparse::ArgumentParser program("test_knn_graph");
     program.add_argument("-c", "--config").default_value(std::string("./configs/datasets.json"));
     program.add_argument("-d", "--dataset").default_value(std::string("sift-1m"));
-    program.add_argument("--max-nbr-size").default_value(64u).scan<'u', uint32_t>();
-    program.add_argument("--extracted-nbr-size").default_value(64u).scan<'u', uint32_t>();
-    program.add_argument("--num-build-loops").default_value(4u).scan<'u', uint32_t>();
-    program.add_argument("--num-triu-iters").default_value(14u).scan<'u', uint32_t>();
-    program.add_argument("--prefill-ratio").default_value(0.5f).scan<'g', float>();
+    program.add_argument("--max-nbr-size").default_value(96u).scan<'u', uint32_t>();
+    program.add_argument("--extracted-nbr-size").default_value(96u).scan<'u', uint32_t>();
+    program.add_argument("--num-build-loops").default_value(5u).scan<'u', uint32_t>();
+    program.add_argument("--num-triu-iters").default_value(12u).scan<'u', uint32_t>();
+    program.add_argument("--prefill-ratio").default_value(0.34f).scan<'g', float>();
     program.add_argument("--num-routing-loops").default_value(1u).scan<'u', uint32_t>();
+    program.add_argument("--routing-topk").default_value(64u).scan<'u', uint32_t>()
+        .help("Routing updater top-k (default: 96)");
+    program.add_argument("--routing-queue-size").default_value(96u).scan<'u', uint32_t>()
+        .help("Routing updater candidate queue size (default: 128)");
     program.add_argument("-k", "--topk").default_value(20u).scan<'u', uint32_t>();
     program.add_argument("--candidate-queue-config")
         .default_value(std::string("40,200,20"))
         .help("Candidate queue size grid search: start,end,step (default: 40,200,20)");
+    program.add_argument("--warmup-runs").default_value(5u).scan<'u', uint32_t>();
+    program.add_argument("--test-runs").default_value(10u).scan<'u', uint32_t>();
     program.add_argument("-v", "--verbose").default_value(false).implicit_value(true);
 
     try {
@@ -242,7 +261,9 @@ int main(int argc, char** argv) {
         program.get<uint32_t>("--num-build-loops"),
         program.get<uint32_t>("--num-triu-iters"),
         program.get<float>("--prefill-ratio"),
-        program.get<uint32_t>("--num-routing-loops")
+        program.get<uint32_t>("--num-routing-loops"),
+        program.get<uint32_t>("--routing-topk"),
+        program.get<uint32_t>("--routing-queue-size")
     );
     g_config.extracted_nbr_size = program.get<uint32_t>("--extracted-nbr-size");
     g_config.topk = program.get<uint32_t>("--topk");
@@ -265,6 +286,8 @@ int main(int argc, char** argv) {
         g_config.queue_step = values[2];
     }
 
+    g_config.warmup_runs = program.get<uint32_t>("--warmup-runs");
+    g_config.test_runs = program.get<uint32_t>("--test-runs");
     g_config.verbose = program.get<bool>("--verbose");
 
     // Print test configuration
@@ -279,6 +302,8 @@ int main(int argc, char** argv) {
     std::cout << "Routing loops: " << g_config.propagate_config.num_routing_loops() << std::endl;
     std::cout << "Top-k: " << g_config.topk << std::endl;
     std::cout << "Candidate queue config: " << g_config.queue_start << "," << g_config.queue_end << "," << g_config.queue_step << std::endl;
+    std::cout << "Warmup runs: " << g_config.warmup_runs << std::endl;
+    std::cout << "Test runs: " << g_config.test_runs << std::endl;
     std::cout << "Verbose: " << (g_config.verbose ? "true" : "false") << std::endl;
     std::cout << "==========================\n" << std::endl;
 
@@ -299,6 +324,8 @@ int main(int argc, char** argv) {
     std::cout << fmt::format("  Prefill Ratio:          {}", g_config.propagate_config.prefill_ratio()) << std::endl;
     std::cout << fmt::format("  Routing Loops:          {}", g_config.propagate_config.num_routing_loops()) << std::endl;
     std::cout << fmt::format("  Top-k:                  {}", g_config.topk) << std::endl;
+    std::cout << fmt::format("  Warmup runs:            {}", g_config.warmup_runs) << std::endl;
+    std::cout << fmt::format("  Test runs:              {}", g_config.test_runs) << std::endl;
     std::cout << "\n--- Graph Construction ---" << std::endl;
     std::cout << fmt::format("  Build Time:             {:.2f} s", g_test_results.build_time_s) << std::endl;
     std::cout << fmt::format("  Num Vertices:           {}", g_test_results.num_vertices) << std::endl;

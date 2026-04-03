@@ -51,6 +51,8 @@ struct PropagateConfigParams {
     uint32_t num_triu_iters;
     float prefill_ratio;
     uint32_t num_routing_loops;
+    uint32_t routing_topk;
+    uint32_t routing_queue_size;
 };
 
 struct TestConfig {
@@ -70,6 +72,9 @@ struct TestConfig {
     uint32_t queue_step;
     uint32_t bl_extracted_nbr_size;
     uint32_t ul_extracted_nbr_size;
+
+    uint32_t warmup_runs;
+    uint32_t test_runs;
 
     bool verbose;
 } g_config;
@@ -200,7 +205,9 @@ protected:
             g_config.propagate_config.num_build_loops,
             g_config.propagate_config.num_triu_iters,
             g_config.propagate_config.prefill_ratio,
-            g_config.propagate_config.num_routing_loops
+            g_config.propagate_config.num_routing_loops,
+            g_config.propagate_config.routing_topk,
+            g_config.propagate_config.routing_queue_size
         );
 
         // Create vertices builder config
@@ -393,8 +400,8 @@ TEST_F(ArteaGraphConstructTest, QueryRecall) {
 
     recall_estimator_t recall_estimator;
 
-    constexpr uint32_t NUM_WARMUP_RUNS = 10;
-    constexpr uint32_t NUM_TEST_RUNS = 50;
+    const uint32_t NUM_WARMUP_RUNS = g_config.warmup_runs;
+    const uint32_t NUM_TEST_RUNS = g_config.test_runs;
 
     for (uint32_t queue_size = g_config.queue_start; queue_size <= g_config.queue_end; queue_size += g_config.queue_step) {
         // Create hierarchical router with current queue size
@@ -484,6 +491,10 @@ int main(int argc, char** argv) {
     program.add_argument("--num-triu-iters").default_value(12u).scan<'u', uint32_t>();
     program.add_argument("--prefill-ratio").default_value(0.34f).scan<'g', float>();
     program.add_argument("--num-routing-loops").default_value(1u).scan<'u', uint32_t>();
+    program.add_argument("--routing-topk").default_value(64u).scan<'u', uint32_t>()
+        .help("Routing updater top-k (default: 96)");
+    program.add_argument("--routing-queue-size").default_value(96u).scan<'u', uint32_t>()
+        .help("Routing updater candidate queue size (default: 128)");
 
     // Router parameters
     program.add_argument("-k", "--topk").default_value(20u).scan<'u', uint32_t>();
@@ -495,6 +506,8 @@ int main(int argc, char** argv) {
     program.add_argument("--ul-extracted-nbr-size").default_value(32u).scan<'u', uint32_t>()
         .help("Upper layer extracted neighbor size (defaults to 32)");
 
+    program.add_argument("--warmup-runs").default_value(5u).scan<'u', uint32_t>();
+    program.add_argument("--test-runs").default_value(10u).scan<'u', uint32_t>();
     program.add_argument("-v", "--verbose").default_value(false).implicit_value(true);
 
     try {
@@ -532,6 +545,8 @@ int main(int argc, char** argv) {
     g_config.propagate_config.num_triu_iters = program.get<uint32_t>("--num-triu-iters");
     g_config.propagate_config.prefill_ratio = program.get<float>("--prefill-ratio");
     g_config.propagate_config.num_routing_loops = program.get<uint32_t>("--num-routing-loops");
+    g_config.propagate_config.routing_topk = program.get<uint32_t>("--routing-topk");
+    g_config.propagate_config.routing_queue_size = program.get<uint32_t>("--routing-queue-size");
 
     g_config.topk = program.get<uint32_t>("--topk");
 
@@ -555,6 +570,9 @@ int main(int argc, char** argv) {
 
     g_config.bl_extracted_nbr_size = program.get<uint32_t>("--bl-extracted-nbr-size");
     g_config.ul_extracted_nbr_size = program.get<uint32_t>("--ul-extracted-nbr-size");
+
+    g_config.warmup_runs = program.get<uint32_t>("--warmup-runs");
+    g_config.test_runs = program.get<uint32_t>("--test-runs");
 
     g_config.verbose = program.get<bool>("--verbose");
 
@@ -580,11 +598,15 @@ int main(int argc, char** argv) {
     std::cout << "Triangle updater iterations: " << g_config.propagate_config.num_triu_iters << std::endl;
     std::cout << "Prefill ratio: " << g_config.propagate_config.prefill_ratio << std::endl;
     std::cout << "Routing loops: " << g_config.propagate_config.num_routing_loops << std::endl;
+    std::cout << "Routing top-k: " << g_config.propagate_config.routing_topk << std::endl;
+    std::cout << "Routing queue size: " << g_config.propagate_config.routing_queue_size << std::endl;
     std::cout << "\n--- Router Configuration ---" << std::endl;
     std::cout << "Top-k: " << g_config.topk << std::endl;
     std::cout << "Candidate queue config: " << g_config.queue_start << "," << g_config.queue_end << "," << g_config.queue_step << std::endl;
     std::cout << "Bottom layer extracted nbr size: " << g_config.bl_extracted_nbr_size << std::endl;
     std::cout << "Upper layer extracted nbr size: " << g_config.ul_extracted_nbr_size << std::endl;
+    std::cout << "Warmup runs: " << g_config.warmup_runs << std::endl;
+    std::cout << "Test runs: " << g_config.test_runs << std::endl;
     std::cout << "Verbose: " << (g_config.verbose ? "true" : "false") << std::endl;
     std::cout << "==========================\n" << std::endl;
 
