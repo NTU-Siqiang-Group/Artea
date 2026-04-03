@@ -47,25 +47,16 @@ int main(int argc, char** argv) {
         .default_value(std::string("graph_index_repo/artea/"))
         .help("Output directory for the graph index");
 
-    // Vertices builder parameters
-    program.add_argument("--beta").default_value(1.44f).scan<'g', float>();
-    program.add_argument("--coverage-ratio").default_value(0.999f).scan<'g', float>();
-    program.add_argument("--confidence").default_value(0.950f).scan<'g', float>();
-    program.add_argument("--max-result-ratio").default_value(0.2f).scan<'g', float>();
-    program.add_argument("--sampling-batch-size").default_value(2048u).scan<'u', uint32_t>();
     program.add_argument("--shuffle-seed").scan<'u', uint32_t>()
         .help("Shuffle seed (if not specified, uses random seed)");
 
     // Bottom layer config
     program.add_argument("--bl-max-nbr-size").default_value(96u).scan<'u', uint32_t>();
-    // Upper layer config
-    program.add_argument("--ul-max-nbr-size").default_value(96u).scan<'u', uint32_t>();
-
-    // Bottom layer pruning config
     program.add_argument("--bl-scale-coeffs").default_value(1.10f).scan<'g', float>();
     program.add_argument("--bl-shifted-coeffs").default_value(0.10f).scan<'g', float>();
 
-    // Upper layer pruning config
+    // Upper layer config
+    program.add_argument("--ul-max-nbr-size").default_value(96u).scan<'u', uint32_t>();
     program.add_argument("--ul-scale-coeffs").default_value(1.10f).scan<'g', float>();
     program.add_argument("--ul-shifted-coeffs").default_value(0.10f).scan<'g', float>();
 
@@ -73,8 +64,17 @@ int main(int argc, char** argv) {
     program.add_argument("--num-build-loops").default_value(5u).scan<'u', uint32_t>();
     program.add_argument("--num-triu-iters").default_value(12u).scan<'u', uint32_t>();
     program.add_argument("--prefill-ratio").default_value(0.34f).scan<'g', float>();
-    program.add_argument("--num-routing-loops").default_value(1u).scan<'u', uint32_t>()
-        .help("Number of routing updater iterations applied at the end of the final build loop");
+    program.add_argument("--num-routing-loops").default_value(1u).scan<'u', uint32_t>();
+    program.add_argument("--routing-topk").default_value(64u).scan<'u', uint32_t>();
+    program.add_argument("--routing-queue-size").default_value(96u).scan<'u', uint32_t>();
+
+    // R-net config
+    program.add_argument("--mis-radix").default_value(1.2f).scan<'g', float>()
+        .help("MIS coarse-to-fine radix (default: 1.2)");
+    program.add_argument("--mis-max-power").default_value(12u).scan<'u', uint32_t>()
+        .help("MIS coarse-to-fine max power (default: 12)");
+    program.add_argument("--beta").default_value(1.44f).scan<'g', float>()
+        .help("Radius growth between layers (default: 1.44)");
 
     try {
         program.parse_args(argc, argv);
@@ -92,7 +92,6 @@ int main(int argc, char** argv) {
     // Load dataset
     ARTEA_INFO(fmt::format("Loading dataset: {} from {}", dataset_name, config_path));
     vector_dataset_t dataset(config_path, dataset_name);
-    dist_func_t dist_func(dataset.get_base_vecs().get_vec_dim());
 
     const auto& base_vecs = dataset.get_base_vecs();
     ARTEA_INFO(fmt::format("Dataset loaded: {} vectors, {} dims",
@@ -105,59 +104,32 @@ int main(int argc, char** argv) {
         : std::random_device{}();
     shuffle_seed = dataset.shuffle_in_place(shuffle_seed);
 
-    // Probe min_radius using radius prober
-    ARTEA_INFO("Probing min_radius from dataset...");
-    constexpr float QUANTILE = 0.001f;
-    constexpr float CONFIDENCE = 0.95f;
-    constexpr float RELATIVE_ERR = 0.05f;
-
-    distance_prober_t prober(dist_func);
-    auto probe_start = std::chrono::high_resolution_clock::now();
-    auto probe_result = prober.probe(base_vecs, QUANTILE, CONFIDENCE, RELATIVE_ERR);
-    auto probe_end = std::chrono::high_resolution_clock::now();
-    auto probe_duration = std::chrono::duration_cast<std::chrono::milliseconds>(probe_end - probe_start);
-
-    float min_radius = probe_result.radius;
-    ARTEA_INFO(fmt::format("Probed min_radius: {:.6f} (quantile: {:.4f}, samples: {}, time: {:.2f}s)",
-        min_radius, probe_result.quantile, probe_result.num_dists_sampled, probe_duration.count() / 1000.0));
-
     // Create layer configs
     uint32_t bl_max_nbr_size = program.get<uint32_t>("--bl-max-nbr-size");
-    uint32_t bl_reserved_nbr_size = static_cast<uint32_t>(bl_max_nbr_size * 1.5);
-
     uint32_t ul_max_nbr_size = program.get<uint32_t>("--ul-max-nbr-size");
-    uint32_t ul_reserved_nbr_size = static_cast<uint32_t>(ul_max_nbr_size * 1.5);
 
-    layer_config_t bottom_layer_config(bl_max_nbr_size, bl_reserved_nbr_size);
-    layer_config_t upper_layer_config(ul_max_nbr_size, ul_reserved_nbr_size);
+    layer_config_t bottom_layer_config(bl_max_nbr_size, static_cast<uint32_t>(bl_max_nbr_size * 1.5));
+    layer_config_t upper_layer_config(ul_max_nbr_size, static_cast<uint32_t>(ul_max_nbr_size * 1.5));
 
-    // Create pruning configs (per layer)
     artea_graph::pruning_config_t bottom_pruning_config(
         program.get<float>("--bl-scale-coeffs"),
-        program.get<float>("--bl-shifted-coeffs")
-    );
+        program.get<float>("--bl-shifted-coeffs"));
     artea_graph::pruning_config_t upper_pruning_config(
         program.get<float>("--ul-scale-coeffs"),
-        program.get<float>("--ul-shifted-coeffs")
-    );
+        program.get<float>("--ul-shifted-coeffs"));
 
-    // Create propagate config (shared between layers)
     artea_graph::propagate_config_t propagate_config(
         program.get<uint32_t>("--num-build-loops"),
         program.get<uint32_t>("--num-triu-iters"),
         program.get<float>("--prefill-ratio"),
-        program.get<uint32_t>("--num-routing-loops")
-    );
+        program.get<uint32_t>("--num-routing-loops"),
+        program.get<uint32_t>("--routing-topk"),
+        program.get<uint32_t>("--routing-queue-size"));
 
-    // Create vertices builder config
-    greedy_vertices_builder_config_t vertices_builder_config(
-        min_radius,
-        program.get<float>("--beta"),
-        program.get<float>("--coverage-ratio"),
-        program.get<float>("--confidence"),
-        program.get<float>("--max-result-ratio"),
-        program.get<uint32_t>("--sampling-batch-size")
-    );
+    artea_graph::rnet_config_t rnet_config(
+        program.get<float>("--mis-radix"),
+        program.get<uint32_t>("--mis-max-power"),
+        program.get<float>("--beta"));
 
     // Construct hierarchical graph via factory
     ARTEA_INFO("Constructing hierarchical Artea graph...");
@@ -165,12 +137,9 @@ int main(int argc, char** argv) {
 
     auto hierarchical_graph = artea_graph::factory_t::construct_graph(
         base_vecs,
-        bottom_layer_config,
-        upper_layer_config,
-        bottom_pruning_config,
-        upper_pruning_config,
-        propagate_config,
-        vertices_builder_config
+        bottom_layer_config, upper_layer_config,
+        bottom_pruning_config, upper_pruning_config,
+        propagate_config, rnet_config
     );
 
     auto construction_end = std::chrono::high_resolution_clock::now();
@@ -218,52 +187,43 @@ int main(int argc, char** argv) {
 
     // Output layer-by-layer statistics
     std::cout << "\n  Layer Statistics:" << std::endl;
-    std::cout << fmt::format("  {:<8} {:<15} {:<15} {:<20}", "Layer", "Vertices", "Edges", "R-Net Radius") << std::endl;
-    std::cout << "  " << std::string(60, '-') << std::endl;
+    std::cout << fmt::format("  {:<8} {:<15} {:<15}", "Layer", "Vertices", "Edges") << std::endl;
+    std::cout << "  " << std::string(40, '-') << std::endl;
 
-    float current_radius = min_radius * program.get<float>("--beta");
     for (uint32_t layer_id = 0; layer_id < hierarchical_graph.get_num_layers(); ++layer_id) {
         const auto& layer_vecs = hierarchical_graph.get_hier_vecs_manager().get_layer_vecs(layer_id);
         uint32_t num_vertices = layer_vecs.get_num_vecs();
 
-        // Count edges for this layer
         uint64_t num_edges = 0;
         const auto& layer_graph = hierarchical_graph.get_layer_graph(layer_id);
         for (uint32_t v = 0; v < num_vertices; ++v) {
             num_edges += layer_graph.fetch_nbrs(v).size();
         }
 
-        // Display layer info
-        if (layer_id == 0) {
-            std::cout << fmt::format("  {:<8} {:<15} {:<15} {:<20}",
-                layer_id, num_vertices, num_edges, "N/A (base layer)") << std::endl;
-        } else {
-            std::cout << fmt::format("  {:<8} {:<15} {:<15} {:<20.6f}",
-                layer_id, num_vertices, num_edges, current_radius) << std::endl;
-            current_radius *= program.get<float>("--beta");
-        }
+        std::cout << fmt::format("  {:<8} {:<15} {:<15}",
+            layer_id, num_vertices, num_edges) << std::endl;
     }
-    std::cout << std::endl;
-    std::cout << "  Bottom layer pruning:" << std::endl;
-    std::cout << fmt::format("    Max nbr size:         {}", bl_max_nbr_size) << std::endl;
+
+    std::cout << "\n--- Layer Configuration ---" << std::endl;
+    std::cout << fmt::format("  Bottom max nbr size:    {}", bl_max_nbr_size) << std::endl;
+    std::cout << fmt::format("  Upper max nbr size:     {}", ul_max_nbr_size) << std::endl;
+    std::cout << "  Bottom pruning:" << std::endl;
     std::cout << fmt::format("    Scale coeffs:         {}", program.get<float>("--bl-scale-coeffs")) << std::endl;
     std::cout << fmt::format("    Shifted coeffs:       {}", program.get<float>("--bl-shifted-coeffs")) << std::endl;
-    std::cout << "  Upper layer pruning:" << std::endl;
-    std::cout << fmt::format("    Max nbr size:         {}", ul_max_nbr_size) << std::endl;
+    std::cout << "  Upper pruning:" << std::endl;
     std::cout << fmt::format("    Scale coeffs:         {}", program.get<float>("--ul-scale-coeffs")) << std::endl;
     std::cout << fmt::format("    Shifted coeffs:       {}", program.get<float>("--ul-shifted-coeffs")) << std::endl;
-    std::cout << "--- Propagate Config ---" << std::endl;
+    std::cout << "\n--- Propagate Config ---" << std::endl;
     std::cout << fmt::format("  Build loops:            {}", program.get<uint32_t>("--num-build-loops")) << std::endl;
     std::cout << fmt::format("  Triangle updater iters: {}", program.get<uint32_t>("--num-triu-iters")) << std::endl;
     std::cout << fmt::format("  Prefill ratio:          {}", program.get<float>("--prefill-ratio")) << std::endl;
     std::cout << fmt::format("  Routing loops:          {}", program.get<uint32_t>("--num-routing-loops")) << std::endl;
-    std::cout << "--- Vertices Builder Config ---" << std::endl;
-    std::cout << fmt::format("  Min radius:             {:.6f} (auto-probed)", min_radius) << std::endl;
-    std::cout << fmt::format("  Beta:                   {}", program.get<float>("--beta")) << std::endl;
-    std::cout << fmt::format("  Coverage ratio:         {}", program.get<float>("--coverage-ratio")) << std::endl;
-    std::cout << fmt::format("  Confidence:             {}", program.get<float>("--confidence")) << std::endl;
-    std::cout << fmt::format("  Max result ratio:       {}", program.get<float>("--max-result-ratio")) << std::endl;
-    std::cout << fmt::format("  Sampling batch size:    {}", program.get<uint32_t>("--sampling-batch-size")) << std::endl;
+    std::cout << fmt::format("  Routing top-k:          {}", program.get<uint32_t>("--routing-topk")) << std::endl;
+    std::cout << fmt::format("  Routing queue size:     {}", program.get<uint32_t>("--routing-queue-size")) << std::endl;
+    std::cout << "\n--- R-Net Config ---" << std::endl;
+    std::cout << fmt::format("  MIS radix:              {}", program.get<float>("--mis-radix")) << std::endl;
+    std::cout << fmt::format("  MIS max power:          {}", program.get<uint32_t>("--mis-max-power")) << std::endl;
+    std::cout << fmt::format("  R-net beta:             {}", program.get<float>("--beta")) << std::endl;
     std::cout << "\n--- Construction Time ---" << std::endl;
     std::cout << fmt::format("  Graph construction:     {:.2f} s", total_time_s) << std::endl;
     std::cout << "\n--- Output ---" << std::endl;
@@ -294,8 +254,9 @@ int main(int argc, char** argv) {
 
     nlohmann::json index_params;
     index_params["dataset"] = dataset_name;
-    index_params["min_radius"] = min_radius;
-    index_params["beta"] = std::round(program.get<float>("--beta") * 100.0f) / 100.0f;
+    index_params["mis_radix"] = program.get<float>("--mis-radix");
+    index_params["mis_max_power"] = program.get<uint32_t>("--mis-max-power");
+    index_params["rnet_beta"] = std::round(program.get<float>("--beta") * 100.0f) / 100.0f;
     index_params["bl_max_nbr_size"] = program.get<uint32_t>("--bl-max-nbr-size");
     index_params["ul_max_nbr_size"] = program.get<uint32_t>("--ul-max-nbr-size");
 

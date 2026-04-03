@@ -97,15 +97,11 @@ public:
         artea_graph::pruning_config_t bottom_pruning(1.10f, 0.10f);
         artea_graph::pruning_config_t upper_pruning(1.10f, 0.10f);
         artea_graph::propagate_config_t propagate_cfg(5, 12, 0.34f);
-
-        ARTEA_INFO("Probing min_radius...");
-        distance_prober_t prober(*dist_func_);
-        auto probe = prober.probe(base_vecs, 0.001f, 0.95f, 0.05f);
-        greedy_vertices_builder_config_t vb_cfg(probe.radius, 1.44f, 0.999f, 0.95f, 0.2f, 2048);
+        artea_graph::rnet_config_t rnet_cfg;  // defaults: radix=1.2, max_power=12, beta=1.44
 
         hgraph_ = std::make_unique<artea_graph::index_t>(
             artea_graph::factory_t::construct_graph(
-                base_vecs, bottom_cfg, upper_cfg, bottom_pruning, upper_pruning, propagate_cfg, vb_cfg
+                base_vecs, bottom_cfg, upper_cfg, bottom_pruning, upper_pruning, propagate_cfg, rnet_cfg
             )
         );
 

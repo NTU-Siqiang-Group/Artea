@@ -62,6 +62,7 @@ namespace conv_graph {
 namespace artea_graph {
     template <typename BaseTraitsT> using PropagateConfig = conv_graph::PropagateConfig<BaseTraitsT>;
     template <typename BaseTraitsT> using PruningConfig = conv_graph::PruningConfig<BaseTraitsT>;
+    template <typename BaseTraitsT> struct RNetConfig;
 }
 
 namespace knn_graph {
@@ -232,6 +233,7 @@ public:
         artea_graph() = delete;
         using propagate_config_t = cpu::artea_graph::PropagateConfig<base_traits_t>;
         using pruning_config_t = cpu::artea_graph::PruningConfig<base_traits_t>;
+        using rnet_config_t = cpu::artea_graph::RNetConfig<base_traits_t>;
     };
 
     /** @brief Namespace-specific type aliases for knn_graph. */

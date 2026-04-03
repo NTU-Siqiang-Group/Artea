@@ -69,10 +69,8 @@ TEST_F(HierarchicalGraphPersistenceTest, SnapshotAndRestore) {
     artea_graph::pruning_config_t upper_pruning_config(1.0f, 0.0f);
     artea_graph::propagate_config_t propagate_config(5, 12);
 
-    // Create vertices builder config
-    greedy_vertices_builder_config_t vertices_builder_config(
-        34875.0f, 2.56f, 0.96f, 0.99f, 0.2f, 2048
-    );
+    // Create R-net config
+    artea_graph::rnet_config_t rnet_config;  // defaults: radix=1.2, max_power=12, beta=1.44
 
     // Create hierarchical graph
     ARTEA_INFO("Constructing hierarchical graph...");
@@ -85,7 +83,7 @@ TEST_F(HierarchicalGraphPersistenceTest, SnapshotAndRestore) {
         bottom_pruning_config,
         upper_pruning_config,
         propagate_config,
-        vertices_builder_config
+        rnet_config
     );
 
     auto end_time = std::chrono::high_resolution_clock::now();
