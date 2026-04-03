@@ -197,10 +197,10 @@ int main(int argc, char** argv) {
     program.add_argument("--knn-num-triu-iters").default_value(12u).scan<'u', uint32_t>();
     program.add_argument("--knn-prefill-ratio").default_value(0.34f).scan<'g', float>();
     program.add_argument("--knn-num-routing-loops").default_value(1u).scan<'u', uint32_t>();
-    program.add_argument("--knn-routing-topk").default_value(0u).scan<'u', uint32_t>()
-        .help("KNN routing updater top-k (0 = max_nbr_size)");
-    program.add_argument("--knn-routing-queue-size").default_value(0u).scan<'u', uint32_t>()
-        .help("KNN routing updater candidate queue size (0 = max_nbr_size + 32)");
+    program.add_argument("--routing-topk").default_value(64u).scan<'u', uint32_t>()
+        .help("Routing updater top-k (default: 96)");
+    program.add_argument("--routing-queue-size").default_value(96u).scan<'u', uint32_t>()
+        .help("Routing updater candidate queue size (default: 128)");
 
     // Conv graph refinement params
     program.add_argument("--conv-scale-coeffs").default_value(1.0f).scan<'g', float>();
@@ -233,8 +233,8 @@ int main(int argc, char** argv) {
         program.get<uint32_t>("--knn-num-triu-iters"),
         program.get<float>("--knn-prefill-ratio"),
         program.get<uint32_t>("--knn-num-routing-loops"),
-        program.get<uint32_t>("--knn-routing-topk"),
-        program.get<uint32_t>("--knn-routing-queue-size")
+        program.get<uint32_t>("--routing-topk"),
+        program.get<uint32_t>("--routing-queue-size")
     );
 
     // Conv graph refinement config

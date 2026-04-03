@@ -19,6 +19,7 @@
 #include <chrono>
 #include <unordered_set>
 #include <string>
+#include <sstream>
 #include <fmt/format.h>
 #include <argparse/argparse.hpp>
 #include <gtest/gtest.h>
@@ -34,6 +35,8 @@ struct TestConfig {
     std::string dataset_name;
     uint32_t max_nbr_size;
     float prefill_ratio;
+    uint32_t routing_topk;
+    uint32_t routing_queue_size;
     bool verbose;
 } g_config;
 
@@ -41,6 +44,8 @@ struct TestResults {
     double knn_build_time_s = 0.0;
     double mis_time_s = 0.0;
     distance_t min_radius = 0.0f;
+    float radix = 2.0f;
+    uint32_t max_power = 0;
     uint32_t num_vertices = 0;
     uint32_t num_selected = 0;
     uint32_t independence_violations = 0;
@@ -67,7 +72,8 @@ public:
         // Build KNN graph
         layer_config_t layer_config(g_config.max_nbr_size, static_cast<uint32_t>(g_config.max_nbr_size * 1.5));
         knn_graph::pruning_config_t pruning_config(1.0f, 0.0f);
-        knn_graph::propagate_config_t propagate_config(5, 12, g_config.prefill_ratio, 1);
+        knn_graph::propagate_config_t propagate_config(5, 12, g_config.prefill_ratio, 1,
+        g_config.routing_topk, g_config.routing_queue_size);
 
         ARTEA_INFO("Building KNN graph...");
         auto t0 = std::chrono::high_resolution_clock::now();
@@ -83,17 +89,29 @@ public:
         // Print radius quantile table for user selection
         _print_radius_table();
 
-        // Interactive: ask user for min_radius
-        std::cout << "\nEnter the desired min_radius for MIS: " << std::flush;
+        // Interactive: ask user for rnet_radius, radix, max_power
+        std::cout << "\nEnter: rnet_radius radix max_power (space-separated, e.g. 30000 2.0 3):" << std::endl;
+        std::cout << "  Start radius = rnet_radius * radix^max_power (max_power=0 for single-shot): " << std::flush;
         std::string input;
         std::getline(std::cin, input);
-        g_results.min_radius = std::stof(input);
-        ARTEA_INFO(fmt::format("User selected min_radius: {:.6f}", g_results.min_radius));
+        {
+            std::istringstream iss(input);
+            float rnet_radius, radix_val = 2.0f;
+            uint32_t max_power_val = 0;
+            iss >> rnet_radius;
+            if (iss >> radix_val) { iss >> max_power_val; }
+            g_results.min_radius = rnet_radius;
+            g_results.radix = radix_val;
+            g_results.max_power = max_power_val;
+        }
+        ARTEA_INFO(fmt::format("Parameters: rnet_radius={:.6f}, radix={:.2f}, max_power={}",
+            g_results.min_radius, g_results.radix, g_results.max_power));
 
         // Run GraphMISVG
         graph_mis_vg_t mis_vg;
         t0 = std::chrono::high_resolution_clock::now();
-        rnet_ = std::make_unique<approx_rnet_t>(mis_vg.generate(*knn_graph_, g_results.min_radius));
+        rnet_ = std::make_unique<approx_rnet_t>(mis_vg.generate(
+            *knn_graph_, g_results.min_radius, g_results.radix, g_results.max_power));
         t1 = std::chrono::high_resolution_clock::now();
         g_results.mis_time_s = std::chrono::duration_cast<std::chrono::microseconds>(t1 - t0).count() / 1e6;
         g_results.num_selected = rnet_->get_num_vecs();
@@ -111,7 +129,7 @@ private:
     void _print_radius_table() {
         radius_prober_t prober;
 
-        std::vector<uint32_t> nbr_ranks = {1, 2, 4, 8, 16, 32, 64};
+        std::vector<uint32_t> nbr_ranks = {1, 2, 4, 8, 16, 32};
         std::vector<float> quantiles = {0.01f, 0.05f, 0.10f, 0.25f, 0.50f, 0.75f, 0.90f, 0.95f, 0.99f};
 
         // Filter out nbr_ranks that exceed max_nbr_size
@@ -259,6 +277,10 @@ int main(int argc, char** argv) {
     program.add_argument("-d", "--dataset").default_value(std::string("sift-1m"));
     program.add_argument("--max-nbr-size").default_value(96u).scan<'u', uint32_t>();
     program.add_argument("--prefill-ratio").default_value(0.34f).scan<'g', float>();
+    program.add_argument("--routing-topk").default_value(64u).scan<'u', uint32_t>()
+        .help("Routing updater top-k (default: 64)");
+    program.add_argument("--routing-queue-size").default_value(96u).scan<'u', uint32_t>()
+        .help("Routing updater candidate queue size (default: 96)");
     program.add_argument("-v", "--verbose").default_value(false).implicit_value(true);
 
     try {
@@ -273,12 +295,16 @@ int main(int argc, char** argv) {
     g_config.dataset_name = program.get<std::string>("--dataset");
     g_config.max_nbr_size = program.get<uint32_t>("--max-nbr-size");
     g_config.prefill_ratio = program.get<float>("--prefill-ratio");
+    g_config.routing_topk = program.get<uint32_t>("--routing-topk");
+    g_config.routing_queue_size = program.get<uint32_t>("--routing-queue-size");
     g_config.verbose = program.get<bool>("--verbose");
 
     std::cout << "\n=== Configuration ===" << std::endl;
     std::cout << fmt::format("  Dataset:        {}", g_config.dataset_name) << std::endl;
-    std::cout << fmt::format("  Max nbr size:   {}", g_config.max_nbr_size) << std::endl;
-    std::cout << fmt::format("  Prefill ratio:  {}", g_config.prefill_ratio) << std::endl;
+    std::cout << fmt::format("  Max nbr size:       {}", g_config.max_nbr_size) << std::endl;
+    std::cout << fmt::format("  Prefill ratio:      {}", g_config.prefill_ratio) << std::endl;
+    std::cout << fmt::format("  Routing top-k:      {}", g_config.routing_topk) << std::endl;
+    std::cout << fmt::format("  Routing queue size: {}", g_config.routing_queue_size) << std::endl;
     std::cout << "=====================\n" << std::endl;
 
     DataProvider::instance().init();
@@ -291,6 +317,10 @@ int main(int argc, char** argv) {
     std::cout << fmt::format("  Dataset:                  {}", g_config.dataset_name) << std::endl;
     std::cout << fmt::format("  Num Vertices:             {}", g_results.num_vertices) << std::endl;
     std::cout << fmt::format("  Min Radius:               {:.6f}", g_results.min_radius) << std::endl;
+    std::cout << fmt::format("  Radix:                    {:.2f}", g_results.radix) << std::endl;
+    std::cout << fmt::format("  Max Power:                {}", g_results.max_power) << std::endl;
+    std::cout << fmt::format("  Mode:                     {}",
+        g_results.max_power > 0 ? "coarse-to-fine" : "single-shot") << std::endl;
     std::cout << fmt::format("  KNN Build Time:           {:.2f} s", g_results.knn_build_time_s) << std::endl;
     std::cout << fmt::format("  MIS Time:                 {:.2f} s", g_results.mis_time_s) << std::endl;
     std::cout << fmt::format("  Selected:                 {} ({:.2f}%)",

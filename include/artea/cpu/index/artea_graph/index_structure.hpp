@@ -160,8 +160,8 @@ public:
             meta["propagate_config"]["num_triu_iters"].get<iter_t>(),
             meta["propagate_config"]["prefill_ratio"].get<ratio_t>(),
             meta["propagate_config"]["num_routing_loops"].get<iter_t>(),
-            meta["propagate_config"].value("routing_topk", vertex_num_t(0)),
-            meta["propagate_config"].value("routing_queue_size", vertex_num_t(0))
+            meta["propagate_config"].value("routing_topk", vertex_num_t(64)),
+            meta["propagate_config"].value("routing_queue_size", vertex_num_t(96))
         );
 
         const std::string vb_type = meta["vertices_builder_config"]["type"].get<std::string>();

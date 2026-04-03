@@ -27,16 +27,16 @@ struct PropagateConfig {
      * @param num_triu_iters Number of triangle updater iterations per build loop (recommend: 14).
      * @param prefill_ratio Prefill ratio for initial random graph (init_nbr_size = max_nbr_size * prefill_ratio).
      * @param num_routing_loops Number of routing updater iterations applied at the end of the final build loop (recommend: 1).
-     * @param routing_topk Top-k for routing updater (0 = use max_nbr_size).
-     * @param routing_queue_size Candidate queue size for routing updater (0 = use max_nbr_size + 32).
+     * @param routing_topk Top-k for routing updater (default: 96).
+     * @param routing_queue_size Candidate queue size for routing updater (default: 128).
      */
     PropagateConfig(
         iter_t num_build_loops,
         iter_t num_triu_iters,
         ratio_t prefill_ratio = ratio_t(1),
         iter_t num_routing_loops = iter_t(1),
-        vertex_num_t routing_topk = vertex_num_t(0),
-        vertex_num_t routing_queue_size = vertex_num_t(0)
+        vertex_num_t routing_topk = vertex_num_t(64),
+        vertex_num_t routing_queue_size = vertex_num_t(96)
     ) :
         _num_build_loops(num_build_loops),
         _num_triu_iters(num_triu_iters),
@@ -66,14 +66,14 @@ struct PropagateConfig {
      * @brief Resolve routing_topk with fallback to max_nbr_size when 0.
      */
     auto resolve_routing_topk(vertex_num_t max_nbr_size) const -> vertex_num_t {
-        return _routing_topk > 0 ? _routing_topk : max_nbr_size;
+        return _routing_topk > 0 ? _routing_topk : vertex_num_t(64);
     }
 
     /**
      * @brief Resolve routing_queue_size with fallback to max_nbr_size + 32 when 0.
      */
     auto resolve_routing_queue_size(vertex_num_t max_nbr_size) const -> vertex_num_t {
-        return _routing_queue_size > 0 ? _routing_queue_size : max_nbr_size + 32;
+        return _routing_queue_size > 0 ? _routing_queue_size : vertex_num_t(96);
     }
 
 private:
@@ -89,10 +89,10 @@ private:
     /** @brief Number of routing updater iterations applied at the end of the final build loop (recommend: 1). */
     iter_t _num_routing_loops;
 
-    /** @brief Top-k for routing updater (0 = use max_nbr_size). */
+    /** @brief Top-k for routing updater (default: 96). */
     vertex_num_t _routing_topk;
 
-    /** @brief Candidate queue size for routing updater (0 = use max_nbr_size + 32). */
+    /** @brief Candidate queue size for routing updater (default: 128). */
     vertex_num_t _routing_queue_size;
 };
 

@@ -24,6 +24,7 @@
 
 #include <algorithm>
 #include <atomic>
+#include <cmath>
 #include <vector>
 #include <random>
 #include <tbb/parallel_for.h>
@@ -71,19 +72,41 @@ public:
     GraphMISVG() = default;
 
     /**
-     * @brief Generate an R-net from a KNN graph using parallel 3-phase MIS.
+     * @brief Generate an R-net from a KNN graph using coarse-to-fine parallel 3-phase MIS.
+     *
+     * When max_power=0, behaves as a single-shot MIS at rnet_radius.
+     * When max_power>0, starts MIS at rnet_radius * radix^max_power and
+     * divides by radix each step, locking in well-separated seeds at
+     * coarse scales before filling gaps at finer scales.
+     *
+     * Radius schedule: r * radix^max_power, r * radix^(max_power-1), ..., r * radix, r
      *
      * @param graph The KNN graph (knn_graph::index_t, neighbors sorted by distance ascending).
-     * @param min_radius The radius threshold: neighbors with distance < min_radius
-     *                   are considered "close" and mutually exclusive in the R-net.
+     * @param rnet_radius The final target radius threshold.
+     * @param radix Geometric ratio between consecutive radius steps (must be > 1).
+     * @param max_power Number of coarse steps above rnet_radius (0 = single-shot).
      * @return approx_rnet_t containing the selected vertex IDs and their vector data.
      */
     auto generate_impl(
         const typename knn_graph::index_t& graph,
-        const distance_t min_radius
+        const distance_t rnet_radius,
+        const distance_t radix = distance_t(2),
+        const uint32_t max_power = uint32_t(0)
     ) -> approx_rnet_t {
         const vertex_num_t num_vertices = graph.get_num_vertices();
         const vector_array_t& vecs_data = graph.get_vecs_data();
+
+        // Build radius schedule: [r * radix^max_power, ..., r * radix, r]
+        std::vector<distance_t> radius_schedule;
+        {
+            for (int32_t p = static_cast<int32_t>(max_power); p >= 1; --p) {
+                radius_schedule.push_back(rnet_radius * std::pow(radix, p));
+            }
+            radius_schedule.push_back(rnet_radius);
+        }
+
+        ARTEA_INFO(fmt::format("GraphMISVG: {} radius steps, from {:.6f} to {:.6f}",
+            radius_schedule.size(), radius_schedule.front(), radius_schedule.back()));
 
         // Assign random priorities (higher = wins tie-breaking)
         std::vector<uint32_t> priority(num_vertices);
@@ -94,160 +117,209 @@ public:
             }
         }
 
-        // Atomic state array for lock-free parallel commit & crush
+        // Persistent state array across all radius steps
         std::vector<std::atomic<uint8_t>> state(num_vertices);
         for (vertex_num_t i = 0; i < num_vertices; ++i) {
             state[i].store(UNDECIDED, std::memory_order_relaxed);
         }
 
-        // Per-round proposal buffer (each thread writes a distinct index, no contention)
+        // Per-round buffers (reused across steps)
         std::vector<uint8_t> proposal(num_vertices, UNDECIDED);
-
-        // Per-round veto flags (false→true single-direction, relaxed atomics)
         std::vector<std::atomic<bool>> veto(num_vertices);
         for (vertex_num_t i = 0; i < num_vertices; ++i) {
             veto[i].store(false, std::memory_order_relaxed);
         }
 
-        // Frontier: vertices still UNDECIDED
-        std::vector<vertex_id_t> frontier(num_vertices);
-        std::iota(frontier.begin(), frontier.end(), 0);
+        // TLS frontier buffer — lives across all steps and MIS rounds to reuse capacity
+        tbb::enumerable_thread_specific<std::vector<vertex_id_t>> tls_frontier;
 
-        uint32_t round = 0;
-        while (!frontier.empty()) {
+        auto _merge_tls_frontier = [&]() {
+            size_t total = 0;
+            for (const auto& local : tls_frontier) { total += local.size(); }
+            std::vector<vertex_id_t> result;
+            result.reserve(total);
+            for (auto& local : tls_frontier) {
+                result.insert(result.end(), local.begin(), local.end());
+                local.clear();
+            }
+            return result;
+        };
 
-            // Phase 0: Reset per-round buffers (parallel)
-            tbb::parallel_for(
-                tbb::blocked_range<size_t>(0, frontier.size()),
-                [&](const tbb::blocked_range<size_t>& r) {
-                    for (size_t fi = r.begin(); fi != r.end(); ++fi) {
-                        const vertex_id_t v = frontier[fi];
-                        proposal[v] = UNDECIDED;
-                        veto[v].store(false, std::memory_order_relaxed);
-                    }
-                }
-            );
+        uint32_t total_rounds = 0;
 
-            // Phase 1: Propose (parallel)
-            // Read state[], write proposal[] (each thread writes distinct indices)
-            tbb::parallel_for(
-                tbb::blocked_range<size_t>(0, frontier.size()),
-                [&](const tbb::blocked_range<size_t>& r) {
-                    for (size_t fi = r.begin(); fi != r.end(); ++fi) {
-                        const vertex_id_t v = frontier[fi];
-                        const auto& nbrs = graph.fetch_nbrs(v);
+        for (size_t step = 0; step < radius_schedule.size(); ++step) {
+            const distance_t current_radius = radius_schedule[step];
 
-                        bool any_nbr_in = false;
-                        bool has_higher_priority_undecided = false;
-
-                        for (vertex_num_t i = 0; i < nbrs.size(); ++i) {
-                            if (nbrs[i].get_distance() >= min_radius) break;
-
-                            const vertex_id_t u = nbrs[i].get_id();
-                            const uint8_t u_state = state[u].load(std::memory_order_relaxed);
-
-                            if (u_state == IN) {
-                                any_nbr_in = true;
-                                break;
-                            }
-                            if (u_state == UNDECIDED &&
-                                (priority[u] > priority[v] ||
-                                 (priority[u] == priority[v] && u > v))) {
-                                has_higher_priority_undecided = true;
-                            }
-                        }
-
-                        if (any_nbr_in) {
-                            proposal[v] = OUT;
-                        } else if (!has_higher_priority_undecided) {
-                            proposal[v] = IN;
-                        } else {
-                            proposal[v] = UNDECIDED;
-                        }
-                    }
-                }
-            );
-
-            // Phase 2: Veto (parallel)
-            // IN proposers veto conflicting IN neighbors along out-edges
-            tbb::parallel_for(
-                tbb::blocked_range<size_t>(0, frontier.size()),
-                [&](const tbb::blocked_range<size_t>& r) {
-                    for (size_t fi = r.begin(); fi != r.end(); ++fi) {
-                        const vertex_id_t v = frontier[fi];
-                        if (proposal[v] != IN) continue;
-
-                        const auto& nbrs = graph.fetch_nbrs(v);
-                        for (vertex_num_t i = 0; i < nbrs.size(); ++i) {
-                            if (nbrs[i].get_distance() >= min_radius) break;
-
-                            const vertex_id_t u = nbrs[i].get_id();
-                            if (proposal[u] == IN) {
-                                veto[u].store(true, std::memory_order_relaxed);
+            // Reset OUT -> UNDECIDED (IN vertices persist)
+            if (step > 0) {
+                tbb::parallel_for(
+                    tbb::blocked_range<vertex_num_t>(0, num_vertices),
+                    [&](const tbb::blocked_range<vertex_num_t>& r) {
+                        for (vertex_num_t v = r.begin(); v != r.end(); ++v) {
+                            if (state[v].load(std::memory_order_relaxed) == OUT) {
+                                state[v].store(UNDECIDED, std::memory_order_relaxed);
                             }
                         }
                     }
-                }
-            );
+                );
 
-            // Phase 3a: Commit & Crush (parallel)
-            // Non-vetoed IN vertices commit and suppress close neighbors
-            tbb::parallel_for(
-                tbb::blocked_range<size_t>(0, frontier.size()),
-                [&](const tbb::blocked_range<size_t>& r) {
-                    for (size_t fi = r.begin(); fi != r.end(); ++fi) {
-                        const vertex_id_t v = frontier[fi];
-
-                        if (proposal[v] == OUT) {
-                            state[v].store(OUT, std::memory_order_relaxed);
-                        } else if (proposal[v] == IN && !veto[v].load(std::memory_order_relaxed)) {
-                            state[v].store(IN, std::memory_order_relaxed);
-                            // Crush: suppress all close neighbors along out-edges
+                // Pre-Crush: existing IN vertices suppress close neighbors
+                // at the new (smaller) radius. This handles asymmetric edges
+                // where an IN vertex v sees u (v→u) but u does not see v.
+                // Without this, u would remain UNDECIDED, propose IN, and
+                // no one would veto it — breaking independence.
+                tbb::parallel_for(
+                    tbb::blocked_range<vertex_num_t>(0, num_vertices),
+                    [&](const tbb::blocked_range<vertex_num_t>& r) {
+                        for (vertex_num_t v = r.begin(); v != r.end(); ++v) {
+                            if (state[v].load(std::memory_order_relaxed) != IN) continue;
                             const auto& nbrs = graph.fetch_nbrs(v);
                             for (vertex_num_t i = 0; i < nbrs.size(); ++i) {
-                                if (nbrs[i].get_distance() >= min_radius) break;
+                                if (nbrs[i].get_distance() >= current_radius) break;
                                 state[nbrs[i].get_id()].store(OUT, std::memory_order_relaxed);
                             }
                         }
-                        // Vetoed IN and UNDECIDED: do not write state, remain UNDECIDED
                     }
-                }
-            );
+                );
+            }
 
-            // Phase 3b: Build next frontier (parallel collect + sequential merge)
-            tbb::enumerable_thread_specific<std::vector<vertex_id_t>> tls_frontier;
-
+            // Build frontier from UNDECIDED vertices (parallel)
             tbb::parallel_for(
-                tbb::blocked_range<size_t>(0, frontier.size()),
-                [&](const tbb::blocked_range<size_t>& r) {
+                tbb::blocked_range<vertex_num_t>(0, num_vertices),
+                [&](const tbb::blocked_range<vertex_num_t>& r) {
                     auto& local = tls_frontier.local();
-                    for (size_t fi = r.begin(); fi != r.end(); ++fi) {
-                        const vertex_id_t v = frontier[fi];
+                    for (vertex_num_t v = r.begin(); v != r.end(); ++v) {
                         if (state[v].load(std::memory_order_relaxed) == UNDECIDED) {
                             local.push_back(v);
                         }
                     }
                 }
             );
+            std::vector<vertex_id_t> frontier = _merge_tls_frontier();
 
-            // Pre-compute total size, single allocation, then copy
-            size_t total = 0;
-            for (const auto& local : tls_frontier) {
-                total += local.size();
+            uint32_t step_rounds = 0;
+            while (!frontier.empty()) {
+
+                // Phase 0: Reset per-round buffers
+                tbb::parallel_for(
+                    tbb::blocked_range<size_t>(0, frontier.size()),
+                    [&](const tbb::blocked_range<size_t>& r) {
+                        for (size_t fi = r.begin(); fi != r.end(); ++fi) {
+                            const vertex_id_t v = frontier[fi];
+                            proposal[v] = UNDECIDED;
+                            veto[v].store(false, std::memory_order_relaxed);
+                        }
+                    }
+                );
+
+                // Phase 1: Propose
+                tbb::parallel_for(
+                    tbb::blocked_range<size_t>(0, frontier.size()),
+                    [&](const tbb::blocked_range<size_t>& r) {
+                        for (size_t fi = r.begin(); fi != r.end(); ++fi) {
+                            const vertex_id_t v = frontier[fi];
+                            const auto& nbrs = graph.fetch_nbrs(v);
+
+                            bool any_nbr_in = false;
+                            bool has_higher_priority_undecided = false;
+
+                            for (vertex_num_t i = 0; i < nbrs.size(); ++i) {
+                                if (nbrs[i].get_distance() >= current_radius) break;
+
+                                const vertex_id_t u = nbrs[i].get_id();
+                                const uint8_t u_state = state[u].load(std::memory_order_relaxed);
+
+                                if (u_state == IN) {
+                                    any_nbr_in = true;
+                                    break;
+                                }
+                                if (u_state == UNDECIDED &&
+                                    (priority[u] > priority[v] ||
+                                     (priority[u] == priority[v] && u > v))) {
+                                    has_higher_priority_undecided = true;
+                                }
+                            }
+
+                            if (any_nbr_in) {
+                                proposal[v] = OUT;
+                            } else if (!has_higher_priority_undecided) {
+                                proposal[v] = IN;
+                            } else {
+                                proposal[v] = UNDECIDED;
+                            }
+                        }
+                    }
+                );
+
+                // Phase 2: Veto
+                tbb::parallel_for(
+                    tbb::blocked_range<size_t>(0, frontier.size()),
+                    [&](const tbb::blocked_range<size_t>& r) {
+                        for (size_t fi = r.begin(); fi != r.end(); ++fi) {
+                            const vertex_id_t v = frontier[fi];
+                            if (proposal[v] != IN) continue;
+
+                            const auto& nbrs = graph.fetch_nbrs(v);
+                            for (vertex_num_t i = 0; i < nbrs.size(); ++i) {
+                                if (nbrs[i].get_distance() >= current_radius) break;
+
+                                const vertex_id_t u = nbrs[i].get_id();
+                                if (proposal[u] == IN) {
+                                    veto[u].store(true, std::memory_order_relaxed);
+                                }
+                            }
+                        }
+                    }
+                );
+
+                // Phase 3a: Commit & Crush
+                tbb::parallel_for(
+                    tbb::blocked_range<size_t>(0, frontier.size()),
+                    [&](const tbb::blocked_range<size_t>& r) {
+                        for (size_t fi = r.begin(); fi != r.end(); ++fi) {
+                            const vertex_id_t v = frontier[fi];
+
+                            if (proposal[v] == OUT) {
+                                state[v].store(OUT, std::memory_order_relaxed);
+                            } else if (proposal[v] == IN && !veto[v].load(std::memory_order_relaxed)) {
+                                state[v].store(IN, std::memory_order_relaxed);
+                                const auto& nbrs = graph.fetch_nbrs(v);
+                                for (vertex_num_t i = 0; i < nbrs.size(); ++i) {
+                                    if (nbrs[i].get_distance() >= current_radius) break;
+                                    state[nbrs[i].get_id()].store(OUT, std::memory_order_relaxed);
+                                }
+                            }
+                        }
+                    }
+                );
+
+                // Phase 3b: Build next frontier (reuse TLS across rounds)
+                tbb::parallel_for(
+                    tbb::blocked_range<size_t>(0, frontier.size()),
+                    [&](const tbb::blocked_range<size_t>& r) {
+                        auto& local = tls_frontier.local();
+                        for (size_t fi = r.begin(); fi != r.end(); ++fi) {
+                            const vertex_id_t v = frontier[fi];
+                            if (state[v].load(std::memory_order_relaxed) == UNDECIDED) {
+                                local.push_back(v);
+                            }
+                        }
+                    }
+                );
+
+                step_rounds++;
+                frontier = _merge_tls_frontier();
             }
 
-            std::vector<vertex_id_t> next_frontier;
-            next_frontier.reserve(total);
-            for (const auto& local : tls_frontier) {
-                next_frontier.insert(next_frontier.end(), local.begin(), local.end());
+            total_rounds += step_rounds;
+
+            // Count current IN vertices
+            uint32_t count_in = 0;
+            for (vertex_num_t v = 0; v < num_vertices; ++v) {
+                if (state[v].load(std::memory_order_relaxed) == IN) count_in++;
             }
-
-            round++;
-            ARTEA_INFO(fmt::format("MIS round {}: frontier {} -> {}, decided {} vertices",
-                round, frontier.size(), next_frontier.size(),
-                frontier.size() - next_frontier.size()));
-
-            frontier = std::move(next_frontier);
+            ARTEA_INFO(fmt::format("C2F step {}/{}: radius={:.6f}, {} MIS rounds, {} IN vertices",
+                step + 1, radius_schedule.size(), current_radius, step_rounds, count_in));
         }
 
         // Collect IN vertices
@@ -259,9 +331,9 @@ public:
         }
         result.vecs_data = vecs_data.extract_subset(result.vec_ids);
 
-        ARTEA_INFO(fmt::format("GraphMISVG: selected {} / {} vertices ({:.2f}%) in {} rounds",
+        ARTEA_INFO(fmt::format("GraphMISVG: selected {} / {} vertices ({:.2f}%) in {} total rounds, {} steps",
             result.vec_ids.size(), num_vertices,
-            100.0 * result.vec_ids.size() / num_vertices, round));
+            100.0 * result.vec_ids.size() / num_vertices, total_rounds, radius_schedule.size()));
 
         return result;
     }

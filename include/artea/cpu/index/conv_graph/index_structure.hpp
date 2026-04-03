@@ -107,8 +107,8 @@ public:
             meta["propagate_config"]["num_triu_iters"].get<uint32_t>(),
             meta["propagate_config"]["prefill_ratio"].get<float>(),
             meta["propagate_config"]["num_routing_loops"].get<uint32_t>(),
-            meta["propagate_config"].value("routing_topk", uint32_t(0)),
-            meta["propagate_config"].value("routing_queue_size", uint32_t(0))
+            meta["propagate_config"].value("routing_topk", uint32_t(64)),
+            meta["propagate_config"].value("routing_queue_size", uint32_t(96))
         );
         return IndexStructure(vecs_data, layer_config, pruning_config, propagate_config);
     }

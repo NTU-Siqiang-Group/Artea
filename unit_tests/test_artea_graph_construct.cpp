@@ -491,10 +491,10 @@ int main(int argc, char** argv) {
     program.add_argument("--num-triu-iters").default_value(12u).scan<'u', uint32_t>();
     program.add_argument("--prefill-ratio").default_value(0.34f).scan<'g', float>();
     program.add_argument("--num-routing-loops").default_value(1u).scan<'u', uint32_t>();
-    program.add_argument("--routing-topk").default_value(0u).scan<'u', uint32_t>()
-        .help("Routing updater top-k (0 = max_nbr_size)");
-    program.add_argument("--routing-queue-size").default_value(0u).scan<'u', uint32_t>()
-        .help("Routing updater candidate queue size (0 = max_nbr_size + 32)");
+    program.add_argument("--routing-topk").default_value(64u).scan<'u', uint32_t>()
+        .help("Routing updater top-k (default: 96)");
+    program.add_argument("--routing-queue-size").default_value(96u).scan<'u', uint32_t>()
+        .help("Routing updater candidate queue size (default: 128)");
 
     // Router parameters
     program.add_argument("-k", "--topk").default_value(20u).scan<'u', uint32_t>();
@@ -598,8 +598,8 @@ int main(int argc, char** argv) {
     std::cout << "Triangle updater iterations: " << g_config.propagate_config.num_triu_iters << std::endl;
     std::cout << "Prefill ratio: " << g_config.propagate_config.prefill_ratio << std::endl;
     std::cout << "Routing loops: " << g_config.propagate_config.num_routing_loops << std::endl;
-    std::cout << "Routing top-k: " << g_config.propagate_config.routing_topk << " (0=max_nbr_size)" << std::endl;
-    std::cout << "Routing queue size: " << g_config.propagate_config.routing_queue_size << " (0=max_nbr_size+32)" << std::endl;
+    std::cout << "Routing top-k: " << g_config.propagate_config.routing_topk << std::endl;
+    std::cout << "Routing queue size: " << g_config.propagate_config.routing_queue_size << std::endl;
     std::cout << "\n--- Router Configuration ---" << std::endl;
     std::cout << "Top-k: " << g_config.topk << std::endl;
     std::cout << "Candidate queue config: " << g_config.queue_start << "," << g_config.queue_end << "," << g_config.queue_step << std::endl;

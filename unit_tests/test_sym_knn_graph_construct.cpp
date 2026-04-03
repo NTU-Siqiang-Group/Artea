@@ -219,10 +219,10 @@ int main(int argc, char** argv) {
     program.add_argument("--num-triu-iters").default_value(14u).scan<'u', uint32_t>();
     program.add_argument("--prefill-ratio").default_value(0.34f).scan<'g', float>();
     program.add_argument("--num-routing-loops").default_value(1u).scan<'u', uint32_t>();
-    program.add_argument("--routing-topk").default_value(0u).scan<'u', uint32_t>()
-        .help("Routing updater top-k (0 = max_nbr_size)");
-    program.add_argument("--routing-queue-size").default_value(0u).scan<'u', uint32_t>()
-        .help("Routing updater candidate queue size (0 = max_nbr_size + 32)");
+    program.add_argument("--routing-topk").default_value(64u).scan<'u', uint32_t>()
+        .help("Routing updater top-k (default: 96)");
+    program.add_argument("--routing-queue-size").default_value(96u).scan<'u', uint32_t>()
+        .help("Routing updater candidate queue size (default: 128)");
     program.add_argument("-k", "--topk").default_value(20u).scan<'u', uint32_t>();
     program.add_argument("--candidate-queue-config")
         .default_value(std::string("40,200,20"))
