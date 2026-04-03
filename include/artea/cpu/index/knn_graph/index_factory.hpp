@@ -158,7 +158,9 @@ private:
         auto triangle_updater  = propagate_engine.template make_updater<triangle_updater_t>(
             pruning_config.scale_coeffs(), pruning_config.shifted_coeffs());
         auto reverse_updater   = propagate_engine.template make_updater<reverse_updater_t>();
-        auto routing_updater   = propagate_engine.template make_updater<routing_updater_t>(max_nbr_size, max_nbr_size * 1.5);
+        const vertex_num_t routing_topk = propagate_config.resolve_routing_topk(max_nbr_size);
+        const vertex_num_t routing_queue_size = propagate_config.resolve_routing_queue_size(max_nbr_size);
+        auto routing_updater   = propagate_engine.template make_updater<routing_updater_t>(routing_topk, routing_queue_size);
         auto truncate_updater  = propagate_engine.template make_updater<truncate_updater_t>();
 
         for (iter_t build_loop = 0; build_loop < propagate_config.num_build_loops(); ++build_loop) {

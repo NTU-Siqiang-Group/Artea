@@ -135,6 +135,10 @@ int main(int argc, char** argv) {
     program.add_argument("--knn-num-triu-iters").default_value(14u).scan<'u', uint32_t>();
     program.add_argument("--knn-prefill-ratio").default_value(0.34f).scan<'g', float>();
     program.add_argument("--knn-num-routing-loops").default_value(1u).scan<'u', uint32_t>();
+    program.add_argument("--knn-routing-topk").default_value(0u).scan<'u', uint32_t>()
+        .help("KNN routing updater top-k (0 = max_nbr_size)");
+    program.add_argument("--knn-routing-queue-size").default_value(0u).scan<'u', uint32_t>()
+        .help("KNN routing updater candidate queue size (0 = max_nbr_size + 32)");
 
     try {
         program.parse_args(argc, argv);
@@ -153,7 +157,9 @@ int main(int argc, char** argv) {
         program.get<uint32_t>("--knn-num-build-loops"),
         program.get<uint32_t>("--knn-num-triu-iters"),
         program.get<float>("--knn-prefill-ratio"),
-        program.get<uint32_t>("--knn-num-routing-loops")
+        program.get<uint32_t>("--knn-num-routing-loops"),
+        program.get<uint32_t>("--knn-routing-topk"),
+        program.get<uint32_t>("--knn-routing-queue-size")
     );
 
     std::cout << "\n=== Configuration ===" << std::endl;
