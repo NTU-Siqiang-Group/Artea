@@ -33,6 +33,8 @@ CMAKE_BIN="${CMAKE_BIN:-cmake}"
 CXX_COMPILER="${CXX_COMPILER:-$HOME/.local/bin/g++}"
 C_COMPILER="${C_COMPILER:-$HOME/.local/bin/gcc}"
 PROFILING_DEFS=""
+EXTRA_CXX_FLAGS="${CMAKE_CXX_FLAGS_EXTRA:-}"
+EXTRA_LINKER_FLAGS="${CMAKE_EXE_LINKER_FLAGS_EXTRA:-}"
 
 # Parse command line arguments
 while [[ $# -gt 0 ]]; do
@@ -69,6 +71,9 @@ log_info "Using C compiler: ${C_COMPILER}"
 if [[ -n "${PROFILING_DEFS}" ]]; then
   log_info "Profiling definitions: ${PROFILING_DEFS}"
 fi
+if [[ -n "${EXTRA_CXX_FLAGS}" ]]; then
+  log_info "Extra CXX flags: ${EXTRA_CXX_FLAGS}"
+fi
 check_cmake_version "${CMAKE_BIN}" "${MIN_CMAKE_VERSION}"
 
 if ! oneapi_is_active; then
@@ -83,7 +88,8 @@ log_info "Running CMake configure..."
       -DCMAKE_BUILD_TYPE="${BUILD_TYPE}" \
       -DCMAKE_CXX_COMPILER="${CXX_COMPILER}" \
       -DCMAKE_C_COMPILER="${C_COMPILER}" \
-      -DCMAKE_CXX_FLAGS="${PROFILING_DEFS}" \
+      -DCMAKE_CXX_FLAGS="${PROFILING_DEFS} ${EXTRA_CXX_FLAGS}" \
+      -DCMAKE_EXE_LINKER_FLAGS="${EXTRA_LINKER_FLAGS}" \
       "${PROJECT_ROOT}"
 log_success "CMake configure completed."
 

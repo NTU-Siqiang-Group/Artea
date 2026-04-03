@@ -192,6 +192,7 @@ namespace artea_graph {
     using factory_t = typename graph_factory_traits_t::artea_graph::factory_t;
     using propagate_config_t = typename graph_factory_traits_t::artea_graph::propagate_config_t;
     using pruning_config_t = typename graph_factory_traits_t::artea_graph::pruning_config_t;
+    using rnet_config_t = typename graph_factory_traits_t::artea_graph::rnet_config_t;
 }
 
 }   // namespace cpu

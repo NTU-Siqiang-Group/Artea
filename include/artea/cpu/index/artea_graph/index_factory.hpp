@@ -14,7 +14,9 @@
 
 #pragma once
 
+#include <chrono>
 #include <artea/common/logger.hpp>
+#include <fmt/format.h>
 
 namespace artea {
 namespace cpu {
@@ -31,17 +33,20 @@ class IndexFactory {
     using distance_t = typename GraphFactoryTraitsT::distance_t;
     using dist_func_t = typename GraphFactoryTraitsT::dist_func_t;
     using conv_graph  = typename GraphFactoryTraitsT::conv_graph;
+    using knn_graph   = typename GraphFactoryTraitsT::knn_graph;
     using artea_graph = typename GraphFactoryTraitsT::artea_graph;
     using this_index_t = typename artea_graph::index_t;
     using vector_array_t = typename GraphFactoryTraitsT::vector_array_t;
     using vertex_subset_t = typename GraphFactoryTraitsT::vertex_subset_t;
-    using lb_greedy_vg_t = typename GraphFactoryTraitsT::lb_greedy_vg_t;
+    using graph_mis_vg_t = typename GraphFactoryTraitsT::graph_mis_vg_t;
+    using radius_prober_t = typename GraphFactoryTraitsT::radius_prober_t;
     using centroid_computer_t = typename GraphFactoryTraitsT::centroid_computer_t;
     using bruteforce_router_t = typename GraphFactoryTraitsT::bruteforce_router_t;
     using layer_config_t = typename GraphFactoryTraitsT::layer_config_t;
-    using greedy_vertices_builder_config_t = typename GraphFactoryTraitsT::greedy_vertices_builder_config_t;
+    using rnet_config_t = typename artea_graph::rnet_config_t;
 
     static constexpr vertex_num_t min_num_layer_vertex = GraphFactoryTraitsT::min_num_layer_vertex;
+    static constexpr layer_num_t max_expected_layers = 16;
 
 public:
 
@@ -52,7 +57,7 @@ public:
         typename artea_graph::pruning_config_t bottom_pruning_config,
         typename artea_graph::pruning_config_t upper_pruning_config,
         typename artea_graph::propagate_config_t propagate_config,
-        greedy_vertices_builder_config_t vertices_builder_config
+        rnet_config_t rnet_config
     ) -> this_index_t {
         dist_func_t dist_func(base_vecs.get_vec_dim());
 
@@ -63,55 +68,94 @@ public:
             bottom_pruning_config,
             upper_pruning_config,
             propagate_config,
-            vertices_builder_config
+            rnet_config
         );
 
         auto& hier_vecs_manager = hierarchical_graph.get_hier_vecs_manager();
         auto& inter_layer_links = hierarchical_graph.get_inter_layer_links();
 
-        // Build bottom layer edges
-        hierarchical_graph.resize(1);
-        hierarchical_graph.set_layer_graph(0, conv_graph::factory_t::construct_graph(
-            base_vecs, bottom_layer_config,
-            static_cast<typename conv_graph::pruning_config_t>(bottom_pruning_config),
-            static_cast<typename conv_graph::propagate_config_t>(propagate_config)));
+        // Pre-allocate upper layer storage to prevent vector reallocation.
+        // FlatGraph stores _vecs_data as a const reference; if the vector
+        // holding upper layer data reallocates, those references dangle.
+        hier_vecs_manager.get_upper_layer_vecs().reserve(max_expected_layers);
 
-        // Iteratively extract upper layer vertices and build edges
         const vector_array_t* current_layer_vecs = &base_vecs;
-        distance_t current_radius = vertices_builder_config.min_radius() * vertices_builder_config.beta();
+        distance_t rnet_radius = distance_t(0);
 
+        layer_id_t layer_id = 0;
         while (true) {
-            vertex_num_t max_result_size = static_cast<vertex_num_t>(
-                current_layer_vecs->get_num_vecs() * vertices_builder_config.max_result_ratio()
-            );
+            #ifdef ARTEA_PROFILING
+            auto t0 = std::chrono::high_resolution_clock::now();
+            #endif
 
-            lb_greedy_vg_t lb_greedy_vg(dist_func);
-            vertex_subset_t next_layer_subset = lb_greedy_vg.generate(
-                *current_layer_vecs,
-                current_radius,
-                max_result_size,
-                vertices_builder_config.coverage_ratio(),
-                vertices_builder_config.confidence(),
-                vertices_builder_config.sampling_batch_size()
-            );
+            // Select configs for this layer
+            const auto& layer_config = (layer_id == 0) ? bottom_layer_config : upper_layer_config;
+            const auto& pruning_config = (layer_id == 0) ? bottom_pruning_config : upper_pruning_config;
 
+            // Step 1: Build KNN graph
+            auto knn_graph_index = knn_graph::factory_t::construct_graph(
+                *current_layer_vecs, layer_config,
+                static_cast<typename knn_graph::pruning_config_t>(pruning_config),
+                static_cast<typename knn_graph::propagate_config_t>(propagate_config));
+
+            #ifdef ARTEA_PROFILING
+            auto t1 = std::chrono::high_resolution_clock::now();
+            #endif
+
+            // Step 2: Probe rnet_radius (L0 only; L1+ uses prev * rnet_beta)
+            if (layer_id == 0) {
+                radius_prober_t prober;
+                auto probe_result = prober.probe(knn_graph_index, rnet_config_t::target_rank, rnet_config_t::target_quantile);
+                rnet_radius = probe_result.radius * rnet_config.rnet_beta();
+                ARTEA_INFO(fmt::format("Layer 0: probed rnet_radius={:.4f} (rank={}, quantile={:.3f}, beta={:.2f})",
+                    rnet_radius, rnet_config_t::target_rank, rnet_config_t::target_quantile, rnet_config.rnet_beta()));
+            }
+
+            // Step 3: Run GraphMIS to select next layer vertices
+            graph_mis_vg_t mis_vg;
+            vertex_subset_t next_layer_subset = mis_vg.generate(
+                knn_graph_index, rnet_radius, rnet_config.mis_radix(), rnet_config.mis_max_power());
+
+            #ifdef ARTEA_PROFILING
+            auto t2 = std::chrono::high_resolution_clock::now();
+            #endif
+
+            // Step 4: Refine KNN graph to conv_graph
+            auto conv_graph_index = conv_graph::factory_t::construct_graph(
+                std::move(knn_graph_index),
+                static_cast<typename conv_graph::pruning_config_t>(pruning_config));
+
+            // Set layer graph
+            hierarchical_graph.resize(layer_id + 1);
+            hierarchical_graph.set_layer_graph(layer_id, std::move(conv_graph_index));
+
+            #ifdef ARTEA_PROFILING
+            auto t3 = std::chrono::high_resolution_clock::now();
+            double knn_time_s = std::chrono::duration_cast<std::chrono::microseconds>(t1 - t0).count() / 1e6;
+            double mis_time_s = std::chrono::duration_cast<std::chrono::microseconds>(t2 - t1).count() / 1e6;
+            double refine_time_s = std::chrono::duration_cast<std::chrono::microseconds>(t3 - t2).count() / 1e6;
+            ARTEA_INFO(fmt::format("Built layer {}: {} vertices, next_layer_selected={}, rnet_radius={:.4f}, knn={:.2f}s, mis={:.2f}s, refine={:.2f}s",
+                layer_id, current_layer_vecs->get_num_vecs(), next_layer_subset.get_num_vecs(),
+                rnet_radius, knn_time_s, mis_time_s, refine_time_s));
+            #else
+            ARTEA_INFO(fmt::format("Built layer {}: {} vertices, next_layer_selected={}, rnet_radius={:.4f}",
+                layer_id, current_layer_vecs->get_num_vecs(), next_layer_subset.get_num_vecs(), rnet_radius));
+            #endif
+
+            // Step 5: Check termination
             if (next_layer_subset.get_num_vecs() < min_num_layer_vertex) {
+                ARTEA_INFO(fmt::format("Stopping: MIS selected {} < min_num_layer_vertex({})",
+                    next_layer_subset.get_num_vecs(), min_num_layer_vertex));
                 break;
             }
 
+            // Step 6: Append layer and advance
             inter_layer_links.bottom_up_append(std::move(next_layer_subset.vec_ids));
             hier_vecs_manager.bottom_up_append(std::move(next_layer_subset.vecs_data));
 
-            layer_id_t layer_id = hier_vecs_manager.get_num_layers() - 1;
+            layer_id = hier_vecs_manager.get_num_layers() - 1;
             current_layer_vecs = &hier_vecs_manager.get_layer_vecs(layer_id);
-            current_radius *= vertices_builder_config.beta();
-
-            // Build edges for this upper layer
-            hierarchical_graph.resize(layer_id + 1);
-            hierarchical_graph.set_layer_graph(layer_id, conv_graph::factory_t::construct_graph(
-                *current_layer_vecs, upper_layer_config,
-                static_cast<typename conv_graph::pruning_config_t>(upper_pruning_config),
-                static_cast<typename conv_graph::propagate_config_t>(propagate_config)));
+            rnet_radius *= rnet_config.rnet_beta();
         }
 
         // Set entry point: vertex closest to centroid in top layer
@@ -122,6 +166,9 @@ public:
         bf_router.initialize();
         auto nearest = bf_router.query(centroid.data());
         hierarchical_graph.set_entry_point(nearest[0].get_id());
+
+        ARTEA_INFO(fmt::format("Artea graph: {} layers, entry_point={} (top layer)",
+            hier_vecs_manager.get_num_layers(), nearest[0].get_id()));
 
         return hierarchical_graph;
     }

@@ -6,7 +6,6 @@
 
 #pragma once
 
-#include <variant>
 #include <nlohmann/json.hpp>
 #include <artea/common/logger.hpp>
 #include <fmt/format.h>
@@ -17,7 +16,7 @@ namespace artea_graph {
 
 /**
  * @brief Artea hierarchical graph index, extending HierarchicalGraph with
- *        pruning, propagation, and vertices builder configs.
+ *        pruning, propagation, and R-net configs.
  * @tparam IndexTraitsT The index traits type.
  */
 template <typename IndexTraitsT>
@@ -31,21 +30,13 @@ class IndexStructure :
     using layer_config_t = typename IndexTraitsT::layer_config_t;
     using propagate_config_t = typename IndexTraitsT::artea_graph::propagate_config_t;
     using pruning_config_t = typename IndexTraitsT::artea_graph::pruning_config_t;
-    using greedy_vertices_builder_config_t = typename IndexTraitsT::greedy_vertices_builder_config_t;
-    using random_vertices_builder_config_t = typename IndexTraitsT::random_vertices_builder_config_t;
-    using vertices_builder_config_t = typename IndexTraitsT::vertices_builder_config_t;
+    using rnet_config_t = typename IndexTraitsT::artea_graph::rnet_config_t;
 
 public:
     using layer_graph_t = typename IndexTraitsT::conv_graph::index_t;
+
     /**
      * @brief Construct a new Artea hierarchical graph index.
-     * @param base_vecs Reference to the base layer vector data.
-     * @param bottom_layer_config Configuration for bottom layer.
-     * @param upper_layer_config Configuration for upper layers.
-     * @param bottom_pruning_config Pruning configuration for bottom layer.
-     * @param upper_pruning_config Pruning configuration for upper layers.
-     * @param propagate_config Propagation configuration (shared between layers).
-     * @param vertices_builder_config Configuration for vertices builder (greedy or random).
      */
     IndexStructure(
         const vector_array_t& base_vecs,
@@ -54,12 +45,12 @@ public:
         const pruning_config_t bottom_pruning_config,
         const pruning_config_t upper_pruning_config,
         const propagate_config_t propagate_config,
-        const vertices_builder_config_t vertices_builder_config
+        const rnet_config_t rnet_config
     ) : base_t(base_vecs, bottom_layer_config, upper_layer_config),
         _bottom_pruning_config(bottom_pruning_config),
         _upper_pruning_config(upper_pruning_config),
         _propagate_config(propagate_config),
-        _vertices_builder_config(vertices_builder_config)
+        _rnet_config(rnet_config)
     {}
 
     IndexStructure(const IndexStructure&) = delete;
@@ -89,10 +80,10 @@ public:
     auto propagate_config() -> propagate_config_t& { return _propagate_config; }
 
     __attribute__((always_inline))
-    auto vertices_builder_config() const -> const vertices_builder_config_t& { return _vertices_builder_config; }
+    auto rnet_config() const -> const rnet_config_t& { return _rnet_config; }
 
     __attribute__((always_inline))
-    auto vertices_builder_config() -> vertices_builder_config_t& { return _vertices_builder_config; }
+    auto rnet_config() -> rnet_config_t& { return _rnet_config; }
 
     // --- Metadata hooks ---
 
@@ -114,25 +105,11 @@ public:
             {"routing_topk", _propagate_config.routing_topk()},
             {"routing_queue_size", _propagate_config.routing_queue_size()}
         };
-        // Save vertices_builder_config based on which variant is active
-        if (std::holds_alternative<greedy_vertices_builder_config_t>(_vertices_builder_config)) {
-            const auto& config = std::get<greedy_vertices_builder_config_t>(_vertices_builder_config);
-            meta["vertices_builder_config"] = {
-                {"type", "approx_rnet"},
-                {"min_radius", config.min_radius()},
-                {"beta", config.beta()},
-                {"coverage_ratio", config.coverage_ratio()},
-                {"confidence", config.confidence()},
-                {"max_result_ratio", config.max_result_ratio()},
-                {"sampling_batch_size", config.sampling_batch_size()}
-            };
-        } else if (std::holds_alternative<random_vertices_builder_config_t>(_vertices_builder_config)) {
-            const auto& config = std::get<random_vertices_builder_config_t>(_vertices_builder_config);
-            meta["vertices_builder_config"] = {
-                {"type", "random"},
-                {"random_result_ratio", config.random_result_ratio()}
-            };
-        }
+        meta["rnet_config"] = {
+            {"mis_radix", _rnet_config.mis_radix()},
+            {"mis_max_power", _rnet_config.mis_max_power()},
+            {"rnet_beta", _rnet_config.rnet_beta()}
+        };
         return meta;
     }
 
@@ -163,31 +140,16 @@ public:
             meta["propagate_config"].value("routing_topk", vertex_num_t(64)),
             meta["propagate_config"].value("routing_queue_size", vertex_num_t(96))
         );
-
-        const std::string vb_type = meta["vertices_builder_config"]["type"].get<std::string>();
-        vertices_builder_config_t vertices_builder_config = [&]() -> vertices_builder_config_t {
-            if (vb_type == "approx_rnet") {
-                return greedy_vertices_builder_config_t(
-                    meta["vertices_builder_config"]["min_radius"].get<distance_t>(),
-                    meta["vertices_builder_config"]["beta"].get<ratio_t>(),
-                    meta["vertices_builder_config"]["coverage_ratio"].get<ratio_t>(),
-                    meta["vertices_builder_config"]["confidence"].get<ratio_t>(),
-                    meta["vertices_builder_config"]["max_result_ratio"].get<ratio_t>(),
-                    meta["vertices_builder_config"]["sampling_batch_size"].get<vertex_num_t>()
-                );
-            } else if (vb_type == "random") {
-                return random_vertices_builder_config_t(
-                    meta["vertices_builder_config"]["random_result_ratio"].get<ratio_t>()
-                );
-            }
-            ARTEA_ERROR(fmt::format("Unknown vertices_builder_config type: {}", vb_type));
-            __builtin_unreachable();
-        }();
+        rnet_config_t rnet_config(
+            meta["rnet_config"].value("mis_radix", distance_t(1.2)),
+            meta["rnet_config"].value("mis_max_power", uint32_t(12)),
+            meta["rnet_config"].value("rnet_beta", ratio_t(1.44))
+        );
 
         return IndexStructure(
             base_vecs, bottom_layer_config, upper_layer_config,
             bottom_pruning_config, upper_pruning_config,
-            propagate_config, vertices_builder_config
+            propagate_config, rnet_config
         );
     }
 
@@ -201,8 +163,8 @@ private:
     /** @brief Propagation configuration (shared between layers). */
     propagate_config_t _propagate_config;
 
-    /** @brief Vertices builder configuration (greedy or random). */
-    vertices_builder_config_t _vertices_builder_config;
+    /** @brief R-net configuration for GraphMIS vertex selection. */
+    rnet_config_t _rnet_config;
 
 };  // class IndexStructure
 

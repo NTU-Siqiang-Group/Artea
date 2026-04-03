@@ -105,8 +105,10 @@ public:
             radius_schedule.push_back(rnet_radius);
         }
 
+        #ifdef ARTEA_PROFILING
         ARTEA_INFO(fmt::format("GraphMISVG: {} radius steps, from {:.6f} to {:.6f}",
             radius_schedule.size(), radius_schedule.front(), radius_schedule.back()));
+        #endif
 
         // Assign random priorities (higher = wins tie-breaking)
         std::vector<uint32_t> priority(num_vertices);
@@ -313,6 +315,7 @@ public:
 
             total_rounds += step_rounds;
 
+            #ifdef ARTEA_PROFILING
             // Count current IN vertices
             uint32_t count_in = 0;
             for (vertex_num_t v = 0; v < num_vertices; ++v) {
@@ -320,6 +323,7 @@ public:
             }
             ARTEA_INFO(fmt::format("C2F step {}/{}: radius={:.6f}, {} MIS rounds, {} IN vertices",
                 step + 1, radius_schedule.size(), current_radius, step_rounds, count_in));
+            #endif
         }
 
         // Collect IN vertices
@@ -331,9 +335,9 @@ public:
         }
         result.vecs_data = vecs_data.extract_subset(result.vec_ids);
 
-        ARTEA_INFO(fmt::format("GraphMISVG: selected {} / {} vertices ({:.2f}%) in {} total rounds, {} steps",
+        ARTEA_INFO(fmt::format("GraphMISVG: selected {} / {} vertices ({:.2f}%) in {} rounds",
             result.vec_ids.size(), num_vertices,
-            100.0 * result.vec_ids.size() / num_vertices, total_rounds, radius_schedule.size()));
+            100.0 * result.vec_ids.size() / num_vertices, total_rounds));
 
         return result;
     }
