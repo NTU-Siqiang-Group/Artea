@@ -120,10 +120,31 @@ public:
             auto t2 = std::chrono::high_resolution_clock::now();
             #endif
 
+            // Step 3.5: Scale shifted_coeffs based on dataset distance distribution.
+            // For layer 0: shifted_coeffs *= min_radius (estimated via 0.01th-percentile
+            //   of 1-NN distances from the KNN graph).
+            // For upper layers: shifted_coeffs = 0 (pure scale-based pruning).
+            auto adjusted_pruning_config = pruning_config;
+            if (layer_id == 0) {
+                radius_prober_t prober_sc;
+                auto min_radius_result = prober_sc.probe(knn_graph_index, 1, 0.0001f);
+                distance_t min_radius = min_radius_result.radius;
+                adjusted_pruning_config.shifted_coeffs(
+                    pruning_config.shifted_coeffs() * min_radius);
+                ARTEA_INFO(fmt::format("Layer 0: scaled shifted_coeffs: {:.6f} -> {:.6f} (min_radius={:.6f})",
+                    pruning_config.shifted_coeffs(),
+                    adjusted_pruning_config.shifted_coeffs(), min_radius));
+            } else if (adjusted_pruning_config.shifted_coeffs() != distance_t(0)) {
+                ARTEA_WARN(fmt::format("Layer {}: shifted_coeffs={:.6f} is non-zero for upper layer; "
+                    "upper layers use pure scale-based pruning, forcing shifted_coeffs=0",
+                    layer_id, adjusted_pruning_config.shifted_coeffs()));
+                adjusted_pruning_config.shifted_coeffs(distance_t(0));
+            }
+
             // Step 4: Refine KNN graph to conv_graph
             auto conv_graph_index = conv_graph::factory_t::construct_graph(
                 std::move(knn_graph_index),
-                static_cast<typename conv_graph::pruning_config_t>(pruning_config));
+                static_cast<typename conv_graph::pruning_config_t>(adjusted_pruning_config));
 
             // Set layer graph
             hierarchical_graph.resize(layer_id + 1);
