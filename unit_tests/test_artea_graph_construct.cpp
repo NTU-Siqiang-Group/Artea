@@ -141,7 +141,7 @@ public:
         ARTEA_INFO("Constructing hierarchical Artea graph...");
         auto construction_start = std::chrono::high_resolution_clock::now();
 
-        auto graph = artea_graph::factory_t::construct_graph(
+        auto graph = artea_graph::factory_t::mis_construct_graph(
             base_vecs,
             bottom_layer_config, upper_layer_config,
             bottom_pruning_config, upper_pruning_config,

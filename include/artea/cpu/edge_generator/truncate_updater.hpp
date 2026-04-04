@@ -15,7 +15,7 @@
 /*
  * @FilePath: /Artea/include/artea/cpu/edge_generator/truncate_updater.hpp
  * @Author: Chandler (Weitang Ye) <weitang.ye@ntu.edu.sg>
- * @Description: Truncate updater: trims each vertex's neighbor array to max_nbr_size.
+ * @Description: Truncate updater: trims each vertex's neighbor array to a specified size.
  */
 
 #pragma once
@@ -44,34 +44,26 @@ public:
         const dist_func_t& dist_func,
         const vector_array_t& vecs_data,
         log_table_t& log_table,
-        const FlatGraphT& flat_graph
-    ) : base_class_t(dist_func, vecs_data, log_table, flat_graph) {}
+        const FlatGraphT& flat_graph,
+        vertex_num_t truncate_size = 0
+    ) : base_class_t(dist_func, vecs_data, log_table, flat_graph),
+        _truncate_size(truncate_size) {}
 
-    /**
-     * @brief Truncate the neighbor array of a pivot vertex to at most max_nbr_size entries.
-     *
-     * Since flat_graph neighbor arrays are maintained in sorted order (closest first),
-     * truncation simply drops the tail entries beyond max_nbr_size, retaining only
-     * the closest neighbors.
-     *
-     * @param pivot_vid The vertex ID whose neighbor array is being truncated (unused).
-     * @param origin_nbrs The neighbor array to truncate in-place. If its size is already
-     *                    <= max_nbr_size, it is left unchanged.
-     *
-     * @note This updater does not compute distances, write logs, or modify neighbor
-     *       distances/flags. It is intended as a post-processing pass after graph
-     *       construction to enforce the max_nbr_size capacity constraint.
-     */
     __attribute__((always_inline))
     auto update_impl(
         const vertex_id_t /* pivot_vid */,
         nbr_arr_t& origin_nbrs
     ) -> void {
-        const vertex_num_t max_sz = this->_flat_graph.layer_config().max_nbr_size();
+        const vertex_num_t max_sz = (_truncate_size > 0)
+            ? _truncate_size
+            : this->_flat_graph.layer_config().max_nbr_size();
         if (origin_nbrs.size() > max_sz) {
             origin_nbrs.resize(max_sz);
         }
     }
+
+private:
+    vertex_num_t _truncate_size;
 
 };  // class TruncateUpdater
 

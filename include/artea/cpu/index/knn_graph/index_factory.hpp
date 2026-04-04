@@ -175,7 +175,7 @@ private:
         /** ------------------------------------------------------------------------- ***/
 
         for (iter_t routing_loop = 0; routing_loop < propagate_config.num_routing_loops(); ++routing_loop) {
-            propagate_engine.next(routing_updater).next(truncate_updater);
+            propagate_engine.next(routing_updater);
             if (on_iter_end) { on_iter_end(propagate_config.num_build_loops() + routing_loop); }
         }
     }

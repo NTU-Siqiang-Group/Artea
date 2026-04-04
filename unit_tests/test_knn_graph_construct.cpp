@@ -18,6 +18,7 @@
 #include <filesystem>
 #include <chrono>
 #include <sstream>
+#include <random>
 #include <fmt/format.h>
 #include <argparse/argparse.hpp>
 #include <gtest/gtest.h>
@@ -108,6 +109,19 @@ public:
 
         ARTEA_INFO(fmt::format("Graph built with {} vertices", g_test_results.num_vertices));
         ARTEA_INFO(fmt::format("Build time: {:.2f} s", g_test_results.build_time_s));
+
+        // Sample neighbor counts for debugging
+        {
+            std::mt19937 rng(42);
+            std::uniform_int_distribution<uint32_t> dist(0, g_test_results.num_vertices - 1);
+            std::cout << "\n--- Sample Neighbor Counts (20 random vertices) ---" << std::endl;
+            for (int i = 0; i < 20; ++i) {
+                uint32_t vid = dist(rng);
+                const auto& nbrs = flat_graph_->fetch_nbrs(vid);
+                std::cout << fmt::format("  vertex {:>8}: {} neighbors", vid, nbrs.size()) << std::endl;
+            }
+            std::cout << std::endl;
+        }
 
         // Convert to flat search graph
         ARTEA_INFO("Converting to flat search graph...");

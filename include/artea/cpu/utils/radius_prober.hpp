@@ -106,11 +106,13 @@ public:
         const vertex_num_t num_valid = static_cast<vertex_num_t>(
             std::distance(distances.begin(), valid_end));
 
+        #ifndef NDEBUG
         if (num_valid < num_vertices) {
             ARTEA_WARN(fmt::format(
                 "[RadiusProber] {} / {} vertices have fewer than {} neighbors",
                 num_vertices - num_valid, num_vertices, nbr_rank));
         }
+        #endif
 
         if (num_valid == 0) {
             return ProbeResult{max_distance, 0, quantile};

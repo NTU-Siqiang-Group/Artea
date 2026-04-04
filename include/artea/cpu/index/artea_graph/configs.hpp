@@ -1,5 +1,5 @@
 /*
- * @FilePath: /Artea/include/artea/cpu/index/artea_graph/configs.hpp
+ * @FilePath: /Artea-feature-mis-rnet/include/artea/cpu/index/artea_graph/configs.hpp
  * @Author: Chandler (Weitang Ye) <weitang.ye@ntu.edu.sg>
  * @Description: Configuration aliases for Artea graph construction.
  */

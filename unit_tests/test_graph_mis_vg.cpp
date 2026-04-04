@@ -129,13 +129,17 @@ private:
     void _print_radius_table() {
         radius_prober_t prober;
 
-        std::vector<uint32_t> nbr_ranks = {1, 2, 4, 8, 16, 32};
+        std::vector<uint32_t> nbr_ranks = {1, 2, 4, 8, 16, 32, 64};
+        // Extend beyond 64 in steps of 32 up to routing_topk
+        for (uint32_t r = 96; r <= g_config.routing_topk; r += 32) {
+            nbr_ranks.push_back(r);
+        }
         std::vector<float> quantiles = {0.01f, 0.05f, 0.10f, 0.25f, 0.50f, 0.75f, 0.90f, 0.95f, 0.99f, 0.995f, 0.999f};
 
-        // Filter out nbr_ranks that exceed max_nbr_size
+        // Filter out nbr_ranks that exceed routing_topk
         std::vector<uint32_t> valid_ranks;
         for (auto rank : nbr_ranks) {
-            if (rank <= g_config.max_nbr_size) valid_ranks.push_back(rank);
+            if (rank <= g_config.routing_topk) valid_ranks.push_back(rank);
         }
 
         // Print header
@@ -154,7 +158,11 @@ private:
             std::cout << fmt::format("{:<12}", fmt::format("{:.3f}", q));
             for (auto rank : valid_ranks) {
                 auto result = prober.probe(*knn_graph_, rank, q);
-                std::cout << fmt::format(" {:>10.4f}", result.radius);
+                if (result.num_vertices == 0) {
+                    std::cout << fmt::format(" {:>10}", "N/A");
+                } else {
+                    std::cout << fmt::format(" {:>10.4f}", result.radius);
+                }
             }
             std::cout << std::endl;
         }

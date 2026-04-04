@@ -322,9 +322,8 @@ public:
             // RoutingUpdater(dist_func, vecs_arr, log_table, flat_graph, candidate_queue_size)
             return UpdaterT(_dist_func, vecs_arr, log_table, *_flat_graph, std::forward<Args>(args)...);
         } else if constexpr (std::is_same_v<UpdaterT, truncate_updater_t>) {
-            // TruncateUpdater constructor signature:
-            // TruncateUpdater(dist_func, vecs_arr, log_table, flat_graph)
-            return UpdaterT(_dist_func, vecs_arr, log_table, *_flat_graph);
+            // TruncateUpdater(dist_func, vecs_arr, log_table, flat_graph, [truncate_size])
+            return UpdaterT(_dist_func, vecs_arr, log_table, *_flat_graph, std::forward<Args>(args)...);
         } else {
             ARTEA_ERROR("Unsupported updater type");
         }

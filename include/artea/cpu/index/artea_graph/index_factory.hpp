@@ -50,7 +50,7 @@ class IndexFactory {
 
 public:
 
-    static auto construct_graph(
+    static auto mis_construct_graph(
         const vector_array_t& base_vecs,
         layer_config_t bottom_layer_config,
         layer_config_t upper_layer_config,
@@ -95,7 +95,7 @@ public:
             // Step 1: Build KNN graph
             auto knn_graph_index = knn_graph::factory_t::construct_graph(
                 *current_layer_vecs, layer_config,
-                static_cast<typename knn_graph::pruning_config_t>(pruning_config),
+                typename knn_graph::pruning_config_t(1.0, 0.0),
                 static_cast<typename knn_graph::propagate_config_t>(propagate_config));
 
             #ifdef ARTEA_PROFILING
