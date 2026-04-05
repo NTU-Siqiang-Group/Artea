@@ -30,7 +30,7 @@ Existing updaters and their behaviors:
 | Updater | Writes logs | Modifies origin_nbrs | Extra constructor args |
 |---------|-------------|----------------------|----------------------|
 | `TriangleUpdater` | Yes (reverse edges on RNG conflict) | Yes (prunes) | `scale_coeffs`, `shifted_coeffs` |
-| `SilentTriangleUpdater` | No | Yes (prunes) | `scale_coeffs`, `shifted_coeffs` |
+| `PruningUpdater` | No | Yes (prunes) | `scale_coeffs`, `shifted_coeffs` |
 | `ReverseUpdater` | Yes (reverse edges) | No | None |
 | `RandomUpdater` | Yes (random neighbors) | No | `rand_gen_size` |
 | `RoutingUpdater` | Yes (KNN results) | No | `topk`, `candidate_queue_size` |

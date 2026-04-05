@@ -96,7 +96,7 @@
 #include <artea/cpu/edge_generator/nbr_log_table.hpp>
 #include <artea/cpu/edge_generator/neighbor_updater.hpp>
 #include <artea/cpu/edge_generator/triangle_updater.hpp>
-#include <artea/cpu/edge_generator/silent_triangle_updater.hpp>
+#include <artea/cpu/edge_generator/pruning_updater.hpp>
 #include <artea/cpu/edge_generator/reverse_updater.hpp>
 #include <artea/cpu/edge_generator/random_updater.hpp>
 #include <artea/cpu/edge_generator/random_eg.hpp>

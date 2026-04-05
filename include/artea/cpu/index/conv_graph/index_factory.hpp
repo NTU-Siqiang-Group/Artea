@@ -57,7 +57,7 @@ class IndexFactory {
     using random_eg_t = typename GraphFactoryTraitsT::random_eg_t;
     using propagate_engine_t = typename GraphFactoryTraitsT::template propagate_engine_t<this_index_t, false>;
     using triangle_updater_t = typename GraphFactoryTraitsT::template triangle_updater_t<this_index_t>;
-    using silent_triangle_updater_t = typename GraphFactoryTraitsT::template silent_triangle_updater_t<this_index_t>;
+    using pruning_updater_t = typename GraphFactoryTraitsT::template pruning_updater_t<this_index_t>;
     using reverse_updater_t = typename GraphFactoryTraitsT::template reverse_updater_t<this_index_t>;
     using routing_updater_t = typename GraphFactoryTraitsT::template routing_updater_t<this_index_t>;
     using truncate_updater_t = typename GraphFactoryTraitsT::template truncate_updater_t<this_index_t>;
@@ -108,12 +108,12 @@ public:
         propagate_engine_t propagate_engine(num_vertices, dist_func);
         propagate_engine.set_graph(flat_graph);
 
-        auto silent_triangle_updater = propagate_engine.template make_updater<silent_triangle_updater_t>(
+        auto pruning_updater = propagate_engine.template make_updater<pruning_updater_t>(
             pruning_config.scale_coeffs(), pruning_config.shifted_coeffs());
         auto reverse_updater  = propagate_engine.template make_updater<reverse_updater_t>();
         auto truncate_updater = propagate_engine.template make_updater<truncate_updater_t>();
 
-        propagate_engine.next(silent_triangle_updater)
+        propagate_engine.next(pruning_updater)
                         .next(reverse_updater).next(truncate_updater);
 
         return flat_graph;
@@ -204,9 +204,9 @@ private:
         }
 
         for (iter_t routing_loop = 0; routing_loop < propagate_config.num_routing_loops(); ++routing_loop) {
-            auto silent_triangle_updater = propagate_engine.template make_updater<silent_triangle_updater_t>(
+            auto pruning_updater = propagate_engine.template make_updater<pruning_updater_t>(
                 pruning_config.scale_coeffs(), pruning_config.shifted_coeffs());
-            propagate_engine.next(routing_updater).next(silent_triangle_updater)
+            propagate_engine.next(routing_updater).next(pruning_updater)
                             .next(truncate_updater).next(reverse_updater).next(truncate_updater);
             if (on_iter_end) { on_iter_end(propagate_config.num_build_loops() + routing_loop); }
         }

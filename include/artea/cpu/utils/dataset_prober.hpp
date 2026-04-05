@@ -23,6 +23,7 @@
 
 #include <vector>
 #include <algorithm>
+#include <execution>
 #include <cmath>
 #include <limits>
 #include <queue>
@@ -52,13 +53,15 @@ namespace cpu {
  * of points within radius r scales as N(r) ~ r^d. Real-world data often lies on a
  * lower-dimensional manifold embedded in high-dimensional space, so LID << ambient dimension.
  *
- * ### Levina-Bickel MLE Estimator
+ * ### Levina-Bickel MLE Estimator (unbiased form)
  *
  * For each sampled point x with k nearest neighbors at distances r_1 <= r_2 <= ... <= r_k,
- * the per-point LID estimate is:
+ * the per-point unbiased LID estimate is:
  *
- *     LID(x) = [ (1/k) * sum_{i=1}^{k} ln(r_k / r_i) ]^{-1}
+ *     LID(x) = [ 1/(k-1) * sum_{i=1}^{k-1} ln(r_k / r_i) ]^{-1}
  *
+ * The k-th term ln(r_k/r_k) = 0 contributes nothing; r_k serves only as the boundary.
+ * Dividing by k-1 (the number of informative terms) yields the unbiased MLE.
  * The global LID is the average over all sampled points.
  *
  * ### Intuition: Shell Effect
@@ -140,7 +143,7 @@ public:
                         column[i] = knn_table[i * MAX_K + col];
                     }
 
-                    std::sort(column.begin(), column.end());
+                    std::sort(std::execution::par, column.begin(), column.end());
 
                     table[col].reserve(quantiles.size());
                     for (float q : quantiles) {
@@ -171,11 +174,12 @@ private:
     const dist_func_t& _dist_func;
 
     /**
-     * @brief Compute LID via Levina-Bickel MLE averaged over all sampled points.
+     * @brief Compute LID via unbiased Levina-Bickel MLE averaged over all sampled points.
      *
      * For each sample i with k-NN distances r_1..r_k (row i of knn_table):
-     *   LID_i = [ (1/k) * sum_{j=1}^{k} ln(r_k / r_j) ]^{-1}
+     *   LID_i = [ 1/(k-1) * sum_{j=1}^{k-1} ln(r_k / r_j) ]^{-1}
      *
+     * The k-th term is excluded (ln(r_k/r_k) = 0); dividing by k-1 gives the unbiased MLE.
      * Global LID = mean(LID_i) over all valid samples.
      *
      * @param knn_table Flat row-major table (num_samples x MAX_K), each row sorted ascending
@@ -187,7 +191,6 @@ private:
         vec_num_t num_samples
     ) -> float {
 
-        // Use thread-local accumulators
         std::vector<double> lid_values(num_samples, 0.0);
 
         tbb::parallel_for(
@@ -203,13 +206,14 @@ private:
                         continue;
                     }
 
+                    // Sum over first k-1 terms only (the k-th term is always 0)
                     double log_sum = 0.0;
-                    for (uint32_t j = 0; j < MAX_K; ++j) {
+                    for (uint32_t j = 0; j < MAX_K - 1; ++j) {
                         distance_t r_j = std::max(row[j], static_cast<distance_t>(EPSILON));
                         log_sum += std::log(static_cast<double>(r_k) / static_cast<double>(r_j));
                     }
 
-                    double avg_log = log_sum / static_cast<double>(MAX_K);
+                    double avg_log = log_sum / static_cast<double>(MAX_K - 1);
                     lid_values[i] = (avg_log > 1e-10) ? (1.0 / avg_log) : 0.0;
                 }
             }
@@ -239,8 +243,9 @@ private:
      */
     auto _compute_knn_table(vec_num_t num_samples) -> std::vector<distance_t> {
         const vec_num_t total_vecs = _base_vecs.get_num_vecs();
-        if (total_vecs < 2) {
-            ARTEA_ERROR("Dataset must contain at least 2 vectors");
+        if (total_vecs <= MAX_K) {
+            ARTEA_ERROR(fmt::format("Dataset must contain more than {} vectors, got {}",
+                MAX_K, total_vecs));
         }
         if (num_samples < 1) {
             ARTEA_ERROR("num_samples must be at least 1");
@@ -283,17 +288,11 @@ private:
                         }
                     }
 
-                    // Extract heap into row, sorted ascending
+                    // Extract heap into row, sorted ascending (heap pops max first)
                     distance_t* row = knn_table.data() + static_cast<size_t>(s) * MAX_K;
-                    uint32_t count = static_cast<uint32_t>(heap.size());
-                    // Fill from the end (heap pops max first)
-                    for (uint32_t k = count; k > 0; --k) {
+                    for (uint32_t k = MAX_K; k > 0; --k) {
                         row[k - 1] = heap.top();
                         heap.pop();
-                    }
-                    // Fill remaining slots with max distance (if dataset has fewer than MAX_K vectors)
-                    for (uint32_t k = count; k < MAX_K; ++k) {
-                        row[k] = std::numeric_limits<distance_t>::max();
                     }
                 }
             }

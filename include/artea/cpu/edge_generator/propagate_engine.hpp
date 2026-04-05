@@ -292,7 +292,7 @@ public:
     template <typename UpdaterT, typename... Args>
     auto make_updater(Args&&... args) -> UpdaterT {
         using triangle_updater_t = typename EdgeGeneratorTraitsT::template triangle_updater_t<FlatGraphT>;
-        using silent_triangle_updater_t = typename EdgeGeneratorTraitsT::template silent_triangle_updater_t<FlatGraphT>;
+        using pruning_updater_t = typename EdgeGeneratorTraitsT::template pruning_updater_t<FlatGraphT>;
         using reverse_updater_t = typename EdgeGeneratorTraitsT::template reverse_updater_t<FlatGraphT>;
         using random_updater_t = typename EdgeGeneratorTraitsT::template random_updater_t<FlatGraphT>;
         using routing_updater_t = typename EdgeGeneratorTraitsT::template routing_updater_t<FlatGraphT>;
@@ -306,8 +306,8 @@ public:
         if constexpr (std::is_same_v<UpdaterT, triangle_updater_t>) {
             // TriangleUpdater(dist_func, vecs_arr, log_table, flat_graph, scale_coeffs, shifted_coeffs)
             return UpdaterT(_dist_func, vecs_arr, log_table, *_flat_graph, std::forward<Args>(args)...);
-        } else if constexpr (std::is_same_v<UpdaterT, silent_triangle_updater_t>) {
-            // SilentTriangleUpdater(dist_func, vecs_arr, log_table, flat_graph, scale_coeffs, shifted_coeffs)
+        } else if constexpr (std::is_same_v<UpdaterT, pruning_updater_t>) {
+            // PruningUpdater(dist_func, vecs_arr, log_table, flat_graph, scale_coeffs, shifted_coeffs)
             return UpdaterT(_dist_func, vecs_arr, log_table, *_flat_graph, std::forward<Args>(args)...);
         } else if constexpr (std::is_same_v<UpdaterT, reverse_updater_t>) {
             // ReverseUpdater constructor signature:

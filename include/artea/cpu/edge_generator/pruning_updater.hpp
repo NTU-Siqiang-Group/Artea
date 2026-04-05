@@ -13,9 +13,9 @@
 // limitations under the License.
 
 /*
- * @FilePath: /Artea/include/artea/cpu/edge_generator/silent_triangle_updater.hpp
+ * @FilePath: /Artea/include/artea/cpu/edge_generator/pruning_updater.hpp
  * @Author: Chandler (Weitang Ye) <weitang.ye@ntu.edu.sg>
- * @Description: Silent triangle-based neighbor updater (no log writes).
+ * @Description: Pruning-based neighbor updater (no log writes).
  */
 
 #pragma once
@@ -30,8 +30,8 @@ namespace artea {
 namespace cpu {
 
 template <typename EdgeGeneratorTraitsT, typename FlatGraphT>
-class SilentTriangleUpdater :
-    public EdgeGeneratorTraitsT::template neighbor_updater_t<FlatGraphT, SilentTriangleUpdater<EdgeGeneratorTraitsT, FlatGraphT>> {
+class PruningUpdater :
+    public EdgeGeneratorTraitsT::template neighbor_updater_t<FlatGraphT, PruningUpdater<EdgeGeneratorTraitsT, FlatGraphT>> {
 
     using vertex_id_t = typename EdgeGeneratorTraitsT::vertex_id_t;
     using vertex_num_t = typename EdgeGeneratorTraitsT::vertex_num_t;
@@ -44,7 +44,7 @@ class SilentTriangleUpdater :
     using log_table_t = typename EdgeGeneratorTraitsT::log_table_t;
     using dist_func_t = typename EdgeGeneratorTraitsT::dist_func_t;
     using pruning_condition_t = typename EdgeGeneratorTraitsT::pruning_condition_t;
-    using base_class_t = typename EdgeGeneratorTraitsT::template neighbor_updater_t<FlatGraphT, SilentTriangleUpdater<EdgeGeneratorTraitsT, FlatGraphT>>;
+    using base_class_t = typename EdgeGeneratorTraitsT::template neighbor_updater_t<FlatGraphT, PruningUpdater<EdgeGeneratorTraitsT, FlatGraphT>>;
     static constexpr vertex_id_t invalid_vertex_id = EdgeGeneratorTraitsT::invalid_vertex_id;
     static constexpr distance_t nan_distance = EdgeGeneratorTraitsT::nan_distance;
     static constexpr distance_t max_distance = EdgeGeneratorTraitsT::max_distance;
@@ -52,9 +52,9 @@ class SilentTriangleUpdater :
     static constexpr bool rejected = false;
 
 public:
-    static constexpr const char* updater_name = "silent_triangle_updater";
+    static constexpr const char* updater_name = "pruning_updater";
 
-    SilentTriangleUpdater(
+    PruningUpdater(
         const dist_func_t& dist_func,
         const vector_array_t& vecs_data,
         log_table_t& log_table,
@@ -84,7 +84,7 @@ public:
     ) -> void {
         #ifndef NDEBUG
         if (origin_nbrs.empty()) {
-            ARTEA_ERROR("[SilentTriangleUpdater]: origin_nbrs cannot be empty");
+            ARTEA_ERROR("[PruningUpdater]: origin_nbrs cannot be empty");
         }
         #endif
 
@@ -162,7 +162,7 @@ private:
         return accepted;
     }
 
-};  // class SilentTriangleUpdater
+};  // class PruningUpdater
 
 }   // namespace cpu
 }   // namespace artea
