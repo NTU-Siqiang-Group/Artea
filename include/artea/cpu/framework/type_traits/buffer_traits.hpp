@@ -82,14 +82,14 @@ public:
     using base_traits_t = BaseTraitsT;
 
     /** @brief Type for buffer elements. */
-    using nbr_t = typename BaseTraitsT::nbr_t;
+    using dnbr_t = typename BaseTraitsT::dnbr_t;
 
     using buffer_policy_t = BufferPolicyT;
 
     /** ------ Selected Buffer Type ------ **/
 
     /** @brief Type for neighbor log buffers. */
-    using log_buffer_t = typename BufferSelector<BufferPolicy, nbr_t, BufCapacity>::type;
+    using log_buffer_t = typename BufferSelector<BufferPolicy, dnbr_t, BufCapacity>::type;
 
      /** @brief Type for the container used within the neighbor buffer. */
     using log_container_t = typename log_buffer_t::container_t;

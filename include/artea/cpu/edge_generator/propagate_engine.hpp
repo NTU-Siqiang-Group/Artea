@@ -42,8 +42,8 @@ class PropagateEngine {
     using vertex_id_t = typename EdgeGeneratorTraitsT::vertex_id_t;
     using distance_t = typename EdgeGeneratorTraitsT::distance_t;
     using iter_t = typename EdgeGeneratorTraitsT::iter_t;
-    using nbr_t = typename EdgeGeneratorTraitsT::nbr_t;
-    using nbr_arr_t = typename EdgeGeneratorTraitsT::nbr_arr_t;
+    using dnbr_t = typename EdgeGeneratorTraitsT::dnbr_t;
+    using dnbr_arr_t = typename EdgeGeneratorTraitsT::dnbr_arr_t;
     using log_buffer_t = typename EdgeGeneratorTraitsT::log_buffer_t;
     using log_container_t = typename EdgeGeneratorTraitsT::log_container_t;
     using log_table_t = typename EdgeGeneratorTraitsT::log_table_t;
@@ -81,7 +81,7 @@ public:
         const vertex_id_t pivot_vid,
         UdfUpdaterT& udf_updater
     ) -> void {
-        nbr_arr_t& origin_nbrs = _flat_graph->fetch_nbrs(pivot_vid);
+        dnbr_arr_t& origin_nbrs = _flat_graph->fetch_nbrs(pivot_vid);
         udf_updater(pivot_vid, origin_nbrs);
     }
 

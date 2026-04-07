@@ -80,7 +80,7 @@ protected:
     }
 
     // Helper to check if edge (u, v) exists in neighbor array
-    bool has_edge(const nbr_arr_t& nbrs, vertex_id_t target_id, distance_t* out_dist = nullptr) {
+    bool has_edge(const dnbr_arr_t& nbrs, vertex_id_t target_id, distance_t* out_dist = nullptr) {
         for (const auto& nbr : nbrs) {
             if (nbr.get_id() == target_id) {
                 if (out_dist) *out_dist = nbr.get_distance();
@@ -92,7 +92,7 @@ protected:
 
     // Verify RNG property manually
     bool verify_rng_property(
-        const std::vector<nbr_arr_t>& nbrs_arr,
+        const std::vector<dnbr_arr_t>& nbrs_arr,
         ratio_t scale_coeffs = 1.0,
         ratio_t shifted_coeffs = 0.0
     ) {
@@ -140,16 +140,16 @@ TEST_F(PropagateEngineCorrectnessTest, TrianglePruningWithPropagateEngine) {
     auto& nbrs_arr = flat_graph_->get_nbrs_arr();
 
     for (vertex_id_t u = 0; u < num_vertices_; ++u) {
-        nbr_arr_t& nbrs = nbrs_arr[u];
+        dnbr_arr_t& nbrs = nbrs_arr[u];
         for (vertex_id_t v = 0; v < num_vertices_; ++v) {
             if (v != u) {
                 distance_t dist = compute_distance(u, v);
-                nbrs.push_back(nbr_t(v, dist, true));
+                nbrs.push_back(dnbr_t(v, dist, true));
             }
         }
         // Sort by distance
         std::sort(nbrs.begin(), nbrs.end(),
-            [](const nbr_t& a, const nbr_t& b) {
+            [](const dnbr_t& a, const dnbr_t& b) {
                 return a.get_distance() < b.get_distance();
             });
     }
@@ -325,15 +325,15 @@ TEST_F(PropagateEngineCorrectnessTest, ScaledTrianglePruning) {
     auto& nbrs_arr = flat_graph_->get_nbrs_arr();
 
     for (vertex_id_t u = 0; u < num_vertices_; ++u) {
-        nbr_arr_t& nbrs = nbrs_arr[u];
+        dnbr_arr_t& nbrs = nbrs_arr[u];
         for (vertex_id_t v = 0; v < num_vertices_; ++v) {
             if (v != u) {
                 distance_t dist = compute_distance(u, v);
-                nbrs.push_back(nbr_t(v, dist, true));
+                nbrs.push_back(dnbr_t(v, dist, true));
             }
         }
         std::sort(nbrs.begin(), nbrs.end(),
-            [](const nbr_t& a, const nbr_t& b) {
+            [](const dnbr_t& a, const dnbr_t& b) {
                 return a.get_distance() < b.get_distance();
             });
     }
@@ -387,15 +387,15 @@ TEST_F(PropagateEngineCorrectnessTest, NeighborsSortedAfterPruning) {
     auto& nbrs_arr = flat_graph_->get_nbrs_arr();
 
     for (vertex_id_t u = 0; u < num_vertices_; ++u) {
-        nbr_arr_t& nbrs = nbrs_arr[u];
+        dnbr_arr_t& nbrs = nbrs_arr[u];
         for (vertex_id_t v = 0; v < num_vertices_; ++v) {
             if (v != u) {
                 distance_t dist = compute_distance(u, v);
-                nbrs.push_back(nbr_t(v, dist, true));
+                nbrs.push_back(dnbr_t(v, dist, true));
             }
         }
         std::sort(nbrs.begin(), nbrs.end(),
-            [](const nbr_t& a, const nbr_t& b) {
+            [](const dnbr_t& a, const dnbr_t& b) {
                 return a.get_distance() < b.get_distance();
             });
     }
@@ -527,15 +527,15 @@ TEST_F(PropagateEngineCorrectnessTest, TrianglePruningWithoutSelectiveScheduling
     auto& nbrs_arr = flat_graph_->get_nbrs_arr();
 
     for (vertex_id_t u = 0; u < num_vertices_; ++u) {
-        nbr_arr_t& nbrs = nbrs_arr[u];
+        dnbr_arr_t& nbrs = nbrs_arr[u];
         for (vertex_id_t v = 0; v < num_vertices_; ++v) {
             if (v != u) {
                 distance_t dist = compute_distance(u, v);
-                nbrs.push_back(nbr_t(v, dist, true));
+                nbrs.push_back(dnbr_t(v, dist, true));
             }
         }
         std::sort(nbrs.begin(), nbrs.end(),
-            [](const nbr_t& a, const nbr_t& b) {
+            [](const dnbr_t& a, const dnbr_t& b) {
                 return a.get_distance() < b.get_distance();
             });
     }

@@ -40,13 +40,13 @@ class RandomEG {
     using distance_t = typename EdgeGeneratorTraitsT::distance_t;
     using vec_dim_t = typename EdgeGeneratorTraitsT::vec_dim_t;
     using vector_array_t = typename EdgeGeneratorTraitsT::vector_array_t;
-    using nbr_t = typename EdgeGeneratorTraitsT::nbr_t;
-    using nbr_arr_t = typename EdgeGeneratorTraitsT::nbr_arr_t;
-    using nbr_comp_t = typename EdgeGeneratorTraitsT::nbr_comp_t;
+    using dnbr_t = typename EdgeGeneratorTraitsT::dnbr_t;
+    using dnbr_arr_t = typename EdgeGeneratorTraitsT::dnbr_arr_t;
+    using dnbr_comp_t = typename EdgeGeneratorTraitsT::dnbr_comp_t;
     using dist_func_t = typename EdgeGeneratorTraitsT::dist_func_t;
     using random_seq_t = typename EdgeGeneratorTraitsT::random_seq_t;
 
-    static constexpr nbr_comp_t nbr_comp {};
+    static constexpr dnbr_comp_t nbr_comp {};
 
 public:
     /**
@@ -79,7 +79,7 @@ public:
                 std::vector<vertex_id_t> random_nbr_ids(init_nbr_size);
 
                 for (vertex_id_t vid = r.begin(); vid != r.end(); ++vid) {
-                    nbr_arr_t& nbrs = flat_graph.fetch_nbrs(vid);
+                    dnbr_arr_t& nbrs = flat_graph.fetch_nbrs(vid);
                     const vec_ele_t* query_vec = vecs_data.get(vid);
 
                     // Generate random neighbor IDs
@@ -111,7 +111,7 @@ public:
                     auto last = std::unique(
                         nbrs.begin(),
                         nbrs.end(),
-                        [](const nbr_t& a, const nbr_t& b) {
+                        [](const dnbr_t& a, const dnbr_t& b) {
                             return a.get_id() == b.get_id();
                         }
                     );

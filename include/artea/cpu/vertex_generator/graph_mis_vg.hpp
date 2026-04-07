@@ -60,7 +60,7 @@ class GraphMISVG : public VertexGeneratorTraitsT::template vertex_generator_t<Gr
     using distance_t = typename VertexGeneratorTraitsT::distance_t;
     using vec_dim_t = typename VertexGeneratorTraitsT::vec_dim_t;
     using vector_array_t = typename VertexGeneratorTraitsT::vector_array_t;
-    using nbr_arr_t = typename VertexGeneratorTraitsT::nbr_arr_t;
+    using dnbr_arr_t = typename VertexGeneratorTraitsT::dnbr_arr_t;
     using approx_rnet_t = typename VertexGeneratorTraitsT::approx_rnet_t;
     using knn_graph = typename VertexGeneratorTraitsT::knn_graph;
 

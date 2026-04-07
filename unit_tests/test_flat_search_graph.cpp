@@ -84,7 +84,7 @@ protected:
         auto& nbrs_arr = flat_graph_->get_nbrs_arr();
 
         for (vertex_id_t u = 0; u < num_vertices_; ++u) {
-            nbr_arr_t& nbrs = nbrs_arr[u];
+            dnbr_arr_t& nbrs = nbrs_arr[u];
             nbrs.clear();
 
             vertex_num_t num_nbrs = 1 + (rng() % max_neighbors_per_vertex);
@@ -96,11 +96,11 @@ protected:
                 }
 
                 distance_t d = compute_distance(u, v);
-                nbrs.push_back(nbr_t(v, d, true));
+                nbrs.push_back(dnbr_t(v, d, true));
             }
 
             std::sort(nbrs.begin(), nbrs.end(),
-                [](const nbr_t& a, const nbr_t& b) {
+                [](const dnbr_t& a, const dnbr_t& b) {
                     return a.get_distance() < b.get_distance();
                 });
         }

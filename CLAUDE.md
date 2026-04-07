@@ -33,7 +33,7 @@ Framework type system is organized in `include/artea/cpu/framework/`:
 ### Trait Hierarchy
 
 Framework traits in `include/artea/cpu/framework/type_traits/`:
-- **BaseTraits** - Fundamental types (vertex_id_t, distance_t, nbr_t, vector_array_t, etc.)
+- **BaseTraits** - Fundamental types (vertex_id_t, distance_t, dnbr_t, vector_array_t, etc.)
 - **ComputerTraits** - Distance computation (dist_func_t, simd_dist_t, fma_func_t)
 - **BufferTraits** - Buffer management (log_buffer_t, log_table_t)
 - **IndexTraits** - Graph structures (flat_graph_t, search_graph_t)

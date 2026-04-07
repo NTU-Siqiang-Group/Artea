@@ -36,7 +36,7 @@ namespace artea {
 namespace cpu {
 
 /* ------ Forward Declarations ------ */
-template <typename BaseTraitsT> struct Neighbor;
+template <typename BaseTraitsT> struct DescentNeighbor;
 template <typename BaseTraitsT> class NbrLogTable;
 template <typename BaseTraitsT> class VectorDataset;
 template <typename BaseTraitsT> class VectorSampler;
@@ -44,10 +44,10 @@ template <typename BaseTraitsT> class NbrArrChecker;
 template <typename BaseTraitsT> class RandomSeq;
 template <typename BaseTraitsT> class RandomSeqNR;
 template <typename BaseTraitsT> class CentroidComputer;
-template <typename BaseTraitsT> struct NeighborComparator;
-template <typename BaseTraitsT> struct StrictNeighborComparator;
-template <typename BaseTraitsT> struct NeighborIdComparator;
-template <typename BaseTraitsT> struct NeighborDistanceComparator;
+template <typename BaseTraitsT> struct DNbrComparator;
+template <typename BaseTraitsT> struct StrictDNbrComparator;
+template <typename BaseTraitsT> struct DNbrIdComparator;
+template <typename BaseTraitsT> struct DNbrDistanceComparator;
 template <typename BaseTraitsT> struct VertexSubset;
 template <typename T, typename ContainerT, typename Compare> class FourAryHeap;
 template <typename BaseTraitsT> struct LayerConfig;
@@ -148,22 +148,22 @@ public:
     using version_tag_table_t = VersionTagTable;
 
     /** @brief neighbor entries. */
-    using nbr_t = Neighbor<base_traits_t>;
+    using dnbr_t = DescentNeighbor<base_traits_t>;
 
     /** @brief neighbor comparator. */
-    using nbr_comp_t = NeighborComparator<base_traits_t>;
+    using dnbr_comp_t = DNbrComparator<base_traits_t>;
 
     /** @brief strict neighbor comparator. */
-    using strict_nbr_comp_t = StrictNeighborComparator<base_traits_t>;
+    using strict_dnbr_comp_t = StrictDNbrComparator<base_traits_t>;
 
     /** @brief ID-only comparator. */
-    using nbr_id_comp_t = NeighborIdComparator<base_traits_t>;
+    using dnbr_id_comp_t = DNbrIdComparator<base_traits_t>;
 
     /** @brief distance-only comparator. */
-    using nbr_dist_comp_t = NeighborDistanceComparator<base_traits_t>;
+    using dnbr_dist_comp_t = DNbrDistanceComparator<base_traits_t>;
 
     /** @brief neighbor arrays. */
-    using nbr_arr_t = std::vector<nbr_t>;
+    using dnbr_arr_t = std::vector<dnbr_t>;
 
     /** @brief CSR graph format. */
     using csr_vids_t = cache_aligned_container_t<vertex_id_t>;

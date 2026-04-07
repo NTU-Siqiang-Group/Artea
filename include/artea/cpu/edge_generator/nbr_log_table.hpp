@@ -36,14 +36,14 @@ class NbrLogTable {
     using vertex_id_t = typename BufferTraitsT::vertex_id_t;
     using vec_ele_t = typename BufferTraitsT::vec_ele_t;
     using distance_t = typename BufferTraitsT::distance_t;
-    using nbr_t = typename BufferTraitsT::nbr_t;
-    using nbr_arr_t = typename BufferTraitsT::nbr_arr_t;
+    using dnbr_t = typename BufferTraitsT::dnbr_t;
+    using dnbr_arr_t = typename BufferTraitsT::dnbr_arr_t;
     using log_buffer_t = typename BufferTraitsT::log_buffer_t;
     using log_container_t = typename BufferTraitsT::log_container_t;
     using nbr_arr_checker_t = typename BufferTraitsT::nbr_arr_checker_t;
-    using strict_nbr_comp_t = typename BufferTraitsT::strict_nbr_comp_t;
+    using strict_dnbr_comp_t = typename BufferTraitsT::strict_dnbr_comp_t;
 
-    constexpr static strict_nbr_comp_t strict_nbr_comp {};
+    constexpr static strict_dnbr_comp_t strict_nbr_comp {};
 
 public:
 
@@ -104,7 +104,7 @@ public:
 
     /**
      * @brief Applies logs to the graph directly using Distance ordering.
-     *        Precondition: graph neighbors are sorted by StrictNeighborComparator (Dist, ID).
+     *        Precondition: graph neighbors are sorted by StrictDNbrComparator (Dist, ID).
      * @param executor_vid The vertex whose logs are to be applied.
      * @param graph The bottom layer graph to which the logs will be applied.
      * @return Number of logs applied.

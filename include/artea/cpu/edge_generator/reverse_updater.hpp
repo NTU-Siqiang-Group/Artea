@@ -36,8 +36,8 @@ class ReverseUpdater :
     using distance_t = typename EdgeGeneratorTraitsT::distance_t;
     using ratio_t = typename EdgeGeneratorTraitsT::ratio_t;
     using vector_array_t = typename EdgeGeneratorTraitsT::vector_array_t;
-    using nbr_t = typename EdgeGeneratorTraitsT::nbr_t;
-    using nbr_arr_t = typename EdgeGeneratorTraitsT::nbr_arr_t;
+    using dnbr_t = typename EdgeGeneratorTraitsT::dnbr_t;
+    using dnbr_arr_t = typename EdgeGeneratorTraitsT::dnbr_arr_t;
     using log_table_t = typename EdgeGeneratorTraitsT::log_table_t;
     using dist_func_t = typename EdgeGeneratorTraitsT::dist_func_t;
     using base_class_t = typename EdgeGeneratorTraitsT::template neighbor_updater_t<FlatGraphT, ReverseUpdater<EdgeGeneratorTraitsT, FlatGraphT>>;
@@ -70,17 +70,17 @@ public:
      */
     auto update_impl(
         const vertex_id_t pivot_vid,
-        nbr_arr_t& origin_nbrs
+        dnbr_arr_t& origin_nbrs
     ) -> void {
         // For each neighbor in origin_nbrs, add a reverse edge from that neighbor to pivot_vid
         const vertex_num_t max_sz = this->_flat_graph.layer_config().max_nbr_size();
         for (vertex_num_t i = 0; i < origin_nbrs.size(); ++i) {
-            const nbr_t& nbr = origin_nbrs[i];
+            const dnbr_t& nbr = origin_nbrs[i];
             vertex_id_t nbr_id = nbr.get_id();
             distance_t dist = nbr.get_distance();
 
             // Check if nbr_id's neighbor array is already full with closer neighbors
-            const nbr_arr_t& nbr_vertex_nbrs = this->_flat_graph.fetch_nbrs(nbr_id);
+            const dnbr_arr_t& nbr_vertex_nbrs = this->_flat_graph.fetch_nbrs(nbr_id);
             // if (nbr_vertex_nbrs.size() >= max_sz &&
             //     nbr_vertex_nbrs[max_sz - 1].get_distance() <= dist) {
             //     continue;

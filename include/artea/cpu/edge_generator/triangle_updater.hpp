@@ -47,8 +47,8 @@ class TriangleUpdater :
     using distance_t = typename EdgeGeneratorTraitsT::distance_t;
     using ratio_t = typename EdgeGeneratorTraitsT::ratio_t;
     using vector_array_t = typename EdgeGeneratorTraitsT::vector_array_t;
-    using nbr_t = typename EdgeGeneratorTraitsT::nbr_t;
-    using nbr_arr_t = typename EdgeGeneratorTraitsT::nbr_arr_t;
+    using dnbr_t = typename EdgeGeneratorTraitsT::dnbr_t;
+    using dnbr_arr_t = typename EdgeGeneratorTraitsT::dnbr_arr_t;
     using log_table_t = typename EdgeGeneratorTraitsT::log_table_t;
     using dist_func_t = typename EdgeGeneratorTraitsT::dist_func_t;
     using base_class_t = typename EdgeGeneratorTraitsT::template neighbor_updater_t<FlatGraphT, TriangleUpdater<EdgeGeneratorTraitsT, FlatGraphT>>;
@@ -111,7 +111,7 @@ public:
     template <PruningConditionT ConditionType = PruningConditionT::scaled_ineq>
     auto update_impl(
         const vertex_id_t pivot_vid,
-        nbr_arr_t& origin_nbrs
+        dnbr_arr_t& origin_nbrs
     ) -> void {
         #ifndef NDEBUG
         if (origin_nbrs.empty()) {
@@ -119,7 +119,7 @@ public:
         }
         #endif
 
-        nbr_arr_t retained_nbrs;
+        dnbr_arr_t retained_nbrs;
         retained_nbrs.reserve(origin_nbrs.capacity());
         const vertex_num_t max_sz = this->_flat_graph.layer_config().max_nbr_size();
 
@@ -127,7 +127,7 @@ public:
         retained_nbrs.push_back(origin_nbrs[0]);
 
         for (vertex_num_t i = 1; i < origin_nbrs.size(); ++i) {
-            const nbr_t& ori_nbr = origin_nbrs[i];
+            const dnbr_t& ori_nbr = origin_nbrs[i];
             auto [passed, conflict_vid, conflict_dist] = _internal_check<ConditionType>(ori_nbr, retained_nbrs);
 
             if (passed) {
@@ -178,8 +178,8 @@ private:
 
     template <PruningConditionT ConditionType>
     auto _internal_check(
-        const nbr_t& ori_nbr,
-        const nbr_arr_t& retained_nbrs
+        const dnbr_t& ori_nbr,
+        const dnbr_arr_t& retained_nbrs
     ) -> std::tuple<bool, vertex_id_t, distance_t> {
         const vec_ele_t* ori_vec = this->_vecs_data.get(ori_nbr.get_id());
         const distance_t threshold = _compute_threshold<ConditionType>(ori_nbr.get_distance());
@@ -191,7 +191,7 @@ private:
                 continue;
             }
 
-            const nbr_t& retained_nbr = retained_nbrs[i];
+            const dnbr_t& retained_nbr = retained_nbrs[i];
             const vec_ele_t* retained_vec = this->_vecs_data.get(retained_nbr.get_id());
             distance_t dist_to_retained = this->_dist_func(ori_vec, retained_vec);
 

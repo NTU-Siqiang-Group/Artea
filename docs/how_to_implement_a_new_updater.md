@@ -56,8 +56,8 @@ class MyUpdater :
     using vertex_id_t    = typename EdgeGeneratorTraitsT::vertex_id_t;
     using vertex_num_t   = typename EdgeGeneratorTraitsT::vertex_num_t;
     using distance_t     = typename EdgeGeneratorTraitsT::distance_t;
-    using nbr_t          = typename EdgeGeneratorTraitsT::nbr_t;
-    using nbr_arr_t      = typename EdgeGeneratorTraitsT::nbr_arr_t;
+    using dnbr_t          = typename EdgeGeneratorTraitsT::dnbr_t;
+    using dnbr_arr_t      = typename EdgeGeneratorTraitsT::dnbr_arr_t;
     using log_table_t    = typename EdgeGeneratorTraitsT::log_table_t;
     using dist_func_t    = typename EdgeGeneratorTraitsT::dist_func_t;
     using vector_array_t = typename EdgeGeneratorTraitsT::vector_array_t;
@@ -82,7 +82,7 @@ public:
     // Required: the core logic, called once per vertex during propagation
     auto update_impl(
         const vertex_id_t pivot_vid,
-        nbr_arr_t& origin_nbrs
+        dnbr_arr_t& origin_nbrs
     ) -> void {
         // Access base class members via this->:
         //   this->_dist_func    -- distance function

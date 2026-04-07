@@ -22,8 +22,8 @@ class SpeculativeUpdater :
     using distance_t = typename EdgeGeneratorTraitsT::distance_t;
     using ratio_t = typename EdgeGeneratorTraitsT::ratio_t;
     using vector_array_t = typename EdgeGeneratorTraitsT::vector_array_t;
-    using nbr_t = typename EdgeGeneratorTraitsT::nbr_t;
-    using nbr_arr_t = typename EdgeGeneratorTraitsT::nbr_arr_t;
+    using dnbr_t = typename EdgeGeneratorTraitsT::dnbr_t;
+    using dnbr_arr_t = typename EdgeGeneratorTraitsT::dnbr_arr_t;
     using log_table_t = typename EdgeGeneratorTraitsT::log_table_t;
     using dist_func_t = typename EdgeGeneratorTraitsT::dist_func_t;
     using base_class_t = typename EdgeGeneratorTraitsT::template neighbor_updater_t<TriangleUpdater<EdgeGeneratorTraitsT>>;

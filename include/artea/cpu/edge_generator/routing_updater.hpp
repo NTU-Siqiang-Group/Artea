@@ -43,8 +43,8 @@ class RoutingUpdater :
     using vec_ele_t = typename EdgeGeneratorTraitsT::vec_ele_t;
     using distance_t = typename EdgeGeneratorTraitsT::distance_t;
     using vector_array_t = typename EdgeGeneratorTraitsT::vector_array_t;
-    using nbr_t = typename EdgeGeneratorTraitsT::nbr_t;
-    using nbr_arr_t = typename EdgeGeneratorTraitsT::nbr_arr_t;
+    using dnbr_t = typename EdgeGeneratorTraitsT::dnbr_t;
+    using dnbr_arr_t = typename EdgeGeneratorTraitsT::dnbr_arr_t;
     using log_table_t = typename EdgeGeneratorTraitsT::log_table_t;
     using dist_func_t = typename EdgeGeneratorTraitsT::dist_func_t;
     using graph_mode_t = typename EdgeGeneratorTraitsT::graph_mode_t;
@@ -84,7 +84,7 @@ public:
      */
     auto update_impl(
         const vertex_id_t pivot_vid,
-        nbr_arr_t& origin_nbrs
+        dnbr_arr_t& origin_nbrs
     ) -> void {
         const vec_ele_t* pivot_vec = this->_vecs_data.get(pivot_vid);
         auto knn_results = _router.query(pivot_vec, this->_flat_graph);
@@ -97,7 +97,7 @@ public:
         for (const auto& entry : knn_results) {
             if (entry.is_invalid()) { continue; }
             if (entry.get_id() == pivot_vid) { continue; }
-            const nbr_arr_t& target_nbrs = this->_flat_graph.fetch_nbrs(pivot_vid);
+            const dnbr_arr_t& target_nbrs = this->_flat_graph.fetch_nbrs(pivot_vid);
             if (target_nbrs.size() >= max_sz &&
                 target_nbrs[max_sz - 1].get_distance() <= entry.get_distance()) {
                 continue;
