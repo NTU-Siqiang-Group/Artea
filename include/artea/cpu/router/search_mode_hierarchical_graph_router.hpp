@@ -139,7 +139,7 @@ private:
 
         // Initialize with entry point
         vertex_id_t current_nearest = _hierarchical_search_graph.get_entry_point();
-        const auto& top_layer_vecs = _hierarchical_search_graph.get_hier_vecs_manager().get_layer_vecs(top_layer_id);
+        const auto& top_layer_vecs = _hierarchical_search_graph.get_hierarchy_manager().get_layer_vecs(top_layer_id);
         distance_t current_dist = this->_dist_func(query_vec, top_layer_vecs.get(current_nearest));
 
         // Greedy search from top layer down to layer 1 (not including bottom layer 0)
@@ -188,7 +188,7 @@ private:
         distance_t& current_dist
     ) const -> void {
         const auto& layer_graph = _hierarchical_search_graph.get_layer_graph(layer_id);
-        const auto& layer_vecs = _hierarchical_search_graph.get_hier_vecs_manager().get_layer_vecs(layer_id);
+        const auto& layer_vecs = _hierarchical_search_graph.get_hierarchy_manager().get_layer_vecs(layer_id);
 
         bool improved = true;
         while (improved) {
@@ -224,7 +224,7 @@ private:
     ) const -> void {
         const auto& layer_graph = _hierarchical_search_graph.get_layer_graph(layer_id);
         // Get the layer-specific vectors for distance computation
-        const auto& layer_vecs = _hierarchical_search_graph.get_hier_vecs_manager().get_layer_vecs(layer_id);
+        const auto& layer_vecs = _hierarchical_search_graph.get_hierarchy_manager().get_layer_vecs(layer_id);
 
         // Beam search loop
         while (!candidate_queue.empty()) {

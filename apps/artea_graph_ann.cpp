@@ -254,7 +254,7 @@ int main(int argc, char** argv) {
     // Output layer-by-layer information
     std::cout << "\n  Layer-by-Layer Structure:" << std::endl;
     for (uint32_t layer_id = 0; layer_id < hierarchical_graph.get_num_layers(); ++layer_id) {
-        const auto& layer_vecs = hierarchical_graph.get_hier_vecs_manager().get_layer_vecs(layer_id);
+        const auto& layer_vecs = hierarchical_graph.get_hierarchy_manager().get_layer_vecs(layer_id);
         const auto& layer_graph = hierarchical_graph.get_layer_graph(layer_id);
 
         uint32_t num_vertices = layer_vecs.get_num_vecs();

@@ -47,23 +47,23 @@ class HierarchicalSearchGraph {
     using vector_array_t = typename IndexTraitsT::vector_array_t;
     using flat_search_graph_t = typename IndexTraitsT::flat_search_graph_t;
     using inter_layer_links_t = typename IndexTraitsT::inter_layer_links_t;
-    using hierarchical_vecs_manager_t = typename IndexTraitsT::hierarchical_vecs_manager_t;
+    using hierarchy_manager_t = typename IndexTraitsT::hierarchy_manager_t;
 
 public:
     /**
      * @brief Construct a new Hierarchical Search Graph object.
-     * @param hier_vecs_manager Reference to the hierarchical vector manager.
+     * @param hierarchy_manager Reference to the hierarchical vector manager.
      * @param bl_extracted_nbr_size Fixed number of neighbors for bottom layer.
      * @param ul_extracted_nbr_size Fixed number of neighbors for upper layers.
      */
     HierarchicalSearchGraph(
-        const hierarchical_vecs_manager_t& hier_vecs_manager,
+        const hierarchy_manager_t& hierarchy_manager,
         const vertex_num_t bl_extracted_nbr_size,
         const vertex_num_t ul_extracted_nbr_size
-    ) : _num_vertices(hier_vecs_manager.get_num_base_vecs()),
+    ) : _num_vertices(hierarchy_manager.get_num_base_vecs()),
         _bl_extracted_nbr_size(bl_extracted_nbr_size),
         _ul_extracted_nbr_size(ul_extracted_nbr_size),
-        _hier_vecs_manager(hier_vecs_manager),
+        _hierarchy_manager(hierarchy_manager),
         _inter_layer_links(inter_layer_links_t(_num_vertices))
     {}
 
@@ -166,17 +166,17 @@ public:
 
     __attribute__((always_inline))
     auto get_vecs_data() const -> const vector_array_t& {
-        return _hier_vecs_manager.get_base_vecs();
+        return _hierarchy_manager.get_base_vecs();
     }
 
     __attribute__((always_inline))
     auto get_base_vecs() const -> const vector_array_t& {
-        return _hier_vecs_manager.get_base_vecs();
+        return _hierarchy_manager.get_base_vecs();
     }
 
     __attribute__((always_inline))
-    auto get_hier_vecs_manager() const -> const hierarchical_vecs_manager_t& {
-        return _hier_vecs_manager;
+    auto get_hierarchy_manager() const -> const hierarchy_manager_t& {
+        return _hierarchy_manager;
     }
 
     __attribute__((always_inline))
@@ -210,7 +210,7 @@ protected:
     vertex_num_t _ul_extracted_nbr_size;
 
     /** @brief Hierarchical vector manager. */
-    const hierarchical_vecs_manager_t& _hier_vecs_manager;
+    const hierarchy_manager_t& _hierarchy_manager;
 
     /** @brief Flat search graphs for all layers. layer_id 0 is the bottom layer at _layer_graphs[0]. */
     std::vector<std::unique_ptr<flat_search_graph_t>> _layer_graphs;

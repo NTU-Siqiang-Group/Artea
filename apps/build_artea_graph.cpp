@@ -150,7 +150,7 @@ int main(int argc, char** argv) {
 
     // Output layer vertices information
     for (uint32_t layer_id = 0; layer_id < hierarchical_graph.get_num_layers(); ++layer_id) {
-        const auto& layer_vecs = hierarchical_graph.get_hier_vecs_manager().get_layer_vecs(layer_id);
+        const auto& layer_vecs = hierarchical_graph.get_hierarchy_manager().get_layer_vecs(layer_id);
         ARTEA_INFO(fmt::format("  Layer {}: {} vertices", layer_id, layer_vecs.get_num_vecs()));
     }
 
@@ -191,7 +191,7 @@ int main(int argc, char** argv) {
     std::cout << "  " << std::string(40, '-') << std::endl;
 
     for (uint32_t layer_id = 0; layer_id < hierarchical_graph.get_num_layers(); ++layer_id) {
-        const auto& layer_vecs = hierarchical_graph.get_hier_vecs_manager().get_layer_vecs(layer_id);
+        const auto& layer_vecs = hierarchical_graph.get_hierarchy_manager().get_layer_vecs(layer_id);
         uint32_t num_vertices = layer_vecs.get_num_vecs();
 
         uint64_t num_edges = 0;

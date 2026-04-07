@@ -71,13 +71,13 @@ public:
             rnet_config
         );
 
-        auto& hier_vecs_manager = hierarchical_graph.get_hier_vecs_manager();
+        auto& hierarchy_manager = hierarchical_graph.get_hierarchy_manager();
         auto& inter_layer_links = hierarchical_graph.get_inter_layer_links();
 
         // Pre-allocate upper layer storage to prevent vector reallocation.
         // FlatGraph stores _vecs_data as a const reference; if the vector
         // holding upper layer data reallocates, those references dangle.
-        hier_vecs_manager.get_upper_layer_vecs().reserve(max_expected_layers);
+        hierarchy_manager.get_upper_layer_vecs().reserve(max_expected_layers);
 
         const vector_array_t* current_layer_vecs = &base_vecs;
         distance_t rnet_radius = distance_t(0);
@@ -172,16 +172,16 @@ public:
 
             // Step 6: Append layer and advance
             inter_layer_links.bottom_up_append(std::move(next_layer_subset.vec_ids));
-            hier_vecs_manager.bottom_up_append(std::move(next_layer_subset.vecs_data));
+            hierarchy_manager.bottom_up_append(std::move(next_layer_subset.vecs_data));
 
-            layer_id = hier_vecs_manager.get_num_layers() - 1;
-            current_layer_vecs = &hier_vecs_manager.get_layer_vecs(layer_id);
+            layer_id = hierarchy_manager.get_num_layers() - 1;
+            current_layer_vecs = &hierarchy_manager.get_layer_vecs(layer_id);
             rnet_radius *= rnet_config.rnet_beta();
         }
 
         // Set entry point: vertex closest to centroid in top layer
-        const layer_id_t top_layer_id = hier_vecs_manager.get_num_layers() - 1;
-        const auto& top_layer_vecs = hier_vecs_manager.get_layer_vecs(top_layer_id);
+        const layer_id_t top_layer_id = hierarchy_manager.get_num_layers() - 1;
+        const auto& top_layer_vecs = hierarchy_manager.get_layer_vecs(top_layer_id);
         auto centroid = centroid_computer_t::compute(top_layer_vecs);
         bruteforce_router_t bf_router(top_layer_vecs, dist_func, 1);
         bf_router.initialize();
@@ -189,7 +189,7 @@ public:
         hierarchical_graph.set_entry_point(nearest[0].get_id());
 
         ARTEA_INFO(fmt::format("Artea graph: {} layers, entry_point={} (top layer)",
-            hier_vecs_manager.get_num_layers(), nearest[0].get_id()));
+            hierarchy_manager.get_num_layers(), nearest[0].get_id()));
 
         return hierarchical_graph;
     }

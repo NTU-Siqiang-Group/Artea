@@ -134,8 +134,8 @@ TEST_F(HierarchicalGraphPersistenceTest, SnapshotAndRestore) {
             << fmt::format("Layer {} vertex count mismatch", layer_id);
 
         // Check layer vecs
-        const auto& original_layer_vecs = original_graph.get_hier_vecs_manager().get_layer_vecs(layer_id);
-        const auto& restored_layer_vecs = restored_graph.get_hier_vecs_manager().get_layer_vecs(layer_id);
+        const auto& original_layer_vecs = original_graph.get_hierarchy_manager().get_layer_vecs(layer_id);
+        const auto& restored_layer_vecs = restored_graph.get_hierarchy_manager().get_layer_vecs(layer_id);
 
         EXPECT_EQ(restored_layer_vecs.get_num_vecs(), original_layer_vecs.get_num_vecs())
             << fmt::format("Layer {} vecs count mismatch", layer_id);

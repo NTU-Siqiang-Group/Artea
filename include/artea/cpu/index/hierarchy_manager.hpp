@@ -13,7 +13,7 @@
 // limitations under the License.
 
 /*
- * @FilePath: /Artea/include/artea/cpu/index/hierarchical_vecs_manager.hpp
+ * @FilePath: /Artea/include/artea/cpu/index/hierarchy_manager.hpp
  * @Author: Chandler (Weitang Ye) <weitang.ye@ntu.edu.sg>
  * @Date: 2026-03-10
  * @Description: Hierarchical vector manager for HNSW-like index.
@@ -37,7 +37,7 @@ namespace cpu {
  *   - layer_id > 0 are upper layers stored in _upper_layer_vecs[layer_id - 1]
  */
 template <typename IndexTraitsT>
-class HierarchicalVecsManager {
+class HierarchyManager {
 
     using vertex_num_t = typename IndexTraitsT::vertex_num_t;
     using layer_id_t = typename IndexTraitsT::layer_id_t;
@@ -51,16 +51,16 @@ public:
      * @brief Construct a new Hierarchical Vecs Manager object.
      * @param bottom_layer_vecs Reference to the base layer vector data.
      */
-    explicit HierarchicalVecsManager(const vector_array_t& bottom_layer_vecs)
+    explicit HierarchyManager(const vector_array_t& bottom_layer_vecs)
         : _bottom_layer_vecs(bottom_layer_vecs) {}
 
     // Copying is deleted
-    HierarchicalVecsManager(const HierarchicalVecsManager&) = delete;
-    HierarchicalVecsManager& operator=(const HierarchicalVecsManager&) = delete;
+    HierarchyManager(const HierarchyManager&) = delete;
+    HierarchyManager& operator=(const HierarchyManager&) = delete;
 
     // Default move constructor and assignment
-    HierarchicalVecsManager(HierarchicalVecsManager&&) noexcept = default;
-    HierarchicalVecsManager& operator=(HierarchicalVecsManager&&) noexcept = default;
+    HierarchyManager(HierarchyManager&&) noexcept = default;
+    HierarchyManager& operator=(HierarchyManager&&) noexcept = default;
 
     // --- Public Interface ---
 
@@ -173,7 +173,7 @@ protected:
     /** @brief Upper layer vector arrays. */
     std::vector<vector_array_t> _upper_layer_vecs;
 
-};  // class HierarchicalVecsManager
+};  // class HierarchyManager
 
 }   // namespace cpu
 }   // namespace artea

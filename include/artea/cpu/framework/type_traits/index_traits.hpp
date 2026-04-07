@@ -43,7 +43,7 @@ namespace artea_graph {
 template <typename IndexTraitsT> class FlatSearchGraph;
 template <typename IndexTraitsT> class HierarchicalSearchGraph;
 template <typename IndexTraitsT> class InterLayerLinks;
-template <typename IndexTraitsT> class HierarchicalVecsManager;
+template <typename IndexTraitsT> class HierarchyManager;
 template <typename IndexTraitsT> class SearchGraphConverter;
 template <typename IndexTraitsT> class FlatGraphFileManager;
 template <typename IndexTraitsT> class HierarchicalGraphFileManager;
@@ -101,7 +101,7 @@ struct IndexTraits : virtual public BaseTraitsT {
     using inter_layer_links_t = InterLayerLinks<index_traits_t>;
 
     /** @brief Hierarchical vector manager type. */
-    using hierarchical_vecs_manager_t = HierarchicalVecsManager<index_traits_t>;
+    using hierarchy_manager_t = HierarchyManager<index_traits_t>;
 
     /** @brief Search graph converter type. */
     using search_graph_converter_t = SearchGraphConverter<index_traits_t>;

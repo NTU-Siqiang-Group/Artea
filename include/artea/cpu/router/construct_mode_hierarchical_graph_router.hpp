@@ -141,7 +141,7 @@ private:
         const layer_id_t top_layer_id = num_layers - 1;
 
         vertex_id_t current_nearest = hier_graph.get_entry_point();
-        const auto& top_layer_vecs = hier_graph.get_hier_vecs_manager().get_layer_vecs(top_layer_id);
+        const auto& top_layer_vecs = hier_graph.get_hierarchy_manager().get_layer_vecs(top_layer_id);
         distance_t current_dist = this->_dist_func(query_vec, top_layer_vecs.get(current_nearest));
 
         // Greedy descent from top layer down to layer 1
@@ -179,7 +179,7 @@ private:
         const HierGraphT& hier_graph
     ) const -> void {
         const auto& layer_graph = hier_graph.get_layer_graph(layer_id);
-        const auto& layer_vecs = hier_graph.get_hier_vecs_manager().get_layer_vecs(layer_id);
+        const auto& layer_vecs = hier_graph.get_hierarchy_manager().get_layer_vecs(layer_id);
 
         bool improved = true;
         while (improved) {
@@ -215,7 +215,7 @@ private:
         const HierGraphT& hier_graph
     ) const -> void {
         const auto& layer_graph = hier_graph.get_layer_graph(layer_id);
-        const auto& layer_vecs = hier_graph.get_hier_vecs_manager().get_layer_vecs(layer_id);
+        const auto& layer_vecs = hier_graph.get_hierarchy_manager().get_layer_vecs(layer_id);
 
         while (!candidate_queue.empty()) {
             if (candidate_queue.should_terminate()) { break; }

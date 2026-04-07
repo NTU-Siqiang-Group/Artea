@@ -38,7 +38,7 @@ protected:
     using layer_num_t = typename IndexTraitsT::layer_num_t;
     using vector_array_t = typename IndexTraitsT::vector_array_t;
     using inter_layer_links_t = typename IndexTraitsT::inter_layer_links_t;
-    using hierarchical_vecs_manager_t = typename IndexTraitsT::hierarchical_vecs_manager_t;
+    using hierarchy_manager_t = typename IndexTraitsT::hierarchy_manager_t;
     using layer_config_t = typename IndexTraitsT::layer_config_t;
 
 public:
@@ -58,7 +58,7 @@ public:
     ) : _num_vertices(base_vecs.get_num_vecs()),
         _bottom_layer_config(bottom_layer_config),
         _upper_layer_config(upper_layer_config),
-        _hier_vecs_manager(base_vecs),
+        _hierarchy_manager(base_vecs),
         _inter_layer_links(_num_vertices)
     {}
 
@@ -74,7 +74,7 @@ public:
     auto get_num_vertices() const -> vertex_num_t { return _num_vertices; }
 
     __attribute__((always_inline))
-    auto get_num_layers() const -> layer_num_t { return _hier_vecs_manager.get_num_layers(); }
+    auto get_num_layers() const -> layer_num_t { return _hierarchy_manager.get_num_layers(); }
 
     /**
      * @brief Resize the layer graphs vector to accommodate a specific number of layers.
@@ -142,16 +142,16 @@ public:
     }
 
     __attribute__((always_inline))
-    auto get_vecs_data() const -> const vector_array_t& { return _hier_vecs_manager.get_base_vecs(); }
+    auto get_vecs_data() const -> const vector_array_t& { return _hierarchy_manager.get_base_vecs(); }
 
     __attribute__((always_inline))
-    auto get_base_vecs() const -> const vector_array_t& { return _hier_vecs_manager.get_base_vecs(); }
+    auto get_base_vecs() const -> const vector_array_t& { return _hierarchy_manager.get_base_vecs(); }
 
     __attribute__((always_inline))
-    auto get_hier_vecs_manager() const -> const hierarchical_vecs_manager_t& { return _hier_vecs_manager; }
+    auto get_hierarchy_manager() const -> const hierarchy_manager_t& { return _hierarchy_manager; }
 
     __attribute__((always_inline))
-    auto get_hier_vecs_manager() -> hierarchical_vecs_manager_t& { return _hier_vecs_manager; }
+    auto get_hierarchy_manager() -> hierarchy_manager_t& { return _hierarchy_manager; }
 
     __attribute__((always_inline))
     auto get_inter_layer_links() -> inter_layer_links_t& { return _inter_layer_links; }
@@ -193,7 +193,7 @@ protected:
     layer_config_t _upper_layer_config;
 
     /** @brief Hierarchical vector manager. */
-    hierarchical_vecs_manager_t _hier_vecs_manager;
+    hierarchy_manager_t _hierarchy_manager;
 
     /** @brief Flat graphs for all layers. layer_id 0 is the bottom layer at _layer_graphs[0]. */
     std::vector<std::unique_ptr<LayerGraphT>> _layer_graphs;

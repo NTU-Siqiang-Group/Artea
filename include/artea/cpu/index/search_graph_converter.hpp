@@ -116,11 +116,11 @@ public:
         const vertex_num_t bl_extracted_nbr_size,
         const vertex_num_t ul_extracted_nbr_size
     ) -> hierarchical_search_graph_t {
-        const auto& hier_vecs_manager = hierarchical_graph.get_hier_vecs_manager();
+        const auto& hierarchy_manager = hierarchical_graph.get_hierarchy_manager();
         const auto num_layers = hierarchical_graph.get_num_layers();
 
         hierarchical_search_graph_t hier_search_graph(
-            hier_vecs_manager,
+            hierarchy_manager,
             bl_extracted_nbr_size,
             ul_extracted_nbr_size
         );

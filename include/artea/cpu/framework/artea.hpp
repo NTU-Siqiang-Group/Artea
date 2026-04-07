@@ -51,7 +51,7 @@
 #include <artea/cpu/index/inter_layer_links.hpp>
 #include <artea/cpu/index/hierarchical_graph.hpp>
 #include <artea/cpu/index/hierarchical_search_graph.hpp>
-#include <artea/cpu/index/hierarchical_vecs_manager.hpp>
+#include <artea/cpu/index/hierarchy_manager.hpp>
 #include <artea/cpu/index/search_graph_converter.hpp>
 #include <artea/cpu/index/index_size_calculator.hpp>
 #include <artea/cpu/index/persistence/flat_graph_file_manager.hpp>

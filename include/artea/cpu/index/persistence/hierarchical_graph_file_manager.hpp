@@ -43,7 +43,7 @@ class HierarchicalGraphFileManager {
     using layer_id_t = typename IndexTraitsT::layer_id_t;
     using layer_num_t = typename IndexTraitsT::layer_num_t;
     using distance_t = typename IndexTraitsT::distance_t;
-    using hierarchical_vecs_manager_t = typename IndexTraitsT::hierarchical_vecs_manager_t;
+    using hierarchy_manager_t = typename IndexTraitsT::hierarchy_manager_t;
     using layer_config_t = typename IndexTraitsT::layer_config_t;
     using vector_array_t = typename IndexTraitsT::vector_array_t;
 
@@ -183,8 +183,8 @@ public:
             ARTEA_ERROR(fmt::format("Failed to open inter_layer_links file: {}", inter_layer_links_path));
         }
 
-        // Get references to hier_vecs_manager and inter_layer_links
-        auto& hier_vecs_manager = hier_graph.get_hier_vecs_manager();
+        // Get references to hierarchy_manager and inter_layer_links
+        auto& hierarchy_manager = hier_graph.get_hierarchy_manager();
         auto& inter_layer_links = hier_graph.get_inter_layer_links();
 
         // Reconstruct layers from inter_layer_links (Layer 1 to num_layers-1)
@@ -197,12 +197,12 @@ public:
                           static_cast<std::streamsize>(num_links * sizeof(vertex_id_t)));
 
             // Extract subset from parent layer
-            const auto& parent_layer_vecs = hier_vecs_manager.get_layer_vecs(layer_id - 1);
+            const auto& parent_layer_vecs = hierarchy_manager.get_layer_vecs(layer_id - 1);
             vector_array_t layer_vecs = parent_layer_vecs.extract_subset(layer_links);
 
-            // Append to hier_vecs_manager and inter_layer_links
+            // Append to hierarchy_manager and inter_layer_links
             inter_layer_links.bottom_up_append(std::move(layer_links));
-            hier_vecs_manager.bottom_up_append(std::move(layer_vecs));
+            hierarchy_manager.bottom_up_append(std::move(layer_vecs));
         }
         links_ifs.close();
 
@@ -217,7 +217,7 @@ public:
             std::string layer_dir = index_dir + "/layers/layer_" + std::to_string(layer_id);
 
             // Get the appropriate vector data for this layer
-            const auto& layer_vecs = hier_graph.get_hier_vecs_manager().get_layer_vecs(layer_id);
+            const auto& layer_vecs = hier_graph.get_hierarchy_manager().get_layer_vecs(layer_id);
 
             // Restore the flat graph using FlatGraphFileManager
             using layer_graph_t = typename HierGraphT::layer_graph_t;

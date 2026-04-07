@@ -159,7 +159,7 @@ public:
 
         // Collect layer metrics
         for (uint32_t lid = 0; lid < g_results.num_layers; ++lid) {
-            const auto& layer_vecs = hierarchical_graph_->get_hier_vecs_manager().get_layer_vecs(lid);
+            const auto& layer_vecs = hierarchical_graph_->get_hierarchy_manager().get_layer_vecs(lid);
             const auto& layer_graph = hierarchical_graph_->get_layer_graph(lid);
 
             LayerMetrics metrics;

@@ -121,13 +121,13 @@ public:
     using part_id_t = VertexNumT;
 
     /** @brief number of layers. */
-    using layer_num_t = uint32_t;
+    using layer_num_t = VertexNumT;
 
     /** @brief layer identifiers. */
-    using layer_id_t = uint32_t;
+    using layer_id_t = VertexNumT;
 
     /** @brief batch identifiers. */
-    using batch_id_t = uint32_t;
+    using batch_id_t = VertexNumT;
 
     /** @brief number of hash functions. */
     using hash_num_t  = uint32_t;
