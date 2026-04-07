@@ -51,6 +51,7 @@ using layer_num_t = typename base_traits_t::layer_num_t;
 using layer_id_t = typename base_traits_t::layer_id_t;
 using hash_num_t = typename base_traits_t::hash_num_t;
 using iter_t = typename base_traits_t::iter_t;
+using lnbr_t = typename base_traits_t::lnbr_t;
 using dnbr_t = typename base_traits_t::dnbr_t;
 using dnbr_arr_t = typename base_traits_t::dnbr_arr_t;
 using dnbr_comp_t = typename base_traits_t::dnbr_comp_t;

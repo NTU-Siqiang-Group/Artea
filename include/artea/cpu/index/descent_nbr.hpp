@@ -13,7 +13,7 @@
 // limitations under the License.
 
 /*
- * @FilePath: /Artea/include/artea/cpu/index/descent_neighbor.hpp
+ * @FilePath: /Artea/include/artea/cpu/index/descent_nbr.hpp
  * @Author: Chandler (Weitang Ye) <weitang.ye@ntu.edu.sg>
  * @Description: Descent Graph Neighbor structure definition.
  */

@@ -36,6 +36,7 @@ namespace artea {
 namespace cpu {
 
 /* ------ Forward Declarations ------ */
+template <typename BaseTraitsT> struct LayerNeighbor;
 template <typename BaseTraitsT> struct DescentNeighbor;
 template <typename BaseTraitsT> class NbrLogTable;
 template <typename BaseTraitsT> class VectorDataset;
@@ -146,6 +147,9 @@ public:
 
     /** @brief version-tag visited table */
     using version_tag_table_t = VersionTagTable;
+
+    /** @brief layer neighbor entries. */
+    using lnbr_t = LayerNeighbor<base_traits_t>;
 
     /** @brief neighbor entries. */
     using dnbr_t = DescentNeighbor<base_traits_t>;
