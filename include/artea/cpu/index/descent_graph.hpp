@@ -1,7 +1,7 @@
 /*
- * @FilePath: /Artea/include/artea/cpu/index/flat_graph.hpp
+ * @FilePath: /Artea/include/artea/cpu/index/descent_graph.hpp
  * @Author: Chandler (Weitang Ye) <weitang.ye@ntu.edu.sg>
- * @Description: CRTP base flat graph structure for graph-based index.
+ * @Description: CRTP base descent graph structure for graph-based index.
  */
 
 #pragma once
@@ -14,13 +14,14 @@ namespace artea {
 namespace cpu {
 
 /**
- * @brief CRTP base flat graph structure storing only graph topology and layer config.
+ * @brief Descent Graph: CRTP base graph structure suitable for gradient descent scenarios.
+ *        Stores only graph topology and layer config.
  *        Subclasses (e.g. conv_graph::IndexStructure) extend with algorithm-specific configs.
  * @tparam IndexTraitsT The index traits type.
  * @tparam DerivedClassT The concrete derived graph type (CRTP).
  */
 template <typename IndexTraitsT, typename DerivedClassT>
-class FlatGraph {
+class DescentGraph {
 
 protected:
     using vertex_num_t = typename IndexTraitsT::vertex_num_t;
@@ -33,11 +34,11 @@ protected:
 
 public:
     /**
-     * @brief Construct a new Flat Graph object.
+     * @brief Construct a new Descent Graph object.
      * @param vecs_data Reference to the vector data for this layer.
      * @param layer_config Layer configuration (max_nbr_size and reserved_nbr_size).
      */
-    FlatGraph(
+    DescentGraph(
         const vector_array_t& vecs_data,
         const layer_config_t layer_config
     ) :
@@ -51,17 +52,17 @@ public:
         }
     }
 
-    FlatGraph(const FlatGraph&) = delete;
-    FlatGraph& operator=(const FlatGraph&) = delete;
+    DescentGraph(const DescentGraph&) = delete;
+    DescentGraph& operator=(const DescentGraph&) = delete;
 
-    FlatGraph(FlatGraph&& other) noexcept
+    DescentGraph(DescentGraph&& other) noexcept
         : _num_vertices(other._num_vertices),
           _layer_config(other._layer_config),
           _nbrs_arr(std::move(other._nbrs_arr)),
           _vecs_data(other._vecs_data)
     {}
 
-    FlatGraph& operator=(FlatGraph&& other) noexcept {
+    DescentGraph& operator=(DescentGraph&& other) noexcept {
         _num_vertices = other._num_vertices;
         _layer_config = other._layer_config;
         _nbrs_arr = std::move(other._nbrs_arr);
@@ -97,7 +98,7 @@ public:
 
     auto get_base_metadata() const -> nlohmann::json {
         nlohmann::json meta;
-        meta["graph_type"] = "flat_graph";
+        meta["graph_type"] = "descent_graph";
         meta["version"] = "1.0";
         meta["num_vertices"] = _num_vertices;
         meta["layer_config"] = {
@@ -120,7 +121,7 @@ protected:
     /** @brief Const reference to vector data for this layer. */
     const vector_array_t& _vecs_data;
 
-};  // class FlatGraph
+};  // class DescentGraph
 
 }   // namespace cpu
 }   // namespace artea

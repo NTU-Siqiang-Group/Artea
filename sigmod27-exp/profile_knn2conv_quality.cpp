@@ -110,7 +110,7 @@ public:
         // Convert to flat search graph
         ARTEA_INFO("Converting to flat search graph...");
         flat_search_graph_ = std::make_unique<flat_search_graph_t>(
-            search_graph_converter_t::from_flat_graph(*conv_graph_, g_config.extracted_nbr_size)
+            search_graph_converter_t::from_descent_graph(*conv_graph_, g_config.extracted_nbr_size)
         );
     }
 

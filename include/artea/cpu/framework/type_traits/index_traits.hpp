@@ -24,7 +24,7 @@ namespace artea {
 namespace cpu {
 
 /** ------ Forward Declaration  ------ **/
-template <typename IndexTraitsT, typename DerivedClassT> class FlatGraph;
+template <typename IndexTraitsT, typename DerivedClassT> class DescentGraph;
 template <typename IndexTraitsT, typename DerivedClassT, typename LayerGraphT> class HierarchicalGraph;
 namespace conv_graph {
     template <typename IndexTraitsT> class IndexStructure;
@@ -59,9 +59,9 @@ struct IndexTraits : virtual public BaseTraitsT {
     /** @brief Base traits type. */
     using base_traits_t = BaseTraitsT;
 
-    /** @brief CRTP base flat graph type (template on DerivedClassT). */
+    /** @brief CRTP base descent graph type (template on DerivedClassT). */
     template <typename DerivedClassT>
-    using flat_graph_t = FlatGraph<index_traits_t, DerivedClassT>;
+    using descent_graph_t = DescentGraph<index_traits_t, DerivedClassT>;
 
     /** @brief Flat search graph type (CSR format). */
     using flat_search_graph_t = FlatSearchGraph<index_traits_t>;

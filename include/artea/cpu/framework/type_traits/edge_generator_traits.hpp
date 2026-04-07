@@ -32,15 +32,15 @@ enum class IVFConstructPolicyT {
 };
 
 // ----- Forward Declaration  ------ //
-template <typename EdgeGeneratorTraitsT, typename FlatGraphT, typename DerivedClassT> class NeighborUpdater;
-template <typename EdgeGeneratorTraitsT, typename FlatGraphT> class TriangleUpdater;
-template <typename EdgeGeneratorTraitsT, typename FlatGraphT> class PruningUpdater;
-template <typename EdgeGeneratorTraitsT, typename FlatGraphT> class ReverseUpdater;
-template <typename EdgeGeneratorTraitsT, typename FlatGraphT> class RandomUpdater;
-template <typename EdgeGeneratorTraitsT, typename FlatGraphT> class RoutingUpdater;
-template <typename EdgeGeneratorTraitsT, typename FlatGraphT> class TruncateUpdater;
+template <typename EdgeGeneratorTraitsT, typename DescentGraphT, typename DerivedClassT> class NeighborUpdater;
+template <typename EdgeGeneratorTraitsT, typename DescentGraphT> class TriangleUpdater;
+template <typename EdgeGeneratorTraitsT, typename DescentGraphT> class PruningUpdater;
+template <typename EdgeGeneratorTraitsT, typename DescentGraphT> class ReverseUpdater;
+template <typename EdgeGeneratorTraitsT, typename DescentGraphT> class RandomUpdater;
+template <typename EdgeGeneratorTraitsT, typename DescentGraphT> class RoutingUpdater;
+template <typename EdgeGeneratorTraitsT, typename DescentGraphT> class TruncateUpdater;
 template <typename EdgeGeneratorTraitsT> class RandomEG;
-template <typename EdgeGeneratorTraitsT, typename FlatGraphT, bool SelectiveSchedule> class PropagateEngine;
+template <typename EdgeGeneratorTraitsT, typename DescentGraphT, bool SelectiveSchedule> class PropagateEngine;
 template <typename EdgeGeneratorTraitsT> class IVFPartitions;
 
 template <typename ComputerTraitsT, typename BufferTraitsT, typename IndexTraitsT, typename RouterTraitsT>
@@ -57,39 +57,39 @@ struct EdgeGeneratorTraits :
     /** @brief IVF construction policy type. */
     using ivf_construct_policy_t = IVFConstructPolicyT;
 
-    template <typename FlatGraphT, typename DerivedClassT>
-    using neighbor_updater_t = NeighborUpdater<edge_generator_traits_t, FlatGraphT, DerivedClassT>;
+    template <typename DescentGraphT, typename DerivedClassT>
+    using neighbor_updater_t = NeighborUpdater<edge_generator_traits_t, DescentGraphT, DerivedClassT>;
 
     /** @brief Triangle updater. */
-    template <typename FlatGraphT>
-    using triangle_updater_t = TriangleUpdater<edge_generator_traits_t, FlatGraphT>;
+    template <typename DescentGraphT>
+    using triangle_updater_t = TriangleUpdater<edge_generator_traits_t, DescentGraphT>;
 
     /** @brief Pruning updater (no log writes). */
-    template <typename FlatGraphT>
-    using pruning_updater_t = PruningUpdater<edge_generator_traits_t, FlatGraphT>;
+    template <typename DescentGraphT>
+    using pruning_updater_t = PruningUpdater<edge_generator_traits_t, DescentGraphT>;
 
     /** @brief Reverse edge updater. */
-    template <typename FlatGraphT>
-    using reverse_updater_t = ReverseUpdater<edge_generator_traits_t, FlatGraphT>;
+    template <typename DescentGraphT>
+    using reverse_updater_t = ReverseUpdater<edge_generator_traits_t, DescentGraphT>;
 
     /** @brief Random neighbor updater. */
-    template <typename FlatGraphT>
-    using random_updater_t = RandomUpdater<edge_generator_traits_t, FlatGraphT>;
+    template <typename DescentGraphT>
+    using random_updater_t = RandomUpdater<edge_generator_traits_t, DescentGraphT>;
 
     /** @brief Routing-based neighbor updater (uses construct-mode router). */
-    template <typename FlatGraphT>
-    using routing_updater_t = RoutingUpdater<edge_generator_traits_t, FlatGraphT>;
+    template <typename DescentGraphT>
+    using routing_updater_t = RoutingUpdater<edge_generator_traits_t, DescentGraphT>;
 
     /** @brief Truncate updater: trims neighbor arrays to max_nbr_size. */
-    template <typename FlatGraphT>
-    using truncate_updater_t = TruncateUpdater<edge_generator_traits_t, FlatGraphT>;
+    template <typename DescentGraphT>
+    using truncate_updater_t = TruncateUpdater<edge_generator_traits_t, DescentGraphT>;
 
     /** @brief Random edge generator. */
     using random_eg_t = RandomEG<edge_generator_traits_t>;
 
     /** @brief Type for propagation engine. */
-    template <typename FlatGraphT, bool SelectiveSchedule>
-    using propagate_engine_t = PropagateEngine<edge_generator_traits_t, FlatGraphT, SelectiveSchedule>;
+    template <typename DescentGraphT, bool SelectiveSchedule>
+    using propagate_engine_t = PropagateEngine<edge_generator_traits_t, DescentGraphT, SelectiveSchedule>;
 
     /** @brief Neighbor array checker. */
     using nbr_arr_checker_t = typename IndexTraitsT::nbr_arr_checker_t;

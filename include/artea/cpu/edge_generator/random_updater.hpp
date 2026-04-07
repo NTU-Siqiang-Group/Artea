@@ -29,9 +29,9 @@
 namespace artea {
 namespace cpu {
 
-template <typename EdgeGeneratorTraitsT, typename FlatGraphT>
+template <typename EdgeGeneratorTraitsT, typename DescentGraphT>
 class RandomUpdater :
-    public EdgeGeneratorTraitsT::template neighbor_updater_t<FlatGraphT, RandomUpdater<EdgeGeneratorTraitsT, FlatGraphT>>
+    public EdgeGeneratorTraitsT::template neighbor_updater_t<DescentGraphT, RandomUpdater<EdgeGeneratorTraitsT, DescentGraphT>>
 {
 
     using vertex_id_t = typename EdgeGeneratorTraitsT::vertex_id_t;
@@ -44,7 +44,7 @@ class RandomUpdater :
     using dnbr_arr_t = typename EdgeGeneratorTraitsT::dnbr_arr_t;
     using log_table_t = typename EdgeGeneratorTraitsT::log_table_t;
     using dist_func_t = typename EdgeGeneratorTraitsT::dist_func_t;
-    using base_class_t = typename EdgeGeneratorTraitsT::template neighbor_updater_t<FlatGraphT, RandomUpdater<EdgeGeneratorTraitsT, FlatGraphT>>;
+    using base_class_t = typename EdgeGeneratorTraitsT::template neighbor_updater_t<DescentGraphT, RandomUpdater<EdgeGeneratorTraitsT, DescentGraphT>>;
     using random_seq_t = typename EdgeGeneratorTraitsT::random_seq_t;
 
 public:
@@ -62,10 +62,10 @@ public:
         const dist_func_t& dist_func,
         const vector_array_t& vecs_data,
         log_table_t& log_table,
-        const FlatGraphT& flat_graph,
+        const DescentGraphT& descent_graph,
         const vertex_num_t num_vertices,
         const vertex_num_t rand_gen_size
-    ) : base_class_t(dist_func, vecs_data, log_table, flat_graph),
+    ) : base_class_t(dist_func, vecs_data, log_table, descent_graph),
         _rand_gen_size(rand_gen_size),
         _random_seq(num_vertices) {}
 
@@ -91,7 +91,7 @@ public:
         _random_seq.generate(rand_ids_buffer, _rand_gen_size);
 
         const vec_ele_t* pivot_vec = this->_vecs_data.get(pivot_vid);
-        const vertex_num_t max_sz = this->_flat_graph.layer_config().max_nbr_size();
+        const vertex_num_t max_sz = this->_descent_graph.layer_config().max_nbr_size();
 
         std::vector<vertex_id_t> nbr_ids;
         std::vector<distance_t> nbr_dists;
@@ -103,7 +103,7 @@ public:
             if (rand_nbr_id == pivot_vid) { continue; }
             const distance_t dist = this->_dist_func(pivot_vec, this->_vecs_data.get(rand_nbr_id));
 
-            const dnbr_arr_t& pivot_nbrs = this->_flat_graph.fetch_nbrs(pivot_vid);
+            const dnbr_arr_t& pivot_nbrs = this->_descent_graph.fetch_nbrs(pivot_vid);
             if (pivot_nbrs.size() >= max_sz &&
                 pivot_nbrs[max_sz - 1].get_distance() <= dist) {
                 continue;

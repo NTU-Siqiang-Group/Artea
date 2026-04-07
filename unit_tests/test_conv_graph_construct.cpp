@@ -94,7 +94,7 @@ public:
         ARTEA_INFO("Building convergent graph...");
         auto start_time = std::chrono::high_resolution_clock::now();
 
-        flat_graph_ = std::make_unique<conv_graph::index_t>(conv_graph::factory_t::construct_graph(
+        descent_graph_ = std::make_unique<conv_graph::index_t>(conv_graph::factory_t::construct_graph(
             base_vecs,
             g_config.layer_config,
             g_config.pruning_config,
@@ -104,7 +104,7 @@ public:
         auto end_time = std::chrono::high_resolution_clock::now();
         auto duration = std::chrono::duration_cast<std::chrono::microseconds>(end_time - start_time);
         g_test_results.build_time_s = duration.count() / 1000000.0;
-        g_test_results.num_vertices = flat_graph_->get_num_vertices();
+        g_test_results.num_vertices = descent_graph_->get_num_vertices();
 
         ARTEA_INFO(fmt::format("Graph built with {} vertices", g_test_results.num_vertices));
         ARTEA_INFO(fmt::format("Build time: {:.2f} s", g_test_results.build_time_s));
@@ -114,7 +114,7 @@ public:
         start_time = std::chrono::high_resolution_clock::now();
 
         flat_search_graph_ = std::make_unique<flat_search_graph_t>(
-            search_graph_converter_t::from_flat_graph(*flat_graph_, g_config.extracted_nbr_size)
+            search_graph_converter_t::from_descent_graph(*descent_graph_, g_config.extracted_nbr_size)
         );
 
         end_time = std::chrono::high_resolution_clock::now();
@@ -139,7 +139,7 @@ private:
     DataProvider() = default;
     std::unique_ptr<vector_dataset_t> dataset_;
     std::unique_ptr<dist_func_t> dist_func_;
-    std::unique_ptr<conv_graph::index_t> flat_graph_;
+    std::unique_ptr<conv_graph::index_t> descent_graph_;
     std::unique_ptr<flat_search_graph_t> flat_search_graph_;
 };
 

@@ -102,20 +102,20 @@ public:
 
         ARTEA_INFO("Building convergent graph...");
         auto t0 = std::chrono::high_resolution_clock::now();
-        flat_graph_ = std::make_unique<conv_graph::index_t>(
+        descent_graph_ = std::make_unique<conv_graph::index_t>(
             conv_graph::factory_t::construct_graph(base_vecs, layer_cfg, pruning_cfg, propagate_cfg)
         );
         auto t1 = std::chrono::high_resolution_clock::now();
         g_results.build_time_s =
             std::chrono::duration_cast<std::chrono::microseconds>(t1 - t0).count() / 1e6;
         ARTEA_INFO(fmt::format("Graph built: {} vertices in {:.2f} s",
-            flat_graph_->get_num_vertices(), g_results.build_time_s));
+            descent_graph_->get_num_vertices(), g_results.build_time_s));
 
         // Convert to flat search graph
         ARTEA_INFO("Converting to flat search graph...");
         auto tc0 = std::chrono::high_resolution_clock::now();
         flat_search_graph_ = std::make_unique<flat_search_graph_t>(
-            search_graph_converter_t::from_flat_graph(*flat_graph_, g_config.extracted_nbr_size)
+            search_graph_converter_t::from_descent_graph(*descent_graph_, g_config.extracted_nbr_size)
         );
         auto tc1 = std::chrono::high_resolution_clock::now();
         g_results.conversion_time_ms =
@@ -127,7 +127,7 @@ public:
 
     vector_dataset_t&    get_dataset()           { return *dataset_; }
     dist_func_t&         get_dist_func()          { return *dist_func_; }
-    conv_graph::index_t&        get_flat_graph()          { return *flat_graph_; }
+    conv_graph::index_t&        get_descent_graph()          { return *descent_graph_; }
     flat_search_graph_t& get_flat_search_graph()  { return *flat_search_graph_; }
     const idlist_array_t& get_gt()               { return dataset_->get_gt_vecs(); }
 
@@ -135,7 +135,7 @@ private:
     DataProvider() = default;
     std::unique_ptr<vector_dataset_t>    dataset_;
     std::unique_ptr<dist_func_t>         dist_func_;
-    std::unique_ptr<conv_graph::index_t>        flat_graph_;
+    std::unique_ptr<conv_graph::index_t>        descent_graph_;
     std::unique_ptr<flat_search_graph_t> flat_search_graph_;
 };
 
@@ -161,7 +161,7 @@ TEST_F(RouterComparisonTest, ConstructModeRouter) {
     router.initialize();
 
     auto t0 = std::chrono::high_resolution_clock::now();
-    knn_results_t results = router.batch_query(query_vecs, p.get_flat_graph());
+    knn_results_t results = router.batch_query(query_vecs, p.get_descent_graph());
     auto t1 = std::chrono::high_resolution_clock::now();
     double us = std::chrono::duration_cast<std::chrono::microseconds>(t1 - t0).count();
 
@@ -281,7 +281,7 @@ int main(int argc, char** argv) {
     std::cout << fmt::format("  {:45s}  {:>10s}  {:>12s}\n", "Mode", "Recall@k", "QPS");
     std::cout << std::string(70, '-') << "\n";
     std::cout << fmt::format("  {:45s}  {:>10.4f}  {:>12.1f}\n",
-        "construct_mode (FlatGraph, no conversion)",
+        "construct_mode (DescentGraph, no conversion)",
         g_results.construct_recall, g_results.construct_qps);
     std::cout << fmt::format("  {:45s}  {:>10.4f}  {:>12.1f}\n",
         "search_mode   (FlatSearchGraph, +conv time)",

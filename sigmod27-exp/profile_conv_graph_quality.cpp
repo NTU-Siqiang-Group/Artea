@@ -96,7 +96,7 @@ public:
             g_config.pruning_config,
             g_config.propagate_config
         );
-        flat_graph_ = std::make_unique<conv_graph::index_t>(conv_graph::factory_t::construct_graph(
+        descent_graph_ = std::make_unique<conv_graph::index_t>(conv_graph::factory_t::construct_graph(
             dataset_->get_base_vecs(),
             g_config.layer_config,
             g_config.pruning_config,
@@ -107,7 +107,7 @@ public:
         ARTEA_INFO("Converting to flat search graph...");
         auto t0 = std::chrono::high_resolution_clock::now();
         flat_search_graph_ = std::make_unique<flat_search_graph_t>(
-            search_graph_converter_t::from_flat_graph(*flat_graph_, g_config.extracted_nbr_size)
+            search_graph_converter_t::from_descent_graph(*descent_graph_, g_config.extracted_nbr_size)
         );
         auto t1 = std::chrono::high_resolution_clock::now();
         g_test_results.conversion_time_ms =
@@ -124,7 +124,7 @@ private:
     DataProvider() = default;
     std::unique_ptr<vector_dataset_t> dataset_;
     std::unique_ptr<dist_func_t> dist_func_;
-    std::unique_ptr<conv_graph::index_t> flat_graph_;
+    std::unique_ptr<conv_graph::index_t> descent_graph_;
     std::unique_ptr<flat_search_graph_t> flat_search_graph_;
 };
 

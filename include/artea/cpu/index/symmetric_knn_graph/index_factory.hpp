@@ -60,10 +60,10 @@ public:
         const pruning_config_t pruning_config,
         const propagate_config_t propagate_config
     ) -> this_index_t {
-        this_index_t flat_graph(base_vecs, layer_config, pruning_config, propagate_config);
+        this_index_t descent_graph(base_vecs, layer_config, pruning_config, propagate_config);
         dist_func_t dist_func(base_vecs.get_vec_dim());
-        _build_loop(flat_graph, dist_func, pruning_config, propagate_config);
-        return flat_graph;
+        _build_loop(descent_graph, dist_func, pruning_config, propagate_config);
+        return descent_graph;
     }
 
     /**
@@ -79,19 +79,19 @@ public:
     static auto construct_graph(
         typename knn_graph::index_t&& knn_graph_index
     ) -> this_index_t {
-        this_index_t flat_graph(std::move(knn_graph_index));
+        this_index_t descent_graph(std::move(knn_graph_index));
 
-        const vertex_num_t num_vertices = flat_graph.get_num_vertices();
-        dist_func_t dist_func(flat_graph.get_vecs_data().get_vec_dim());
+        const vertex_num_t num_vertices = descent_graph.get_num_vertices();
+        dist_func_t dist_func(descent_graph.get_vecs_data().get_vec_dim());
 
         propagate_engine_t propagate_engine(num_vertices, dist_func);
-        propagate_engine.set_graph(flat_graph);
+        propagate_engine.set_graph(descent_graph);
 
         auto reverse_updater = propagate_engine.template make_updater<reverse_updater_t>();
 
         propagate_engine.next(reverse_updater);
 
-        return flat_graph;
+        return descent_graph;
     }
 
     /** @brief Construct with per-build-loop recall/throughput profiling. */
@@ -105,7 +105,7 @@ public:
         const query_vecs_t& query_vecs = dataset.get_query_vecs();
         const ground_truth_t& groundtruth = dataset.get_gt_vecs();
 
-        this_index_t flat_graph(base_vecs, layer_config, pruning_config, propagate_config);
+        this_index_t descent_graph(base_vecs, layer_config, pruning_config, propagate_config);
         dist_func_t dist_func(base_vecs.get_vec_dim());
 
         recall_estimator_t recall_estimator;
@@ -114,10 +114,10 @@ public:
         monolayer_graph_router_t router(base_vecs, dist_func, topk, candidate_queue_size);
         router.initialize();
 
-        _build_loop(flat_graph, dist_func, pruning_config, propagate_config,
+        _build_loop(descent_graph, dist_func, pruning_config, propagate_config,
             [&](iter_t build_loop) {
                 auto t0 = std::chrono::high_resolution_clock::now();
-                auto results = router.batch_query(query_vecs, flat_graph);
+                auto results = router.batch_query(query_vecs, descent_graph);
                 auto t1 = std::chrono::high_resolution_clock::now();
                 double qps = query_vecs.get_num_vecs() * 1e6 /
                     std::chrono::duration_cast<std::chrono::microseconds>(t1 - t0).count();
@@ -138,26 +138,26 @@ private:
      *        reverse edges without truncation to make it symmetric.
      */
     static auto _build_loop(
-        this_index_t& flat_graph,
+        this_index_t& descent_graph,
         const dist_func_t& dist_func,
         const pruning_config_t& pruning_config,
         const propagate_config_t& propagate_config,
         std::function<void(iter_t)> on_iter_end = nullptr
     ) -> void {
-        const vertex_num_t num_vertices = flat_graph.get_num_vertices();
-        const vertex_num_t max_nbr_size = flat_graph.layer_config().max_nbr_size();
+        const vertex_num_t num_vertices = descent_graph.get_num_vertices();
+        const vertex_num_t max_nbr_size = descent_graph.layer_config().max_nbr_size();
         const vertex_num_t init_nbr_size = static_cast<vertex_num_t>(max_nbr_size * propagate_config.prefill_ratio());
 
         /** -------------------- Optimazation ------------------------------------- ***/
         /** @brief A sparse graph is effecient enough to search nearest neighbors     */
-        flat_graph.layer_config().max_nbr_size(max_nbr_size / 2);
+        descent_graph.layer_config().max_nbr_size(max_nbr_size / 2);
         /** ----------------------------------------------------------------------- ***/
 
         random_eg_t random_eg(dist_func);
-        random_eg.generate(flat_graph, init_nbr_size);
+        random_eg.generate(descent_graph, init_nbr_size);
 
         propagate_engine_t propagate_engine(num_vertices, dist_func);
-        propagate_engine.set_graph(flat_graph);
+        propagate_engine.set_graph(descent_graph);
 
         auto triangle_updater  = propagate_engine.template make_updater<triangle_updater_t>(
             pruning_config.scale_coeffs(), pruning_config.shifted_coeffs());
@@ -175,7 +175,7 @@ private:
 
         /** -------------------- Optimazation --------------------------------------- ***/
         /** @brief Reconstructed as dense graph with original edge number requirements  */
-        flat_graph.layer_config().max_nbr_size(max_nbr_size);
+        descent_graph.layer_config().max_nbr_size(max_nbr_size);
         /** ------------------------------------------------------------------------- ***/
 
         for (iter_t routing_loop = 0; routing_loop < propagate_config.num_routing_loops(); ++routing_loop) {

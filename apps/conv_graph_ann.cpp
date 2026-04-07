@@ -165,17 +165,17 @@ int main(int argc, char** argv) {
         base_vecs.get_num_vecs(), query_vecs.get_num_vecs()));
 
     // Load flat graph
-    ARTEA_INFO(fmt::format("Loading flat graph from {}...", index_path));
-    conv_graph::index_t flat_graph = flat_graph_file_manager_t::restore<conv_graph::index_t>(index_path, base_vecs);
+    ARTEA_INFO(fmt::format("Loading descent graph from {}...", index_path));
+    conv_graph::index_t descent_graph = flat_graph_file_manager_t::restore<conv_graph::index_t>(index_path, base_vecs);
 
     // Calculate and output index size
     index_size_calculator_t index_size_calc;
-    auto index_size_info = index_size_calc.calculate_flat_graph_size(flat_graph);
+    auto index_size_info = index_size_calc.calculate_descent_graph_size(descent_graph);
 
     // Determine extracted neighbor size
     vertex_num_t extracted_nbr_size = program.is_used("--extracted-nbr-size")
         ? program.get<uint32_t>("--extracted-nbr-size")
-        : flat_graph.layer_config().max_nbr_size();
+        : descent_graph.layer_config().max_nbr_size();
 
     // Print graph construction configuration
     std::cout << "\n" << std::string(80, '=') << std::endl;
@@ -188,12 +188,12 @@ int main(int argc, char** argv) {
     std::cout << fmt::format("  Vector dimension:       {}", base_vecs.get_vec_dim()) << std::endl;
     std::cout << "\n--- Graph Construction Config ---" << std::endl;
     std::cout << fmt::format("  Index size:             {:.2f} MB ({} bytes)", index_size_info.total_mb, index_size_info.total_bytes) << std::endl;
-    std::cout << fmt::format("  Max nbr size:           {}", flat_graph.layer_config().max_nbr_size()) << std::endl;
-    std::cout << fmt::format("  Reserved nbr size:      {}", flat_graph.layer_config().reserved_nbr_size()) << std::endl;
-    std::cout << fmt::format("  Scale coeffs:           {}", flat_graph.pruning_config().scale_coeffs()) << std::endl;
-    std::cout << fmt::format("  Shifted coeffs:         {}", flat_graph.pruning_config().shifted_coeffs()) << std::endl;
-    std::cout << fmt::format("  Build loops:            {}", flat_graph.propagate_config().num_build_loops()) << std::endl;
-    std::cout << fmt::format("  Triangle updater iters: {}", flat_graph.propagate_config().num_triu_iters()) << std::endl;
+    std::cout << fmt::format("  Max nbr size:           {}", descent_graph.layer_config().max_nbr_size()) << std::endl;
+    std::cout << fmt::format("  Reserved nbr size:      {}", descent_graph.layer_config().reserved_nbr_size()) << std::endl;
+    std::cout << fmt::format("  Scale coeffs:           {}", descent_graph.pruning_config().scale_coeffs()) << std::endl;
+    std::cout << fmt::format("  Shifted coeffs:         {}", descent_graph.pruning_config().shifted_coeffs()) << std::endl;
+    std::cout << fmt::format("  Build loops:            {}", descent_graph.propagate_config().num_build_loops()) << std::endl;
+    std::cout << fmt::format("  Triangle updater iters: {}", descent_graph.propagate_config().num_triu_iters()) << std::endl;
     std::cout << "\n--- Query Config ---" << std::endl;
     std::cout << fmt::format("  Top-k:                  {}", topk) << std::endl;
     std::cout << fmt::format("  Candidate queue size:   {}", candidate_queue_size) << std::endl;
@@ -204,8 +204,8 @@ int main(int argc, char** argv) {
 
     // Convert to flat search graph
     ARTEA_INFO("Converting to flat search graph...");
-    flat_search_graph_t flat_search_graph = search_graph_converter_t::from_flat_graph(
-        flat_graph,
+    flat_search_graph_t flat_search_graph = search_graph_converter_t::from_descent_graph(
+        descent_graph,
         extracted_nbr_size
     );
 

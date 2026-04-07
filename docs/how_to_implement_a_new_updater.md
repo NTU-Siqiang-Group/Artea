@@ -47,10 +47,10 @@ All updaters inherit from `NeighborUpdater` via CRTP:
 ```cpp
 namespace artea::cpu {
 
-template <typename EdgeGeneratorTraitsT, typename FlatGraphT>
+template <typename EdgeGeneratorTraitsT, typename DescentGraphT>
 class MyUpdater :
     public EdgeGeneratorTraitsT::template neighbor_updater_t<
-        FlatGraphT, MyUpdater<EdgeGeneratorTraitsT, FlatGraphT>>
+        DescentGraphT, MyUpdater<EdgeGeneratorTraitsT, DescentGraphT>>
 {
     // Extract types from traits
     using vertex_id_t    = typename EdgeGeneratorTraitsT::vertex_id_t;
@@ -62,7 +62,7 @@ class MyUpdater :
     using dist_func_t    = typename EdgeGeneratorTraitsT::dist_func_t;
     using vector_array_t = typename EdgeGeneratorTraitsT::vector_array_t;
     using base_class_t   = typename EdgeGeneratorTraitsT::template neighbor_updater_t<
-        FlatGraphT, MyUpdater<EdgeGeneratorTraitsT, FlatGraphT>>;
+        DescentGraphT, MyUpdater<EdgeGeneratorTraitsT, DescentGraphT>>;
 
 public:
     // Required: unique name for debug/profiling output
@@ -73,9 +73,9 @@ public:
         const dist_func_t& dist_func,
         const vector_array_t& vecs_data,
         log_table_t& log_table,
-        const FlatGraphT& flat_graph
+        const DescentGraphT& descent_graph
         // ... updater-specific args ...
-    ) : base_class_t(dist_func, vecs_data, log_table, flat_graph)
+    ) : base_class_t(dist_func, vecs_data, log_table, descent_graph)
         // ... initialize updater-specific members ...
     {}
 
@@ -88,7 +88,7 @@ public:
         //   this->_dist_func    -- distance function
         //   this->_vecs_data    -- vector array (use .get(vid) to get raw pointer)
         //   this->_log_table    -- log table for buffering new edges
-        //   this->_flat_graph   -- read-only graph reference
+        //   this->_descent_graph   -- read-only graph reference
 
         // Option A: Write logs (deferred edge additions, merged after propagation)
         this->_log_table.write_log(executor_vid, nbr_id, distance);
@@ -109,10 +109,10 @@ private:
 
 ### Rules
 
-- **CRTP inheritance**: always inherit from `EdgeGeneratorTraitsT::template neighbor_updater_t<FlatGraphT, YourClass>`
+- **CRTP inheritance**: always inherit from `EdgeGeneratorTraitsT::template neighbor_updater_t<DescentGraphT, YourClass>`
 - **`updater_name`**: required `static constexpr const char*`, used in profiling output
 - **`update_impl`**: required method, called by base class `operator()` via CRTP
-- **Constructor**: first 4 args are always `(dist_func, vecs_data, log_table, flat_graph)`, passed to base class; extra args are updater-specific
+- **Constructor**: first 4 args are always `(dist_func, vecs_data, log_table, descent_graph)`, passed to base class; extra args are updater-specific
 - **Extract types from `EdgeGeneratorTraitsT`**, never hard-code
 
 ---
@@ -124,14 +124,14 @@ private:
 **(a) Forward declaration** (in the forward declaration area):
 
 ```cpp
-template <typename EdgeGeneratorTraitsT, typename FlatGraphT> class MyUpdater;
+template <typename EdgeGeneratorTraitsT, typename DescentGraphT> class MyUpdater;
 ```
 
 **(b) Type alias** (inside `EdgeGeneratorTraits` struct):
 
 ```cpp
-template <typename FlatGraphT>
-using my_updater_t = MyUpdater<edge_generator_traits_t, FlatGraphT>;
+template <typename DescentGraphT>
+using my_updater_t = MyUpdater<edge_generator_traits_t, DescentGraphT>;
 ```
 
 ---
@@ -145,19 +145,19 @@ Inside the `make_updater` factory method:
 **(a) Add local type alias** (alongside the existing ones):
 
 ```cpp
-using my_updater_t = typename EdgeGeneratorTraitsT::template my_updater_t<FlatGraphT>;
+using my_updater_t = typename EdgeGeneratorTraitsT::template my_updater_t<DescentGraphT>;
 ```
 
 **(b) Add `if constexpr` branch** (before the `else { ARTEA_ERROR(...) }` fallback):
 
 ```cpp
 else if constexpr (std::is_same_v<UpdaterT, my_updater_t>) {
-    // MyUpdater(dist_func, vecs_arr, log_table, flat_graph, ...extra_args)
-    return UpdaterT(_dist_func, vecs_arr, log_table, *_flat_graph, std::forward<Args>(args)...);
+    // MyUpdater(dist_func, vecs_arr, log_table, descent_graph, ...extra_args)
+    return UpdaterT(_dist_func, vecs_arr, log_table, *_descent_graph, std::forward<Args>(args)...);
 }
 ```
 
-The `make_updater` factory auto-provides `dist_func`, `vecs_arr`, `log_table`, and `flat_graph`. Only updater-specific extra args need to be passed by the caller:
+The `make_updater` factory auto-provides `dist_func`, `vecs_arr`, `log_table`, and `descent_graph`. Only updater-specific extra args need to be passed by the caller:
 
 ```cpp
 // No extra args (like ReverseUpdater, TruncateUpdater):

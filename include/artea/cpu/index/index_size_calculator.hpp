@@ -39,11 +39,11 @@ class IndexSizeCalculator {
 
 public:
     /**
-     * @brief Calculate size of a flat graph (uses max_nbr_size)
+     * @brief Calculate size of a descent graph (uses max_nbr_size)
      * Each vertex has max_nbr_size neighbors.
      */
-    template <typename FlatGraphT>
-    static auto calculate_flat_graph_size(const FlatGraphT& graph) -> IndexSizeInfo {
+    template <typename DescentGraphT>
+    static auto calculate_descent_graph_size(const DescentGraphT& graph) -> IndexSizeInfo {
         IndexSizeInfo info;
 
         vertex_num_t num_vertices = graph.get_num_vertices();

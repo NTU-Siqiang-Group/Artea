@@ -1,7 +1,7 @@
 /*
  * @FilePath: /Artea/include/artea/cpu/index/conv_graph/index_structure.hpp
  * @Author: Chandler (Weitang Ye) <weitang.ye@ntu.edu.sg>
- * @Description: Convergent graph index structure extending FlatGraph via CRTP.
+ * @Description: Convergent graph index structure extending DescentGraph via CRTP.
  */
 
 #pragma once
@@ -13,14 +13,14 @@ namespace cpu {
 namespace conv_graph {
 
 /**
- * @brief Convergent graph index, extending FlatGraph with pruning and propagation configs.
+ * @brief Convergent graph index, extending DescentGraph with pruning and propagation configs.
  * @tparam IndexTraitsT The index traits type.
  */
 template <typename IndexTraitsT>
 class IndexStructure :
-    public IndexTraitsT::template flat_graph_t<IndexStructure<IndexTraitsT>>
+    public IndexTraitsT::template descent_graph_t<IndexStructure<IndexTraitsT>>
 {
-    using base_t = typename IndexTraitsT::template flat_graph_t<IndexStructure<IndexTraitsT>>;
+    using base_t = typename IndexTraitsT::template descent_graph_t<IndexStructure<IndexTraitsT>>;
     using vector_array_t = typename IndexTraitsT::vector_array_t;
     using layer_config_t = typename IndexTraitsT::layer_config_t;
     using propagate_config_t = typename IndexTraitsT::conv_graph::propagate_config_t;

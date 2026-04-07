@@ -46,17 +46,17 @@ class SearchGraphConverter {
 
 public:
     /**
-     * @brief Convert a FlatGraph to FlatSearchGraph in parallel.
-     * @param flat_graph The source flat graph to convert from.
+     * @brief Convert a DescentGraph to FlatSearchGraph in parallel.
+     * @param descent_graph The source descent graph to convert from.
      * @param extracted_nbr_size Fixed number of neighbors per vertex in the flat search graph.
      * @return A new FlatSearchGraph instance.
      */
-    template <typename FlatGraphT>
-    static auto from_flat_graph(
-        const FlatGraphT& flat_graph,
+    template <typename DescentGraphT>
+    static auto from_descent_graph(
+        const DescentGraphT& descent_graph,
         const vertex_num_t extracted_nbr_size
     ) -> flat_search_graph_t {
-        const vertex_num_t max_nbr_size = flat_graph.layer_config().max_nbr_size();
+        const vertex_num_t max_nbr_size = descent_graph.layer_config().max_nbr_size();
 
         // Validate extracted_nbr_size does not exceed max_nbr_size
         if (extracted_nbr_size > max_nbr_size) {
@@ -66,14 +66,14 @@ public:
             ));
         }
 
-        const vertex_num_t num_vertices = flat_graph.get_num_vertices();
-        const auto& vecs_data = flat_graph.get_vecs_data();
-        const auto& nbrs_arr = flat_graph.get_nbrs_arr();
+        const vertex_num_t num_vertices = descent_graph.get_num_vertices();
+        const auto& vecs_data = descent_graph.get_vecs_data();
+        const auto& nbrs_arr = descent_graph.get_nbrs_arr();
 
         // Create the flat search graph
         flat_search_graph_t flat_search_graph(vecs_data, extracted_nbr_size);
 
-        // Copy neighbors from FlatGraph to FlatSearchGraph in parallel
+        // Copy neighbors from DescentGraph to FlatSearchGraph in parallel
         auto& csr_nbrs = flat_search_graph.get_csr_nbrs();
         const vertex_id_t invalid_id = IndexTraitsT::invalid_vertex_id;
 
@@ -128,18 +128,18 @@ public:
         hier_search_graph.resize(num_layers);
 
         // Convert bottom layer (layer_id = 0)
-        const auto& bottom_flat_graph = hierarchical_graph.get_layer_graph(0);
-        auto bottom_search_graph = from_flat_graph(
-            bottom_flat_graph,
+        const auto& bottom_descent_graph = hierarchical_graph.get_layer_graph(0);
+        auto bottom_search_graph = from_descent_graph(
+            bottom_descent_graph,
             bl_extracted_nbr_size
         );
         hier_search_graph.set_layer_graph(0, std::move(bottom_search_graph));
 
         // Convert upper layers (layer_id > 0)
         for (layer_id_t layer_id = 1; layer_id < num_layers; ++layer_id) {
-            const auto& upper_flat_graph = hierarchical_graph.get_layer_graph(layer_id);
-            auto upper_search_graph = from_flat_graph(
-                upper_flat_graph,
+            const auto& upper_descent_graph = hierarchical_graph.get_layer_graph(layer_id);
+            auto upper_search_graph = from_descent_graph(
+                upper_descent_graph,
                 ul_extracted_nbr_size
             );
             hier_search_graph.set_layer_graph(layer_id, std::move(upper_search_graph));
@@ -154,8 +154,8 @@ public:
     }
 
     /**
-     * @brief Load FlatGraph from file and convert to FlatSearchGraph.
-     * @param file_path Path to the flat graph index file.
+     * @brief Load DescentGraph from file and convert to FlatSearchGraph.
+     * @param file_path Path to the descent graph index file.
      * @param extracted_nbr_size Fixed number of neighbors per vertex in the flat search graph.
      * @param vecs_data Reference to the vector data.
      * @return A new FlatSearchGraph instance.
@@ -165,11 +165,11 @@ public:
         const vertex_num_t extracted_nbr_size,
         const vector_array_t& vecs_data
     ) -> flat_search_graph_t {
-        // Load FlatGraph from file
-        index_t flat_graph = index_t::restore(file_path, vecs_data);
+        // Load DescentGraph from file
+        index_t descent_graph = index_t::restore(file_path, vecs_data);
 
         // Convert to FlatSearchGraph
-        return from_flat_graph(flat_graph, extracted_nbr_size);
+        return from_descent_graph(descent_graph, extracted_nbr_size);
     }
 
 };  // class SearchGraphConverter

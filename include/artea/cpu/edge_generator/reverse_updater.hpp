@@ -26,9 +26,9 @@
 namespace artea {
 namespace cpu {
 
-template <typename EdgeGeneratorTraitsT, typename FlatGraphT>
+template <typename EdgeGeneratorTraitsT, typename DescentGraphT>
 class ReverseUpdater :
-    public EdgeGeneratorTraitsT::template neighbor_updater_t<FlatGraphT, ReverseUpdater<EdgeGeneratorTraitsT, FlatGraphT>> {
+    public EdgeGeneratorTraitsT::template neighbor_updater_t<DescentGraphT, ReverseUpdater<EdgeGeneratorTraitsT, DescentGraphT>> {
 
     using vertex_id_t = typename EdgeGeneratorTraitsT::vertex_id_t;
     using vertex_num_t = typename EdgeGeneratorTraitsT::vertex_num_t;
@@ -40,7 +40,7 @@ class ReverseUpdater :
     using dnbr_arr_t = typename EdgeGeneratorTraitsT::dnbr_arr_t;
     using log_table_t = typename EdgeGeneratorTraitsT::log_table_t;
     using dist_func_t = typename EdgeGeneratorTraitsT::dist_func_t;
-    using base_class_t = typename EdgeGeneratorTraitsT::template neighbor_updater_t<FlatGraphT, ReverseUpdater<EdgeGeneratorTraitsT, FlatGraphT>>;
+    using base_class_t = typename EdgeGeneratorTraitsT::template neighbor_updater_t<DescentGraphT, ReverseUpdater<EdgeGeneratorTraitsT, DescentGraphT>>;
 
 public:
     static constexpr const char* updater_name = "reverse_updater";
@@ -55,8 +55,8 @@ public:
         const dist_func_t& dist_func,
         const vector_array_t& vecs_data,
         log_table_t& log_table,
-        const FlatGraphT& flat_graph
-    ) : base_class_t(dist_func, vecs_data, log_table, flat_graph) {}
+        const DescentGraphT& descent_graph
+    ) : base_class_t(dist_func, vecs_data, log_table, descent_graph) {}
 
     /**
      * @brief Add reverse edges for all neighbors in origin_nbrs.
@@ -73,14 +73,14 @@ public:
         dnbr_arr_t& origin_nbrs
     ) -> void {
         // For each neighbor in origin_nbrs, add a reverse edge from that neighbor to pivot_vid
-        const vertex_num_t max_sz = this->_flat_graph.layer_config().max_nbr_size();
+        const vertex_num_t max_sz = this->_descent_graph.layer_config().max_nbr_size();
         for (vertex_num_t i = 0; i < origin_nbrs.size(); ++i) {
             const dnbr_t& nbr = origin_nbrs[i];
             vertex_id_t nbr_id = nbr.get_id();
             distance_t dist = nbr.get_distance();
 
             // Check if nbr_id's neighbor array is already full with closer neighbors
-            const dnbr_arr_t& nbr_vertex_nbrs = this->_flat_graph.fetch_nbrs(nbr_id);
+            const dnbr_arr_t& nbr_vertex_nbrs = this->_descent_graph.fetch_nbrs(nbr_id);
             // if (nbr_vertex_nbrs.size() >= max_sz &&
             //     nbr_vertex_nbrs[max_sz - 1].get_distance() <= dist) {
             //     continue;

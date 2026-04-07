@@ -25,9 +25,9 @@
 namespace artea {
 namespace cpu {
 
-template <typename EdgeGeneratorTraitsT, typename FlatGraphT>
+template <typename EdgeGeneratorTraitsT, typename DescentGraphT>
 class TruncateUpdater :
-    public EdgeGeneratorTraitsT::template neighbor_updater_t<FlatGraphT, TruncateUpdater<EdgeGeneratorTraitsT, FlatGraphT>> {
+    public EdgeGeneratorTraitsT::template neighbor_updater_t<DescentGraphT, TruncateUpdater<EdgeGeneratorTraitsT, DescentGraphT>> {
 
     using vertex_id_t    = typename EdgeGeneratorTraitsT::vertex_id_t;
     using vertex_num_t   = typename EdgeGeneratorTraitsT::vertex_num_t;
@@ -35,7 +35,7 @@ class TruncateUpdater :
     using log_table_t    = typename EdgeGeneratorTraitsT::log_table_t;
     using dist_func_t    = typename EdgeGeneratorTraitsT::dist_func_t;
     using vector_array_t = typename EdgeGeneratorTraitsT::vector_array_t;
-    using base_class_t   = typename EdgeGeneratorTraitsT::template neighbor_updater_t<FlatGraphT, TruncateUpdater<EdgeGeneratorTraitsT, FlatGraphT>>;
+    using base_class_t   = typename EdgeGeneratorTraitsT::template neighbor_updater_t<DescentGraphT, TruncateUpdater<EdgeGeneratorTraitsT, DescentGraphT>>;
 
 public:
     static constexpr const char* updater_name = "truncate_updater";
@@ -44,9 +44,9 @@ public:
         const dist_func_t& dist_func,
         const vector_array_t& vecs_data,
         log_table_t& log_table,
-        const FlatGraphT& flat_graph,
+        const DescentGraphT& descent_graph,
         vertex_num_t truncate_size = 0
-    ) : base_class_t(dist_func, vecs_data, log_table, flat_graph),
+    ) : base_class_t(dist_func, vecs_data, log_table, descent_graph),
         _truncate_size(truncate_size) {}
 
     __attribute__((always_inline))
@@ -56,7 +56,7 @@ public:
     ) -> void {
         const vertex_num_t max_sz = (_truncate_size > 0)
             ? _truncate_size
-            : this->_flat_graph.layer_config().max_nbr_size();
+            : this->_descent_graph.layer_config().max_nbr_size();
         if (origin_nbrs.size() > max_sz) {
             origin_nbrs.resize(max_sz);
         }

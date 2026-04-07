@@ -95,7 +95,7 @@ public:
         ARTEA_INFO("Building symmetric KNN graph from scratch...");
         auto start_time = std::chrono::high_resolution_clock::now();
 
-        flat_graph_ = std::make_unique<symmetric_knn_graph::index_t>(
+        descent_graph_ = std::make_unique<symmetric_knn_graph::index_t>(
             symmetric_knn_graph::factory_t::construct_graph(
                 base_vecs,
                 g_config.layer_config,
@@ -107,13 +107,13 @@ public:
         auto end_time = std::chrono::high_resolution_clock::now();
         auto duration = std::chrono::duration_cast<std::chrono::microseconds>(end_time - start_time);
         g_test_results.build_time_s = duration.count() / 1e6;
-        g_test_results.num_vertices = flat_graph_->get_num_vertices();
+        g_test_results.num_vertices = descent_graph_->get_num_vertices();
 
         ARTEA_INFO(fmt::format("Graph built with {} vertices", g_test_results.num_vertices));
         ARTEA_INFO(fmt::format("Build time: {:.2f} s", g_test_results.build_time_s));
 
         // Compute average degree
-        g_test_results.avg_degree = compute_average_degree(*flat_graph_);
+        g_test_results.avg_degree = compute_average_degree(*descent_graph_);
         ARTEA_INFO(fmt::format("Average degree: {:.2f}", g_test_results.avg_degree));
 
         // Convert to flat search graph
@@ -121,7 +121,7 @@ public:
         start_time = std::chrono::high_resolution_clock::now();
 
         flat_search_graph_ = std::make_unique<flat_search_graph_t>(
-            search_graph_converter_t::from_flat_graph(*flat_graph_, g_config.extracted_nbr_size)
+            search_graph_converter_t::from_descent_graph(*descent_graph_, g_config.extracted_nbr_size)
         );
 
         end_time = std::chrono::high_resolution_clock::now();
@@ -143,7 +143,7 @@ private:
     DataProvider() = default;
     std::unique_ptr<vector_dataset_t> dataset_;
     std::unique_ptr<dist_func_t> dist_func_;
-    std::unique_ptr<symmetric_knn_graph::index_t> flat_graph_;
+    std::unique_ptr<symmetric_knn_graph::index_t> descent_graph_;
     std::unique_ptr<flat_search_graph_t> flat_search_graph_;
 };
 

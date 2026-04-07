@@ -94,13 +94,13 @@ public:
         layer_config_t layer_cfg(16, 24);
         conv_graph::pruning_config_t pruning_cfg(1.0f, 0.0f);
         conv_graph::propagate_config_t propagate_cfg(4, 14, 0.6f);
-        flat_graph_ = std::make_unique<conv_graph::index_t>(
+        descent_graph_ = std::make_unique<conv_graph::index_t>(
             conv_graph::factory_t::construct_graph(base_vecs, layer_cfg, pruning_cfg, propagate_cfg)
         );
 
         // Convert to search graph
         flat_search_graph_ = std::make_unique<flat_search_graph_t>(
-            search_graph_converter_t::from_flat_graph(*flat_graph_, g_config.extracted_nbr_size)
+            search_graph_converter_t::from_descent_graph(*descent_graph_, g_config.extracted_nbr_size)
         );
 
         ARTEA_INFO("DataProvider ready.");
@@ -108,7 +108,7 @@ public:
 
     vector_dataset_t&    get_dataset()          { return *dataset_; }
     dist_func_t&         get_dist_func()         { return *dist_func_; }
-    conv_graph::index_t&        get_flat_graph()         { return *flat_graph_; }
+    conv_graph::index_t&        get_descent_graph()         { return *descent_graph_; }
     flat_search_graph_t& get_flat_search_graph() { return *flat_search_graph_; }
     const idlist_array_t& get_gt()              { return dataset_->get_gt_vecs(); }
 
@@ -116,7 +116,7 @@ private:
     DataProvider() = default;
     std::unique_ptr<vector_dataset_t>    dataset_;
     std::unique_ptr<dist_func_t>         dist_func_;
-    std::unique_ptr<conv_graph::index_t>        flat_graph_;
+    std::unique_ptr<conv_graph::index_t>        descent_graph_;
     std::unique_ptr<flat_search_graph_t> flat_search_graph_;
 };
 
@@ -252,7 +252,7 @@ TEST_F(ConvGraphSearchTest, ConstructModeBatchQuery) {
 
     // Warmup runs
     for (uint32_t w = 0; w < g_config.warmup_runs; ++w) {
-        [[maybe_unused]] auto _ = router.batch_query(query_vecs, p.get_flat_graph());
+        [[maybe_unused]] auto _ = router.batch_query(query_vecs, p.get_descent_graph());
     }
 
     // Test runs
@@ -262,7 +262,7 @@ TEST_F(ConvGraphSearchTest, ConstructModeBatchQuery) {
     recall_estimator_t re;
     for (uint32_t r = 0; r < g_config.test_runs; ++r) {
         auto t0 = std::chrono::high_resolution_clock::now();
-        last_results = router.batch_query(query_vecs, p.get_flat_graph());
+        last_results = router.batch_query(query_vecs, p.get_descent_graph());
         auto t1 = std::chrono::high_resolution_clock::now();
         total_us += std::chrono::duration_cast<std::chrono::microseconds>(t1 - t0).count();
         total_recall += re.calculate_recall_at_k(last_results, p.get_gt(), g_config.topk, g_results.num_queries);

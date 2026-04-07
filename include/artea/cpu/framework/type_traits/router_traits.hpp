@@ -29,7 +29,7 @@ namespace cpu {
 /** ------ Graph Mode ------ **/
 
 /** @brief Graph mode selector for proximity graph routers.
- *  - construct_mode: operates on FlatGraph / HierarchicalGraph (build-time, dnbr_t neighbors)
+ *  - construct_mode: operates on DescentGraph / HierarchicalGraph (build-time, dnbr_t neighbors)
  *  - search_mode:    operates on FlatSearchGraph / HierarchicalSearchGraph (query-time, vertex_id_t CSR)
  */
 enum class GraphModeT {

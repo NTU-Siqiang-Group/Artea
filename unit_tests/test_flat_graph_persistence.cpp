@@ -89,10 +89,10 @@ protected:
     dist_func_t* dist_func_;
 };
 
-TEST_F(FlatGraphPersistenceTest, FlatGraphSnapshotRestore) {
+TEST_F(FlatGraphPersistenceTest, DescentGraphSnapshotRestore) {
     const auto& base_vecs = dataset_->get_base_vecs();
 
-    ARTEA_INFO("Building flat graph for persistence test...");
+    ARTEA_INFO("Building descent graph for persistence test...");
 
     // Build original flat graph
     conv_graph::index_t original_graph = conv_graph::factory_t::construct_graph(
@@ -107,7 +107,7 @@ TEST_F(FlatGraphPersistenceTest, FlatGraphSnapshotRestore) {
     // Snapshot the graph
     std::string snapshot_dir = g_config.temp_dir + "/flat_graph_snapshot";
     nlohmann::json metadata;
-    metadata["test_name"] = "FlatGraphSnapshotRestore";
+    metadata["test_name"] = "DescentGraphSnapshotRestore";
     metadata["dataset"] = g_config.dataset_name;
 
     ARTEA_INFO(fmt::format("Snapshotting graph to {}", snapshot_dir));
@@ -170,7 +170,7 @@ TEST_F(FlatGraphPersistenceTest, FlatGraphSnapshotRestore) {
 
     EXPECT_EQ(mismatch_count, 0) << "All neighbor arrays should match exactly";
 
-    ARTEA_INFO("Flat graph snapshot/restore test passed!");
+    ARTEA_INFO("Descent graph snapshot/restore test passed!");
 }
 
 int main(int argc, char** argv) {

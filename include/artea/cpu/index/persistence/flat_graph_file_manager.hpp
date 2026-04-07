@@ -16,7 +16,7 @@
  * @FilePath: /Artea/include/artea/cpu/persistence/flat_graph_file_manager.hpp
  * @Author: Chandler (Weitang Ye) <weitang.ye@ntu.edu.sg>
  * @Date: 2026-03-14
- * @Description: File manager for FlatGraph snapshot and restore operations.
+ * @Description: File manager for DescentGraph snapshot and restore operations.
  */
 
 #pragma once
@@ -32,7 +32,7 @@ namespace artea {
 namespace cpu {
 
 /**
- * @brief File manager for FlatGraph snapshot and restore operations.
+ * @brief File manager for DescentGraph snapshot and restore operations.
  * @tparam IndexTraitsT The index traits type.
  */
 template <typename IndexTraitsT>
@@ -48,14 +48,14 @@ class FlatGraphFileManager {
 
 public:
     /**
-     * @brief Snapshot flat graph to a directory with metadata.
-     * @param flat_graph The flat graph to snapshot.
+     * @brief Snapshot descent graph to a directory with metadata.
+     * @param descent_graph The descent graph to snapshot.
      * @param index_dir Target directory path.
      * @param metadata Optional metadata to include in metadata.json.
      */
-    template <typename FlatGraphT>
+    template <typename DescentGraphT>
     static auto snapshot(
-        const FlatGraphT& flat_graph,
+        const DescentGraphT& descent_graph,
         const std::string& index_dir,
         const nlohmann::json& metadata = nlohmann::json::object()
     ) -> void {
@@ -69,8 +69,8 @@ public:
 
         // Write metadata.json
         nlohmann::json meta = metadata;
-        meta.merge_patch(flat_graph.get_base_metadata());
-        meta.merge_patch(flat_graph.get_metadata());
+        meta.merge_patch(descent_graph.get_base_metadata());
+        meta.merge_patch(descent_graph.get_metadata());
 
         std::string metadata_path = index_dir + "/metadata.json";
         std::ofstream meta_ofs(metadata_path);
@@ -84,14 +84,14 @@ public:
         std::string graph_bin_path = index_dir + "/graph.bin";
         std::ofstream ofs(graph_bin_path, std::ios::binary | std::ios::trunc);
         if (!ofs.is_open()) {
-            ARTEA_ERROR(fmt::format("Failed to open file for snapshotting flat graph: {}", graph_bin_path));
+            ARTEA_ERROR(fmt::format("Failed to open file for snapshotting descent graph: {}", graph_bin_path));
         }
 
         const uint32_t magic = k_file_magic;
         const uint32_t version = k_file_version;
-        const vertex_num_t num_vertices = flat_graph.get_num_vertices();
-        const vertex_num_t reserved_nbr_size = flat_graph.layer_config().reserved_nbr_size();
-        const vertex_num_t max_nbr_size = flat_graph.layer_config().max_nbr_size();
+        const vertex_num_t num_vertices = descent_graph.get_num_vertices();
+        const vertex_num_t reserved_nbr_size = descent_graph.layer_config().reserved_nbr_size();
+        const vertex_num_t max_nbr_size = descent_graph.layer_config().max_nbr_size();
 
         ofs.write(reinterpret_cast<const char*>(&magic), sizeof(magic));
         ofs.write(reinterpret_cast<const char*>(&version), sizeof(version));
@@ -100,7 +100,7 @@ public:
         ofs.write(reinterpret_cast<const char*>(&max_nbr_size), sizeof(max_nbr_size));
 
         // Write neighbor arrays
-        const auto& nbrs_arr = flat_graph.get_nbrs_arr();
+        const auto& nbrs_arr = descent_graph.get_nbrs_arr();
         for (vertex_num_t i = 0; i < num_vertices; ++i) {
             const auto& nbrs = nbrs_arr[i];
             const vertex_num_t nbr_count = static_cast<vertex_num_t>(nbrs.size());
@@ -115,21 +115,21 @@ public:
         }
 
         if (!ofs.good()) {
-            ARTEA_ERROR(fmt::format("Failed while writing flat graph to file: {}", graph_bin_path));
+            ARTEA_ERROR(fmt::format("Failed while writing descent graph to file: {}", graph_bin_path));
         }
     }
 
     /**
-     * @brief Restore flat graph from a snapshot directory.
+     * @brief Restore descent graph from a snapshot directory.
      * @param index_dir Source directory path.
      * @param vecs_data Reference to the vector data that this graph should bind to.
-     * @return Loaded FlatGraph instance.
+     * @return Loaded DescentGraph instance.
      */
-    template <typename FlatGraphT>
+    template <typename DescentGraphT>
     static auto restore(
         const std::string& index_dir,
         const vector_array_t& vecs_data
-    ) -> FlatGraphT {
+    ) -> DescentGraphT {
         static_assert(
             std::is_trivially_copyable_v<vertex_id_t> && std::is_trivially_copyable_v<distance_t>,
             "vertex_id_t and distance_t must be trivially copyable for binary loading."
@@ -147,7 +147,7 @@ public:
         meta_ifs.close();
 
         // Validate graph type
-        if (meta["graph_type"] != "flat_graph") {
+        if (meta["graph_type"] != "descent_graph") {
             ARTEA_ERROR(fmt::format("Invalid graph type in metadata: {}", meta["graph_type"].get<std::string>()));
         }
 
@@ -155,7 +155,7 @@ public:
         std::string graph_bin_path = index_dir + "/graph.bin";
         std::ifstream ifs(graph_bin_path, std::ios::binary);
         if (!ifs.is_open()) {
-            ARTEA_ERROR(fmt::format("Failed to open file for loading flat graph: {}", graph_bin_path));
+            ARTEA_ERROR(fmt::format("Failed to open file for loading descent graph: {}", graph_bin_path));
         }
 
         uint32_t magic = 0;
@@ -171,32 +171,32 @@ public:
         ifs.read(reinterpret_cast<char*>(&max_nbr_size), sizeof(max_nbr_size));
 
         if (!ifs.good()) {
-            ARTEA_ERROR(fmt::format("Failed to read flat graph header from file: {}", graph_bin_path));
+            ARTEA_ERROR(fmt::format("Failed to read descent graph header from file: {}", graph_bin_path));
         }
 
         if (magic != k_file_magic) {
-            ARTEA_ERROR(fmt::format("Invalid flat graph file magic: {}", graph_bin_path));
+            ARTEA_ERROR(fmt::format("Invalid descent graph file magic: {}", graph_bin_path));
         }
 
         if (version != k_file_version) {
-            ARTEA_ERROR(fmt::format("Unsupported flat graph file version: {}", graph_bin_path));
+            ARTEA_ERROR(fmt::format("Unsupported descent graph file version: {}", graph_bin_path));
         }
 
         layer_config_t layer_config(max_nbr_size, reserved_nbr_size);
 
-        // Construct flat graph from metadata using subclass hook
-        FlatGraphT flat_graph = FlatGraphT::from_metadata(meta, vecs_data, layer_config);
+        // Construct descent graph from metadata using subclass hook
+        DescentGraphT descent_graph = DescentGraphT::from_metadata(meta, vecs_data, layer_config);
 
         // Check if the number of vertices matches
-        if (flat_graph.get_num_vertices() != num_vertices) {
+        if (descent_graph.get_num_vertices() != num_vertices) {
             ARTEA_ERROR(fmt::format(
                 "Vertex count mismatch: vecs_data has {} vertices but file has {} vertices",
-                flat_graph.get_num_vertices(), num_vertices
+                descent_graph.get_num_vertices(), num_vertices
             ));
         }
 
         // Read neighbor arrays
-        auto& nbrs_arr = flat_graph.get_nbrs_arr();
+        auto& nbrs_arr = descent_graph.get_nbrs_arr();
         for (vertex_num_t i = 0; i < num_vertices; ++i) {
             vertex_num_t nbr_count = 0;
             ifs.read(reinterpret_cast<char*>(&nbr_count), sizeof(nbr_count));
@@ -211,10 +211,10 @@ public:
         }
 
         if (!ifs.good()) {
-            ARTEA_ERROR(fmt::format("Failed to read flat graph data from file: {}", graph_bin_path));
+            ARTEA_ERROR(fmt::format("Failed to read descent graph data from file: {}", graph_bin_path));
         }
 
-        return flat_graph;
+        return descent_graph;
     }
 
 private:

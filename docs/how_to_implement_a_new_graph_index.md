@@ -63,9 +63,9 @@ namespace artea::cpu::my_graph {
 
 template <typename IndexTraitsT>
 class IndexStructure :
-    public IndexTraitsT::template flat_graph_t<IndexStructure<IndexTraitsT>>
+    public IndexTraitsT::template descent_graph_t<IndexStructure<IndexTraitsT>>
 {
-    using base_t             = typename IndexTraitsT::template flat_graph_t<IndexStructure<IndexTraitsT>>;
+    using base_t             = typename IndexTraitsT::template descent_graph_t<IndexStructure<IndexTraitsT>>;
     using propagate_config_t = typename IndexTraitsT::my_graph::propagate_config_t;
     using pruning_config_t   = typename IndexTraitsT::my_graph::pruning_config_t;
 
@@ -115,14 +115,14 @@ class IndexFactory {
 
 public:
     static auto construct_graph(const vector_array_t& base_vecs, ...) -> this_index_t {
-        this_index_t flat_graph(base_vecs, layer_config, pruning_config, propagate_config);
+        this_index_t descent_graph(base_vecs, layer_config, pruning_config, propagate_config);
         dist_func_t dist_func(base_vecs.get_vec_dim());
-        _build_loop(flat_graph, dist_func, pruning_config, propagate_config);
-        return flat_graph;
+        _build_loop(descent_graph, dist_func, pruning_config, propagate_config);
+        return descent_graph;
     }
 
 private:
-    static auto _build_loop(this_index_t& flat_graph, ...) -> void {
+    static auto _build_loop(this_index_t& descent_graph, ...) -> void {
         // 1. Initialize random edges
         // 2. Create propagate engine + updaters
         // 3. Run your build schedule  <-- THIS IS WHERE GRAPH TYPES DIVERGE
@@ -238,11 +238,11 @@ CMake auto-discovers all `.cpp` files via `file(GLOB ...)`. Create `test_my_grap
 using namespace artea::cpu;
 
 // 1. Build
-auto flat_graph = my_graph::factory_t::construct_graph(
+auto descent_graph = my_graph::factory_t::construct_graph(
     base_vecs, layer_config, pruning_config, propagate_config);
 
 // 2. Convert to search graph
-auto search_graph = search_graph_converter_t::from_flat_graph(flat_graph, extracted_nbr_size);
+auto search_graph = search_graph_converter_t::from_descent_graph(descent_graph, extracted_nbr_size);
 
 // 3. Grid-search QPS vs Recall
 for (uint32_t qs = start; qs <= end; qs += step) {

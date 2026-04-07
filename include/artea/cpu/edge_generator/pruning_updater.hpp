@@ -29,9 +29,9 @@
 namespace artea {
 namespace cpu {
 
-template <typename EdgeGeneratorTraitsT, typename FlatGraphT>
+template <typename EdgeGeneratorTraitsT, typename DescentGraphT>
 class PruningUpdater :
-    public EdgeGeneratorTraitsT::template neighbor_updater_t<FlatGraphT, PruningUpdater<EdgeGeneratorTraitsT, FlatGraphT>> {
+    public EdgeGeneratorTraitsT::template neighbor_updater_t<DescentGraphT, PruningUpdater<EdgeGeneratorTraitsT, DescentGraphT>> {
 
     using vertex_id_t = typename EdgeGeneratorTraitsT::vertex_id_t;
     using vertex_num_t = typename EdgeGeneratorTraitsT::vertex_num_t;
@@ -44,7 +44,7 @@ class PruningUpdater :
     using log_table_t = typename EdgeGeneratorTraitsT::log_table_t;
     using dist_func_t = typename EdgeGeneratorTraitsT::dist_func_t;
     using pruning_condition_t = typename EdgeGeneratorTraitsT::pruning_condition_t;
-    using base_class_t = typename EdgeGeneratorTraitsT::template neighbor_updater_t<FlatGraphT, PruningUpdater<EdgeGeneratorTraitsT, FlatGraphT>>;
+    using base_class_t = typename EdgeGeneratorTraitsT::template neighbor_updater_t<DescentGraphT, PruningUpdater<EdgeGeneratorTraitsT, DescentGraphT>>;
     static constexpr vertex_id_t invalid_vertex_id = EdgeGeneratorTraitsT::invalid_vertex_id;
     static constexpr distance_t nan_distance = EdgeGeneratorTraitsT::nan_distance;
     static constexpr distance_t max_distance = EdgeGeneratorTraitsT::max_distance;
@@ -58,16 +58,16 @@ public:
         const dist_func_t& dist_func,
         const vector_array_t& vecs_data,
         log_table_t& log_table,
-        const FlatGraphT& flat_graph,
+        const DescentGraphT& descent_graph,
         const ratio_t scale_coeffs,
         const ratio_t shifted_coeffs = 0.0
-    ) : base_class_t(dist_func, vecs_data, log_table, flat_graph),
+    ) : base_class_t(dist_func, vecs_data, log_table, descent_graph),
         _inv_scale_coeffs(static_cast<ratio_t>(1.0) / scale_coeffs),
         _shifted_coeffs(shifted_coeffs) {}
 
     __attribute__((always_inline))
     auto get_max_nbr_size() const -> vertex_num_t {
-        return this->_flat_graph.layer_config().max_nbr_size();
+        return this->_descent_graph.layer_config().max_nbr_size();
     }
 
     /**
@@ -90,7 +90,7 @@ public:
 
         dnbr_arr_t retained_nbrs;
         retained_nbrs.reserve(origin_nbrs.capacity());
-        const vertex_num_t max_sz = this->_flat_graph.layer_config().max_nbr_size();
+        const vertex_num_t max_sz = this->_descent_graph.layer_config().max_nbr_size();
 
         // The first neighbor is always the closest and cannot conflict
         retained_nbrs.push_back(origin_nbrs[0]);

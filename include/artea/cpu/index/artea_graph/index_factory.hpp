@@ -75,7 +75,7 @@ public:
         auto& inter_layer_links = hierarchical_graph.get_inter_layer_links();
 
         // Pre-allocate upper layer storage to prevent vector reallocation.
-        // FlatGraph stores _vecs_data as a const reference; if the vector
+        // DescentGraph stores _vecs_data as a const reference; if the vector
         // holding upper layer data reallocates, those references dangle.
         hierarchy_manager.get_upper_layer_vecs().reserve(max_expected_layers);
 

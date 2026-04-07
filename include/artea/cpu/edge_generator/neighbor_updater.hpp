@@ -28,7 +28,7 @@
 namespace artea {
 namespace cpu {
 
-template <typename EdgeGeneratorTraitsT, typename FlatGraphT, typename DerivedClassT>
+template <typename EdgeGeneratorTraitsT, typename DescentGraphT, typename DerivedClassT>
 class NeighborUpdater {
 
     using vertex_id_t = typename EdgeGeneratorTraitsT::vertex_id_t;
@@ -48,8 +48,8 @@ public:
         const dist_func_t& dist_func,
         const vector_array_t& vecs_data,
         log_table_t& log_table,
-        const FlatGraphT& flat_graph
-    ) : _dist_func(dist_func), _vecs_data(vecs_data), _log_table(log_table), _flat_graph(flat_graph) {}
+        const DescentGraphT& descent_graph
+    ) : _dist_func(dist_func), _vecs_data(vecs_data), _log_table(log_table), _descent_graph(descent_graph) {}
 
     /**
      * @brief Operator that delegates to the derived class's update_impl.
@@ -86,8 +86,8 @@ protected:
     /** @brief Reference to the operation log table. */
     log_table_t& _log_table;
 
-    /** @brief Reference to the flat graph for neighbor overflow check. */
-    const FlatGraphT& _flat_graph;
+    /** @brief Reference to the descent graph for neighbor overflow check. */
+    const DescentGraphT& _descent_graph;
 
 };  //  class NeighborUpdater
 

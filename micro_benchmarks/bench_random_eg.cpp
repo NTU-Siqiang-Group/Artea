@@ -78,8 +78,8 @@ static void BM_RandomEG(benchmark::State& state) {
     random_eg_t random_eg(dist_func);
 
     for (auto _ : state) {
-        // Create a new flat_graph (included in timing)
-        conv_graph::index_t flat_graph(
+        // Create a new descent_graph (included in timing)
+        conv_graph::index_t descent_graph(
             base_vecs,
             g_config.layer_config,
             g_config.pruning_config,
@@ -87,10 +87,10 @@ static void BM_RandomEG(benchmark::State& state) {
         );
 
         // Perform the random edge generation
-        random_eg.generate(flat_graph, g_config.layer_config.max_nbr_size());
+        random_eg.generate(descent_graph, g_config.layer_config.max_nbr_size());
 
         // Prevent optimization from removing the work
-        benchmark::DoNotOptimize(flat_graph);
+        benchmark::DoNotOptimize(descent_graph);
         benchmark::ClobberMemory();
     }
 

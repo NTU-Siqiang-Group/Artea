@@ -60,8 +60,8 @@ protected:
 
         dist_func_ = std::make_unique<dist_func_t>(vec_dim_);
 
-        // Initialize flat graph
-        flat_graph_ = std::make_unique<conv_graph::index_t>(
+        // Initialize descent graph
+        descent_graph_ = std::make_unique<conv_graph::index_t>(
             *vecs_,
             layer_config_,
             pruning_config_,
@@ -81,7 +81,7 @@ protected:
         std::mt19937 rng(42);
         std::uniform_int_distribution<vertex_id_t> dist(0, num_vertices_ - 1);
 
-        auto& nbrs_arr = flat_graph_->get_nbrs_arr();
+        auto& nbrs_arr = descent_graph_->get_nbrs_arr();
 
         for (vertex_id_t u = 0; u < num_vertices_; ++u) {
             dnbr_arr_t& nbrs = nbrs_arr[u];
@@ -113,17 +113,17 @@ protected:
     conv_graph::propagate_config_t propagate_config_{4, 14};
     std::unique_ptr<vector_array_t> vecs_;
     std::unique_ptr<dist_func_t> dist_func_;
-    std::unique_ptr<conv_graph::index_t> flat_graph_;
+    std::unique_ptr<conv_graph::index_t> descent_graph_;
 };
 
 TEST_F(FlatSearchGraphTest, BasicConversion) {
     const vertex_num_t max_neighbors = 50;
     populate_random_neighbors(max_neighbors);
 
-    const auto& flat_nbrs_arr = flat_graph_->get_nbrs_arr();
+    const auto& flat_nbrs_arr = descent_graph_->get_nbrs_arr();
 
     const vertex_num_t extracted_nbr_size = 32;
-    auto flat_search_graph = search_graph_converter_t::from_flat_graph(*flat_graph_, extracted_nbr_size);
+    auto flat_search_graph = search_graph_converter_t::from_descent_graph(*descent_graph_, extracted_nbr_size);
 
     EXPECT_EQ(flat_search_graph.get_num_vertices(), num_vertices_);
     EXPECT_EQ(flat_search_graph.get_extracted_nbr_size(), extracted_nbr_size);
@@ -149,9 +149,9 @@ TEST_F(FlatSearchGraphTest, BasicConversion) {
     }
 }
 
-TEST_F(FlatSearchGraphTest, EmptyFlatGraph) {
+TEST_F(FlatSearchGraphTest, EmptyDescentGraph) {
     const vertex_num_t extracted_nbr_size = 32;
-    auto flat_search_graph = search_graph_converter_t::from_flat_graph(*flat_graph_, extracted_nbr_size);
+    auto flat_search_graph = search_graph_converter_t::from_descent_graph(*descent_graph_, extracted_nbr_size);
 
     EXPECT_EQ(flat_search_graph.get_num_vertices(), num_vertices_);
     EXPECT_EQ(flat_search_graph.get_extracted_nbr_size(), extracted_nbr_size);
@@ -170,9 +170,9 @@ TEST_F(FlatSearchGraphTest, FixNbrSizeLargerThanFlatNbrs) {
     const vertex_num_t max_neighbors = 10;
     populate_random_neighbors(max_neighbors);
 
-    const auto& flat_nbrs_arr = flat_graph_->get_nbrs_arr();
+    const auto& flat_nbrs_arr = descent_graph_->get_nbrs_arr();
     const vertex_num_t extracted_nbr_size = 64;
-    auto flat_search_graph = search_graph_converter_t::from_flat_graph(*flat_graph_, extracted_nbr_size);
+    auto flat_search_graph = search_graph_converter_t::from_descent_graph(*descent_graph_, extracted_nbr_size);
 
     for (vertex_id_t u = 0; u < num_vertices_; ++u) {
         const auto& flat_nbrs = flat_nbrs_arr[u];
@@ -194,9 +194,9 @@ TEST_F(FlatSearchGraphTest, FixNbrSizeSmallerThanFlatNbrs) {
     const vertex_num_t max_neighbors = 50;
     populate_random_neighbors(max_neighbors);
 
-    const auto& flat_nbrs_arr = flat_graph_->get_nbrs_arr();
+    const auto& flat_nbrs_arr = descent_graph_->get_nbrs_arr();
     const vertex_num_t extracted_nbr_size = 16;
-    auto flat_search_graph = search_graph_converter_t::from_flat_graph(*flat_graph_, extracted_nbr_size);
+    auto flat_search_graph = search_graph_converter_t::from_descent_graph(*descent_graph_, extracted_nbr_size);
 
     for (vertex_id_t u = 0; u < num_vertices_; ++u) {
         const auto& flat_nbrs = flat_nbrs_arr[u];
@@ -220,9 +220,9 @@ TEST_F(FlatSearchGraphTest, SingleNeighborPerVertex) {
     const vertex_num_t max_neighbors = 1;
     populate_random_neighbors(max_neighbors);
 
-    const auto& flat_nbrs_arr = flat_graph_->get_nbrs_arr();
+    const auto& flat_nbrs_arr = descent_graph_->get_nbrs_arr();
     const vertex_num_t extracted_nbr_size = 32;
-    auto flat_search_graph = search_graph_converter_t::from_flat_graph(*flat_graph_, extracted_nbr_size);
+    auto flat_search_graph = search_graph_converter_t::from_descent_graph(*descent_graph_, extracted_nbr_size);
 
     for (vertex_id_t u = 0; u < num_vertices_; ++u) {
         const auto& flat_nbrs = flat_nbrs_arr[u];
@@ -241,9 +241,9 @@ TEST_F(FlatSearchGraphTest, NeighborOrderPreservation) {
     const vertex_num_t max_neighbors = 40;
     populate_random_neighbors(max_neighbors);
 
-    const auto& flat_nbrs_arr = flat_graph_->get_nbrs_arr();
+    const auto& flat_nbrs_arr = descent_graph_->get_nbrs_arr();
     const vertex_num_t extracted_nbr_size = 32;
-    auto flat_search_graph = search_graph_converter_t::from_flat_graph(*flat_graph_, extracted_nbr_size);
+    auto flat_search_graph = search_graph_converter_t::from_descent_graph(*descent_graph_, extracted_nbr_size);
 
     for (vertex_id_t u = 0; u < num_vertices_; ++u) {
         const auto& flat_nbrs = flat_nbrs_arr[u];
@@ -268,7 +268,7 @@ TEST_F(FlatSearchGraphTest, LargeFixNbrSize) {
 
     // extracted_nbr_size (128) exceeds max_nbr_size (64), should throw an exception
     EXPECT_THROW({
-        auto flat_search_graph = search_graph_converter_t::from_flat_graph(*flat_graph_, extracted_nbr_size);
+        auto flat_search_graph = search_graph_converter_t::from_descent_graph(*descent_graph_, extracted_nbr_size);
     }, std::runtime_error);
 }
 
@@ -277,7 +277,7 @@ TEST_F(FlatSearchGraphTest, SmallFixNbrSize) {
     populate_random_neighbors(max_neighbors);
 
     const vertex_num_t extracted_nbr_size = 4;
-    auto flat_search_graph = search_graph_converter_t::from_flat_graph(*flat_graph_, extracted_nbr_size);
+    auto flat_search_graph = search_graph_converter_t::from_descent_graph(*descent_graph_, extracted_nbr_size);
 
     EXPECT_EQ(flat_search_graph.get_num_vertices(), num_vertices_);
     EXPECT_EQ(flat_search_graph.get_extracted_nbr_size(), extracted_nbr_size);
@@ -290,7 +290,7 @@ TEST_F(FlatSearchGraphTest, PerformanceTest) {
     const vertex_num_t extracted_nbr_size = 32;
 
     auto start = std::chrono::high_resolution_clock::now();
-    auto flat_search_graph = search_graph_converter_t::from_flat_graph(*flat_graph_, extracted_nbr_size);
+    auto flat_search_graph = search_graph_converter_t::from_descent_graph(*descent_graph_, extracted_nbr_size);
     auto end = std::chrono::high_resolution_clock::now();
 
     auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(end - start);
