@@ -13,7 +13,7 @@
 // limitations under the License.
 
 /*
- * @FilePath: /Artea/include/artea/cpu/index/internal_graph_compactor.hpp
+ * @FilePath: /Artea/include/artea/cpu/index/compactor/internal_graph_compactor.hpp
  * @Author: Chandler (Weitang Ye) <weitang.ye@ntu.edu.sg>
  * @Description: Single-layer compactor: InternalGraph -> CompactInternalGraph.
  */

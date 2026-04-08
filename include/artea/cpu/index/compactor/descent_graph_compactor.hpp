@@ -13,7 +13,7 @@
 // limitations under the License.
 
 /*
- * @FilePath: /Artea/include/artea/cpu/index/descent_graph_compactor.hpp
+ * @FilePath: /Artea/include/artea/cpu/index/compactor/descent_graph_compactor.hpp
  * @Author: Chandler (Weitang Ye) <weitang.ye@ntu.edu.sg>
  * @Date: 2026-03-13
  * @Description: Unified converter for transforming graphs to search graphs.
