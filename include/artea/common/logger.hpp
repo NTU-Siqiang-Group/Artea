@@ -148,3 +148,17 @@ inline ArteaLogger logger("Artea", LogLevelT::INFO);
 #define ARTEA_WARN(msg)    ::artea::logger.warn(msg)
 #define ARTEA_INFO(msg)    ::artea::logger.info(msg)
 #define ARTEA_SUCCESS(msg) ::artea::logger.success(msg)
+
+#ifndef NDEBUG
+#define ARTEA_ASSERT(expr, expected)                                             \
+    do {                                                                         \
+        const auto _artea_actual = (expr);                                       \
+        const auto _artea_expected = (expected);                                 \
+        if (_artea_actual != _artea_expected) {                                  \
+            ARTEA_ERROR(fmt::format("Assertion failed: {} == {} (actual: {}, expected: {})", \
+                #expr, #expected, _artea_actual, _artea_expected));              \
+        }                                                                        \
+    } while(0)
+#else
+#define ARTEA_ASSERT(expr, expected) ((void)0)
+#endif

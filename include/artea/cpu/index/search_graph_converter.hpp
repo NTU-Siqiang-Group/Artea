@@ -40,22 +40,22 @@ class SearchGraphConverter {
     using layer_id_t = typename IndexTraitsT::layer_id_t;
     using vector_array_t = typename IndexTraitsT::vector_array_t;
     using index_t = typename IndexTraitsT::conv_graph::index_t;
-    using flat_search_graph_t = typename IndexTraitsT::flat_search_graph_t;
+    using compact_descent_graph_t = typename IndexTraitsT::compact_descent_graph_t;
     using hierarchical_search_graph_t = typename IndexTraitsT::hierarchical_search_graph_t;
     using nbr_arr_checker_t = typename IndexTraitsT::nbr_arr_checker_t;
 
 public:
     /**
-     * @brief Convert a DescentGraph to FlatSearchGraph in parallel.
+     * @brief Convert a DescentGraph to CompactDescentGraph in parallel.
      * @param descent_graph The source descent graph to convert from.
      * @param extracted_nbr_size Fixed number of neighbors per vertex in the flat search graph.
-     * @return A new FlatSearchGraph instance.
+     * @return A new CompactDescentGraph instance.
      */
     template <typename DescentGraphT>
     static auto from_descent_graph(
         const DescentGraphT& descent_graph,
         const vertex_num_t extracted_nbr_size
-    ) -> flat_search_graph_t {
+    ) -> compact_descent_graph_t {
         const vertex_num_t max_nbr_size = descent_graph.layer_config().max_nbr_size();
 
         // Validate extracted_nbr_size does not exceed max_nbr_size
@@ -71,10 +71,10 @@ public:
         const auto& nbrs_arr = descent_graph.get_nbrs_arr();
 
         // Create the flat search graph
-        flat_search_graph_t flat_search_graph(vecs_data, extracted_nbr_size);
+        compact_descent_graph_t compact_descent_graph(vecs_data, extracted_nbr_size);
 
-        // Copy neighbors from DescentGraph to FlatSearchGraph in parallel
-        auto& csr_nbrs = flat_search_graph.get_csr_nbrs();
+        // Copy neighbors from DescentGraph to CompactDescentGraph in parallel
+        auto& csr_nbrs = compact_descent_graph.get_csr_nbrs();
         const vertex_id_t invalid_id = IndexTraitsT::invalid_vertex_id;
 
         tbb::parallel_for(
@@ -98,7 +98,7 @@ public:
             }
         );
 
-        return flat_search_graph;
+        return compact_descent_graph;
     }
 
     /**
@@ -154,21 +154,21 @@ public:
     }
 
     /**
-     * @brief Load DescentGraph from file and convert to FlatSearchGraph.
+     * @brief Load DescentGraph from file and convert to CompactDescentGraph.
      * @param file_path Path to the descent graph index file.
      * @param extracted_nbr_size Fixed number of neighbors per vertex in the flat search graph.
      * @param vecs_data Reference to the vector data.
-     * @return A new FlatSearchGraph instance.
+     * @return A new CompactDescentGraph instance.
      */
     static auto from_index_file(
         const std::string& file_path,
         const vertex_num_t extracted_nbr_size,
         const vector_array_t& vecs_data
-    ) -> flat_search_graph_t {
+    ) -> compact_descent_graph_t {
         // Load DescentGraph from file
         index_t descent_graph = index_t::restore(file_path, vecs_data);
 
-        // Convert to FlatSearchGraph
+        // Convert to CompactDescentGraph
         return from_descent_graph(descent_graph, extracted_nbr_size);
     }
 

@@ -113,7 +113,7 @@ public:
         ARTEA_INFO("Converting to flat search graph...");
         start_time = std::chrono::high_resolution_clock::now();
 
-        flat_search_graph_ = std::make_unique<flat_search_graph_t>(
+        compact_descent_graph_ = std::make_unique<compact_descent_graph_t>(
             search_graph_converter_t::from_descent_graph(*descent_graph_, g_config.extracted_nbr_size)
         );
 
@@ -132,7 +132,7 @@ public:
 
     vector_dataset_t& get_dataset() { return *dataset_; }
     dist_func_t& get_dist_func() { return *dist_func_; }
-    flat_search_graph_t& get_flat_search_graph() { return *flat_search_graph_; }
+    compact_descent_graph_t& get_compact_descent_graph() { return *compact_descent_graph_; }
     const idlist_array_t& get_groundtruth() { return dataset_->get_gt_vecs(); }
 
 private:
@@ -140,7 +140,7 @@ private:
     std::unique_ptr<vector_dataset_t> dataset_;
     std::unique_ptr<dist_func_t> dist_func_;
     std::unique_ptr<conv_graph::index_t> descent_graph_;
-    std::unique_ptr<flat_search_graph_t> flat_search_graph_;
+    std::unique_ptr<compact_descent_graph_t> compact_descent_graph_;
 };
 
 class ConvGraphTest : public ::testing::Test {};
@@ -149,7 +149,7 @@ TEST_F(ConvGraphTest, QueryRecall) {
     auto& provider = DataProvider::instance();
     auto& dataset = provider.get_dataset();
     auto& dist_func = provider.get_dist_func();
-    auto& flat_search_graph = provider.get_flat_search_graph();
+    auto& compact_descent_graph = provider.get_compact_descent_graph();
     const auto& groundtruth = provider.get_groundtruth();
 
     const auto& base_vecs = dataset.get_base_vecs();
@@ -169,7 +169,7 @@ TEST_F(ConvGraphTest, QueryRecall) {
         monolayer_graph_router_t<graph_mode_t::search_mode> router(
             base_vecs,
             dist_func,
-            flat_search_graph,
+            compact_descent_graph,
             g_config.topk,
             queue_size
         );

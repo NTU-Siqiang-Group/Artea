@@ -40,7 +40,7 @@ namespace symmetric_knn_graph {
 namespace artea_graph {
     template <typename IndexTraitsT> class IndexStructure;
 }
-template <typename IndexTraitsT> class FlatSearchGraph;
+template <typename IndexTraitsT> class CompactDescentGraph;
 template <typename IndexTraitsT> class HierarchicalSearchGraph;
 template <typename IndexTraitsT> class InterLayerLinks;
 template <typename IndexTraitsT> class HierarchyManager;
@@ -49,6 +49,8 @@ template <typename IndexTraitsT> class FlatGraphFileManager;
 template <typename IndexTraitsT> class HierarchicalGraphFileManager;
 template <typename IndexTraitsT> class IndexSizeCalculator;
 template <typename IndexTraitsT> class RadiusProber;
+template <typename IndexTraitsT> class CompactInternalGraph;
+template <typename IndexTraitsT> class InternalGraph;
 
 template <typename BaseTraitsT>
 struct IndexTraits : virtual public BaseTraitsT {
@@ -64,7 +66,7 @@ struct IndexTraits : virtual public BaseTraitsT {
     using descent_graph_t = DescentGraph<index_traits_t, DerivedClassT>;
 
     /** @brief Flat search graph type (CSR format). */
-    using flat_search_graph_t = FlatSearchGraph<index_traits_t>;
+    using compact_descent_graph_t = CompactDescentGraph<index_traits_t>;
 
     /** @brief CRTP base hierarchical graph type (template on DerivedClassT and LayerGraphT). */
     template <typename DerivedClassT, typename LayerGraphT>
@@ -117,6 +119,12 @@ struct IndexTraits : virtual public BaseTraitsT {
 
     /** @brief Radius prober type. */
     using radius_prober_t = RadiusProber<index_traits_t>;
+
+    /** @brief Compact internal graph type. */
+    using compact_internal_graph_t = CompactInternalGraph<index_traits_t>;
+
+    /** @brief Internal graph type (supports concurrent vertex/neighbor insertion). */
+    using internal_graph_t = InternalGraph<index_traits_t>;
 
     /** @brief Minimum number of vertices required for a layer to continue building upper layers. */
     static constexpr uint32_t min_num_layer_vertex = 1024;

@@ -47,8 +47,10 @@
 #include <artea/cpu/index/artea_graph/vertices_builder_config.hpp>
 #include <artea/cpu/index/layer_nbr.hpp>
 #include <artea/cpu/index/descent_nbr.hpp>
+#include <artea/cpu/index/compact_internal_graph.hpp>
+#include <artea/cpu/index/internal_graph.hpp>
 #include <artea/cpu/index/descent_graph.hpp>
-#include <artea/cpu/index/flat_search_graph.hpp>
+#include <artea/cpu/index/compact_descent_graph.hpp>
 #include <artea/cpu/index/inter_layer_links.hpp>
 #include <artea/cpu/index/hierarchical_graph.hpp>
 #include <artea/cpu/index/hierarchical_search_graph.hpp>

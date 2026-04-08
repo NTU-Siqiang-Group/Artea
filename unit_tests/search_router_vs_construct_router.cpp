@@ -114,7 +114,7 @@ public:
         // Convert to flat search graph
         ARTEA_INFO("Converting to flat search graph...");
         auto tc0 = std::chrono::high_resolution_clock::now();
-        flat_search_graph_ = std::make_unique<flat_search_graph_t>(
+        compact_descent_graph_ = std::make_unique<compact_descent_graph_t>(
             search_graph_converter_t::from_descent_graph(*descent_graph_, g_config.extracted_nbr_size)
         );
         auto tc1 = std::chrono::high_resolution_clock::now();
@@ -128,7 +128,7 @@ public:
     vector_dataset_t&    get_dataset()           { return *dataset_; }
     dist_func_t&         get_dist_func()          { return *dist_func_; }
     conv_graph::index_t&        get_descent_graph()          { return *descent_graph_; }
-    flat_search_graph_t& get_flat_search_graph()  { return *flat_search_graph_; }
+    compact_descent_graph_t& get_compact_descent_graph()  { return *compact_descent_graph_; }
     const idlist_array_t& get_gt()               { return dataset_->get_gt_vecs(); }
 
 private:
@@ -136,7 +136,7 @@ private:
     std::unique_ptr<vector_dataset_t>    dataset_;
     std::unique_ptr<dist_func_t>         dist_func_;
     std::unique_ptr<conv_graph::index_t>        descent_graph_;
-    std::unique_ptr<flat_search_graph_t> flat_search_graph_;
+    std::unique_ptr<compact_descent_graph_t> compact_descent_graph_;
 };
 
 // ============================================================
@@ -185,7 +185,7 @@ TEST_F(RouterComparisonTest, SearchModeRouter) {
     const auto& query_vecs = p.get_dataset().get_query_vecs();
 
     monolayer_graph_router_t<graph_mode_t::search_mode> router(
-        base_vecs, p.get_dist_func(), p.get_flat_search_graph(),
+        base_vecs, p.get_dist_func(), p.get_compact_descent_graph(),
         g_config.topk, g_config.queue_size
     );
     router.initialize();
@@ -284,7 +284,7 @@ int main(int argc, char** argv) {
         "construct_mode (DescentGraph, no conversion)",
         g_results.construct_recall, g_results.construct_qps);
     std::cout << fmt::format("  {:45s}  {:>10.4f}  {:>12.1f}\n",
-        "search_mode   (FlatSearchGraph, +conv time)",
+        "search_mode   (CompactDescentGraph, +conv time)",
         g_results.search_recall, g_results.search_qps);
     std::cout << std::string(70, '=') << "\n";
 

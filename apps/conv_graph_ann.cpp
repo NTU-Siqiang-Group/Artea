@@ -204,7 +204,7 @@ int main(int argc, char** argv) {
 
     // Convert to flat search graph
     ARTEA_INFO("Converting to flat search graph...");
-    flat_search_graph_t flat_search_graph = search_graph_converter_t::from_descent_graph(
+    compact_descent_graph_t compact_descent_graph = search_graph_converter_t::from_descent_graph(
         descent_graph,
         extracted_nbr_size
     );
@@ -213,7 +213,7 @@ int main(int argc, char** argv) {
     monolayer_graph_router_t<graph_mode_t::search_mode> router(
         base_vecs,
         dist_func,
-        flat_search_graph,
+        compact_descent_graph,
         topk,
         candidate_queue_size
     );

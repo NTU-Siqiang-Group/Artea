@@ -45,7 +45,7 @@ class HierarchicalSearchGraph {
     using layer_id_t = typename IndexTraitsT::layer_id_t;
     using layer_num_t = typename IndexTraitsT::layer_num_t;
     using vector_array_t = typename IndexTraitsT::vector_array_t;
-    using flat_search_graph_t = typename IndexTraitsT::flat_search_graph_t;
+    using compact_descent_graph_t = typename IndexTraitsT::compact_descent_graph_t;
     using inter_layer_links_t = typename IndexTraitsT::inter_layer_links_t;
     using hierarchy_manager_t = typename IndexTraitsT::hierarchy_manager_t;
 
@@ -107,22 +107,22 @@ public:
     }
 
     __attribute__((always_inline))
-    auto get_bottom_layer_graph() -> flat_search_graph_t& {
+    auto get_bottom_layer_graph() -> compact_descent_graph_t& {
         return *_layer_graphs[0];
     }
 
     __attribute__((always_inline))
-    auto get_bottom_layer_graph() const -> const flat_search_graph_t& {
+    auto get_bottom_layer_graph() const -> const compact_descent_graph_t& {
         return *_layer_graphs[0];
     }
 
     __attribute__((always_inline))
-    auto get_layer_graphs() -> std::vector<std::unique_ptr<flat_search_graph_t>>& {
+    auto get_layer_graphs() -> std::vector<std::unique_ptr<compact_descent_graph_t>>& {
         return _layer_graphs;
     }
 
     __attribute__((always_inline))
-    auto get_layer_graphs() const -> const std::vector<std::unique_ptr<flat_search_graph_t>>& {
+    auto get_layer_graphs() const -> const std::vector<std::unique_ptr<compact_descent_graph_t>>& {
         return _layer_graphs;
     }
 
@@ -131,7 +131,7 @@ public:
      * @param layer_id The layer ID (0 for bottom layer, higher values for upper layers).
      */
     __attribute__((always_inline))
-    auto get_layer_graph(const layer_id_t layer_id) -> flat_search_graph_t& {
+    auto get_layer_graph(const layer_id_t layer_id) -> compact_descent_graph_t& {
         return *_layer_graphs[layer_id];
     }
 
@@ -140,7 +140,7 @@ public:
      * @param layer_id The layer ID (0 for bottom layer, higher values for upper layers).
      */
     __attribute__((always_inline))
-    auto get_layer_graph(const layer_id_t layer_id) const -> const flat_search_graph_t& {
+    auto get_layer_graph(const layer_id_t layer_id) const -> const compact_descent_graph_t& {
         return *_layer_graphs[layer_id];
     }
 
@@ -150,7 +150,7 @@ public:
      * @param layer_graph Unique pointer to the flat search graph to set.
      */
     __attribute__((always_inline))
-    auto set_layer_graph(const layer_id_t layer_id, std::unique_ptr<flat_search_graph_t> layer_graph) -> void {
+    auto set_layer_graph(const layer_id_t layer_id, std::unique_ptr<compact_descent_graph_t> layer_graph) -> void {
         _layer_graphs[layer_id] = std::move(layer_graph);
     }
 
@@ -160,8 +160,8 @@ public:
      * @param layer_graph Reference to the flat search graph to set (will be moved).
      */
     __attribute__((always_inline))
-    auto set_layer_graph(const layer_id_t layer_id, flat_search_graph_t&& layer_graph) -> void {
-        _layer_graphs[layer_id] = std::make_unique<flat_search_graph_t>(std::move(layer_graph));
+    auto set_layer_graph(const layer_id_t layer_id, compact_descent_graph_t&& layer_graph) -> void {
+        _layer_graphs[layer_id] = std::make_unique<compact_descent_graph_t>(std::move(layer_graph));
     }
 
     __attribute__((always_inline))
@@ -213,7 +213,7 @@ protected:
     const hierarchy_manager_t& _hierarchy_manager;
 
     /** @brief Flat search graphs for all layers. layer_id 0 is the bottom layer at _layer_graphs[0]. */
-    std::vector<std::unique_ptr<flat_search_graph_t>> _layer_graphs;
+    std::vector<std::unique_ptr<compact_descent_graph_t>> _layer_graphs;
 
     /** @brief links vertex between two adjacent layers */
     inter_layer_links_t _inter_layer_links;

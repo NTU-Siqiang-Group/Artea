@@ -1,8 +1,8 @@
 /*
- * @FilePath: /Artea/include/artea/cpu/index/flat_search_graph.hpp
+ * @FilePath: /Artea/include/artea/cpu/index/compact_descent_graph.hpp
  * @Author: Chandler (Weitang Ye) <weitang.ye@ntu.edu.sg>
  * @Date: 2026-02-05
- * @Description: Flat search graph with CSR format for efficient neighbor access.
+ * @Description: Compact descent graph with CSR format for efficient neighbor access.
  */
 
 #pragma once
@@ -15,11 +15,11 @@ namespace artea {
 namespace cpu {
 
 /**
- * @brief Flat search graph using CSR (Compressed Sparse Row) format for efficient neighbor access.
+ * @brief Compact descent graph using CSR (Compressed Sparse Row) format for efficient neighbor access.
  * @tparam IndexTraitsT The index traits type.
  */
 template <typename IndexTraitsT>
-class FlatSearchGraph {
+class CompactDescentGraph {
 
     using vertex_num_t = typename IndexTraitsT::vertex_num_t;
     using vertex_id_t = typename IndexTraitsT::vertex_id_t;
@@ -33,7 +33,7 @@ public:
      * @param vecs_data Reference to the vector data for this graph.
      * @param extracted_nbr_size Fixed number of neighbors per vertex.
      */
-    FlatSearchGraph(
+    CompactDescentGraph(
         const vector_array_t& vecs_data,
         const vertex_num_t extracted_nbr_size
     ) :
@@ -48,12 +48,12 @@ public:
     }
 
     // Copying is deleted
-    FlatSearchGraph(const FlatSearchGraph&) = delete;
-    FlatSearchGraph& operator=(const FlatSearchGraph&) = delete;
+    CompactDescentGraph(const CompactDescentGraph&) = delete;
+    CompactDescentGraph& operator=(const CompactDescentGraph&) = delete;
 
     // default move constructor and assignment
-    FlatSearchGraph(FlatSearchGraph&&) noexcept = default;
-    FlatSearchGraph& operator=(FlatSearchGraph&&) noexcept = default;
+    CompactDescentGraph(CompactDescentGraph&&) noexcept = default;
+    CompactDescentGraph& operator=(CompactDescentGraph&&) noexcept = default;
 
     // --- Public Interface ---
 
@@ -141,7 +141,7 @@ private:
     /** @brief Const reference to vector data for this graph. */
     const vector_array_t& _vecs_data;
 
-};  // class FlatSearchGraph
+};  // class CompactDescentGraph
 
 }   // namespace cpu
 }   // namespace artea
