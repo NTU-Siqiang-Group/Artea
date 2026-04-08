@@ -145,7 +145,7 @@ private:
 Register your type through the trait inheritance chain:
 
 ```
-BaseTraits  -->  IndexTraits  -->  (EdgeGeneratorTraits)  -->  GraphFactoryTraits
+BaseTraits  -->  IndexTraits  -->  (RefinerTraits)  -->  GraphFactoryTraits
  configs          index_t           (pass-through)              factory_t
 ```
 
@@ -187,7 +187,7 @@ namespace my_graph { template <typename GraphFactoryTraitsT> class IndexFactory;
 
 **(b) Inside `GraphFactoryTraits`:**
 ```cpp
-struct my_graph : EdgeGeneratorTraitsT::my_graph {
+struct my_graph : RefinerTraitsT::my_graph {
     my_graph() = delete;
     using factory_t = cpu::my_graph::IndexFactory<graph_factory_traits_t>;
 };
@@ -242,7 +242,7 @@ auto descent_graph = my_graph::factory_t::construct_graph(
     base_vecs, layer_config, pruning_config, propagate_config);
 
 // 2. Convert to search graph
-auto search_graph = search_graph_converter_t::from_descent_graph(descent_graph, extracted_nbr_size);
+auto search_graph = descent_graph_compactor_t::from_descent_graph(descent_graph, extracted_nbr_size);
 
 // 3. Grid-search QPS vs Recall
 for (uint32_t qs = start; qs <= end; qs += step) {

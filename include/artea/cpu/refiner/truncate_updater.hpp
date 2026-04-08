@@ -13,7 +13,7 @@
 // limitations under the License.
 
 /*
- * @FilePath: /Artea/include/artea/cpu/edge_generator/truncate_updater.hpp
+ * @FilePath: /Artea/include/artea/cpu/refiner/truncate_updater.hpp
  * @Author: Chandler (Weitang Ye) <weitang.ye@ntu.edu.sg>
  * @Description: Truncate updater: trims each vertex's neighbor array to a specified size.
  */
@@ -25,17 +25,17 @@
 namespace artea {
 namespace cpu {
 
-template <typename EdgeGeneratorTraitsT, typename DescentGraphT>
+template <typename RefinerTraitsT, typename DescentGraphT>
 class TruncateUpdater :
-    public EdgeGeneratorTraitsT::template neighbor_updater_t<DescentGraphT, TruncateUpdater<EdgeGeneratorTraitsT, DescentGraphT>> {
+    public RefinerTraitsT::template neighbor_updater_t<DescentGraphT, TruncateUpdater<RefinerTraitsT, DescentGraphT>> {
 
-    using vertex_id_t    = typename EdgeGeneratorTraitsT::vertex_id_t;
-    using vertex_num_t   = typename EdgeGeneratorTraitsT::vertex_num_t;
-    using dnbr_arr_t      = typename EdgeGeneratorTraitsT::dnbr_arr_t;
-    using log_table_t    = typename EdgeGeneratorTraitsT::log_table_t;
-    using dist_func_t    = typename EdgeGeneratorTraitsT::dist_func_t;
-    using vector_array_t = typename EdgeGeneratorTraitsT::vector_array_t;
-    using base_class_t   = typename EdgeGeneratorTraitsT::template neighbor_updater_t<DescentGraphT, TruncateUpdater<EdgeGeneratorTraitsT, DescentGraphT>>;
+    using vertex_id_t    = typename RefinerTraitsT::vertex_id_t;
+    using vertex_num_t   = typename RefinerTraitsT::vertex_num_t;
+    using dnbr_arr_t      = typename RefinerTraitsT::dnbr_arr_t;
+    using log_table_t    = typename RefinerTraitsT::log_table_t;
+    using dist_func_t    = typename RefinerTraitsT::dist_func_t;
+    using vector_array_t = typename RefinerTraitsT::vector_array_t;
+    using base_class_t   = typename RefinerTraitsT::template neighbor_updater_t<DescentGraphT, TruncateUpdater<RefinerTraitsT, DescentGraphT>>;
 
 public:
     static constexpr const char* updater_name = "truncate_updater";

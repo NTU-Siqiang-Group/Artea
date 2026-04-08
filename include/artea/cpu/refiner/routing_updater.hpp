@@ -13,7 +13,7 @@
 // limitations under the License.
 
 /*
- * @FilePath: /Artea/include/artea/cpu/edge_generator/routing_updater.hpp
+ * @FilePath: /Artea/include/artea/cpu/refiner/routing_updater.hpp
  * @Author: Chandler (Weitang Ye) <weitang.ye@ntu.edu.sg>
  * @Description: Routing-based edge updater: uses a construct-mode router to find
  *               approximate nearest neighbors and writes them to the log table.
@@ -31,25 +31,25 @@ namespace cpu {
  * @brief RoutingUpdater uses a construct-mode MonolayerGraphRouter to find
  *        candidate nearest neighbors for each pivot vertex and logs them.
  *
- * @tparam GraphFactoryTraitsT Must expose both EdgeGeneratorTraits and RouterTraits
+ * @tparam GraphFactoryTraitsT Must expose both RefinerTraits and RouterTraits
  *         (i.e. GraphFactoryTraits or any traits that inherits both).
  */
-template <typename EdgeGeneratorTraitsT, typename DescentGraphT>
+template <typename RefinerTraitsT, typename DescentGraphT>
 class RoutingUpdater :
-    public EdgeGeneratorTraitsT::template neighbor_updater_t<DescentGraphT, RoutingUpdater<EdgeGeneratorTraitsT, DescentGraphT>>
+    public RefinerTraitsT::template neighbor_updater_t<DescentGraphT, RoutingUpdater<RefinerTraitsT, DescentGraphT>>
 {
-    using vertex_id_t = typename EdgeGeneratorTraitsT::vertex_id_t;
-    using vertex_num_t = typename EdgeGeneratorTraitsT::vertex_num_t;
-    using vec_ele_t = typename EdgeGeneratorTraitsT::vec_ele_t;
-    using distance_t = typename EdgeGeneratorTraitsT::distance_t;
-    using vector_array_t = typename EdgeGeneratorTraitsT::vector_array_t;
-    using dnbr_t = typename EdgeGeneratorTraitsT::dnbr_t;
-    using dnbr_arr_t = typename EdgeGeneratorTraitsT::dnbr_arr_t;
-    using log_table_t = typename EdgeGeneratorTraitsT::log_table_t;
-    using dist_func_t = typename EdgeGeneratorTraitsT::dist_func_t;
-    using graph_mode_t = typename EdgeGeneratorTraitsT::graph_mode_t;
-    using router_t = typename EdgeGeneratorTraitsT::template monolayer_graph_router_t<graph_mode_t::construct_mode>;
-    using base_class_t = typename EdgeGeneratorTraitsT::template neighbor_updater_t<DescentGraphT, RoutingUpdater<EdgeGeneratorTraitsT, DescentGraphT>>;
+    using vertex_id_t = typename RefinerTraitsT::vertex_id_t;
+    using vertex_num_t = typename RefinerTraitsT::vertex_num_t;
+    using vec_ele_t = typename RefinerTraitsT::vec_ele_t;
+    using distance_t = typename RefinerTraitsT::distance_t;
+    using vector_array_t = typename RefinerTraitsT::vector_array_t;
+    using dnbr_t = typename RefinerTraitsT::dnbr_t;
+    using dnbr_arr_t = typename RefinerTraitsT::dnbr_arr_t;
+    using log_table_t = typename RefinerTraitsT::log_table_t;
+    using dist_func_t = typename RefinerTraitsT::dist_func_t;
+    using graph_mode_t = typename RefinerTraitsT::graph_mode_t;
+    using router_t = typename RefinerTraitsT::template monolayer_graph_router_t<graph_mode_t::construct_mode>;
+    using base_class_t = typename RefinerTraitsT::template neighbor_updater_t<DescentGraphT, RoutingUpdater<RefinerTraitsT, DescentGraphT>>;
 
 public:
     static constexpr const char* updater_name = "routing_updater";

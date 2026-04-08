@@ -218,7 +218,7 @@ TEST_F(ArteaGraphConstructTest, QueryRecall) {
     g_results.num_queries = query_vecs.get_num_vecs();
 
     // Convert to hierarchical search graph (copy inter-layer links, no move)
-    auto hierarchical_search_graph = search_graph_converter_t::from_hierarchical_graph(
+    auto hierarchical_search_graph = descent_graph_compactor_t::from_hierarchical_graph(
         hierarchical_graph,
         g_config.bl_extracted_nbr_size,
         g_config.ul_extracted_nbr_size);

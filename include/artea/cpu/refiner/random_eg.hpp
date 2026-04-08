@@ -13,7 +13,7 @@
 // limitations under the License.
 
 /*
- * @FilePath: /Artea/include/artea/cpu/edge_generator/random_eg.hpp
+ * @FilePath: /Artea/include/artea/cpu/refiner/random_eg.hpp
  * @Author: Chandler (Weitang Ye) <weitang.ye@ntu.edu.sg>
  * @Description: Random edge generator for graph initialization.
  */
@@ -29,22 +29,22 @@ namespace cpu {
 
 /**
  * @brief Random edge generator for initializing graph with random neighbors.
- * @tparam EdgeGeneratorTraitsT The edge generator traits type.
+ * @tparam RefinerTraitsT The refiner traits type.
  */
-template <typename EdgeGeneratorTraitsT>
+template <typename RefinerTraitsT>
 class RandomEG {
 
-    using vertex_num_t = typename EdgeGeneratorTraitsT::vertex_num_t;
-    using vertex_id_t = typename EdgeGeneratorTraitsT::vertex_id_t;
-    using vec_ele_t = typename EdgeGeneratorTraitsT::vec_ele_t;
-    using distance_t = typename EdgeGeneratorTraitsT::distance_t;
-    using vec_dim_t = typename EdgeGeneratorTraitsT::vec_dim_t;
-    using vector_array_t = typename EdgeGeneratorTraitsT::vector_array_t;
-    using dnbr_t = typename EdgeGeneratorTraitsT::dnbr_t;
-    using dnbr_arr_t = typename EdgeGeneratorTraitsT::dnbr_arr_t;
-    using dnbr_comp_t = typename EdgeGeneratorTraitsT::dnbr_comp_t;
-    using dist_func_t = typename EdgeGeneratorTraitsT::dist_func_t;
-    using random_seq_t = typename EdgeGeneratorTraitsT::random_seq_t;
+    using vertex_num_t = typename RefinerTraitsT::vertex_num_t;
+    using vertex_id_t = typename RefinerTraitsT::vertex_id_t;
+    using vec_ele_t = typename RefinerTraitsT::vec_ele_t;
+    using distance_t = typename RefinerTraitsT::distance_t;
+    using vec_dim_t = typename RefinerTraitsT::vec_dim_t;
+    using vector_array_t = typename RefinerTraitsT::vector_array_t;
+    using dnbr_t = typename RefinerTraitsT::dnbr_t;
+    using dnbr_arr_t = typename RefinerTraitsT::dnbr_arr_t;
+    using dnbr_comp_t = typename RefinerTraitsT::dnbr_comp_t;
+    using dist_func_t = typename RefinerTraitsT::dist_func_t;
+    using random_seq_t = typename RefinerTraitsT::random_seq_t;
 
     static constexpr dnbr_comp_t nbr_comp {};
 

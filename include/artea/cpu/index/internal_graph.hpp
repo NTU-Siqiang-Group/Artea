@@ -142,7 +142,7 @@ public:
      * 2. Uses the claimed layer_vid to deterministically locate the
      *    pre-allocated block in @c _csr_nbrs (offset = layer_vid * stride).
      * 3. Initializes the header (num_valid_nbrs = 0) and fills all
-     *    neighbor slots with @c lnbr_t::make_invalid_nbr().
+     *    neighbor slots with @c IndexTraitsT::invalid_lnbr.
      *
      * @param lower_layer_vid This vertex's layer_vid in the next (lower) layer.
      * @return The newly assigned layer_vid in this layer.
@@ -160,7 +160,7 @@ public:
         std::fill(
             &_csr_nbrs[base + 1],
             &_csr_nbrs[base + 1] + _max_nbr_size,
-            lnbr_t::make_invalid_nbr()
+            IndexTraitsT::invalid_lnbr
         );
 
         return layer_vid;
@@ -294,7 +294,7 @@ public:
             ARTEA_ASSERT(count, static_cast<uint64_t>(max_nbr_size));
             const uint64_t new_count = prune_fn(slots, new_nbr);
             for (uint64_t i = new_count; i < max_nbr_size; ++i) {
-                slots[i] = lnbr_t::make_invalid_nbr();
+                slots[i] = IndexTraitsT::invalid_lnbr;
             }
             result = AddNbrResult::PRUNED;
             return new_count;

@@ -13,7 +13,7 @@
 // limitations under the License.
 
 /*
- * @FilePath: /Artea/include/artea/cpu/edge_generator/ivf_partitions.hpp
+ * @FilePath: /Artea/include/artea/cpu/refiner/ivf_partitions.hpp
  * @Author: Chandler (Weitang Ye) <weitang.ye@ntu.edu.sg>
  * @Description: IVF (Inverted File) partitions using CSR format for efficient partition-based operations.
  */
@@ -32,7 +32,7 @@ namespace cpu {
 
 /**
  * @brief IVF partitions using CSR (Compressed Sparse Row) format.
- * @tparam EdgeGeneratorTraitsT The edge generator traits type.
+ * @tparam RefinerTraitsT The refiner traits type.
  *
  * @details CSR Structure:
  * - Stores vertex IDs grouped by partition ID
@@ -49,15 +49,15 @@ namespace cpu {
  *   _partition_vids = [5, 12, 23, 1, 7, 3, 9, 15, 20]
  *   _partition_offsets = [0, 3, 5, 9]
  */
-template <typename EdgeGeneratorTraitsT>
+template <typename RefinerTraitsT>
 class IVFPartitions {
-    using vertex_id_t = typename EdgeGeneratorTraitsT::vertex_id_t;
-    using vertex_num_t = typename EdgeGeneratorTraitsT::vertex_num_t;
-    using part_id_t = typename EdgeGeneratorTraitsT::part_id_t;
-    using part_num_t = typename EdgeGeneratorTraitsT::part_num_t;
-    using csr_vids_t = typename EdgeGeneratorTraitsT::csr_vids_t;
+    using vertex_id_t = typename RefinerTraitsT::vertex_id_t;
+    using vertex_num_t = typename RefinerTraitsT::vertex_num_t;
+    using part_id_t = typename RefinerTraitsT::part_id_t;
+    using part_num_t = typename RefinerTraitsT::part_num_t;
+    using csr_vids_t = typename RefinerTraitsT::csr_vids_t;
     using cache_aligned_offset_t = cache_aligned_container_t<vertex_num_t>;
-    using ivf_construct_policy_t = typename EdgeGeneratorTraitsT::ivf_construct_policy_t;
+    using ivf_construct_policy_t = typename RefinerTraitsT::ivf_construct_policy_t;
 
 public:
     IVFPartitions() = default;

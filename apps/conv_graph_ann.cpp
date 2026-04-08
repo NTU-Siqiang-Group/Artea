@@ -204,7 +204,7 @@ int main(int argc, char** argv) {
 
     // Convert to flat search graph
     ARTEA_INFO("Converting to flat search graph...");
-    compact_descent_graph_t compact_descent_graph = search_graph_converter_t::from_descent_graph(
+    compact_descent_graph_t compact_descent_graph = descent_graph_compactor_t::from_descent_graph(
         descent_graph,
         extracted_nbr_size
     );

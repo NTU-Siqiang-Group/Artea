@@ -297,8 +297,8 @@ int main(int argc, char** argv) {
     // Convert to hierarchical search graph
     ARTEA_INFO("Converting to hierarchical search graph...");
     auto conv_start = std::chrono::high_resolution_clock::now();
-    auto hierarchical_search_graph = search_graph_converter_t::from_hierarchical_graph(
-        std::move(hierarchical_graph),
+    auto hierarchical_search_graph = descent_graph_compactor_t::from_hierarchical_graph(
+        hierarchical_graph,
         bl_extracted_nbr_size,
         ul_extracted_nbr_size
     );

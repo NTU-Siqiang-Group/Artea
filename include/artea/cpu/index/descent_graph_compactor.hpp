@@ -13,7 +13,7 @@
 // limitations under the License.
 
 /*
- * @FilePath: /Artea/include/artea/cpu/index/search_graph_converter.hpp
+ * @FilePath: /Artea/include/artea/cpu/index/descent_graph_compactor.hpp
  * @Author: Chandler (Weitang Ye) <weitang.ye@ntu.edu.sg>
  * @Date: 2026-03-13
  * @Description: Unified converter for transforming graphs to search graphs.
@@ -33,7 +33,7 @@ namespace artea {
 namespace cpu {
 
 template <typename IndexTraitsT>
-class SearchGraphConverter {
+class DescentGraphCompactor {
 
     using vertex_num_t = typename IndexTraitsT::vertex_num_t;
     using vertex_id_t = typename IndexTraitsT::vertex_id_t;
@@ -103,16 +103,26 @@ public:
 
     /**
      * @brief Convert HierarchicalGraph to HierarchicalSearchGraph.
+     *
+     * Semantics (uniform across all owned data):
+     *   - @c vecs_data and @c hierarchy_manager: borrowed by reference (too
+     *     large to copy; the destination's lifetime must be a subset of the
+     *     source's lifetime).
+     *   - Per-layer neighbor arrays: copied + transformed (nbrs_arr -> CSR).
+     *   - @c inter_layer_links: copied per layer (no move).
+     *   - @c entry_point: value copy.
+     *
+     * The source @c hierarchical_graph is left fully intact and may continue
+     * to be used after this call.
+     *
      * @param hierarchical_graph The source hierarchical graph to convert from.
-     *        When passed as an rvalue (std::move), inter-layer links are moved
-     *        instead of copied.
      * @param bl_extracted_nbr_size Fixed number of neighbors for bottom layer.
      * @param ul_extracted_nbr_size Fixed number of neighbors for upper layers.
      * @return A new HierarchicalSearchGraph instance.
      */
     template <typename HierGraphT>
     static auto from_hierarchical_graph(
-        HierGraphT&& hierarchical_graph,
+        const HierGraphT& hierarchical_graph,
         const vertex_num_t bl_extracted_nbr_size,
         const vertex_num_t ul_extracted_nbr_size
     ) -> hierarchical_search_graph_t {
@@ -127,7 +137,7 @@ public:
 
         hier_search_graph.resize(num_layers);
 
-        // Convert bottom layer (layer_id = 0)
+        // Convert bottom layer (layer_id = 0): copy + transform.
         const auto& bottom_descent_graph = hierarchical_graph.get_layer_graph(0);
         auto bottom_search_graph = from_descent_graph(
             bottom_descent_graph,
@@ -135,7 +145,7 @@ public:
         );
         hier_search_graph.set_layer_graph(0, std::move(bottom_search_graph));
 
-        // Convert upper layers (layer_id > 0)
+        // Convert upper layers (layer_id > 0): copy + transform.
         for (layer_id_t layer_id = 1; layer_id < num_layers; ++layer_id) {
             const auto& upper_descent_graph = hierarchical_graph.get_layer_graph(layer_id);
             auto upper_search_graph = from_descent_graph(
@@ -145,9 +155,16 @@ public:
             hier_search_graph.set_layer_graph(layer_id, std::move(upper_search_graph));
         }
 
-        // Transfer inter-layer links (move when rvalue, copy when lvalue) and entry point
-        hier_search_graph.get_inter_layer_links() =
-            std::move(std::forward<HierGraphT>(hierarchical_graph).get_inter_layer_links());
+        // Copy inter-layer links per layer (no move; source remains intact).
+        const auto& src_links = hierarchical_graph.get_inter_layer_links();
+        auto& dst_links = hier_search_graph.get_inter_layer_links();
+        for (layer_id_t layer_id = 1; layer_id < num_layers; ++layer_id) {
+            const auto src_span = src_links.get_layer_links(layer_id);
+            std::vector<vertex_id_t> layer_copy(src_span.begin(), src_span.end());
+            dst_links.bottom_up_append(std::move(layer_copy));
+        }
+
+        // Copy entry point (trivial scalar).
         hier_search_graph.set_entry_point(hierarchical_graph.get_entry_point());
 
         return hier_search_graph;
@@ -172,7 +189,7 @@ public:
         return from_descent_graph(descent_graph, extracted_nbr_size);
     }
 
-};  // class SearchGraphConverter
+};  // class DescentGraphCompactor
 
 }   // namespace cpu
 }   // namespace artea

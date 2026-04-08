@@ -4,9 +4,9 @@ This guide uses `MyUpdater` as a placeholder name. The process consists of **4 s
 
 | Step | What | Where |
 |------|------|-------|
-| 1 | Implement the Updater | `include/artea/cpu/edge_generator/my_updater.hpp` |
-| 2 | Register in the Type System | `include/artea/cpu/framework/type_traits/edge_generator_traits.hpp` |
-| 3 | Add to PropagateEngine | `include/artea/cpu/edge_generator/propagate_engine.hpp` |
+| 1 | Implement the Updater | `include/artea/cpu/refiner/my_updater.hpp` |
+| 2 | Register in the Type System | `include/artea/cpu/framework/type_traits/refiner_traits.hpp` |
+| 3 | Add to PropagateEngine | `include/artea/cpu/refiner/propagate_engine.hpp` |
 | 4 | Export via Include | `include/artea/cpu/framework/artea.hpp` |
 
 ---
@@ -40,29 +40,29 @@ Existing updaters and their behaviors:
 
 ## Step 1 : Implement the Updater
 
-**File:** `include/artea/cpu/edge_generator/my_updater.hpp`
+**File:** `include/artea/cpu/refiner/my_updater.hpp`
 
 All updaters inherit from `NeighborUpdater` via CRTP:
 
 ```cpp
 namespace artea::cpu {
 
-template <typename EdgeGeneratorTraitsT, typename DescentGraphT>
+template <typename RefinerTraitsT, typename DescentGraphT>
 class MyUpdater :
-    public EdgeGeneratorTraitsT::template neighbor_updater_t<
-        DescentGraphT, MyUpdater<EdgeGeneratorTraitsT, DescentGraphT>>
+    public RefinerTraitsT::template neighbor_updater_t<
+        DescentGraphT, MyUpdater<RefinerTraitsT, DescentGraphT>>
 {
     // Extract types from traits
-    using vertex_id_t    = typename EdgeGeneratorTraitsT::vertex_id_t;
-    using vertex_num_t   = typename EdgeGeneratorTraitsT::vertex_num_t;
-    using distance_t     = typename EdgeGeneratorTraitsT::distance_t;
-    using dnbr_t          = typename EdgeGeneratorTraitsT::dnbr_t;
-    using dnbr_arr_t      = typename EdgeGeneratorTraitsT::dnbr_arr_t;
-    using log_table_t    = typename EdgeGeneratorTraitsT::log_table_t;
-    using dist_func_t    = typename EdgeGeneratorTraitsT::dist_func_t;
-    using vector_array_t = typename EdgeGeneratorTraitsT::vector_array_t;
-    using base_class_t   = typename EdgeGeneratorTraitsT::template neighbor_updater_t<
-        DescentGraphT, MyUpdater<EdgeGeneratorTraitsT, DescentGraphT>>;
+    using vertex_id_t    = typename RefinerTraitsT::vertex_id_t;
+    using vertex_num_t   = typename RefinerTraitsT::vertex_num_t;
+    using distance_t     = typename RefinerTraitsT::distance_t;
+    using dnbr_t          = typename RefinerTraitsT::dnbr_t;
+    using dnbr_arr_t      = typename RefinerTraitsT::dnbr_arr_t;
+    using log_table_t    = typename RefinerTraitsT::log_table_t;
+    using dist_func_t    = typename RefinerTraitsT::dist_func_t;
+    using vector_array_t = typename RefinerTraitsT::vector_array_t;
+    using base_class_t   = typename RefinerTraitsT::template neighbor_updater_t<
+        DescentGraphT, MyUpdater<RefinerTraitsT, DescentGraphT>>;
 
 public:
     // Required: unique name for debug/profiling output
@@ -109,43 +109,43 @@ private:
 
 ### Rules
 
-- **CRTP inheritance**: always inherit from `EdgeGeneratorTraitsT::template neighbor_updater_t<DescentGraphT, YourClass>`
+- **CRTP inheritance**: always inherit from `RefinerTraitsT::template neighbor_updater_t<DescentGraphT, YourClass>`
 - **`updater_name`**: required `static constexpr const char*`, used in profiling output
 - **`update_impl`**: required method, called by base class `operator()` via CRTP
 - **Constructor**: first 4 args are always `(dist_func, vecs_data, log_table, descent_graph)`, passed to base class; extra args are updater-specific
-- **Extract types from `EdgeGeneratorTraitsT`**, never hard-code
+- **Extract types from `RefinerTraitsT`**, never hard-code
 
 ---
 
 ## Step 2 : Register in the Type System
 
-**File:** `include/artea/cpu/framework/type_traits/edge_generator_traits.hpp`
+**File:** `include/artea/cpu/framework/type_traits/refiner_traits.hpp`
 
 **(a) Forward declaration** (in the forward declaration area):
 
 ```cpp
-template <typename EdgeGeneratorTraitsT, typename DescentGraphT> class MyUpdater;
+template <typename RefinerTraitsT, typename DescentGraphT> class MyUpdater;
 ```
 
-**(b) Type alias** (inside `EdgeGeneratorTraits` struct):
+**(b) Type alias** (inside `RefinerTraits` struct):
 
 ```cpp
 template <typename DescentGraphT>
-using my_updater_t = MyUpdater<edge_generator_traits_t, DescentGraphT>;
+using my_updater_t = MyUpdater<refiner_traits_t, DescentGraphT>;
 ```
 
 ---
 
 ## Step 3 : Add to PropagateEngine
 
-**File:** `include/artea/cpu/edge_generator/propagate_engine.hpp`
+**File:** `include/artea/cpu/refiner/propagate_engine.hpp`
 
 Inside the `make_updater` factory method:
 
 **(a) Add local type alias** (alongside the existing ones):
 
 ```cpp
-using my_updater_t = typename EdgeGeneratorTraitsT::template my_updater_t<DescentGraphT>;
+using my_updater_t = typename RefinerTraitsT::template my_updater_t<DescentGraphT>;
 ```
 
 **(b) Add `if constexpr` branch** (before the `else { ARTEA_ERROR(...) }` fallback):
@@ -173,10 +173,10 @@ auto updater = propagate_engine.template make_updater<my_updater_t>(arg1, arg2);
 
 **File:** `include/artea/cpu/framework/artea.hpp`
 
-Add `#include` in the edge_generator section:
+Add `#include` in the refiner section:
 
 ```cpp
-#include <artea/cpu/edge_generator/my_updater.hpp>
+#include <artea/cpu/refiner/my_updater.hpp>
 ```
 
 ---
@@ -201,12 +201,12 @@ propagate_engine.run(num_iters, my_updater);
 
 ## Checklist
 
-- [ ] Updater class in `include/artea/cpu/edge_generator/my_updater.hpp`
+- [ ] Updater class in `include/artea/cpu/refiner/my_updater.hpp`
 - [ ] CRTP inheritance from `neighbor_updater_t`
 - [ ] `static constexpr const char* updater_name` defined
 - [ ] `update_impl(pivot_vid, origin_nbrs)` implemented
-- [ ] Forward declaration in `edge_generator_traits.hpp`
-- [ ] Type alias `my_updater_t` in `EdgeGeneratorTraits`
+- [ ] Forward declaration in `refiner_traits.hpp`
+- [ ] Type alias `my_updater_t` in `RefinerTraits`
 - [ ] `make_updater` branch in `propagate_engine.hpp`
 - [ ] `#include` in `artea.hpp`
 - [ ] Compiles and tests pass

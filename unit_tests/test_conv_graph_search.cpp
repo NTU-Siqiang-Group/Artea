@@ -100,7 +100,7 @@ public:
 
         // Convert to search graph
         compact_descent_graph_ = std::make_unique<compact_descent_graph_t>(
-            search_graph_converter_t::from_descent_graph(*descent_graph_, g_config.extracted_nbr_size)
+            descent_graph_compactor_t::from_descent_graph(*descent_graph_, g_config.extracted_nbr_size)
         );
 
         ARTEA_INFO("DataProvider ready.");

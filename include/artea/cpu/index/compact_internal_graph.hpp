@@ -40,7 +40,7 @@ namespace cpu {
  * neighbors per vertex. Instead, it uses a **sentinel-based traversal**
  * pattern: iterate over a vertex's neighbor array from the beginning and
  * stop when encountering a sentinel entry whose @c base_vid equals
- * @c invalid_vertex_id (i.e., @c lnbr_t::make_invalid_nbr()).
+ * @c invalid_vertex_id (i.e., @c IndexTraitsT::invalid_lnbr).
  *
  * @tparam IndexTraitsT The index traits type.
  */
@@ -70,7 +70,7 @@ public:
         _max_nbr_size(max_nbr_size)
     {
         _csr_nbrs.resize(static_cast<size_t>(_num_vertices) * _max_nbr_size);
-        std::fill(_csr_nbrs.begin(), _csr_nbrs.end(), lnbr_t::make_invalid_nbr());
+        std::fill(_csr_nbrs.begin(), _csr_nbrs.end(), IndexTraitsT::invalid_lnbr);
 
         _inter_layer_links.resize(_num_vertices, invalid_vertex_id);
     }

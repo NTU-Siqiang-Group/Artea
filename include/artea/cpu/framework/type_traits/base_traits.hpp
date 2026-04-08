@@ -31,12 +31,12 @@
 #include <artea/cpu/containers/thread_local_bitmap.hpp>
 #include <artea/cpu/containers/version_tag_table.hpp>
 #include <artea/cpu/containers/word_aligned_bitmap.hpp>
+#include <artea/cpu/index/layer_nbr.hpp>
 
 namespace artea {
 namespace cpu {
 
 /* ------ Forward Declarations ------ */
-template <typename BaseTraitsT> struct LayerNeighbor;
 template <typename BaseTraitsT> struct DescentNeighbor;
 template <typename BaseTraitsT> class NbrLogTable;
 template <typename BaseTraitsT> class VectorDataset;
@@ -265,6 +265,9 @@ public:
         return std::numeric_limits<vertex_id_t>::max();
     }
     static constexpr vertex_id_t invalid_vertex_id = invalid_vertex_id_generator();
+
+    /** @brief Sentinel layer neighbor: both base_vid and layer_vid set to invalid_vertex_id. */
+    static constexpr lnbr_t invalid_lnbr = lnbr_t(invalid_vertex_id, invalid_vertex_id);
 
     __attribute__((always_inline))
     static constexpr auto nan_distance_generator() -> distance_t {

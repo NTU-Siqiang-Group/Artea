@@ -44,13 +44,15 @@ template <typename IndexTraitsT> class CompactDescentGraph;
 template <typename IndexTraitsT> class HierarchicalSearchGraph;
 template <typename IndexTraitsT> class InterLayerLinks;
 template <typename IndexTraitsT> class HierarchyManager;
-template <typename IndexTraitsT> class SearchGraphConverter;
+template <typename IndexTraitsT> class DescentGraphCompactor;
 template <typename IndexTraitsT> class FlatGraphFileManager;
 template <typename IndexTraitsT> class HierarchicalGraphFileManager;
 template <typename IndexTraitsT> class IndexSizeCalculator;
 template <typename IndexTraitsT> class RadiusProber;
 template <typename IndexTraitsT> class CompactInternalGraph;
 template <typename IndexTraitsT> class InternalGraph;
+template <typename IndexTraitsT> class InternalGraphCompactor;
+template <typename IndexTraitsT> class HierarchicalGraphV2;
 
 template <typename BaseTraitsT>
 struct IndexTraits : virtual public BaseTraitsT {
@@ -105,8 +107,8 @@ struct IndexTraits : virtual public BaseTraitsT {
     /** @brief Hierarchical vector manager type. */
     using hierarchy_manager_t = HierarchyManager<index_traits_t>;
 
-    /** @brief Search graph converter type. */
-    using search_graph_converter_t = SearchGraphConverter<index_traits_t>;
+    /** @brief Descent graph compactor type. */
+    using descent_graph_compactor_t = DescentGraphCompactor<index_traits_t>;
 
     /** @brief Flat graph file manager type. */
     using flat_graph_file_manager_t = FlatGraphFileManager<index_traits_t>;
@@ -125,6 +127,12 @@ struct IndexTraits : virtual public BaseTraitsT {
 
     /** @brief Internal graph type (supports concurrent vertex/neighbor insertion). */
     using internal_graph_t = InternalGraph<index_traits_t>;
+
+    /** @brief Single-layer compactor: InternalGraph -> CompactInternalGraph. */
+    using internal_graph_compactor_t = InternalGraphCompactor<index_traits_t>;
+
+    /** @brief Hierarchical graph V2 type (holds InternalGraph layers, atomic lnbr_t entry point). */
+    using hierarchical_graph_v2_t = HierarchicalGraphV2<index_traits_t>;
 
     /** @brief Minimum number of vertices required for a layer to continue building upper layers. */
     static constexpr uint32_t min_num_layer_vertex = 1024;

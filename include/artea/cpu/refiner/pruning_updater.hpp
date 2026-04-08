@@ -13,7 +13,7 @@
 // limitations under the License.
 
 /*
- * @FilePath: /Artea/include/artea/cpu/edge_generator/pruning_updater.hpp
+ * @FilePath: /Artea/include/artea/cpu/refiner/pruning_updater.hpp
  * @Author: Chandler (Weitang Ye) <weitang.ye@ntu.edu.sg>
  * @Description: Pruning-based neighbor updater (no log writes).
  */
@@ -29,25 +29,25 @@
 namespace artea {
 namespace cpu {
 
-template <typename EdgeGeneratorTraitsT, typename DescentGraphT>
+template <typename RefinerTraitsT, typename DescentGraphT>
 class PruningUpdater :
-    public EdgeGeneratorTraitsT::template neighbor_updater_t<DescentGraphT, PruningUpdater<EdgeGeneratorTraitsT, DescentGraphT>> {
+    public RefinerTraitsT::template neighbor_updater_t<DescentGraphT, PruningUpdater<RefinerTraitsT, DescentGraphT>> {
 
-    using vertex_id_t = typename EdgeGeneratorTraitsT::vertex_id_t;
-    using vertex_num_t = typename EdgeGeneratorTraitsT::vertex_num_t;
-    using vec_ele_t = typename EdgeGeneratorTraitsT::vec_ele_t;
-    using distance_t = typename EdgeGeneratorTraitsT::distance_t;
-    using ratio_t = typename EdgeGeneratorTraitsT::ratio_t;
-    using vector_array_t = typename EdgeGeneratorTraitsT::vector_array_t;
-    using dnbr_t = typename EdgeGeneratorTraitsT::dnbr_t;
-    using dnbr_arr_t = typename EdgeGeneratorTraitsT::dnbr_arr_t;
-    using log_table_t = typename EdgeGeneratorTraitsT::log_table_t;
-    using dist_func_t = typename EdgeGeneratorTraitsT::dist_func_t;
-    using pruning_condition_t = typename EdgeGeneratorTraitsT::pruning_condition_t;
-    using base_class_t = typename EdgeGeneratorTraitsT::template neighbor_updater_t<DescentGraphT, PruningUpdater<EdgeGeneratorTraitsT, DescentGraphT>>;
-    static constexpr vertex_id_t invalid_vertex_id = EdgeGeneratorTraitsT::invalid_vertex_id;
-    static constexpr distance_t nan_distance = EdgeGeneratorTraitsT::nan_distance;
-    static constexpr distance_t max_distance = EdgeGeneratorTraitsT::max_distance;
+    using vertex_id_t = typename RefinerTraitsT::vertex_id_t;
+    using vertex_num_t = typename RefinerTraitsT::vertex_num_t;
+    using vec_ele_t = typename RefinerTraitsT::vec_ele_t;
+    using distance_t = typename RefinerTraitsT::distance_t;
+    using ratio_t = typename RefinerTraitsT::ratio_t;
+    using vector_array_t = typename RefinerTraitsT::vector_array_t;
+    using dnbr_t = typename RefinerTraitsT::dnbr_t;
+    using dnbr_arr_t = typename RefinerTraitsT::dnbr_arr_t;
+    using log_table_t = typename RefinerTraitsT::log_table_t;
+    using dist_func_t = typename RefinerTraitsT::dist_func_t;
+    using pruning_condition_t = typename RefinerTraitsT::pruning_condition_t;
+    using base_class_t = typename RefinerTraitsT::template neighbor_updater_t<DescentGraphT, PruningUpdater<RefinerTraitsT, DescentGraphT>>;
+    static constexpr vertex_id_t invalid_vertex_id = RefinerTraitsT::invalid_vertex_id;
+    static constexpr distance_t nan_distance = RefinerTraitsT::nan_distance;
+    static constexpr distance_t max_distance = RefinerTraitsT::max_distance;
     static constexpr bool accepted = true;
     static constexpr bool rejected = false;
 

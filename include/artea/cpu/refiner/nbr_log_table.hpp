@@ -13,7 +13,7 @@
 // limitations under the License.
 
 /*
- * @FilePath: /Artea/include/artea/cpu/edge_generator/nbr_log_table.hpp
+ * @FilePath: /Artea/include/artea/cpu/refiner/nbr_log_table.hpp
  * @Author: Chandler (Weitang Ye) <weitang.ye@ntu.edu.sg>
  * @Description: Neighbor log table for buffering neighbor updates before applying to the graph.
  */

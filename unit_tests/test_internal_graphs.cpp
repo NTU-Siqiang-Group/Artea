@@ -97,7 +97,7 @@ TEST_F(CompactInternalGraphTest, WriteAndReadNeighbors) {
 
     // Remaining should still be invalid
     for (vertex_num_t i = 3; i < max_nbr_size; ++i) {
-        EXPECT_EQ(nbrs_read[i], lnbr_t::make_invalid_nbr());
+        EXPECT_EQ(nbrs_read[i], base_traits_t::invalid_lnbr);
     }
 }
 
@@ -159,7 +159,7 @@ TEST_F(CompactInternalGraphTest, VertexIsolation) {
 
     auto nbrs_next = graph_->fetch_nbrs(target + 1);
     for (vertex_num_t i = 0; i < max_nbr_size; ++i) {
-        EXPECT_EQ(nbrs_next[i], lnbr_t::make_invalid_nbr());
+        EXPECT_EQ(nbrs_next[i], base_traits_t::invalid_lnbr);
     }
 }
 
@@ -253,7 +253,7 @@ TEST_F(InternalGraphTest, AddVertexInitializesNeighbors) {
     auto nbrs = graph_->fetch_nbrs(layer_vid);
     // nbrs[0] is the atomic header, skip it
     for (vertex_num_t i = 1; i <= max_nbr_size; ++i) {
-        EXPECT_EQ(nbrs[i], lnbr_t::make_invalid_nbr());
+        EXPECT_EQ(nbrs[i], base_traits_t::invalid_lnbr);
     }
 }
 
@@ -348,7 +348,7 @@ TEST_F(InternalGraphTest, VertexIsolation) {
     // v1 should still be all invalid
     auto nbrs_1 = graph_->fetch_nbrs(v1);
     for (vertex_num_t i = 1; i <= max_nbr_size; ++i) {
-        EXPECT_EQ(nbrs_1[i], lnbr_t::make_invalid_nbr());
+        EXPECT_EQ(nbrs_1[i], base_traits_t::invalid_lnbr);
     }
     EXPECT_EQ(graph_->num_valid_nbrs(v1), 0u);
 }
@@ -485,7 +485,7 @@ TEST_F(InternalGraphTest, ParallelWriteThenParallelRead) {
                 // Remaining slots should be invalid
                 for (vertex_num_t j = nbrs_per_vertex + 1;
                      j <= max_nbr_size; ++j) {
-                    if (nbrs[j] != lnbr_t::make_invalid_nbr()) {
+                    if (nbrs[j] != base_traits_t::invalid_lnbr) {
                         errors.fetch_add(1, std::memory_order_relaxed);
                     }
                 }
@@ -589,7 +589,7 @@ TEST_F(InternalGraphTest, AddNbrTriggersPruning) {
 
     // Trailing slots should be invalid
     for (uint64_t i = expected_count + 1; i <= max_nbr_size; ++i) {
-        EXPECT_EQ(nbrs[i], lnbr_t::make_invalid_nbr());
+        EXPECT_EQ(nbrs[i], base_traits_t::invalid_lnbr);
     }
 }
 

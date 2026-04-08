@@ -30,7 +30,7 @@
 #include <artea/cpu/framework/type_traits/buffer_traits.hpp>
 #include <artea/cpu/framework/type_traits/router_traits.hpp>
 #include <artea/cpu/framework/type_traits/vertex_generator_traits.hpp>
-#include <artea/cpu/framework/type_traits/edge_generator_traits.hpp>
+#include <artea/cpu/framework/type_traits/refiner_traits.hpp>
 #include <artea/cpu/framework/type_traits/index_traits.hpp>
 #include <artea/cpu/framework/type_traits/graph_factory_traits.hpp>
 
@@ -53,9 +53,11 @@
 #include <artea/cpu/index/compact_descent_graph.hpp>
 #include <artea/cpu/index/inter_layer_links.hpp>
 #include <artea/cpu/index/hierarchical_graph.hpp>
+#include <artea/cpu/index/hierarchical_graph_v2.hpp>
 #include <artea/cpu/index/hierarchical_search_graph.hpp>
 #include <artea/cpu/index/hierarchy_manager.hpp>
-#include <artea/cpu/index/search_graph_converter.hpp>
+#include <artea/cpu/index/descent_graph_compactor.hpp>
+#include <artea/cpu/index/internal_graph_compactor.hpp>
 #include <artea/cpu/index/index_size_calculator.hpp>
 #include <artea/cpu/index/persistence/flat_graph_file_manager.hpp>
 #include <artea/cpu/index/persistence/hierarchical_graph_file_manager.hpp>
@@ -96,17 +98,17 @@
 #include <artea/cpu/vertex_generator/random_vg.hpp>
 #include <artea/cpu/vertex_generator/graph_mis_vg.hpp>
 
-#include <artea/cpu/edge_generator/nbr_log_table.hpp>
-#include <artea/cpu/edge_generator/neighbor_updater.hpp>
-#include <artea/cpu/edge_generator/triangle_updater.hpp>
-#include <artea/cpu/edge_generator/pruning_updater.hpp>
-#include <artea/cpu/edge_generator/reverse_updater.hpp>
-#include <artea/cpu/edge_generator/random_updater.hpp>
-#include <artea/cpu/edge_generator/random_eg.hpp>
-#include <artea/cpu/edge_generator/propagate_engine.hpp>
-#include <artea/cpu/edge_generator/ivf_partitions.hpp>
-#include <artea/cpu/edge_generator/routing_updater.hpp>
-#include <artea/cpu/edge_generator/truncate_updater.hpp>
+#include <artea/cpu/refiner/nbr_log_table.hpp>
+#include <artea/cpu/refiner/neighbor_updater.hpp>
+#include <artea/cpu/refiner/triangle_updater.hpp>
+#include <artea/cpu/refiner/pruning_updater.hpp>
+#include <artea/cpu/refiner/reverse_updater.hpp>
+#include <artea/cpu/refiner/random_updater.hpp>
+#include <artea/cpu/refiner/random_eg.hpp>
+#include <artea/cpu/refiner/propagate_engine.hpp>
+#include <artea/cpu/refiner/ivf_partitions.hpp>
+#include <artea/cpu/refiner/routing_updater.hpp>
+#include <artea/cpu/refiner/truncate_updater.hpp>
 
 #include <artea/cpu/utils/bit_ops.hpp>
 #include <artea/cpu/utils/centroid_computer.hpp>

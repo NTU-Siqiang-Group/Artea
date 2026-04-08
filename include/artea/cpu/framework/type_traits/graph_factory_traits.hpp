@@ -39,35 +39,35 @@ namespace symmetric_knn_graph {
 
 template <
     typename VertexGeneratorTraitsT,
-    typename EdgeGeneratorTraitsT,
+    typename RefinerTraitsT,
     typename RouterTraitsT
 >
 struct GraphFactoryTraits :
     public VertexGeneratorTraitsT,
-    public EdgeGeneratorTraitsT
+    public RefinerTraitsT
 {
-    using graph_factory_traits_t = GraphFactoryTraits<VertexGeneratorTraitsT, EdgeGeneratorTraitsT, RouterTraitsT>;
+    using graph_factory_traits_t = GraphFactoryTraits<VertexGeneratorTraitsT, RefinerTraitsT, RouterTraitsT>;
 
     /** @brief Namespace-scoped factory types for conv_graph, extending IndexTraits::conv_graph. */
-    struct conv_graph : EdgeGeneratorTraitsT::conv_graph {
+    struct conv_graph : RefinerTraitsT::conv_graph {
         conv_graph() = delete;
         using factory_t = cpu::conv_graph::IndexFactory<graph_factory_traits_t>;
     };
 
     /** @brief Namespace-scoped factory types for knn_graph, extending IndexTraits::knn_graph. */
-    struct knn_graph : EdgeGeneratorTraitsT::knn_graph {
+    struct knn_graph : RefinerTraitsT::knn_graph {
         knn_graph() = delete;
         using factory_t = cpu::knn_graph::IndexFactory<graph_factory_traits_t>;
     };
 
     /** @brief Namespace-scoped factory types for symmetric_knn_graph, extending IndexTraits::symmetric_knn_graph. */
-    struct symmetric_knn_graph : EdgeGeneratorTraitsT::symmetric_knn_graph {
+    struct symmetric_knn_graph : RefinerTraitsT::symmetric_knn_graph {
         symmetric_knn_graph() = delete;
         using factory_t = cpu::symmetric_knn_graph::IndexFactory<graph_factory_traits_t>;
     };
 
     /** @brief Namespace-scoped factory types for artea_graph, extending IndexTraits::artea_graph. */
-    struct artea_graph : EdgeGeneratorTraitsT::artea_graph {
+    struct artea_graph : RefinerTraitsT::artea_graph {
         artea_graph() = delete;
         using factory_t = cpu::artea_graph::IndexFactory<graph_factory_traits_t>;
     };

@@ -13,7 +13,7 @@
 // limitations under the License.
 
 /*
- * @FilePath: /Artea/include/artea/cpu/edge_generator/neighbor_updater.hpp
+ * @FilePath: /Artea/include/artea/cpu/refiner/neighbor_updater.hpp
  * @Author: Chandler (Weitang Ye) <weitang.ye@ntu.edu.sg>
  * @Description: Neighbor updater base class for edge generation.
  */
@@ -28,19 +28,19 @@
 namespace artea {
 namespace cpu {
 
-template <typename EdgeGeneratorTraitsT, typename DescentGraphT, typename DerivedClassT>
+template <typename RefinerTraitsT, typename DescentGraphT, typename DerivedClassT>
 class NeighborUpdater {
 
-    using vertex_id_t = typename EdgeGeneratorTraitsT::vertex_id_t;
-    using vertex_num_t = typename EdgeGeneratorTraitsT::vertex_num_t;
-    using vec_ele_t = typename EdgeGeneratorTraitsT::vec_ele_t;
-    using distance_t = typename EdgeGeneratorTraitsT::distance_t;
-    using vector_array_t = typename EdgeGeneratorTraitsT::vector_array_t;
-    using dnbr_t = typename EdgeGeneratorTraitsT::dnbr_t;
-    using dnbr_arr_t = typename EdgeGeneratorTraitsT::dnbr_arr_t;
-    using log_table_t = typename EdgeGeneratorTraitsT::log_table_t;
-    using dist_func_t = typename EdgeGeneratorTraitsT::dist_func_t;
-    using nbr_arr_checker_t = typename EdgeGeneratorTraitsT::nbr_arr_checker_t;
+    using vertex_id_t = typename RefinerTraitsT::vertex_id_t;
+    using vertex_num_t = typename RefinerTraitsT::vertex_num_t;
+    using vec_ele_t = typename RefinerTraitsT::vec_ele_t;
+    using distance_t = typename RefinerTraitsT::distance_t;
+    using vector_array_t = typename RefinerTraitsT::vector_array_t;
+    using dnbr_t = typename RefinerTraitsT::dnbr_t;
+    using dnbr_arr_t = typename RefinerTraitsT::dnbr_arr_t;
+    using log_table_t = typename RefinerTraitsT::log_table_t;
+    using dist_func_t = typename RefinerTraitsT::dist_func_t;
+    using nbr_arr_checker_t = typename RefinerTraitsT::nbr_arr_checker_t;
 
 public:
 

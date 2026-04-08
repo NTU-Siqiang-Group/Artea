@@ -107,7 +107,7 @@ public:
 
         // Convert to hierarchical search graph
         hsearch_graph_ = std::make_unique<hierarchical_search_graph_t>(
-            search_graph_converter_t::from_hierarchical_graph(
+            descent_graph_compactor_t::from_hierarchical_graph(
                 *hgraph_, g_config.bl_extracted_nbr_size, g_config.ul_extracted_nbr_size)
         );
 

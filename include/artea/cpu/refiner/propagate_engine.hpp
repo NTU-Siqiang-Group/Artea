@@ -13,7 +13,7 @@
 // limitations under the License.
 
 /*
- * @FilePath: /Artea/include/artea/cpu/edge_generator/propagate_engine.hpp
+ * @FilePath: /Artea/include/artea/cpu/refiner/propagate_engine.hpp
  * @Author: Chandler (Weitang Ye) <weitang.ye@ntu.edu.sg>
  * @Description: Propagation engine for edge generation.
  */
@@ -34,27 +34,27 @@
 namespace artea {
 namespace cpu {
 
-template <typename EdgeGeneratorTraitsT, typename DescentGraphT, bool SelectiveSchedule>
+template <typename RefinerTraitsT, typename DescentGraphT, bool SelectiveSchedule>
 class PropagateEngine {
 
-    using vertex_num_t = typename EdgeGeneratorTraitsT::vertex_num_t;
-    using vec_ele_t = typename EdgeGeneratorTraitsT::vec_ele_t;
-    using vertex_id_t = typename EdgeGeneratorTraitsT::vertex_id_t;
-    using distance_t = typename EdgeGeneratorTraitsT::distance_t;
-    using iter_t = typename EdgeGeneratorTraitsT::iter_t;
-    using dnbr_t = typename EdgeGeneratorTraitsT::dnbr_t;
-    using dnbr_arr_t = typename EdgeGeneratorTraitsT::dnbr_arr_t;
-    using log_buffer_t = typename EdgeGeneratorTraitsT::log_buffer_t;
-    using log_container_t = typename EdgeGeneratorTraitsT::log_container_t;
-    using log_table_t = typename EdgeGeneratorTraitsT::log_table_t;
-    using word_aligned_bitmap_t = typename EdgeGeneratorTraitsT::word_aligned_bitmap_t;
-    using dist_func_t = typename EdgeGeneratorTraitsT::dist_func_t;
+    using vertex_num_t = typename RefinerTraitsT::vertex_num_t;
+    using vec_ele_t = typename RefinerTraitsT::vec_ele_t;
+    using vertex_id_t = typename RefinerTraitsT::vertex_id_t;
+    using distance_t = typename RefinerTraitsT::distance_t;
+    using iter_t = typename RefinerTraitsT::iter_t;
+    using dnbr_t = typename RefinerTraitsT::dnbr_t;
+    using dnbr_arr_t = typename RefinerTraitsT::dnbr_arr_t;
+    using log_buffer_t = typename RefinerTraitsT::log_buffer_t;
+    using log_container_t = typename RefinerTraitsT::log_container_t;
+    using log_table_t = typename RefinerTraitsT::log_table_t;
+    using word_aligned_bitmap_t = typename RefinerTraitsT::word_aligned_bitmap_t;
+    using dist_func_t = typename RefinerTraitsT::dist_func_t;
 
     template <typename DerivedClassT>
-    using neighbor_updater_t = typename EdgeGeneratorTraitsT::template neighbor_updater_t<DescentGraphT, DerivedClassT>;
+    using neighbor_updater_t = typename RefinerTraitsT::template neighbor_updater_t<DescentGraphT, DerivedClassT>;
 
     static constexpr bool selective_schedule = SelectiveSchedule;
-    static constexpr bool profiling_mode = EdgeGeneratorTraitsT::profiling_mode;
+    static constexpr bool profiling_mode = RefinerTraitsT::profiling_mode;
 
 public:
     PropagateEngine(const vertex_num_t num_vertices, const dist_func_t& dist_func) :
@@ -291,12 +291,12 @@ public:
       */
     template <typename UpdaterT, typename... Args>
     auto make_updater(Args&&... args) -> UpdaterT {
-        using triangle_updater_t = typename EdgeGeneratorTraitsT::template triangle_updater_t<DescentGraphT>;
-        using pruning_updater_t = typename EdgeGeneratorTraitsT::template pruning_updater_t<DescentGraphT>;
-        using reverse_updater_t = typename EdgeGeneratorTraitsT::template reverse_updater_t<DescentGraphT>;
-        using random_updater_t = typename EdgeGeneratorTraitsT::template random_updater_t<DescentGraphT>;
-        using routing_updater_t = typename EdgeGeneratorTraitsT::template routing_updater_t<DescentGraphT>;
-        using truncate_updater_t = typename EdgeGeneratorTraitsT::template truncate_updater_t<DescentGraphT>;
+        using triangle_updater_t = typename RefinerTraitsT::template triangle_updater_t<DescentGraphT>;
+        using pruning_updater_t = typename RefinerTraitsT::template pruning_updater_t<DescentGraphT>;
+        using reverse_updater_t = typename RefinerTraitsT::template reverse_updater_t<DescentGraphT>;
+        using random_updater_t = typename RefinerTraitsT::template random_updater_t<DescentGraphT>;
+        using routing_updater_t = typename RefinerTraitsT::template routing_updater_t<DescentGraphT>;
+        using truncate_updater_t = typename RefinerTraitsT::template truncate_updater_t<DescentGraphT>;
 
         const auto& vecs_arr = _descent_graph->get_vecs_data();
         auto& log_table = _log_table;
