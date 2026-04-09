@@ -53,6 +53,7 @@ template <typename IndexTraitsT> class CompactInternalGraph;
 template <typename IndexTraitsT> class InternalGraph;
 template <typename IndexTraitsT> class InternalGraphCompactor;
 template <typename IndexTraitsT> class HierarchicalGraphV2;
+template <typename IndexTraitsT> class StackedRGraph;
 
 template <typename BaseTraitsT>
 struct IndexTraits : virtual public BaseTraitsT {
@@ -133,6 +134,9 @@ struct IndexTraits : virtual public BaseTraitsT {
 
     /** @brief Hierarchical graph V2 type (holds InternalGraph layers, atomic lnbr_t entry point). */
     using hierarchical_graph_v2_t = HierarchicalGraphV2<index_traits_t>;
+
+    /** @brief Stacked R-net graph type (dynamic insertion over HierarchicalGraphV2). */
+    using stacked_rgraph_t = StackedRGraph<index_traits_t>;
 
     /** @brief Minimum number of vertices required for a layer to continue building upper layers. */
     static constexpr uint32_t min_num_layer_vertex = 1024;

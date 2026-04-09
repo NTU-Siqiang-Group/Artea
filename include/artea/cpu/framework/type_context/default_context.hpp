@@ -121,6 +121,7 @@ using compact_internal_graph_t = typename index_traits_t::compact_internal_graph
 using internal_graph_t = typename index_traits_t::internal_graph_t;
 using internal_graph_compactor_t = typename index_traits_t::internal_graph_compactor_t;
 using hierarchical_graph_v2_t = typename index_traits_t::hierarchical_graph_v2_t;
+using stacked_rgraph_t = typename index_traits_t::stacked_rgraph_t;
 
 // Refiner types from RefinerTraits
 using triangle_updater_t = typename refiner_traits_t::template triangle_updater_t<typename index_traits_t::conv_graph::index_t>;

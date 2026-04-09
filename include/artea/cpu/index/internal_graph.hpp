@@ -27,6 +27,7 @@
 #include <algorithm>
 #include <immintrin.h>
 #include <tbb/concurrent_vector.h>
+#include <artea/common/logger.hpp>
 
 namespace artea {
 namespace cpu {
@@ -152,6 +153,16 @@ public:
         const vertex_id_t layer_vid = static_cast<vertex_id_t>(
             it - _inter_layer_links.begin()
         );
+
+        // Bounds check: CSR is pre-allocated for exactly _max_num_vertices
+        // slots. Writing past that corrupts heap metadata. Fail loud.
+        if (layer_vid >= _max_num_vertices) {
+            ARTEA_ERROR(fmt::format(
+                "InternalGraph::add_vertex: layer_vid ({}) exceeds "
+                "max_num_vertices ({}). Increase the pre-allocation.",
+                layer_vid, _max_num_vertices
+            ));
+        }
 
         const auto base = static_cast<size_t>(layer_vid) * _stride();
         // Initialize header: num_valid_nbrs = 0

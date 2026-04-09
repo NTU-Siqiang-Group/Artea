@@ -39,9 +39,13 @@ using namespace artea::cpu;
 class HierarchicalGraphV2Test : public ::testing::Test {
 protected:
     /**
-     * @brief Build a HierarchicalGraphV2 with @p num_layers layers, each
-     *        layer pre-allocating @p max_num_vertices_per_layer vertices
+     * @brief Build a HierarchicalGraphV2 with @p num_layers committed layers,
+     *        each layer pre-allocating @p max_num_vertices_per_layer vertices
      *        with neighbor capacity @p max_nbr_size.
+     *
+     * Uses @c grow_layers so both the slot and the visible count are
+     * committed in one step. The container is reserved with capacity
+     * @c num_layers (the minimum that fits all requested layers).
      */
     static auto make_hg(
         const layer_num_t num_layers,
@@ -49,14 +53,11 @@ protected:
         const vertex_num_t max_nbr_size
     ) -> std::unique_ptr<hierarchical_graph_v2_t> {
         auto hg = std::make_unique<hierarchical_graph_v2_t>(num_layers);
-        for (layer_id_t l = 0; l < num_layers; ++l) {
-            hg->set_layer_graph(
-                l,
-                std::make_unique<internal_graph_t>(
-                    max_num_vertices_per_layer, max_nbr_size
-                )
+        hg->grow_layers(num_layers, [&](layer_id_t) {
+            return std::make_unique<internal_graph_t>(
+                max_num_vertices_per_layer, max_nbr_size
             );
-        }
+        });
         return hg;
     }
 };
@@ -66,19 +67,88 @@ protected:
 // ============================================================
 
 TEST_F(HierarchicalGraphV2Test, ConstructionEmpty) {
-    hierarchical_graph_v2_t hg(/*num_layers=*/0);
+    hierarchical_graph_v2_t hg(/*max_layers=*/0);
     EXPECT_EQ(hg.get_num_layers(), 0u);
+    EXPECT_EQ(hg.max_layers(), 0u);
     EXPECT_EQ(hg.get_entry_point(), base_traits_t::invalid_lnbr);
 }
 
-TEST_F(HierarchicalGraphV2Test, ConstructionPreallocatesLayerSlots) {
-    hierarchical_graph_v2_t hg(/*num_layers=*/5);
-    EXPECT_EQ(hg.get_num_layers(), 5u);
+TEST_F(HierarchicalGraphV2Test, ConstructionReservesCapacity) {
+    hierarchical_graph_v2_t hg(/*max_layers=*/5);
+    // Visible count starts at 0 because no layers have been committed yet.
+    EXPECT_EQ(hg.get_num_layers(), 0u);
+    EXPECT_EQ(hg.max_layers(), 5u);
     EXPECT_EQ(hg.get_entry_point(), base_traits_t::invalid_lnbr);
-    // All layer slots are default-constructed unique_ptrs (nullptr).
+    // All reserved slots are default-constructed unique_ptrs (nullptr).
     for (layer_id_t l = 0; l < 5; ++l) {
         EXPECT_EQ(hg.get_layer_graphs()[l].get(), nullptr);
     }
+}
+
+TEST_F(HierarchicalGraphV2Test, GrowLayersCommitsProgressively) {
+    hierarchical_graph_v2_t hg(/*max_layers=*/4);
+    std::atomic<uint32_t> factory_calls{0};
+    auto factory = [&](layer_id_t) {
+        factory_calls.fetch_add(1);
+        return std::make_unique<internal_graph_t>(/*max=*/128, /*nbr=*/8);
+    };
+
+    EXPECT_EQ(hg.get_num_layers(), 0u);
+    hg.grow_layers(2, factory);
+    EXPECT_EQ(hg.get_num_layers(), 2u);
+    EXPECT_EQ(factory_calls.load(), 2u);
+
+    // Idempotent: calling with the same target doesn't invoke factory again.
+    hg.grow_layers(2, factory);
+    EXPECT_EQ(hg.get_num_layers(), 2u);
+    EXPECT_EQ(factory_calls.load(), 2u);
+
+    // Incremental growth.
+    hg.grow_layers(4, factory);
+    EXPECT_EQ(hg.get_num_layers(), 4u);
+    EXPECT_EQ(factory_calls.load(), 4u);
+}
+
+TEST_F(HierarchicalGraphV2Test, GrowLayersConcurrentCallersNoDoubleFactory) {
+    // Multiple threads all asking for the same growth target. The factory
+    // must run exactly N times in total (not N × num_threads).
+    hierarchical_graph_v2_t hg(/*max_layers=*/8);
+    constexpr layer_num_t target = 5;
+    std::atomic<uint32_t> factory_calls{0};
+    auto factory = [&](layer_id_t) {
+        factory_calls.fetch_add(1);
+        return std::make_unique<internal_graph_t>(/*max=*/64, /*nbr=*/8);
+    };
+
+    constexpr uint32_t num_threads = 16;
+    std::vector<std::thread> threads;
+    threads.reserve(num_threads);
+    for (uint32_t t = 0; t < num_threads; ++t) {
+        threads.emplace_back([&] { hg.grow_layers(target, factory); });
+    }
+    for (auto& th : threads) th.join();
+
+    EXPECT_EQ(hg.get_num_layers(), target);
+    EXPECT_EQ(factory_calls.load(), target);
+    for (layer_id_t l = 0; l < target; ++l) {
+        EXPECT_NE(hg.get_layer_graphs()[l].get(), nullptr);
+    }
+}
+
+TEST_F(HierarchicalGraphV2Test, CommitLayerAfterSetLayerGraph) {
+    // Legacy two-step flow: set_layer_graph then commit_layer.
+    hierarchical_graph_v2_t hg(/*max_layers=*/3);
+    EXPECT_EQ(hg.get_num_layers(), 0u);
+
+    hg.set_layer_graph(0, std::make_unique<internal_graph_t>(/*max=*/256, /*nbr=*/16));
+    // Not yet visible.
+    EXPECT_EQ(hg.get_num_layers(), 0u);
+    hg.commit_layer(0);
+    EXPECT_EQ(hg.get_num_layers(), 1u);
+
+    hg.set_layer_graph(1, std::make_unique<internal_graph_t>(/*max=*/256, /*nbr=*/16));
+    hg.commit_layer(1);
+    EXPECT_EQ(hg.get_num_layers(), 2u);
 }
 
 TEST_F(HierarchicalGraphV2Test, SetGetLayerGraphRoundTrip) {
@@ -118,7 +188,7 @@ TEST_F(HierarchicalGraphV2Test, GetLayerGraphsConstAndMutable) {
 // ============================================================
 
 TEST_F(HierarchicalGraphV2Test, EntryPointInitiallyInvalid) {
-    hierarchical_graph_v2_t hg(/*num_layers=*/1);
+    hierarchical_graph_v2_t hg(/*max_layers=*/1);
     const lnbr_t ep = hg.get_entry_point();
     EXPECT_EQ(ep, base_traits_t::invalid_lnbr);
     EXPECT_EQ(ep.base_vid, base_traits_t::invalid_vertex_id);
@@ -126,7 +196,7 @@ TEST_F(HierarchicalGraphV2Test, EntryPointInitiallyInvalid) {
 }
 
 TEST_F(HierarchicalGraphV2Test, UpdateEntryPointSerial) {
-    hierarchical_graph_v2_t hg(/*num_layers=*/1);
+    hierarchical_graph_v2_t hg(/*max_layers=*/1);
 
     hg.update_entry_point(lnbr_t(42, 7));
     {
@@ -146,7 +216,7 @@ TEST_F(HierarchicalGraphV2Test, UpdateEntryPointSerial) {
 TEST_F(HierarchicalGraphV2Test, UpdateEntryPointConcurrent) {
     // Many threads racing on update_entry_point — final value must be one
     // of the values that was actually written, never a torn read.
-    hierarchical_graph_v2_t hg(/*num_layers=*/1);
+    hierarchical_graph_v2_t hg(/*max_layers=*/1);
 
     constexpr uint32_t num_threads = 16;
     constexpr uint32_t writes_per_thread = 10'000;
@@ -173,7 +243,7 @@ TEST_F(HierarchicalGraphV2Test, ConcurrentReadWriteEntryPointNoTear) {
     // Reader threads watch the entry point while writer threads update it.
     // Each writer always uses (base_vid == layer_vid) so any torn read
     // (different halves from different writes) would be detectable.
-    hierarchical_graph_v2_t hg(/*num_layers=*/1);
+    hierarchical_graph_v2_t hg(/*max_layers=*/1);
     hg.update_entry_point(lnbr_t(0, 0));
 
     constexpr uint32_t num_writers = 4;
