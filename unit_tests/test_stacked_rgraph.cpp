@@ -406,22 +406,12 @@ TEST_F(StackedRGraphTest, CoverageRate) {
                             g_config.rnet_beta,
                             static_cast<layer_num_t>(l + 1)));
 
-        // Collect the base_vids present in layer l (each vertex's identity
-        // is its base_vid, carried through lnbr_t). We need these to compute
-        // distances from sampled base points to layer vertices.
-        //
-        // Layer 0's inter_layer_link stores base_vid directly; for upper
-        // layers we walk the chain down via get_inter_layer_link.
+        // Collect the base_vids present in layer l via the InternalGraph's
+        // O(1) per-vertex metadata (base_vid stored alongside layer_vid in
+        // _vertex_info).
         std::vector<vertex_id_t> layer_base_vids(n_l);
         for (vertex_num_t v = 0; v < n_l; ++v) {
-            vertex_id_t cur_vid = v;
-            for (layer_id_t down = l; down > 0; --down) {
-                cur_vid = _graph->get_layer_graph(down).get_inter_layer_link(cur_vid);
-            }
-            // cur_vid is now a layer-0 layer_vid; its inter_layer_link is the base_vid.
-            const vertex_id_t base_vid =
-                _graph->get_layer_graph(0).get_inter_layer_link(cur_vid);
-            layer_base_vids[v] = base_vid;
+            layer_base_vids[v] = layer.get_base_vid(v);
         }
 
         // Parallel coverage test: for each sample, brute-force nearest over
@@ -506,14 +496,11 @@ TEST_F(StackedRGraphTest, SeparationRate) {
                             g_config.rnet_beta,
                             static_cast<layer_num_t>(l + 1)));
 
-        // Resolve every layer-h vertex back to its base_vid.
+        // Resolve every layer-h vertex back to its base_vid via the
+        // InternalGraph's O(1) per-vertex metadata.
         std::vector<vertex_id_t> layer_base_vids(n_l);
         for (vertex_num_t v = 0; v < n_l; ++v) {
-            vertex_id_t cur_vid = v;
-            for (layer_id_t down = l; down > 0; --down) {
-                cur_vid = _graph->get_layer_graph(down).get_inter_layer_link(cur_vid);
-            }
-            layer_base_vids[v] = _graph->get_layer_graph(0).get_inter_layer_link(cur_vid);
+            layer_base_vids[v] = layer.get_base_vid(v);
         }
 
         // Sample at most separation_num_samples source vertices from this

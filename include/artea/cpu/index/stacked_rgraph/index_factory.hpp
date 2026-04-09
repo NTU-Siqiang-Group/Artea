@@ -289,11 +289,8 @@ private:
                 if (top_size <= search_nn_qs) {
                     // Take every vertex in the top layer.
                     for (vertex_num_t lv = 0; lv < top_size; ++lv) {
-                        const vertex_id_t bv =
-                            index.resolve_base_vid(h_max - 1, lv);
-                        if (bv != invalid_vertex_id) {
-                            current_entries.emplace_back(bv, lv);
-                        }
+                        current_entries.emplace_back(
+                            top_layer.get_base_vid(lv), lv);
                     }
                 } else {
                     // Sample `search_nn_qs` distinct vertices without
@@ -307,11 +304,8 @@ private:
                            static_cast<std::size_t>(search_nn_qs)) {
                         const vertex_id_t rand_lv = uni_dist(rng);
                         if (picked.insert(rand_lv).second) {
-                            const vertex_id_t bv =
-                                index.resolve_base_vid(h_max - 1, rand_lv);
-                            if (bv != invalid_vertex_id) {
-                                current_entries.emplace_back(bv, rand_lv);
-                            }
+                            current_entries.emplace_back(
+                                top_layer.get_base_vid(rand_lv), rand_lv);
                         }
                     }
                 }

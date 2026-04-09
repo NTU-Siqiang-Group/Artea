@@ -358,15 +358,15 @@ TEST_F(InternalGraphTest, CsrNbrsAccessor) {
     EXPECT_EQ(csr.size(), static_cast<size_t>(max_num_vertices) * (max_nbr_size + 1));
 }
 
-TEST_F(InternalGraphTest, InterLayerLinksAccessor) {
+TEST_F(InternalGraphTest, VertexInfoAccessor) {
     graph_->add_vertex(10);
     graph_->add_vertex(20);
 
-    auto& links = graph_->get_inter_layer_links();
-    EXPECT_EQ(links.size(), 2u);
+    auto& info = graph_->get_vertex_info();
+    EXPECT_EQ(info.size(), 2u);
 
-    const auto& const_links = std::as_const(*graph_).get_inter_layer_links();
-    EXPECT_EQ(const_links.size(), 2u);
+    const auto& const_info = std::as_const(*graph_).get_vertex_info();
+    EXPECT_EQ(const_info.size(), 2u);
 }
 
 // --- Parallel Tests for InternalGraph ---

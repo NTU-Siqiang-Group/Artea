@@ -61,8 +61,6 @@ class IndexStructure : public HierarchicalGraphV2<IndexTraitsT> {
     using distance_t       = typename IndexTraitsT::distance_t;
     using ratio_t          = typename IndexTraitsT::ratio_t;
 
-    static constexpr vertex_id_t invalid_vertex_id = IndexTraitsT::invalid_vertex_id;
-
 public:
     /**
      * @brief Construct an empty IndexStructure.
@@ -165,24 +163,6 @@ public:
         const double raw = static_cast<double>(base_n) / divisor;
         const vertex_num_t cap = static_cast<vertex_num_t>(raw);
         return std::max<vertex_num_t>(cap, _min_layer_cap);
-    }
-
-    /**
-     * @brief Walk the inter_layer_link chain from @p (layer_idx, layer_vid)
-     *        all the way down to layer 0 and return the corresponding
-     *        @c base_vid. Returns @c invalid_vertex_id if any step is OOB.
-     */
-    auto resolve_base_vid(const layer_id_t layer_idx,
-                          const vertex_id_t layer_vid) const -> vertex_id_t {
-        vertex_id_t cur = layer_vid;
-        for (layer_id_t down = layer_idx; down > 0; --down) {
-            const auto& layer = this->get_layer_graph(down);
-            if (cur >= layer.get_num_vertices()) return invalid_vertex_id;
-            cur = layer.get_inter_layer_link(cur);
-        }
-        const auto& layer0 = this->get_layer_graph(0);
-        if (cur >= layer0.get_num_vertices()) return invalid_vertex_id;
-        return layer0.get_inter_layer_link(cur);
     }
 
 private:

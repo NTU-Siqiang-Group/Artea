@@ -43,11 +43,21 @@ namespace cpu {
  * lower 63 bits hold the valid neighbor count (@c num_valid_nbrs) and
  * whose MSB (bit 63) serves as a per-vertex spinlock for @c add_nbr().
  *
+ * Per-vertex metadata (parallel to the CSR, indexed by layer_vid) lives in
+ * the concurrent vector @c _vertex_info, which stores one @c lnbr_t slot
+ * per vertex carrying both:
+ *   - @c .base_vid — the vertex's id in the base dataset (write-once at
+ *     @c add_vertex time).
+ *   - @c .layer_vid — the vertex's layer_vid in the layer directly below,
+ *     initially a placeholder equal to @c base_vid and overwritten by
+ *     @c set_inter_layer_link when the caller knows the lower-layer id.
+ * Both fields are accessible in O(1) via @c get_base_vid / @c get_inter_layer_link.
+ *
  * Vertices are added concurrently via @c add_vertex(): each call atomically
- * claims a layer_vid by pushing to the concurrent @c _inter_layer_links
- * vector, then deterministically locates its pre-allocated neighbor block
- * in @c _csr_nbrs (position = layer_vid * stride). Since each thread writes
- * to a disjoint region, no synchronization on @c _csr_nbrs is needed.
+ * claims a layer_vid by pushing to @c _vertex_info, then deterministically
+ * locates its pre-allocated neighbor block in @c _csr_nbrs
+ * (position = layer_vid * stride). Since each thread writes to a disjoint
+ * region, no synchronization on @c _csr_nbrs is needed.
  *
  * @tparam IndexTraitsT The index traits type.
  */
@@ -138,20 +148,28 @@ public:
     /**
      * @brief Concurrently add a new vertex to this layer.
      *
-     * 1. Atomically claims a layer_vid by pushing @p lower_layer_vid
-     *    into the concurrent @c _inter_layer_links vector.
+     * 1. Atomically claims a layer_vid by pushing @c lnbr_t(base_vid, base_vid)
+     *    into the concurrent @c _vertex_info vector. The second field of
+     *    the slot is a placeholder for the lower-layer link; callers that
+     *    know the actual lower_layer_vid should overwrite it via
+     *    @c set_inter_layer_link afterwards. The @c base_vid field is
+     *    write-once and can be read race-free via @c get_base_vid.
      * 2. Uses the claimed layer_vid to deterministically locate the
      *    pre-allocated block in @c _csr_nbrs (offset = layer_vid * stride).
      * 3. Initializes the header (num_valid_nbrs = 0) and fills all
      *    neighbor slots with @c IndexTraitsT::invalid_lnbr.
      *
-     * @param lower_layer_vid This vertex's layer_vid in the next (lower) layer.
+     * @param base_vid This vertex's id in the base dataset. Stored in
+     *                 @c _vertex_info[layer_vid].base_vid (write-once);
+     *                 also used as the initial placeholder for the
+     *                 lower-layer link until @c set_inter_layer_link
+     *                 updates it.
      * @return The newly assigned layer_vid in this layer.
      */
-    auto add_vertex(const vertex_id_t lower_layer_vid) -> vertex_id_t {
-        auto it = _inter_layer_links.push_back(lower_layer_vid);
+    auto add_vertex(const vertex_id_t base_vid) -> vertex_id_t {
+        auto it = _vertex_info.push_back(lnbr_t(base_vid, base_vid));
         const vertex_id_t layer_vid = static_cast<vertex_id_t>(
-            it - _inter_layer_links.begin()
+            it - _vertex_info.begin()
         );
 
         // Bounds check: CSR is pre-allocated for exactly _max_num_vertices
@@ -200,13 +218,14 @@ public:
      *         @code uint64_t(lnbr_t* slots, vertex_num_t max_nbr_size) @endcode
      *         Writes initial neighbors into @p slots and returns the number
      *         of valid neighbors written.
-     * @param lower_layer_vid   This vertex's layer_vid in the next (lower) layer.
+     * @param base_vid          This vertex's id in the base dataset
+     *                          (see single-argument overload).
      * @param nbr_prefilling_fn Functor to populate neighbors lock-free.
      * @return The newly assigned layer_vid in this layer.
      */
     template <typename NbrPrefillingFnT>
-    auto add_vertex(const vertex_id_t lower_layer_vid, NbrPrefillingFnT&& nbr_prefilling_fn) -> vertex_id_t {
-        const vertex_id_t layer_vid = add_vertex(lower_layer_vid);
+    auto add_vertex(const vertex_id_t base_vid, NbrPrefillingFnT&& nbr_prefilling_fn) -> vertex_id_t {
+        const vertex_id_t layer_vid = add_vertex(base_vid);
 
         lnbr_t* nbr_slots = &_csr_nbrs[static_cast<size_t>(layer_vid) * _stride() + 1];
         const uint64_t prefilled_count = nbr_prefilling_fn(nbr_slots, _max_nbr_size);
@@ -370,16 +389,29 @@ public:
         );
     }
 
-    // --- Inter-Layer Links ---
+    // --- Per-Vertex Metadata ---
+
+    /**
+     * @brief Get this vertex's id in the base dataset.
+     * @param layer_vid The vertex's layer_vid in the current layer.
+     * @return The corresponding base_vid. Write-once at @c add_vertex time;
+     *         safe to read concurrently with any mutator.
+     */
+    __attribute__((always_inline))
+    auto get_base_vid(const vertex_id_t layer_vid) const -> vertex_id_t {
+        return _vertex_info[layer_vid].base_vid;
+    }
 
     /**
      * @brief Get the layer_vid of a vertex in the next (lower) layer.
      * @param layer_vid The vertex's layer_vid in the current layer.
-     * @return The corresponding layer_vid in the next layer, or invalid_vertex_id if none.
+     * @return The corresponding layer_vid in the next layer. Initially a
+     *         placeholder equal to @c base_vid; callers overwrite via
+     *         @c set_inter_layer_link once the lower-layer id is known.
      */
     __attribute__((always_inline))
     auto get_inter_layer_link(const vertex_id_t layer_vid) const -> vertex_id_t {
-        return _inter_layer_links[layer_vid];
+        return _vertex_info[layer_vid].layer_vid;
     }
 
     /**
@@ -389,23 +421,23 @@ public:
      */
     __attribute__((always_inline))
     auto set_inter_layer_link(const vertex_id_t layer_vid, const vertex_id_t next_layer_vid) -> void {
-        _inter_layer_links[layer_vid] = next_layer_vid;
+        _vertex_info[layer_vid].layer_vid = next_layer_vid;
     }
 
     /**
-     * @brief Get the inter-layer links concurrent vector (const).
+     * @brief Get the per-vertex metadata concurrent vector (const).
      */
     __attribute__((always_inline))
-    auto get_inter_layer_links() const -> const tbb::concurrent_vector<vertex_id_t>& {
-        return _inter_layer_links;
+    auto get_vertex_info() const -> const tbb::concurrent_vector<lnbr_t>& {
+        return _vertex_info;
     }
 
     /**
-     * @brief Get the inter-layer links concurrent vector (mutable).
+     * @brief Get the per-vertex metadata concurrent vector (mutable).
      */
     __attribute__((always_inline))
-    auto get_inter_layer_links() -> tbb::concurrent_vector<vertex_id_t>& {
-        return _inter_layer_links;
+    auto get_vertex_info() -> tbb::concurrent_vector<lnbr_t>& {
+        return _vertex_info;
     }
 
     // --- Properties ---
@@ -423,7 +455,7 @@ public:
     /** @brief Number of vertices currently inserted. */
     __attribute__((always_inline))
     auto get_num_vertices() const -> vertex_num_t {
-        return static_cast<vertex_num_t>(_inter_layer_links.size());
+        return static_cast<vertex_num_t>(_vertex_info.size());
     }
 
     __attribute__((always_inline))
@@ -458,12 +490,15 @@ private:
     csr_lnbrs_t _csr_nbrs;
 
     /**
-     * @brief Concurrent inter-layer links: _inter_layer_links[layer_vid]
-     *        stores this vertex's layer_vid in the next (lower) layer.
+     * @brief Concurrent per-vertex metadata: _vertex_info[layer_vid] stores
+     *        an @c lnbr_t whose @c .base_vid is this vertex's id in the
+     *        base dataset (write-once) and whose @c .layer_vid is the
+     *        layer_vid in the next (lower) layer (initially a placeholder
+     *        equal to base_vid, overwritten via @c set_inter_layer_link).
      *
      * push_back() is used in add_vertex() to atomically claim a new layer_vid.
      */
-    tbb::concurrent_vector<vertex_id_t> _inter_layer_links;
+    tbb::concurrent_vector<lnbr_t> _vertex_info;
 
 };  // class InternalGraph
 
