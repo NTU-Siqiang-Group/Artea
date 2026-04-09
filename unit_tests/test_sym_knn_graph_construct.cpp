@@ -165,7 +165,7 @@ TEST_F(SymKnnGraphTest, QueryRecall) {
         g_config.queue_start, g_config.queue_end, g_config.queue_step));
 
     for (uint32_t queue_size = g_config.queue_start; queue_size <= g_config.queue_end; queue_size += g_config.queue_step) {
-        monolayer_graph_router_t<graph_mode_t::search_mode> router(
+        descent_graph_router_t<graph_mode_t::compact_mode> router(
             base_vecs, dist_func, compact_descent_graph, g_config.topk, queue_size);
         router.initialize();
 

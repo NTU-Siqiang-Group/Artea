@@ -26,7 +26,7 @@ namespace cpu {
  *
  * All candidate queue implementations (LinearCandidateQueue, StdCandidateQueue,
  * FHCandidateQueue) must satisfy this concept to be used as a template parameter
- * in MonolayerGraphRouter.
+ * in DescentGraphRouter.
  *
  * Design Philosophy:
  * This concept is completely decoupled from candidate_entry_t. All operations

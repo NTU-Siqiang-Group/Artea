@@ -13,9 +13,9 @@
 // limitations under the License.
 
 /*
- * @FilePath: /Artea/include/artea/cpu/router/construct_mode_monolayer_graph_router.hpp
+ * @FilePath: /Artea/include/artea/cpu/router/descent_graph_router.hpp
  * @Author: Chandler (Weitang Ye) <weitang.ye@ntu.edu.sg>
- * @Description: construct_mode specialization of MonolayerGraphRouter.
+ * @Description: dynamic_mode specialization of DescentGraphRouter.
  *               Operates on DescentGraph (dnbr_t neighbors) for build-time navigation.
  */
 
@@ -36,8 +36,8 @@ namespace artea {
 namespace cpu {
 
 template <typename RouterTraitsT>
-class MonolayerGraphRouter<RouterTraitsT, GraphModeT::construct_mode> :
-    public RouterTraitsT::template vector_router_t<MonolayerGraphRouter<RouterTraitsT, GraphModeT::construct_mode>>
+class DescentGraphRouter<RouterTraitsT, GraphModeT::dynamic_mode> :
+    public RouterTraitsT::template vector_router_t<DescentGraphRouter<RouterTraitsT, GraphModeT::dynamic_mode>>
 {
     using vertex_num_t = typename RouterTraitsT::vertex_num_t;
     using vertex_id_t = typename RouterTraitsT::vertex_id_t;
@@ -51,11 +51,11 @@ class MonolayerGraphRouter<RouterTraitsT, GraphModeT::construct_mode> :
     using visited_table_t = typename RouterTraitsT::visited_table_t;
     using visited_table_pool_t = typename RouterTraitsT::visited_table_pool_t;
     using knn_results_t = typename RouterTraitsT::knn_results_t;
-    using base_class_t = typename RouterTraitsT::template vector_router_t<MonolayerGraphRouter<RouterTraitsT, GraphModeT::construct_mode>>;
+    using base_class_t = typename RouterTraitsT::template vector_router_t<DescentGraphRouter<RouterTraitsT, GraphModeT::dynamic_mode>>;
 
 public:
 
-    MonolayerGraphRouter(
+    DescentGraphRouter(
         const vector_array_t& vecs_data,
         const dist_func_t& dist_func,
         const uint32_t topk,
@@ -190,7 +190,7 @@ private:
     /** @brief Pool of thread-local visited bitmaps for parallel beam search. */
     mutable visited_table_pool_t _visited_table_pool;
 
-};  // class MonolayerGraphRouter<RouterTraitsT, GraphModeT::construct_mode>
+};  // class DescentGraphRouter<RouterTraitsT, GraphModeT::dynamic_mode>
 
 }   // namespace cpu
 }   // namespace artea

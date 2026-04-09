@@ -15,7 +15,7 @@
 /*
  * @FilePath: /Artea/unit_tests/test_conv_graph_search.cpp
  * @Author: Chandler (Weitang Ye) <weitang.ye@ntu.edu.sg>
- * @Description: Search tests for MonolayerGraphRouter (search_mode & construct_mode)
+ * @Description: Search tests for DescentGraphRouter (compact_mode & dynamic_mode)
  *               on a convergent graph. Reports dataset info, recall, and throughput.
  *               Covers: SearchModeBatchQuery, SearchModeParallelSingleQuery,
  *                       ConstructModeBatchQuery.
@@ -127,7 +127,7 @@ private:
 class ConvGraphSearchTest : public ::testing::Test {};
 
 // ============================================================
-// search_mode: BatchQuery
+// compact_mode: BatchQuery
 // ============================================================
 
 TEST_F(ConvGraphSearchTest, SearchModeBatchQuery) {
@@ -135,7 +135,7 @@ TEST_F(ConvGraphSearchTest, SearchModeBatchQuery) {
     const auto& base_vecs  = p.get_dataset().get_base_vecs();
     const auto& query_vecs = p.get_dataset().get_query_vecs();
 
-    monolayer_graph_router_t<graph_mode_t::search_mode> router(
+    descent_graph_router_t<graph_mode_t::compact_mode> router(
         base_vecs, p.get_dist_func(), p.get_compact_descent_graph(),
         g_config.topk, g_config.queue_size
     );
@@ -169,7 +169,7 @@ TEST_F(ConvGraphSearchTest, SearchModeBatchQuery) {
 }
 
 // ============================================================
-// search_mode: ParallelSingleQuery
+// compact_mode: ParallelSingleQuery
 // ============================================================
 
 TEST_F(ConvGraphSearchTest, SearchModeParallelSingleQuery) {
@@ -177,7 +177,7 @@ TEST_F(ConvGraphSearchTest, SearchModeParallelSingleQuery) {
     const auto& base_vecs  = p.get_dataset().get_base_vecs();
     const auto& query_vecs = p.get_dataset().get_query_vecs();
 
-    monolayer_graph_router_t<graph_mode_t::search_mode> router(
+    descent_graph_router_t<graph_mode_t::compact_mode> router(
         base_vecs, p.get_dist_func(), p.get_compact_descent_graph(),
         g_config.topk, g_config.queue_size
     );
@@ -236,7 +236,7 @@ TEST_F(ConvGraphSearchTest, SearchModeParallelSingleQuery) {
 }
 
 // ============================================================
-// construct_mode: BatchQuery
+// dynamic_mode: BatchQuery
 // ============================================================
 
 TEST_F(ConvGraphSearchTest, ConstructModeBatchQuery) {
@@ -244,7 +244,7 @@ TEST_F(ConvGraphSearchTest, ConstructModeBatchQuery) {
     const auto& base_vecs  = p.get_dataset().get_base_vecs();
     const auto& query_vecs = p.get_dataset().get_query_vecs();
 
-    monolayer_graph_router_t<graph_mode_t::construct_mode> router(
+    descent_graph_router_t<graph_mode_t::dynamic_mode> router(
         base_vecs, p.get_dist_func(),
         g_config.topk, g_config.queue_size
     );
@@ -327,11 +327,11 @@ int main(int argc, char** argv) {
     std::cout << std::string(80, '-') << "\n";
     std::string runs_str = fmt::format("{}w+{}r", g_config.warmup_runs, g_config.test_runs);
     std::cout << fmt::format("  {:40s}  {:>10.4f}  {:>12.1f}  {:>10s}\n",
-        "search_mode  / BatchQuery",       g_results.search_batch_recall,    g_results.search_batch_qps, runs_str);
+        "compact_mode  / BatchQuery",       g_results.search_batch_recall,    g_results.search_batch_qps, runs_str);
     std::cout << fmt::format("  {:40s}  {:>10.4f}  {:>12.1f}  {:>10s}\n",
-        "search_mode  / ParallelSingleQuery", g_results.search_parallel_recall, g_results.search_parallel_qps, runs_str);
+        "compact_mode  / ParallelSingleQuery", g_results.search_parallel_recall, g_results.search_parallel_qps, runs_str);
     std::cout << fmt::format("  {:40s}  {:>10.4f}  {:>12.1f}  {:>10s}\n",
-        "construct_mode / BatchQuery",     g_results.construct_batch_recall,  g_results.construct_batch_qps, runs_str);
+        "dynamic_mode / BatchQuery",     g_results.construct_batch_recall,  g_results.construct_batch_qps, runs_str);
     std::cout << std::string(70, '=') << "\n";
 
     return ret;

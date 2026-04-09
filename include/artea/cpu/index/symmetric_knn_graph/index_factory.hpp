@@ -49,7 +49,7 @@ class IndexFactory {
     using ground_truth_t = typename GraphFactoryTraitsT::ground_truth_t;
     using recall_estimator_t = typename GraphFactoryTraitsT::recall_estimator_t;
     using graph_mode_t = typename GraphFactoryTraitsT::graph_mode_t;
-    using monolayer_graph_router_t = typename GraphFactoryTraitsT::template monolayer_graph_router_t<graph_mode_t::construct_mode>;
+    using descent_graph_router_t = typename GraphFactoryTraitsT::template descent_graph_router_t<graph_mode_t::dynamic_mode>;
     using knn_graph = typename GraphFactoryTraitsT::knn_graph;
 
 public:
@@ -111,7 +111,7 @@ public:
         recall_estimator_t recall_estimator;
         const vertex_num_t topk = 20;
         const vertex_num_t candidate_queue_size = 40;
-        monolayer_graph_router_t router(base_vecs, dist_func, topk, candidate_queue_size);
+        descent_graph_router_t router(base_vecs, dist_func, topk, candidate_queue_size);
         router.initialize();
 
         _build_loop(descent_graph, dist_func, pruning_config, propagate_config,

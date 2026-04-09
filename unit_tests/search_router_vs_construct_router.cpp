@@ -15,7 +15,7 @@
 /*
  * @FilePath: /Artea/unit_tests/search_router_vs_construct_router.cpp
  * @Author: Chandler (Weitang Ye) <weitang.ye@ntu.edu.sg>
- * @Description: Compares construct_mode vs search_mode MonolayerGraphRouter on a
+ * @Description: Compares dynamic_mode vs compact_mode DescentGraphRouter on a
  *               ConvGraph. Measures construct-mode query time, search-graph conversion
  *               time, and search-mode query time.
  */
@@ -146,7 +146,7 @@ private:
 class RouterComparisonTest : public ::testing::Test {};
 
 // ============================================================
-// Test 1: construct_mode router on flat graph
+// Test 1: dynamic_mode router on flat graph
 // ============================================================
 
 TEST_F(RouterComparisonTest, ConstructModeRouter) {
@@ -154,7 +154,7 @@ TEST_F(RouterComparisonTest, ConstructModeRouter) {
     const auto& base_vecs  = p.get_dataset().get_base_vecs();
     const auto& query_vecs = p.get_dataset().get_query_vecs();
 
-    monolayer_graph_router_t<graph_mode_t::construct_mode> router(
+    descent_graph_router_t<graph_mode_t::dynamic_mode> router(
         base_vecs, p.get_dist_func(),
         g_config.topk, g_config.queue_size
     );
@@ -176,7 +176,7 @@ TEST_F(RouterComparisonTest, ConstructModeRouter) {
 }
 
 // ============================================================
-// Test 2: search_mode router on flat search graph
+// Test 2: compact_mode router on flat search graph
 // ============================================================
 
 TEST_F(RouterComparisonTest, SearchModeRouter) {
@@ -184,7 +184,7 @@ TEST_F(RouterComparisonTest, SearchModeRouter) {
     const auto& base_vecs  = p.get_dataset().get_base_vecs();
     const auto& query_vecs = p.get_dataset().get_query_vecs();
 
-    monolayer_graph_router_t<graph_mode_t::search_mode> router(
+    descent_graph_router_t<graph_mode_t::compact_mode> router(
         base_vecs, p.get_dist_func(), p.get_compact_descent_graph(),
         g_config.topk, g_config.queue_size
     );
@@ -281,10 +281,10 @@ int main(int argc, char** argv) {
     std::cout << fmt::format("  {:45s}  {:>10s}  {:>12s}\n", "Mode", "Recall@k", "QPS");
     std::cout << std::string(70, '-') << "\n";
     std::cout << fmt::format("  {:45s}  {:>10.4f}  {:>12.1f}\n",
-        "construct_mode (DescentGraph, no conversion)",
+        "dynamic_mode (DescentGraph, no conversion)",
         g_results.construct_recall, g_results.construct_qps);
     std::cout << fmt::format("  {:45s}  {:>10.4f}  {:>12.1f}\n",
-        "search_mode   (CompactDescentGraph, +conv time)",
+        "compact_mode (CompactDescentGraph, +conv time)",
         g_results.search_recall, g_results.search_qps);
     std::cout << std::string(70, '=') << "\n";
 

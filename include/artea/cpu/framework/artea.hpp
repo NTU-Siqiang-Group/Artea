@@ -44,7 +44,6 @@
 #include <artea/cpu/containers/four_ary_heap.hpp>
 
 #include <artea/cpu/index/layer_config.hpp>
-#include <artea/cpu/index/artea_graph/vertices_builder_config.hpp>
 #include <artea/cpu/index/layer_nbr.hpp>
 #include <artea/cpu/index/descent_nbr.hpp>
 #include <artea/cpu/index/compact_internal_graph.hpp>
@@ -71,7 +70,6 @@
 #include <artea/cpu/index/symmetric_knn_graph/configs.hpp>
 #include <artea/cpu/index/symmetric_knn_graph/index_structure.hpp>
 #include <artea/cpu/index/symmetric_knn_graph/index_factory.hpp>
-#include <artea/cpu/index/artea_graph/configs.hpp>
 #include <artea/cpu/index/artea_graph/index_structure.hpp>
 #include <artea/cpu/index/artea_graph/index_factory.hpp>
 #include <artea/cpu/index/stacked_rgraph/index_structure.hpp>
@@ -79,10 +77,8 @@
 
 #include <artea/cpu/router/vector_router.hpp>
 #include <artea/cpu/router/bruteforce_router.hpp>
-#include <artea/cpu/router/search_mode_monolayer_graph_router.hpp>
-#include <artea/cpu/router/search_mode_hierarchical_graph_router.hpp>
-#include <artea/cpu/router/construct_mode_monolayer_graph_router.hpp>
-#include <artea/cpu/router/construct_mode_hierarchical_graph_router.hpp>
+#include <artea/cpu/router/compact_descent_graph_router.hpp>
+#include <artea/cpu/router/descent_graph_router.hpp>
 #include <artea/cpu/router/data_structures/candidate_entry.hpp>
 #include <artea/cpu/router/candidate_queue_concept.hpp>
 #include <artea/cpu/router/visited_table_concept.hpp>

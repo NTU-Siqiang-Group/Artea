@@ -37,9 +37,6 @@ namespace symmetric_knn_graph {
     template <typename IndexTraitsT>
     using IndexStructure = conv_graph::IndexStructure<IndexTraitsT>;
 }
-namespace artea_graph {
-    template <typename IndexTraitsT> class IndexStructure;
-}
 template <typename IndexTraitsT> class CompactDescentGraph;
 template <typename IndexTraitsT> class HierarchicalSearchGraph;
 template <typename IndexTraitsT> class InterLayerLinks;
@@ -93,12 +90,6 @@ struct IndexTraits : virtual public BaseTraitsT {
     struct symmetric_knn_graph : BaseTraitsT::symmetric_knn_graph {
         symmetric_knn_graph() = delete;
         using index_t = cpu::symmetric_knn_graph::IndexStructure<index_traits_t>;
-    };
-
-    /** @brief Namespace-scoped index types for artea_graph, extending BaseTraits::artea_graph. */
-    struct artea_graph : BaseTraitsT::artea_graph {
-        artea_graph() = delete;
-        using index_t = cpu::artea_graph::IndexStructure<index_traits_t>;
     };
 
     /** @brief Hierarchical search graph type. */

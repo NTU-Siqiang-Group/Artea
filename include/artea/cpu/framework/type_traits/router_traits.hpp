@@ -29,19 +29,18 @@ namespace cpu {
 /** ------ Graph Mode ------ **/
 
 /** @brief Graph mode selector for proximity graph routers.
- *  - construct_mode: operates on DescentGraph / HierarchicalGraph (build-time, dnbr_t neighbors)
- *  - search_mode:    operates on CompactDescentGraph / HierarchicalSearchGraph (query-time, vertex_id_t CSR)
+ *  - dynamic_mode: operates on DescentGraph (build-time, dnbr_t neighbors)
+ *  - compact_mode: operates on CompactDescentGraph (query-time, vertex_id_t CSR)
  */
 enum class GraphModeT {
-    construct_mode,
-    search_mode
+    dynamic_mode,
+    compact_mode
 };
 
 /** ------ Forward Declaration  ------ **/
 template <typename RouterTraitsT, typename DerivedClassT> class VectorRouter;
 template <typename RouterTraitsT> class BruteforceRouter;
-template <typename RouterTraitsT, GraphModeT Mode = GraphModeT::search_mode> class MonolayerGraphRouter;
-template <typename RouterTraitsT, GraphModeT Mode = GraphModeT::search_mode> class HierarchicalGraphRouter;
+template <typename RouterTraitsT, GraphModeT Mode = GraphModeT::compact_mode> class DescentGraphRouter;
 template <typename RouterTraitsT> struct CandidateEntry;
 template <typename RouterTraitsT> struct CandidateEntryComparator;
 template <typename RouterTraitsT> class StdCandidateQueue;
@@ -107,13 +106,9 @@ struct RouterTraits : virtual public ComputerTraitsT, virtual public IndexTraits
     /** @brief Type for visited table pool (default uses thread_local_bitmap_t). */
     using visited_table_pool_t = VisitedTablePool<router_traits_t, visited_table_t>;
 
-    /** @brief Type for monolayer graph router (template on GraphModeT). */
-    template <GraphModeT Mode = GraphModeT::search_mode>
-    using monolayer_graph_router_t = MonolayerGraphRouter<router_traits_t, Mode>;
-
-    /** @brief Type for hierarchical graph router (template on GraphModeT). */
-    template <GraphModeT Mode = GraphModeT::search_mode>
-    using hierarchical_graph_router_t = HierarchicalGraphRouter<router_traits_t, Mode>;
+    /** @brief Type for descent graph router (template on GraphModeT). */
+    template <GraphModeT Mode = GraphModeT::compact_mode>
+    using descent_graph_router_t = DescentGraphRouter<router_traits_t, Mode>;
 
     /** @brief Graph mode enum alias. */
     using graph_mode_t = GraphModeT;

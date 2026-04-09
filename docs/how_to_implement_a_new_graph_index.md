@@ -246,7 +246,7 @@ auto search_graph = descent_graph_compactor_t::from_descent_graph(descent_graph,
 
 // 3. Grid-search QPS vs Recall
 for (uint32_t qs = start; qs <= end; qs += step) {
-    monolayer_graph_router_t<graph_mode_t::search_mode> router(
+    descent_graph_router_t<graph_mode_t::compact_mode> router(
         base_vecs, dist_func, search_graph, topk, qs);
     router.initialize();
 

@@ -27,9 +27,6 @@ namespace cpu {
 namespace conv_graph {
     template <typename GraphFactoryTraitsT> class IndexFactory;
 }
-namespace artea_graph {
-    template <typename GraphFactoryTraitsT> class IndexFactory;
-}
 namespace knn_graph {
     template <typename GraphFactoryTraitsT> class IndexFactory;
 }
@@ -67,12 +64,6 @@ struct GraphFactoryTraits :
     struct symmetric_knn_graph : RefinerTraitsT::symmetric_knn_graph {
         symmetric_knn_graph() = delete;
         using factory_t = cpu::symmetric_knn_graph::IndexFactory<graph_factory_traits_t>;
-    };
-
-    /** @brief Namespace-scoped factory types for artea_graph, extending IndexTraits::artea_graph. */
-    struct artea_graph : RefinerTraitsT::artea_graph {
-        artea_graph() = delete;
-        using factory_t = cpu::artea_graph::IndexFactory<graph_factory_traits_t>;
     };
 
     /** @brief Namespace-scoped factory types for stacked_rgraph, extending IndexTraits::stacked_rgraph. */

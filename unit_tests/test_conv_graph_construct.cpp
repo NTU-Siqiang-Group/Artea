@@ -166,7 +166,7 @@ TEST_F(ConvGraphTest, QueryRecall) {
 
     for (uint32_t queue_size = g_config.queue_start; queue_size <= g_config.queue_end; queue_size += g_config.queue_step) {
         // Create router with current queue size
-        monolayer_graph_router_t<graph_mode_t::search_mode> router(
+        descent_graph_router_t<graph_mode_t::compact_mode> router(
             base_vecs,
             dist_func,
             compact_descent_graph,

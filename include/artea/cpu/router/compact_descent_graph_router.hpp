@@ -13,9 +13,9 @@
 // limitations under the License.
 
 /*
- * @FilePath: /Artea/include/artea/cpu/router/search_mode_monolayer_graph_router.hpp
+ * @FilePath: /Artea/include/artea/cpu/router/compact_descent_graph_router.hpp
  * @Author: Chandler (Weitang Ye) <weitang.ye@ntu.edu.sg>
- * @Description: search_mode specialization of MonolayerGraphRouter.
+ * @Description: compact_mode specialization of DescentGraphRouter.
  *               Operates on CompactDescentGraph (CSR vertex_id_t neighbors).
  */
 
@@ -38,8 +38,8 @@ namespace artea {
 namespace cpu {
 
 template <typename RouterTraitsT>
-class MonolayerGraphRouter<RouterTraitsT, GraphModeT::search_mode> :
-    public RouterTraitsT::template vector_router_t<MonolayerGraphRouter<RouterTraitsT, GraphModeT::search_mode>>
+class DescentGraphRouter<RouterTraitsT, GraphModeT::compact_mode> :
+    public RouterTraitsT::template vector_router_t<DescentGraphRouter<RouterTraitsT, GraphModeT::compact_mode>>
 {
 
     using vertex_num_t = typename RouterTraitsT::vertex_num_t;
@@ -55,11 +55,11 @@ class MonolayerGraphRouter<RouterTraitsT, GraphModeT::search_mode> :
     using visited_table_t = typename RouterTraitsT::visited_table_t;
     using visited_table_pool_t = typename RouterTraitsT::visited_table_pool_t;
     using knn_results_t = typename RouterTraitsT::knn_results_t;
-    using base_class_t = typename RouterTraitsT::template vector_router_t<MonolayerGraphRouter<RouterTraitsT, GraphModeT::search_mode>>;
+    using base_class_t = typename RouterTraitsT::template vector_router_t<DescentGraphRouter<RouterTraitsT, GraphModeT::compact_mode>>;
 
 public:
 
-    MonolayerGraphRouter(
+    DescentGraphRouter(
         const vector_array_t& vecs_data,
         const dist_func_t& dist_func,
         const compact_descent_graph_t& compact_descent_graph,
@@ -333,7 +333,7 @@ private:
     /** @brief Thread-safe random sequence generator (internally uses thread-local MKL streams). */
     mutable random_seq_t _random_seq;
 
-};  // class MonolayerGraphRouter<RouterTraitsT, GraphModeT::search_mode>
+};  // class DescentGraphRouter<RouterTraitsT, GraphModeT::compact_mode>
 
 }   // namespace cpu
 }   // namespace artea

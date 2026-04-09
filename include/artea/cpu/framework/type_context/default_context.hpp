@@ -103,9 +103,6 @@ using log_table_t = typename buffer_traits_t::log_table_t;
 
 // Config types from BaseTraits
 using layer_config_t = typename base_traits_t::layer_config_t;
-using greedy_vertices_builder_config_t = typename base_traits_t::greedy_vertices_builder_config_t;
-using random_vertices_builder_config_t = typename base_traits_t::random_vertices_builder_config_t;
-using vertices_builder_config_t = typename base_traits_t::vertices_builder_config_t;
 
 // Index types from IndexTraits
 using compact_descent_graph_t = typename index_traits_t::compact_descent_graph_t;
@@ -156,11 +153,8 @@ using bruteforce_router_t = typename router_traits_t::bruteforce_router_t;
 // alias for routers with customizable GraphModeT
 using graph_mode_t = typename router_traits_t::graph_mode_t;
 
-template <GraphModeT Mode = GraphModeT::search_mode>
-using monolayer_graph_router_t = typename router_traits_t::template monolayer_graph_router_t<Mode>;
-
-template <GraphModeT Mode = GraphModeT::search_mode>
-using hierarchical_graph_router_t = typename router_traits_t::template hierarchical_graph_router_t<Mode>;
+template <GraphModeT Mode = GraphModeT::compact_mode>
+using descent_graph_router_t = typename router_traits_t::template descent_graph_router_t<Mode>;
 
 // Utility types
 using index_register_util_t = IndexRegisterUtil;
@@ -191,14 +185,6 @@ namespace symmetric_knn_graph {
     using factory_t = typename graph_factory_traits_t::symmetric_knn_graph::factory_t;
     using propagate_config_t = typename graph_factory_traits_t::symmetric_knn_graph::propagate_config_t;
     using pruning_config_t = typename graph_factory_traits_t::symmetric_knn_graph::pruning_config_t;
-}
-
-namespace artea_graph {
-    using index_t = typename graph_factory_traits_t::artea_graph::index_t;
-    using factory_t = typename graph_factory_traits_t::artea_graph::factory_t;
-    using propagate_config_t = typename graph_factory_traits_t::artea_graph::propagate_config_t;
-    using pruning_config_t = typename graph_factory_traits_t::artea_graph::pruning_config_t;
-    using rnet_config_t = typename graph_factory_traits_t::artea_graph::rnet_config_t;
 }
 
 namespace stacked_rgraph {
