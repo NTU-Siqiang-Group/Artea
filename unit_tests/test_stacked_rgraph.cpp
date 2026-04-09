@@ -65,13 +65,6 @@ struct TestConfig {
     uint32_t search_nn_qs;
     uint32_t select_nbrs_qs;
 
-    // Multi-entry descent parameters
-    uint32_t descent_fanout;
-    uint32_t descent_random_seeds;
-
-    // Optional explicit max_restrict_level. 0 means auto-compute from N.
-    uint32_t max_restrict_level;
-
     // Coverage/separation sampling parameters
     uint32_t coverage_num_samples;    // # base points sampled per layer
     uint32_t separation_num_samples;  // # layer-h vertices sampled per layer
@@ -244,43 +237,28 @@ protected:
         const float l1_radius = provider.get_l1_radius();
         const float beta = g_config.rnet_beta;
 
-        // Resolve max_restrict_level: if the user passed 0 (default), compute
-        // it from the dataset size via ceil(log_16(N / 1024)).
-        layer_num_t max_restrict_level = g_config.max_restrict_level;
-        if (max_restrict_level == 0) {
-            max_restrict_level = stacked_rgraph_t::compute_max_restrict_level(
-                static_cast<vertex_num_t>(base_vecs.get_num_vecs()));
-        }
-
         ARTEA_INFO(fmt::format(
             "Building StackedRGraph: beta={:.3f}, L1_radius={:.6f}, max_nbr={}, "
-            "max_restrict_level={}, search_nn_qs={}, select_nbrs_qs={}, "
-            "descent_fanout={}, descent_random_seeds={}",
-            beta, l1_radius, g_config.max_nbr_size, max_restrict_level,
-            g_config.search_nn_qs, g_config.select_nbrs_qs,
-            g_config.descent_fanout, g_config.descent_random_seeds));
-
-        _graph = std::make_unique<stacked_rgraph_t>(
-            /*rnet_beta=*/beta,
-            /*L1_rnet_radius=*/l1_radius,
-            /*max_restrict_level=*/max_restrict_level,
-            /*search_nn_qs=*/static_cast<vertex_num_t>(g_config.search_nn_qs),
-            /*select_nbrs_qs=*/static_cast<vertex_num_t>(g_config.select_nbrs_qs),
-            /*descent_fanout=*/static_cast<vertex_num_t>(g_config.descent_fanout),
-            /*descent_random_seeds=*/static_cast<vertex_num_t>(g_config.descent_random_seeds),
-            /*max_nbr_size=*/g_config.max_nbr_size);
+            "search_nn_qs={}, select_nbrs_qs={}",
+            beta, l1_radius, g_config.max_nbr_size,
+            g_config.search_nn_qs, g_config.select_nbrs_qs));
 
         auto t0 = std::chrono::high_resolution_clock::now();
-        _graph->add_vertices(
+        _graph = stacked_rgraph::factory_t::construct_graph(
             base_vecs, dist_func,
             simple_select_initial_fn_t{},
-            fifo_evict_fn_t{static_cast<vertex_num_t>(g_config.max_nbr_size)});
+            fifo_evict_fn_t{static_cast<vertex_num_t>(g_config.max_nbr_size)},
+            /*rnet_beta=*/beta,
+            /*L1_rnet_radius=*/l1_radius,
+            /*search_nn_qs=*/static_cast<vertex_num_t>(g_config.search_nn_qs),
+            /*select_nbrs_qs=*/static_cast<vertex_num_t>(g_config.select_nbrs_qs),
+            /*max_nbr_size=*/g_config.max_nbr_size);
         auto t1 = std::chrono::high_resolution_clock::now();
         _build_ms = std::chrono::duration_cast<std::chrono::milliseconds>(t1 - t0).count();
 
         ARTEA_INFO(fmt::format(
-            "StackedRGraph built in {} ms: {} layers",
-            _build_ms, _graph->get_num_layers()));
+            "StackedRGraph built in {} ms: {} layers (max_restrict_level={})",
+            _build_ms, _graph->get_num_layers(), _graph->max_restrict_level()));
 
         // Per-layer summary.
         for (layer_id_t l = 0; l < _graph->get_num_layers(); ++l) {
@@ -298,12 +276,12 @@ protected:
         _graph.reset();
     }
 
-    static std::unique_ptr<stacked_rgraph_t> _graph;
-    static int64_t                           _build_ms;
+    static std::unique_ptr<stacked_rgraph::index_t> _graph;
+    static int64_t                                  _build_ms;
 };
 
-std::unique_ptr<stacked_rgraph_t> StackedRGraphTest::_graph = nullptr;
-int64_t                           StackedRGraphTest::_build_ms = 0;
+std::unique_ptr<stacked_rgraph::index_t> StackedRGraphTest::_graph = nullptr;
+int64_t                                  StackedRGraphTest::_build_ms = 0;
 
 // ============================================================
 //  Test cases
@@ -391,21 +369,6 @@ TEST_F(StackedRGraphTest, NeighborListsAreValid) {
                     << " slot " << i << " has OOB layer_vid " << nbr.layer_vid;
             }
         }
-    }
-}
-
-TEST_F(StackedRGraphTest, EntryPointIsValid) {
-    const auto& base_vecs = DataProvider::instance().get_dataset().get_base_vecs();
-    const auto n = base_vecs.get_num_vecs();
-    const auto num_layers = _graph->get_num_layers();
-
-    const lnbr_t ep = _graph->get_entry_point();
-    ASSERT_NE(ep, base_traits_t::invalid_lnbr);
-    EXPECT_LT(ep.base_vid, n);
-
-    if (num_layers > 0) {
-        const auto& top = _graph->get_layer_graph(num_layers - 1);
-        EXPECT_LT(ep.layer_vid, top.get_num_vertices());
     }
 }
 
@@ -656,22 +619,6 @@ int main(int argc, char** argv) {
         .scan<'u', uint32_t>()
         .help("Queue size for Phase 2 candidate gathering (default: 500)");
 
-    // Multi-entry descent parameters.
-    program.add_argument("--descent-fanout")
-        .default_value(8u)
-        .scan<'u', uint32_t>()
-        .help("Number of candidates carried between layers during descent (default: 8)");
-    program.add_argument("--descent-random-seeds")
-        .default_value(3u)
-        .scan<'u', uint32_t>()
-        .help("Number of random top-layer vertices added to initial entry set (default: 3)");
-
-    // Max restrict level (0 = auto-compute from dataset size).
-    program.add_argument("--max-restrict-level")
-        .default_value(0u)
-        .scan<'u', uint32_t>()
-        .help("Max layer a single point can reach. 0 = ceil(log_16(N/1024)) (default: 0)");
-
     // Coverage / separation sampling parameters.
     program.add_argument("--coverage-num-samples")
         .default_value(1000u)
@@ -702,9 +649,6 @@ int main(int argc, char** argv) {
     g_config.probe_quantile    = program.get<float>("--probe-quantile");
     g_config.search_nn_qs       = program.get<uint32_t>("--search-nn-qs");
     g_config.select_nbrs_qs     = program.get<uint32_t>("--select-nbrs-qs");
-    g_config.descent_fanout       = program.get<uint32_t>("--descent-fanout");
-    g_config.descent_random_seeds = program.get<uint32_t>("--descent-random-seeds");
-    g_config.max_restrict_level = program.get<uint32_t>("--max-restrict-level");
     g_config.coverage_num_samples   = program.get<uint32_t>("--coverage-num-samples");
     g_config.separation_num_samples = program.get<uint32_t>("--separation-num-samples");
     g_config.verbose      = program.get<bool>("--verbose");
@@ -727,13 +671,6 @@ int main(int argc, char** argv) {
     std::cout << "max_nbr_size: " << g_config.max_nbr_size << std::endl;
     std::cout << "search_nn_qs:   " << g_config.search_nn_qs << std::endl;
     std::cout << "select_nbrs_qs: " << g_config.select_nbrs_qs << std::endl;
-    std::cout << "descent_fanout:       " << g_config.descent_fanout << std::endl;
-    std::cout << "descent_random_seeds: " << g_config.descent_random_seeds << std::endl;
-    if (g_config.max_restrict_level == 0) {
-        std::cout << "max_restrict_level: auto (ceil(log_16(N/1024)))" << std::endl;
-    } else {
-        std::cout << "max_restrict_level: " << g_config.max_restrict_level << std::endl;
-    }
     std::cout << "==========================\n" << std::endl;
 
     DataProvider::instance().init();

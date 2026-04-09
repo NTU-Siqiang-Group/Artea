@@ -121,7 +121,6 @@ using compact_internal_graph_t = typename index_traits_t::compact_internal_graph
 using internal_graph_t = typename index_traits_t::internal_graph_t;
 using internal_graph_compactor_t = typename index_traits_t::internal_graph_compactor_t;
 using hierarchical_graph_v2_t = typename index_traits_t::hierarchical_graph_v2_t;
-using stacked_rgraph_t = typename index_traits_t::stacked_rgraph_t;
 
 // Refiner types from RefinerTraits
 using triangle_updater_t = typename refiner_traits_t::template triangle_updater_t<typename index_traits_t::conv_graph::index_t>;
@@ -200,6 +199,11 @@ namespace artea_graph {
     using propagate_config_t = typename graph_factory_traits_t::artea_graph::propagate_config_t;
     using pruning_config_t = typename graph_factory_traits_t::artea_graph::pruning_config_t;
     using rnet_config_t = typename graph_factory_traits_t::artea_graph::rnet_config_t;
+}
+
+namespace stacked_rgraph {
+    using index_t   = typename graph_factory_traits_t::stacked_rgraph::index_t;
+    using factory_t = typename graph_factory_traits_t::stacked_rgraph::factory_t;
 }
 
 }   // namespace cpu

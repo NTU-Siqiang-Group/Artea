@@ -70,7 +70,6 @@ TEST_F(HierarchicalGraphV2Test, ConstructionEmpty) {
     hierarchical_graph_v2_t hg(/*max_layers=*/0);
     EXPECT_EQ(hg.get_num_layers(), 0u);
     EXPECT_EQ(hg.max_layers(), 0u);
-    EXPECT_EQ(hg.get_entry_point(), base_traits_t::invalid_lnbr);
 }
 
 TEST_F(HierarchicalGraphV2Test, ConstructionReservesCapacity) {
@@ -78,7 +77,6 @@ TEST_F(HierarchicalGraphV2Test, ConstructionReservesCapacity) {
     // Visible count starts at 0 because no layers have been committed yet.
     EXPECT_EQ(hg.get_num_layers(), 0u);
     EXPECT_EQ(hg.max_layers(), 5u);
-    EXPECT_EQ(hg.get_entry_point(), base_traits_t::invalid_lnbr);
     // All reserved slots are default-constructed unique_ptrs (nullptr).
     for (layer_id_t l = 0; l < 5; ++l) {
         EXPECT_EQ(hg.get_layer_graphs()[l].get(), nullptr);
@@ -181,107 +179,6 @@ TEST_F(HierarchicalGraphV2Test, GetLayerGraphsConstAndMutable) {
     // const layer access
     const auto& clayer = chg.get_layer_graph(1);
     EXPECT_EQ(clayer.max_nbr_size(), 16u);
-}
-
-// ============================================================
-//  Atomic entry point
-// ============================================================
-
-TEST_F(HierarchicalGraphV2Test, EntryPointInitiallyInvalid) {
-    hierarchical_graph_v2_t hg(/*max_layers=*/1);
-    const lnbr_t ep = hg.get_entry_point();
-    EXPECT_EQ(ep, base_traits_t::invalid_lnbr);
-    EXPECT_EQ(ep.base_vid, base_traits_t::invalid_vertex_id);
-    EXPECT_EQ(ep.layer_vid, base_traits_t::invalid_vertex_id);
-}
-
-TEST_F(HierarchicalGraphV2Test, UpdateEntryPointSerial) {
-    hierarchical_graph_v2_t hg(/*max_layers=*/1);
-
-    hg.update_entry_point(lnbr_t(42, 7));
-    {
-        auto ep = hg.get_entry_point();
-        EXPECT_EQ(ep.base_vid, 42u);
-        EXPECT_EQ(ep.layer_vid, 7u);
-    }
-
-    hg.update_entry_point(lnbr_t(99, 100));
-    {
-        auto ep = hg.get_entry_point();
-        EXPECT_EQ(ep.base_vid, 99u);
-        EXPECT_EQ(ep.layer_vid, 100u);
-    }
-}
-
-TEST_F(HierarchicalGraphV2Test, UpdateEntryPointConcurrent) {
-    // Many threads racing on update_entry_point — final value must be one
-    // of the values that was actually written, never a torn read.
-    hierarchical_graph_v2_t hg(/*max_layers=*/1);
-
-    constexpr uint32_t num_threads = 16;
-    constexpr uint32_t writes_per_thread = 10'000;
-
-    std::vector<std::thread> threads;
-    threads.reserve(num_threads);
-    for (uint32_t t = 0; t < num_threads; ++t) {
-        threads.emplace_back([t, &hg] {
-            for (uint32_t i = 0; i < writes_per_thread; ++i) {
-                // Encode (thread, iter) into the lnbr_t fields so we can
-                // verify the final value below.
-                hg.update_entry_point(lnbr_t(t, i));
-            }
-        });
-    }
-    for (auto& th : threads) th.join();
-
-    const lnbr_t final_ep = hg.get_entry_point();
-    EXPECT_LT(final_ep.base_vid, num_threads);
-    EXPECT_LT(final_ep.layer_vid, writes_per_thread);
-}
-
-TEST_F(HierarchicalGraphV2Test, ConcurrentReadWriteEntryPointNoTear) {
-    // Reader threads watch the entry point while writer threads update it.
-    // Each writer always uses (base_vid == layer_vid) so any torn read
-    // (different halves from different writes) would be detectable.
-    hierarchical_graph_v2_t hg(/*max_layers=*/1);
-    hg.update_entry_point(lnbr_t(0, 0));
-
-    constexpr uint32_t num_writers = 4;
-    constexpr uint32_t num_readers = 4;
-    constexpr uint32_t writes_per_writer = 50'000;
-    constexpr uint32_t reads_per_reader  = 200'000;
-
-    std::atomic<bool> stop{false};
-    std::atomic<uint32_t> tear_count{0};
-
-    std::vector<std::thread> writers;
-    for (uint32_t w = 0; w < num_writers; ++w) {
-        writers.emplace_back([w, &hg] {
-            for (uint32_t i = 0; i < writes_per_writer; ++i) {
-                const vertex_id_t v = w * writes_per_writer + i;
-                hg.update_entry_point(lnbr_t(v, v));
-            }
-        });
-    }
-
-    std::vector<std::thread> readers;
-    for (uint32_t r = 0; r < num_readers; ++r) {
-        readers.emplace_back([&hg, &stop, &tear_count] {
-            for (uint32_t i = 0; i < reads_per_reader; ++i) {
-                if (stop.load(std::memory_order_relaxed)) break;
-                const lnbr_t ep = hg.get_entry_point();
-                if (ep.base_vid != ep.layer_vid) {
-                    tear_count.fetch_add(1, std::memory_order_relaxed);
-                }
-            }
-        });
-    }
-
-    for (auto& th : writers) th.join();
-    stop.store(true);
-    for (auto& th : readers) th.join();
-
-    EXPECT_EQ(tear_count.load(), 0u);
 }
 
 // ============================================================
@@ -420,54 +317,6 @@ TEST_F(HierarchicalGraphV2Test, AddNbrUnderConcurrentInsertion) {
 }
 
 // ============================================================
-//  Combined: layer mutation + concurrent entry point updates
-// ============================================================
-
-TEST_F(HierarchicalGraphV2Test, ConcurrentEntryPointUpdateDuringInsertion) {
-    // Producer threads insert into layer 0; in parallel a separate writer
-    // bumps the entry point to point at the most recently inserted vertex.
-    constexpr vertex_num_t per_layer = 50'000;
-    auto hg = make_hg(/*num_layers=*/3,
-                      /*max=*/per_layer,
-                      /*nbr=*/16);
-
-    auto& layer0 = hg->get_layer_graph(0);
-    std::atomic<bool> done{false};
-
-    std::thread ep_writer([&] {
-        std::mt19937 rng(2026);
-        while (!done.load(std::memory_order_relaxed)) {
-            const vertex_num_t cur = layer0.get_num_vertices();
-            if (cur > 0) {
-                const vertex_id_t v = rng() % cur;
-                hg->update_entry_point(lnbr_t(v, v));
-            }
-        }
-    });
-
-    tbb::parallel_for(
-        tbb::blocked_range<vertex_num_t>(0, per_layer),
-        [&](const tbb::blocked_range<vertex_num_t>& range) {
-            for (vertex_num_t i = range.begin(); i < range.end(); ++i) {
-                layer0.add_vertex(i);
-            }
-        }
-    );
-
-    done.store(true);
-    ep_writer.join();
-
-    EXPECT_EQ(layer0.get_num_vertices(), per_layer);
-    const lnbr_t ep = hg->get_entry_point();
-    // Either still at the initial invalid value (if writer never observed
-    // any insertion) or a valid (v, v) tuple. Verify no torn read.
-    if (ep != base_traits_t::invalid_lnbr) {
-        EXPECT_EQ(ep.base_vid, ep.layer_vid);
-        EXPECT_LT(ep.base_vid, per_layer);
-    }
-}
-
-// ============================================================
 //  Larger scale stress: many layers, many vertices
 // ============================================================
 
@@ -518,11 +367,6 @@ TEST_F(HierarchicalGraphV2Test, LargeScaleManyLayersManyVertices) {
             ASSERT_EQ(seen[i], 1) << "layer " << l << " lower " << i;
         }
     }
-
-    // Set entry point pointing into the top layer.
-    const layer_id_t top = num_layers - 1;
-    hg->update_entry_point(lnbr_t(top, per_layer / 2));
-    EXPECT_EQ(hg->get_entry_point(), lnbr_t(top, per_layer / 2));
 }
 
 int main(int argc, char** argv) {

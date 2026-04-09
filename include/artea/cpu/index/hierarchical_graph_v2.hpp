@@ -49,8 +49,8 @@ namespace cpu {
  * reallocation, so pointer-writes at slot @p i are visible to concurrent
  * readers once the layer count crosses @p i+1).
  *
- * The entry point is a @c std::atomic<lnbr_t>, allowing concurrent
- * construction threads to update it via @c update_entry_point().
+ * No entry point is maintained — algorithms that need a starting vertex
+ * should seed their beam search by sampling the top layer directly.
  *
  * @tparam IndexTraitsT The index traits type.
  */
@@ -63,9 +63,6 @@ class HierarchicalGraphV2 {
     using layer_id_t       = typename IndexTraitsT::layer_id_t;
     using lnbr_t           = typename IndexTraitsT::lnbr_t;
     using internal_graph_t = typename IndexTraitsT::internal_graph_t;
-
-    static_assert(std::atomic<lnbr_t>::is_always_lock_free,
-        "std::atomic<lnbr_t> must be lock-free for HierarchicalGraphV2.");
 
 public:
     /**
@@ -82,10 +79,9 @@ public:
      */
     explicit HierarchicalGraphV2(const layer_num_t max_layers) :
         _layer_graphs(max_layers),
-        _num_layers(0),
-        _entry_point(IndexTraitsT::invalid_lnbr) {}
+        _num_layers(0) {}
 
-    // Copy & move both deleted (std::atomic is non-movable).
+    // Copy & move both deleted (contains std::mutex and std::atomic members).
     HierarchicalGraphV2(const HierarchicalGraphV2&) = delete;
     HierarchicalGraphV2& operator=(const HierarchicalGraphV2&) = delete;
     HierarchicalGraphV2(HierarchicalGraphV2&&) = delete;
@@ -212,42 +208,41 @@ public:
     }
 
     /**
-     * @brief Atomically extend the hierarchy and seed the new top layer.
+     * @brief Atomically extend the hierarchy by constructing every missing
+     *        layer up to @p target_num_layers and running @p seed_fn on the
+     *        FINAL new layer before publishing it.
      *
-     * Holds @c _extend_mutex for the full sequence of:
-     *   1. Growing the hierarchy to at least @p target_num_layers layers
-     *      (invoking @p layer_factory once per newly committed slot).
-     *   2. Locating the CURRENT top layer at the moment the mutex is held.
-     *      This may be higher than @p target_num_layers if another thread
-     *      had already grown further — in that case we do NOT roll back,
-     *      we seed the actual top.
-     *   3. Invoking @p seed_fn with the current top layer's id and graph
-     *      reference. @p seed_fn should insert any new vertex/vertices and
-     *      return the @c lnbr_t that should become the new entry point.
-     *   4. Atomically publishing that @c lnbr_t as the new entry point.
+     * The final new layer's visible slot (i.e. the bump of @c _num_layers)
+     * is written AFTER @p seed_fn completes, so other threads observing the
+     * new layer count via @c get_num_layers() are guaranteed to also see at
+     * least one vertex populated in the top layer. This prevents other
+     * threads from racing in on an empty top layer.
      *
-     * Because steps 1-4 run under a single mutex, other threads observing
-     * the new @c _num_layers via @c get_num_layers() are guaranteed to also
-     * see an @c _entry_point whose @c layer_vid is valid for the current
-     * top layer (no stale-layer entry points).
+     * Returns @c true if growth occurred (and @p seed_fn ran), or @c false
+     * if another thread had already extended past @p target_num_layers
+     * before we acquired the mutex — in that case @p seed_fn is NOT invoked.
      *
      * @tparam LayerFactoryFnT Same signature as @c grow_layers.
      * @tparam SeedFnT Callable with signature
      *         @code
-     *         lnbr_t(layer_id_t top_layer_id, internal_graph_t& top_layer)
+     *         void(layer_id_t top_layer_id, internal_graph_t& top_layer)
      *         @endcode
-     *         Invoked under the mutex exactly once.
-     * @param target_num_layers Desired minimum visible layer count.
+     *         Invoked under the mutex exactly once, on the final new layer.
+     * @param target_num_layers Desired visible layer count after growth.
      * @param layer_factory     Factory producing a fresh InternalGraph.
-     * @param seed_fn           Callable producing the new entry point lnbr.
+     * @param seed_fn           Callable that inserts the first vertex into
+     *                          the new top layer.
+     * @return @c true if this call grew the hierarchy (and seeded the new
+     *         top); @c false if another thread had already extended.
      */
     template <typename LayerFactoryFnT, typename SeedFnT>
     auto extend_and_seed(const layer_num_t target_num_layers,
                          LayerFactoryFnT&& layer_factory,
-                         SeedFnT&& seed_fn) -> void {
+                         SeedFnT&& seed_fn) -> bool {
         std::lock_guard<std::mutex> guard(_extend_mutex);
 
-        layer_num_t cur = _num_layers.load(std::memory_order_relaxed);
+        const layer_num_t cur = _num_layers.load(std::memory_order_relaxed);
+        if (cur >= target_num_layers) return false;  // lost the race
 
         if (target_num_layers > max_layers()) {
             ARTEA_ERROR(fmt::format(
@@ -255,23 +250,22 @@ public:
                 target_num_layers, max_layers()));
         }
 
-        // Grow to at least target_num_layers. Ignored if we're already there.
-        for (layer_num_t l = cur; l < target_num_layers; ++l) {
+        // Grow all but the last new layer normally (publish each slot as
+        // soon as it's populated).
+        for (layer_num_t l = cur; l + 1 < target_num_layers; ++l) {
             _layer_graphs[l] = layer_factory(l);
             _num_layers.store(l + 1, std::memory_order_release);
         }
 
-        // At this point we are the only writer to `_num_layers` (mutex held),
-        // so the current top is simply `_num_layers - 1`. This may exceed
-        // `target_num_layers - 1` if another thread had already grown further
-        // before we acquired the mutex, but either way it is the correct
-        // top layer to seed.
-        const layer_num_t cur_num = _num_layers.load(std::memory_order_relaxed);
-        const layer_id_t top_idx = static_cast<layer_id_t>(cur_num - 1);
-        internal_graph_t& top_layer = *_layer_graphs[top_idx];
+        // Final new layer: construct it, run `seed_fn` to insert at least
+        // one vertex, and THEN publish it. Other threads that only read
+        // `get_num_layers()` never observe this layer as empty.
+        const layer_num_t last = target_num_layers - 1;
+        _layer_graphs[last] = layer_factory(last);
+        seed_fn(static_cast<layer_id_t>(last), *_layer_graphs[last]);
+        _num_layers.store(last + 1, std::memory_order_release);
 
-        const lnbr_t new_ep = seed_fn(top_idx, top_layer);
-        _entry_point.store(new_ep, std::memory_order_release);
+        return true;
     }
 
     __attribute__((always_inline))
@@ -284,24 +278,6 @@ public:
         return _layer_graphs;
     }
 
-    // --- Entry Point (atomic) ---
-
-    /**
-     * @brief Atomically read the current entry point (acquire ordering).
-     */
-    __attribute__((always_inline))
-    auto get_entry_point() const -> lnbr_t {
-        return _entry_point.load(std::memory_order_acquire);
-    }
-
-    /**
-     * @brief Atomically update the entry point (release ordering). Thread-safe.
-     */
-    __attribute__((always_inline))
-    auto update_entry_point(const lnbr_t new_entry_point) -> void {
-        _entry_point.store(new_entry_point, std::memory_order_release);
-    }
-
 private:
     /** @brief Per-layer InternalGraph instances (unique_ptr because InternalGraph is non-movable). */
     std::vector<std::unique_ptr<internal_graph_t>> _layer_graphs;
@@ -311,9 +287,6 @@ private:
 
     /** @brief Serializes concurrent grow_layers callers. */
     mutable std::mutex _extend_mutex;
-
-    /** @brief Atomic entry point (lnbr_t). Initialized to invalid_lnbr. */
-    std::atomic<lnbr_t> _entry_point;
 
 };  // class HierarchicalGraphV2
 

@@ -254,6 +254,15 @@ public:
         using pruning_config_t = cpu::symmetric_knn_graph::PruningConfig<base_traits_t>;
     };
 
+    /** @brief Namespace-specific type aliases for stacked_rgraph.
+     *  The dynamic r-net index takes all its configuration as runtime
+     *  constructor parameters, so this nested struct is an empty
+     *  placeholder — IndexTraits::stacked_rgraph inherits from it and
+     *  adds index_t / factory_t. */
+    struct stacked_rgraph {
+        stacked_rgraph() = delete;
+    };
+
     #ifdef ARTEA_PROFILING
     static constexpr bool profiling_mode = true;
     #else

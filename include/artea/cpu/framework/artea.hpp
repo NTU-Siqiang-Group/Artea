@@ -54,7 +54,6 @@
 #include <artea/cpu/index/inter_layer_links.hpp>
 #include <artea/cpu/index/hierarchical_graph.hpp>
 #include <artea/cpu/index/hierarchical_graph_v2.hpp>
-#include <artea/cpu/index/stacked_rgraph.hpp>
 #include <artea/cpu/index/hierarchical_search_graph.hpp>
 #include <artea/cpu/index/hierarchy_manager.hpp>
 #include <artea/cpu/index/compactor/descent_graph_compactor.hpp>
@@ -75,6 +74,8 @@
 #include <artea/cpu/index/artea_graph/configs.hpp>
 #include <artea/cpu/index/artea_graph/index_structure.hpp>
 #include <artea/cpu/index/artea_graph/index_factory.hpp>
+#include <artea/cpu/index/stacked_rgraph/index_structure.hpp>
+#include <artea/cpu/index/stacked_rgraph/index_factory.hpp>
 
 #include <artea/cpu/router/vector_router.hpp>
 #include <artea/cpu/router/bruteforce_router.hpp>
