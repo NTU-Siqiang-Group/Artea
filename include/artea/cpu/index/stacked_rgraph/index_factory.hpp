@@ -118,7 +118,7 @@ public:
      * then call @c add_vertices to insert every vector from @p base_vecs.
      *
      * Returns by @c std::unique_ptr because @c IndexStructure inherits
-     * copy/move-deleted from @c HierarchicalGraphV2.
+     * copy/move-deleted from @c HierarchicalGraph.
      *
      * @tparam SelectInitialFnT Callable selecting the initial neighbor set
      *         for the new vertex from sorted beam-search candidates.

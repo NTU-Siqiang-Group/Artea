@@ -28,7 +28,7 @@
 #include <cstdint>
 
 #include <artea/common/logger.hpp>
-#include <artea/cpu/index/hierarchical_graph_v2.hpp>
+#include <artea/cpu/index/hierarchical_graph.hpp>
 
 namespace artea {
 namespace cpu {
@@ -36,7 +36,7 @@ namespace stacked_rgraph {
 
 /**
  * @brief Dynamic hierarchical r-net index: holds the layer storage (via
- *        @c HierarchicalGraphV2) and the per-graph configuration used by
+ *        @c HierarchicalGraph) and the per-graph configuration used by
  *        the insertion algorithm. Construction and dynamic insertion are
  *        performed by @c stacked_rgraph::IndexFactory.
  *
@@ -50,9 +50,9 @@ namespace stacked_rgraph {
  * @tparam IndexTraitsT The index traits type.
  */
 template <typename IndexTraitsT>
-class IndexStructure : public HierarchicalGraphV2<IndexTraitsT> {
+class IndexStructure : public HierarchicalGraph<IndexTraitsT> {
 
-    using base_t           = HierarchicalGraphV2<IndexTraitsT>;
+    using base_t           = HierarchicalGraph<IndexTraitsT>;
 
     using vertex_num_t     = typename IndexTraitsT::vertex_num_t;
     using vertex_id_t      = typename IndexTraitsT::vertex_id_t;
@@ -121,7 +121,7 @@ public:
         }
     }
 
-    // Inherits copy/move-deleted from HierarchicalGraphV2.
+    // Inherits copy/move-deleted from HierarchicalGraph.
 
     // --- Config accessors ---
 

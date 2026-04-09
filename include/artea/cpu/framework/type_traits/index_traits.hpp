@@ -25,7 +25,6 @@ namespace cpu {
 
 /** ------ Forward Declaration  ------ **/
 template <typename IndexTraitsT, typename DerivedClassT> class DescentGraph;
-template <typename IndexTraitsT, typename DerivedClassT, typename LayerGraphT> class HierarchicalGraph;
 namespace conv_graph {
     template <typename IndexTraitsT> class IndexStructure;
 }
@@ -38,18 +37,14 @@ namespace symmetric_knn_graph {
     using IndexStructure = conv_graph::IndexStructure<IndexTraitsT>;
 }
 template <typename IndexTraitsT> class CompactDescentGraph;
-template <typename IndexTraitsT> class HierarchicalSearchGraph;
-template <typename IndexTraitsT> class InterLayerLinks;
-template <typename IndexTraitsT> class HierarchyManager;
 template <typename IndexTraitsT> class DescentGraphCompactor;
 template <typename IndexTraitsT> class FlatGraphFileManager;
-template <typename IndexTraitsT> class HierarchicalGraphFileManager;
 template <typename IndexTraitsT> class IndexSizeCalculator;
 template <typename IndexTraitsT> class RadiusProber;
 template <typename IndexTraitsT> class CompactInternalGraph;
 template <typename IndexTraitsT> class InternalGraph;
 template <typename IndexTraitsT> class InternalGraphCompactor;
-template <typename IndexTraitsT> class HierarchicalGraphV2;
+template <typename IndexTraitsT> class HierarchicalGraph;
 namespace stacked_rgraph {
     template <typename IndexTraitsT> class IndexStructure;
 }
@@ -70,10 +65,6 @@ struct IndexTraits : virtual public BaseTraitsT {
     /** @brief Flat search graph type (CSR format). */
     using compact_descent_graph_t = CompactDescentGraph<index_traits_t>;
 
-    /** @brief CRTP base hierarchical graph type (template on DerivedClassT and LayerGraphT). */
-    template <typename DerivedClassT, typename LayerGraphT>
-    using hierarchical_graph_t = HierarchicalGraph<index_traits_t, DerivedClassT, LayerGraphT>;
-
     /** @brief Namespace-scoped index types for conv_graph, extending BaseTraits::conv_graph. */
     struct conv_graph : BaseTraitsT::conv_graph {
         conv_graph() = delete;
@@ -92,23 +83,11 @@ struct IndexTraits : virtual public BaseTraitsT {
         using index_t = cpu::symmetric_knn_graph::IndexStructure<index_traits_t>;
     };
 
-    /** @brief Hierarchical search graph type. */
-    using hierarchical_search_graph_t = HierarchicalSearchGraph<index_traits_t>;
-
-    /** @brief Inter-layer links type. */
-    using inter_layer_links_t = InterLayerLinks<index_traits_t>;
-
-    /** @brief Hierarchical vector manager type. */
-    using hierarchy_manager_t = HierarchyManager<index_traits_t>;
-
     /** @brief Descent graph compactor type. */
     using descent_graph_compactor_t = DescentGraphCompactor<index_traits_t>;
 
     /** @brief Flat graph file manager type. */
     using flat_graph_file_manager_t = FlatGraphFileManager<index_traits_t>;
-
-    /** @brief Hierarchical graph file manager type. */
-    using hierarchical_graph_file_manager_t = HierarchicalGraphFileManager<index_traits_t>;
 
     /** @brief Index size calculator type. */
     using index_size_calculator_t = IndexSizeCalculator<index_traits_t>;
@@ -125,11 +104,11 @@ struct IndexTraits : virtual public BaseTraitsT {
     /** @brief Single-layer compactor: InternalGraph -> CompactInternalGraph. */
     using internal_graph_compactor_t = InternalGraphCompactor<index_traits_t>;
 
-    /** @brief Hierarchical graph V2 type (holds InternalGraph layers, atomic lnbr_t entry point). */
-    using hierarchical_graph_v2_t = HierarchicalGraphV2<index_traits_t>;
+    /** @brief Hierarchical graph type (holds InternalGraph layers with atomic layer growth). */
+    using hierarchical_graph_t = HierarchicalGraph<index_traits_t>;
 
     /** @brief Namespace-scoped index types for stacked_rgraph
-     *  (dynamic r-net insertion over HierarchicalGraphV2). */
+     *  (dynamic r-net insertion over HierarchicalGraph). */
     struct stacked_rgraph : BaseTraitsT::stacked_rgraph {
         stacked_rgraph() = delete;
         using index_t = cpu::stacked_rgraph::IndexStructure<index_traits_t>;

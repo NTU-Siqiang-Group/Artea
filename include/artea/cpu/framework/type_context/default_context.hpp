@@ -106,18 +106,14 @@ using layer_config_t = typename base_traits_t::layer_config_t;
 
 // Index types from IndexTraits
 using compact_descent_graph_t = typename index_traits_t::compact_descent_graph_t;
-using hierarchical_search_graph_t = typename index_traits_t::hierarchical_search_graph_t;
-using inter_layer_links_t = typename index_traits_t::inter_layer_links_t;
-using hierarchy_manager_t = typename index_traits_t::hierarchy_manager_t;
 using descent_graph_compactor_t = typename index_traits_t::descent_graph_compactor_t;
 using flat_graph_file_manager_t = typename index_traits_t::flat_graph_file_manager_t;
-using hierarchical_graph_file_manager_t = typename index_traits_t::hierarchical_graph_file_manager_t;
 using index_size_calculator_t = typename index_traits_t::index_size_calculator_t;
 using radius_prober_t = typename index_traits_t::radius_prober_t;
 using compact_internal_graph_t = typename index_traits_t::compact_internal_graph_t;
 using internal_graph_t = typename index_traits_t::internal_graph_t;
 using internal_graph_compactor_t = typename index_traits_t::internal_graph_compactor_t;
-using hierarchical_graph_v2_t = typename index_traits_t::hierarchical_graph_v2_t;
+using hierarchical_graph_t = typename index_traits_t::hierarchical_graph_t;
 
 // Refiner types from RefinerTraits
 using triangle_updater_t = typename refiner_traits_t::template triangle_updater_t<typename index_traits_t::conv_graph::index_t>;

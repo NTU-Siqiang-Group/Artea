@@ -41,7 +41,6 @@ class DescentGraphCompactor {
     using vector_array_t = typename IndexTraitsT::vector_array_t;
     using index_t = typename IndexTraitsT::conv_graph::index_t;
     using compact_descent_graph_t = typename IndexTraitsT::compact_descent_graph_t;
-    using hierarchical_search_graph_t = typename IndexTraitsT::hierarchical_search_graph_t;
     using nbr_arr_checker_t = typename IndexTraitsT::nbr_arr_checker_t;
 
 public:
@@ -99,75 +98,6 @@ public:
         );
 
         return compact_descent_graph;
-    }
-
-    /**
-     * @brief Convert HierarchicalGraph to HierarchicalSearchGraph.
-     *
-     * Semantics (uniform across all owned data):
-     *   - @c vecs_data and @c hierarchy_manager: borrowed by reference (too
-     *     large to copy; the destination's lifetime must be a subset of the
-     *     source's lifetime).
-     *   - Per-layer neighbor arrays: copied + transformed (nbrs_arr -> CSR).
-     *   - @c inter_layer_links: copied per layer (no move).
-     *   - @c entry_point: value copy.
-     *
-     * The source @c hierarchical_graph is left fully intact and may continue
-     * to be used after this call.
-     *
-     * @param hierarchical_graph The source hierarchical graph to convert from.
-     * @param bl_extracted_nbr_size Fixed number of neighbors for bottom layer.
-     * @param ul_extracted_nbr_size Fixed number of neighbors for upper layers.
-     * @return A new HierarchicalSearchGraph instance.
-     */
-    template <typename HierGraphT>
-    static auto from_hierarchical_graph(
-        const HierGraphT& hierarchical_graph,
-        const vertex_num_t bl_extracted_nbr_size,
-        const vertex_num_t ul_extracted_nbr_size
-    ) -> hierarchical_search_graph_t {
-        const auto& hierarchy_manager = hierarchical_graph.get_hierarchy_manager();
-        const auto num_layers = hierarchical_graph.get_num_layers();
-
-        hierarchical_search_graph_t hier_search_graph(
-            hierarchy_manager,
-            bl_extracted_nbr_size,
-            ul_extracted_nbr_size
-        );
-
-        hier_search_graph.resize(num_layers);
-
-        // Convert bottom layer (layer_id = 0): copy + transform.
-        const auto& bottom_descent_graph = hierarchical_graph.get_layer_graph(0);
-        auto bottom_search_graph = from_descent_graph(
-            bottom_descent_graph,
-            bl_extracted_nbr_size
-        );
-        hier_search_graph.set_layer_graph(0, std::move(bottom_search_graph));
-
-        // Convert upper layers (layer_id > 0): copy + transform.
-        for (layer_id_t layer_id = 1; layer_id < num_layers; ++layer_id) {
-            const auto& upper_descent_graph = hierarchical_graph.get_layer_graph(layer_id);
-            auto upper_search_graph = from_descent_graph(
-                upper_descent_graph,
-                ul_extracted_nbr_size
-            );
-            hier_search_graph.set_layer_graph(layer_id, std::move(upper_search_graph));
-        }
-
-        // Copy inter-layer links per layer (no move; source remains intact).
-        const auto& src_links = hierarchical_graph.get_inter_layer_links();
-        auto& dst_links = hier_search_graph.get_inter_layer_links();
-        for (layer_id_t layer_id = 1; layer_id < num_layers; ++layer_id) {
-            const auto src_span = src_links.get_layer_links(layer_id);
-            std::vector<vertex_id_t> layer_copy(src_span.begin(), src_span.end());
-            dst_links.bottom_up_append(std::move(layer_copy));
-        }
-
-        // Copy entry point (trivial scalar).
-        hier_search_graph.set_entry_point(hierarchical_graph.get_entry_point());
-
-        return hier_search_graph;
     }
 
     /**

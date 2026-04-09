@@ -50,16 +50,11 @@
 #include <artea/cpu/index/internal_graph.hpp>
 #include <artea/cpu/index/descent_graph.hpp>
 #include <artea/cpu/index/compact_descent_graph.hpp>
-#include <artea/cpu/index/inter_layer_links.hpp>
 #include <artea/cpu/index/hierarchical_graph.hpp>
-#include <artea/cpu/index/hierarchical_graph_v2.hpp>
-#include <artea/cpu/index/hierarchical_search_graph.hpp>
-#include <artea/cpu/index/hierarchy_manager.hpp>
 #include <artea/cpu/index/compactor/descent_graph_compactor.hpp>
 #include <artea/cpu/index/compactor/internal_graph_compactor.hpp>
 #include <artea/cpu/index/index_size_calculator.hpp>
 #include <artea/cpu/index/persistence/flat_graph_file_manager.hpp>
-#include <artea/cpu/index/persistence/hierarchical_graph_file_manager.hpp>
 
 #include <artea/cpu/index/conv_graph/configs.hpp>
 #include <artea/cpu/index/conv_graph/index_structure.hpp>

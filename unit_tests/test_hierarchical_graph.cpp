@@ -13,9 +13,9 @@
 // limitations under the License.
 
 /*
- * @FilePath: /Artea/unit_tests/test_hierarchical_graph_v2.cpp
+ * @FilePath: /Artea/unit_tests/test_hierarchical_graph.cpp
  * @Author: Chandler (Weitang Ye) <weitang.ye@ntu.edu.sg>
- * @Description: Tests for HierarchicalGraphV2: layer container, atomic
+ * @Description: Tests for HierarchicalGraph: layer container, atomic
  *               lnbr_t entry point, and concurrent vertex insertion across
  *               its InternalGraph layers.
  */
@@ -36,10 +36,10 @@
 using namespace artea;
 using namespace artea::cpu;
 
-class HierarchicalGraphV2Test : public ::testing::Test {
+class HierarchicalGraphTest : public ::testing::Test {
 protected:
     /**
-     * @brief Build a HierarchicalGraphV2 with @p num_layers committed layers,
+     * @brief Build a HierarchicalGraph with @p num_layers committed layers,
      *        each layer pre-allocating @p max_num_vertices_per_layer vertices
      *        with neighbor capacity @p max_nbr_size.
      *
@@ -51,8 +51,8 @@ protected:
         const layer_num_t num_layers,
         const vertex_num_t max_num_vertices_per_layer,
         const vertex_num_t max_nbr_size
-    ) -> std::unique_ptr<hierarchical_graph_v2_t> {
-        auto hg = std::make_unique<hierarchical_graph_v2_t>(num_layers);
+    ) -> std::unique_ptr<hierarchical_graph_t> {
+        auto hg = std::make_unique<hierarchical_graph_t>(num_layers);
         hg->grow_layers(num_layers, [&](layer_id_t) {
             return std::make_unique<internal_graph_t>(
                 max_num_vertices_per_layer, max_nbr_size
@@ -66,14 +66,14 @@ protected:
 //  Construction & layer container basics
 // ============================================================
 
-TEST_F(HierarchicalGraphV2Test, ConstructionEmpty) {
-    hierarchical_graph_v2_t hg(/*max_layers=*/0);
+TEST_F(HierarchicalGraphTest, ConstructionEmpty) {
+    hierarchical_graph_t hg(/*max_layers=*/0);
     EXPECT_EQ(hg.get_num_layers(), 0u);
     EXPECT_EQ(hg.max_layers(), 0u);
 }
 
-TEST_F(HierarchicalGraphV2Test, ConstructionReservesCapacity) {
-    hierarchical_graph_v2_t hg(/*max_layers=*/5);
+TEST_F(HierarchicalGraphTest, ConstructionReservesCapacity) {
+    hierarchical_graph_t hg(/*max_layers=*/5);
     // Visible count starts at 0 because no layers have been committed yet.
     EXPECT_EQ(hg.get_num_layers(), 0u);
     EXPECT_EQ(hg.max_layers(), 5u);
@@ -83,8 +83,8 @@ TEST_F(HierarchicalGraphV2Test, ConstructionReservesCapacity) {
     }
 }
 
-TEST_F(HierarchicalGraphV2Test, GrowLayersCommitsProgressively) {
-    hierarchical_graph_v2_t hg(/*max_layers=*/4);
+TEST_F(HierarchicalGraphTest, GrowLayersCommitsProgressively) {
+    hierarchical_graph_t hg(/*max_layers=*/4);
     std::atomic<uint32_t> factory_calls{0};
     auto factory = [&](layer_id_t) {
         factory_calls.fetch_add(1);
@@ -107,10 +107,10 @@ TEST_F(HierarchicalGraphV2Test, GrowLayersCommitsProgressively) {
     EXPECT_EQ(factory_calls.load(), 4u);
 }
 
-TEST_F(HierarchicalGraphV2Test, GrowLayersConcurrentCallersNoDoubleFactory) {
+TEST_F(HierarchicalGraphTest, GrowLayersConcurrentCallersNoDoubleFactory) {
     // Multiple threads all asking for the same growth target. The factory
     // must run exactly N times in total (not N × num_threads).
-    hierarchical_graph_v2_t hg(/*max_layers=*/8);
+    hierarchical_graph_t hg(/*max_layers=*/8);
     constexpr layer_num_t target = 5;
     std::atomic<uint32_t> factory_calls{0};
     auto factory = [&](layer_id_t) {
@@ -133,9 +133,9 @@ TEST_F(HierarchicalGraphV2Test, GrowLayersConcurrentCallersNoDoubleFactory) {
     }
 }
 
-TEST_F(HierarchicalGraphV2Test, CommitLayerAfterSetLayerGraph) {
+TEST_F(HierarchicalGraphTest, CommitLayerAfterSetLayerGraph) {
     // Legacy two-step flow: set_layer_graph then commit_layer.
-    hierarchical_graph_v2_t hg(/*max_layers=*/3);
+    hierarchical_graph_t hg(/*max_layers=*/3);
     EXPECT_EQ(hg.get_num_layers(), 0u);
 
     hg.set_layer_graph(0, std::make_unique<internal_graph_t>(/*max=*/256, /*nbr=*/16));
@@ -149,7 +149,7 @@ TEST_F(HierarchicalGraphV2Test, CommitLayerAfterSetLayerGraph) {
     EXPECT_EQ(hg.get_num_layers(), 2u);
 }
 
-TEST_F(HierarchicalGraphV2Test, SetGetLayerGraphRoundTrip) {
+TEST_F(HierarchicalGraphTest, SetGetLayerGraphRoundTrip) {
     auto hg = make_hg(/*num_layers=*/3,
                       /*max_num_vertices_per_layer=*/1024,
                       /*max_nbr_size=*/32);
@@ -164,7 +164,7 @@ TEST_F(HierarchicalGraphV2Test, SetGetLayerGraphRoundTrip) {
     }
 }
 
-TEST_F(HierarchicalGraphV2Test, GetLayerGraphsConstAndMutable) {
+TEST_F(HierarchicalGraphTest, GetLayerGraphsConstAndMutable) {
     auto hg = make_hg(/*num_layers=*/2, /*max=*/256, /*nbr=*/16);
 
     // mutable accessor
@@ -182,10 +182,10 @@ TEST_F(HierarchicalGraphV2Test, GetLayerGraphsConstAndMutable) {
 }
 
 // ============================================================
-//  Per-layer InternalGraph operations through HierarchicalGraphV2
+//  Per-layer InternalGraph operations through HierarchicalGraph
 // ============================================================
 
-TEST_F(HierarchicalGraphV2Test, PerLayerSerialVertexInsertion) {
+TEST_F(HierarchicalGraphTest, PerLayerSerialVertexInsertion) {
     auto hg = make_hg(/*num_layers=*/3,
                       /*max=*/1024,
                       /*nbr=*/16);
@@ -210,7 +210,7 @@ TEST_F(HierarchicalGraphV2Test, PerLayerSerialVertexInsertion) {
     }
 }
 
-TEST_F(HierarchicalGraphV2Test, ConcurrentVertexInsertionWithinLayer) {
+TEST_F(HierarchicalGraphTest, ConcurrentVertexInsertionWithinLayer) {
     constexpr vertex_num_t per_layer = 100'000;
     auto hg = make_hg(/*num_layers=*/2,
                       /*max=*/per_layer,
@@ -241,7 +241,7 @@ TEST_F(HierarchicalGraphV2Test, ConcurrentVertexInsertionWithinLayer) {
     }
 }
 
-TEST_F(HierarchicalGraphV2Test, IndependentLayersInParallel) {
+TEST_F(HierarchicalGraphTest, IndependentLayersInParallel) {
     // Insert into multiple layers in parallel; verify each layer is
     // independent (no cross-talk through the hierarchy).
     constexpr layer_num_t num_layers = 4;
@@ -269,7 +269,7 @@ TEST_F(HierarchicalGraphV2Test, IndependentLayersInParallel) {
     }
 }
 
-TEST_F(HierarchicalGraphV2Test, AddNbrUnderConcurrentInsertion) {
+TEST_F(HierarchicalGraphTest, AddNbrUnderConcurrentInsertion) {
     // Insert vertices, then concurrently add neighbors. The per-vertex
     // spinlock in InternalGraph should prevent corruption.
     constexpr vertex_num_t num_v = 5'000;
@@ -320,7 +320,7 @@ TEST_F(HierarchicalGraphV2Test, AddNbrUnderConcurrentInsertion) {
 //  Larger scale stress: many layers, many vertices
 // ============================================================
 
-TEST_F(HierarchicalGraphV2Test, LargeScaleManyLayersManyVertices) {
+TEST_F(HierarchicalGraphTest, LargeScaleManyLayersManyVertices) {
     constexpr layer_num_t num_layers = 8;
     constexpr vertex_num_t per_layer = 100'000;
     constexpr vertex_num_t max_nbr = 16;
@@ -348,7 +348,7 @@ TEST_F(HierarchicalGraphV2Test, LargeScaleManyLayersManyVertices) {
     auto t1 = std::chrono::high_resolution_clock::now();
     auto ms = std::chrono::duration_cast<std::chrono::milliseconds>(t1 - t0).count();
     ARTEA_INFO(fmt::format(
-        "HierarchicalGraphV2: {} layers x {} vertices populated in {} ms",
+        "HierarchicalGraph: {} layers x {} vertices populated in {} ms",
         num_layers, per_layer, ms));
 
     // Each layer should have exactly per_layer vertices and the union of
