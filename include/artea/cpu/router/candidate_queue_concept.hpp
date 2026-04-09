@@ -16,6 +16,7 @@
 
 #include <concepts>
 #include <cstddef>
+#include <utility>
 
 namespace artea {
 namespace cpu {
@@ -29,44 +30,29 @@ namespace cpu {
  * in DescentGraphRouter.
  *
  * Design Philosophy:
- * This concept is completely decoupled from candidate_entry_t. All operations
- * work directly with vertex_id_t and distance_t pairs, making the interface
- * simpler and more flexible.
+ * The queue is parameterized on an entry type (@c candidate_entry_t) that
+ * satisfies the @c CandidateEntry concept. @c try_push forwards its arguments
+ * into the entry constructor — it does NOT have a fixed signature — so this
+ * concept does not check it. Callers that want the legacy 2-arg interface
+ * (vertex_id, distance) should verify separately that their entry type
+ * accepts that constructor shape.
  *
  * Semantic Requirements:
  *
  * 1. Construction:
- *    - Must be constructible with a capacity (std::size_t) parameter
- *    - Capacity defines the maximum number of top candidates to maintain
+ *    - Must be constructible with a capacity (std::size_t) parameter.
  *
- * 2. Initialization:
- *    - random_initialize: Initialize with random vertex IDs from random_seq
- *    - seeded_initialize: Initialize with provided vertex IDs
- *    - Both compute distances and populate the queue with initial candidates
- *    - Both mark all initial candidates as visited in the provided visited_table
- *    - If init_vids.size() > capacity, only the best capacity candidates are kept
+ * 2. Query Operations (const):
+ *    - empty(), size(), get_result_size(), get_unexplored_size(), capacity()
  *
- * 3. Query Operations (const):
- *    - empty(): Returns true if no unexplored candidates remain
- *    - size(): Returns approximate memory footprint in bytes
- *    - get_result_size(): Returns number of result candidates currently maintained
- *    - get_unexplored_size(): Returns number of unexplored candidates remaining
- *    - capacity(): Returns maximum capacity of the queue
- *
- * 4. Mutating Operations:
+ * 3. Mutating Operations:
  *    - clear(): Removes all candidates and resets internal state
- *    - try_push(vertex_id, distance): Attempts to insert a new candidate
- *      * Returns true if inserted, false if rejected (e.g., distance too large)
- *      * Maintains capacity constraint by removing worst candidate if needed
- *    - pop_best_unexplored(): Retrieves and marks the closest unexplored candidate
- *      * Returns (vertex_id, distance) pair
- *      * Returns (invalid_vertex_id, max_distance) if no unexplored candidates
- *    - should_terminate(): Checks if search should terminate early
- *      * Returns true if closest unexplored > worst in top candidates (and queue is full)
+ *    - pop_best_unexplored(): legacy (vid, dist) pair overload
+ *    - pop_best_unexplored_entry(): returns the full entry (for lnbr callers)
+ *    - should_terminate(): early-termination check
  *
- * 5. Result Extraction:
- *    - extract_results(k): Returns top-k result entries (knn_results_t) sorted by distance.
- *      After calling this method, the candidate queue may be in an invalid state.
+ * 4. Result Extraction:
+ *    - extract_results(k): Returns top-k result entries (knn_results_t)
  *
  * @tparam CandidateQueueImpl The candidate queue type to check.
  */
@@ -80,6 +66,8 @@ std::constructible_from<CandidateQueueImpl, std::size_t> && requires(
     // Type aliases
     typename CandidateQueueImpl::vertex_id_t;
     typename CandidateQueueImpl::distance_t;
+    typename CandidateQueueImpl::candidate_entry_t;
+    typename CandidateQueueImpl::knn_results_t;
     typename CandidateQueueImpl::random_seq_t;
     typename CandidateQueueImpl::dist_func_t;
     typename CandidateQueueImpl::vec_ele_t;
@@ -93,36 +81,21 @@ std::constructible_from<CandidateQueueImpl, std::size_t> && requires(
     { const_queue.get_unexplored_size()} -> std::convertible_to<std::size_t>;
     { const_queue.capacity() }           -> std::convertible_to<std::size_t>;
 
-    // Mutating operations
+    // Mutating operations. Note: try_push is variadic and cannot be checked
+    // by this concept — it is enforced via a static_assert inside each queue
+    // implementation at the call site.
     { queue.clear() }               -> std::same_as<void>;
-    { queue.try_push(
-        std::declval<typename CandidateQueueImpl::vertex_id_t>(),
-        std::declval<typename CandidateQueueImpl::distance_t>()
-    ) } -> std::convertible_to<bool>;
     { queue.pop_best_unexplored() } -> std::same_as<std::pair<
         typename CandidateQueueImpl::vertex_id_t,
         typename CandidateQueueImpl::distance_t
     >>;
+    { queue.pop_best_unexplored_entry() } -> std::same_as<
+        typename CandidateQueueImpl::candidate_entry_t
+    >;
     { queue.extract_results(std::declval<std::size_t>()) } -> std::same_as<
         typename CandidateQueueImpl::knn_results_t
     >;
     { queue.should_terminate() } -> std::convertible_to<bool>;
-
-    // Initialization operations
-    { queue.random_initialize(
-        std::declval<typename CandidateQueueImpl::random_seq_t&>(),
-        std::declval<const typename CandidateQueueImpl::dist_func_t&>(),
-        std::declval<const typename CandidateQueueImpl::vec_ele_t*>(),
-        std::declval<const typename CandidateQueueImpl::vector_array_t&>(),
-        std::declval<typename CandidateQueueImpl::visited_table_t&>()
-    ) } -> std::same_as<void>;
-    { queue.seeded_initialize(
-        std::declval<const std::vector<typename CandidateQueueImpl::vertex_id_t>&>(),
-        std::declval<const typename CandidateQueueImpl::dist_func_t&>(),
-        std::declval<const typename CandidateQueueImpl::vec_ele_t*>(),
-        std::declval<const typename CandidateQueueImpl::vector_array_t&>(),
-        std::declval<typename CandidateQueueImpl::visited_table_t&>()
-    ) } -> std::same_as<void>;
 };
 
 }   // namespace cpu

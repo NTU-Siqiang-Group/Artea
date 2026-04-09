@@ -128,14 +128,16 @@ public:
 
         ARTEA_INFO(fmt::format("Shuffling dataset with {} base vectors (seed={})...", num_base_vecs, seed));
 
-        // Generate shuffle indices using RandomSeqNR
-        random_seq_nr_t shuffle_gen(num_base_vecs, seed);
+        // Generate a full random permutation of [0, num_base_vecs) via
+        // RandomSeqNR; sample_size == upper_bound == num_base_vecs.
+        random_seq_nr_t shuffle_gen(seed);
+        auto shuffle_perm = shuffle_gen.generate(num_base_vecs, num_base_vecs);
 
         // Create old_id -> new_id mapping for ground truth update
         std::vector<vec_id_t> old_to_new(num_base_vecs);
         std::vector<vec_id_t> shuffle_ids(num_base_vecs);
         for (vec_num_t new_id = 0; new_id < num_base_vecs; ++new_id) {
-            vec_id_t old_id = shuffle_gen[new_id];
+            vec_id_t old_id = shuffle_perm[new_id];
             old_to_new[old_id] = static_cast<vec_id_t>(new_id);
             shuffle_ids[new_id] = old_id;
         }

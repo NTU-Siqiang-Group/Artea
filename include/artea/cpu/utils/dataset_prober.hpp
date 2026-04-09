@@ -251,13 +251,13 @@ private:
             ARTEA_ERROR("num_samples must be at least 1");
         }
 
-        // Sample vertex IDs
-        random_seq_t rand_gen(total_vecs);
+        // Sample vertex IDs (per-call upper bound supplied below)
+        random_seq_t rand_gen;
         std::vector<vec_id_t> sample_ids(num_samples);
         tbb::parallel_for(
             tbb::blocked_range<vec_num_t>(0, num_samples),
             [&](const tbb::blocked_range<vec_num_t>& r) {
-                rand_gen.generate(sample_ids.data() + r.begin(), r.size());
+                rand_gen.generate(sample_ids.data() + r.begin(), total_vecs, r.size());
             }
         );
 

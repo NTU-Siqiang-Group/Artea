@@ -40,12 +40,12 @@ public:
         _dim = _dataset->get_base_vecs().get_vec_dim();
         _num_vecs = _dataset->get_base_vecs().get_num_vecs();
 
-        random_seq_t rng_a(_num_vecs);
-        random_seq_t rng_b(_num_vecs);
+        random_seq_t rng_a;
+        random_seq_t rng_b;
         _ids_a.resize(NUM_PAIRS);
         _ids_b.resize(NUM_PAIRS);
-        rng_a.generate(_ids_a, NUM_PAIRS);
-        rng_b.generate(_ids_b, NUM_PAIRS);
+        rng_a.generate(_ids_a, _num_vecs, NUM_PAIRS);
+        rng_b.generate(_ids_b, _num_vecs, NUM_PAIRS);
     }
     uint32_t get_dim() const { return _dim; }
     uint32_t get_num_vecs() const { return _num_vecs; }

@@ -19,6 +19,8 @@
 #include <cstdint>
 #include <cassert>
 #include <immintrin.h>
+#include <type_traits>
+#include <utility>
 #include <artea/cpu/containers/allocator.hpp>
 #include <artea/common/logger.hpp>
 
@@ -45,17 +47,27 @@ namespace cpu {
  * - Memory: O(L) with cache-aligned allocation for SIMD operations
  *
  * @tparam RouterTraitsT Traits defining vertex types, distance types, and candidate entry types.
+ * @tparam EntryT Candidate-entry type carried by the queue. Defaults to the
+ *         router traits' dnbr candidate entry, preserving existing behavior.
  */
-template <typename RouterTraitsT>
+template <typename RouterTraitsT,
+          typename EntryT = typename RouterTraitsT::dnbr_candidate_entry_t>
 class LinearCandidateQueue {
 
 public:
     // Type aliases for clarity and convenience
     using vertex_id_t = typename RouterTraitsT::vertex_id_t;
     using distance_t = typename RouterTraitsT::distance_t;
-    using candidate_entry_t = typename RouterTraitsT::candidate_entry_t;
-    using entry_comp_t = typename RouterTraitsT::entry_comp_t;
-    using knn_results_t = typename RouterTraitsT::knn_results_t;
+    using candidate_entry_t = EntryT;
+    /** @brief Distance-ordered comparator. Both DnbrCandidateEntry and
+     *         LnbrCandidateEntry compare by @c get_distance() via their own
+     *         comparator types; pick based on @c EntryT. */
+    using entry_comp_t = std::conditional_t<
+        std::is_same_v<EntryT, typename RouterTraitsT::dnbr_candidate_entry_t>,
+        typename RouterTraitsT::dnbr_candidate_entry_comp_t,
+        typename RouterTraitsT::lnbr_candidate_entry_comp_t>;
+    /** @brief knn_results_t is a queue-local type that tracks @c EntryT. */
+    using knn_results_t = std::vector<candidate_entry_t>;
     using random_seq_t = typename RouterTraitsT::random_seq_t;
     using dist_func_t = typename RouterTraitsT::dist_func_t;
     using vec_ele_t = typename RouterTraitsT::vec_ele_t;
@@ -75,7 +87,8 @@ public:
     static constexpr entry_comp_t entry_comparator = entry_comp_t();
 
     /** @brief Sentinel value representing an invalid/non-existent candidate. */
-    static constexpr candidate_entry_t invalid_candidate_entry = candidate_entry_t::make_invalid_entry();
+    static constexpr candidate_entry_t invalid_candidate_entry =
+        candidate_entry_t::make_invalid_entry();
 
     /**
      * @brief Construct a LinearCandidateQueue with a fixed capacity.
@@ -129,7 +142,7 @@ public:
     ) {
         // Generate random vertex IDs directly into std::vector
         std::vector<vertex_id_t> init_vids(_capacity);
-        random_seq.generate(init_vids, _capacity);
+        random_seq.generate(init_vids, base_vecs.get_num_vecs(), _capacity);
 
         // Call seeded_initialize with the generated IDs
         seeded_initialize(init_vids, dist_func, query_vec, base_vecs, visited_table);
@@ -152,6 +165,13 @@ public:
         const vector_array_t& base_vecs,
         visited_table_t& visited_table
     ) {
+        // This overload assumes a dnbr-style 2-arg entry constructor
+        // (vertex_id, distance). Lnbr callers should seed manually via
+        // try_push(...) instead.
+        static_assert(
+            std::is_constructible_v<candidate_entry_t, vertex_id_t, distance_t>,
+            "seeded_initialize requires an entry with (vid, dist) constructor");
+
         // Create candidate entries with computed distances
         container_t init_candidates;
         init_candidates.reserve(init_vids.size());
@@ -223,24 +243,33 @@ public:
     /**
      * @brief Attempt to insert a new candidate entry into the queue.
      *
+     * Variadic-perfect-forwarding API: the arguments are forwarded directly
+     * into @c candidate_entry_t's constructor (with a trailing @c false for
+     * the explored flag). This lets one queue implementation carry either
+     * dnbr or lnbr entries.
+     *
      * Uses fast rejection (O(1)) for entries that are too far, then performs
      * binary search insertion to maintain sorted order. Updates cursor and
      * threshold as needed.
      *
-     * @param vertex_id The vertex ID to insert.
-     * @param distance The distance to the vertex.
      * @return true if the entry was inserted, false if rejected.
      * @complexity O(N) worst case due to insertion shift, but O(1) for rejected entries.
      */
+    template <typename... Args>
     __attribute__((always_inline))
-    auto try_push(vertex_id_t vertex_id, distance_t distance) -> bool {
-        // Fast rejection: O(1) check before expensive operations
-        if (_data.size() >= _capacity && distance >= _thresh_distance) {
-            return false;
-        }
+    auto try_push(Args&&... args) -> bool {
+        static_assert(
+            std::is_constructible_v<candidate_entry_t, Args..., bool>,
+            "EntryT must accept these args plus a trailing bool is_explored flag");
 
         // Create a new unexplored entry
-        candidate_entry_t entry(vertex_id, distance, false);
+        candidate_entry_t entry(std::forward<Args>(args)..., /*is_explored=*/false);
+        const distance_t entry_dist = entry.get_distance();
+
+        // Fast rejection: O(1) check before expensive operations
+        if (_data.size() >= _capacity && entry_dist >= _thresh_distance) {
+            return false;
+        }
 
         auto it = std::upper_bound(_data.begin(), _data.end(), entry, entry_comparator);
         std::size_t insert_place = it - _data.begin();
@@ -253,16 +282,38 @@ public:
             _check_cursor = insert_place;
         }
         if (_data.size() >= _capacity) {
-            _thresh_distance = _data.back().distance;
+            _thresh_distance = _data.back().get_distance();
         }
         return true;
     }
 
     /**
+     * @brief Retrieve and return the FULL best-unexplored entry.
+     *
+     * Returns a copy of the complete @c candidate_entry_t so callers working
+     * with lnbr-style entries can recover both @c base_vid and @c layer_vid.
+     * The entry inside @c _data is marked as explored and the cursor is
+     * advanced.
+     */
+    __attribute__((always_inline))
+    auto pop_best_unexplored_entry() -> candidate_entry_t {
+        _move_to_unexplored();
+
+        if (_check_cursor >= _data.size()) {
+            return invalid_candidate_entry;
+        }
+
+        // Mark as explored and advance cursor
+        _data[_check_cursor].mark_as_explored();
+        candidate_entry_t entry = _data[_check_cursor];
+        _check_cursor++;
+        return entry;
+    }
+
+    /**
      * @brief Retrieve and mark the best unexplored candidate.
      *
-     * Uses embedded status bits to track explored state. A cursor tracks the position
-     * of the last explored candidate to avoid redundant scans.
+     * Legacy 2-element pair overload kept for backward compatibility.
      *
      * @return Pair of (vertex_id, distance) for the best unexplored candidate,
      *         or (invalid_vertex_id, max_distance) if none found.
@@ -270,17 +321,10 @@ public:
      */
     __attribute__((always_inline))
     auto pop_best_unexplored() -> std::pair<vertex_id_t, distance_t> {
-        _move_to_unexplored();
-
-        if (_check_cursor >= _data.size()) {
+        const candidate_entry_t entry = pop_best_unexplored_entry();
+        if (entry.is_invalid()) {
             return {invalid_vertex_id, max_distance};
         }
-
-        // Mark as explored and advance cursor
-        _data[_check_cursor].mark_as_explored();
-        auto& entry = _data[_check_cursor];
-        _check_cursor++;
-
         return {entry.get_id(), entry.get_distance()};
     }
 
@@ -303,7 +347,7 @@ public:
         }
 
         // Check if queue is full and the closest unexplored candidate is too far
-        if (_data.size() >= _capacity && _data[_check_cursor].distance > _thresh_distance) {
+        if (_data.size() >= _capacity && _data[_check_cursor].get_distance() > _thresh_distance) {
             return true;
         }
 
@@ -353,7 +397,7 @@ private:
     __attribute__((always_inline))
     auto _update_thresh_distance() -> void {
         _thresh_distance = (_data.size() >= _capacity && !_data.empty()) ?
-            _data.back().distance : max_distance;
+            _data.back().get_distance() : max_distance;
     }
 
     /**

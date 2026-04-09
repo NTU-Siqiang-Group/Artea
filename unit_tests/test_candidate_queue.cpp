@@ -245,7 +245,7 @@ TEST_F(CandidateQueueTest, RandomInitialize_StdQueue) {
 
     // Create distance function and random sequence
     dist_func_t dist_func(dim);
-    random_seq_t random_seq(num_vecs);
+    random_seq_t random_seq;
 
     // Create visited table
     visited_table_t visited_table(num_vecs);
@@ -298,7 +298,7 @@ TEST_F(CandidateQueueTest, RandomInitialize_LinearQueue) {
     }
 
     dist_func_t dist_func(dim);
-    random_seq_t random_seq(num_vecs);
+    random_seq_t random_seq;
 
     // Create visited table
     visited_table_t visited_table(num_vecs);
@@ -348,7 +348,7 @@ TEST_F(CandidateQueueTest, RandomInitialize_FHQueue) {
     }
 
     dist_func_t dist_func(dim);
-    random_seq_t random_seq(num_vecs);
+    random_seq_t random_seq;
 
     // Create visited table
     visited_table_t visited_table(num_vecs);

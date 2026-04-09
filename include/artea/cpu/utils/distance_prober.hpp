@@ -293,8 +293,8 @@ private:
         vec_num_t num_samples
     ) -> std::vector<vec_id_t> {
 
-        // Initialize random generator
-        random_seq_t rand_gen(total_vecs);
+        // Initialize random generator (per-call upper bound supplied below)
+        random_seq_t rand_gen;
 
         // Generate random indices
         std::vector<vec_id_t> sampled_ids(num_samples);
@@ -302,7 +302,7 @@ private:
         tbb::parallel_for(
             tbb::blocked_range<vec_num_t>(0, num_samples),
             [&](const tbb::blocked_range<vec_num_t>& r) {
-                rand_gen.generate(sampled_ids.data() + r.begin(), r.size());
+                rand_gen.generate(sampled_ids.data() + r.begin(), total_vecs, r.size());
             }
         );
 

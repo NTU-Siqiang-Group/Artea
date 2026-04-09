@@ -34,10 +34,12 @@ class RandomSeq {
 public:
     /**
      * @brief Construct a new thread-safe RandomSeq object.
-     * @param num_vecs The upper bound (exclusive) for the random numbers to be generated.
+     *
+     * The class is stateless apart from per-thread MKL streams; the
+     * upper bound for generated values is supplied per-call to
+     * @c generate, allowing one instance to serve multiple ranges.
      */
-    RandomSeq(const vec_num_t num_vecs) :
-        _num_vecs(num_vecs),
+    RandomSeq() :
         // Initialize the thread-local storage container.
         // The container will call this factory function once for each thread
         // that executes 'local()' function in 'generate()' method.
@@ -65,14 +67,16 @@ public:
     RandomSeq& operator=(RandomSeq&&) = delete;
 
     /**
-     * @brief Generate random numbers in a thread-safe manner.
-     *        It automatically uses a random stream unique to the calling thread.
-     *        This method can be called by single-threaded or multi-threaded code.
+     * @brief Generate uniformly random integers in @c [0, upper_bound) in a
+     *        thread-safe manner. Automatically uses a random stream unique
+     *        to the calling thread; can be called from single- or
+     *        multi-threaded code.
      * @param rand_ids Reference to the vector where the generated random numbers will be stored.
+     * @param upper_bound Exclusive upper bound for the generated values.
      * @param num_rand_ids The total number of random numbers to generate.
-     * @note  Caller must ensure that the size of rand_ids is at least num_rand_ids.
+     * @note  Caller must ensure that the size of @p rand_ids is at least @p num_rand_ids.
      */
-    auto generate(std::vector<vec_id_t>& rand_ids, const vec_num_t num_rand_ids) -> void {
+    auto generate(std::vector<vec_id_t>& rand_ids, const vec_num_t upper_bound, const vec_num_t num_rand_ids) -> void {
         vec_id_t* rand_ids_ptr = rand_ids.data();
 
         // Get the MKL stream specific to the current thread.
@@ -84,20 +88,22 @@ public:
             local_stream, num_rand_ids,
             reinterpret_cast<int*>(rand_ids_ptr),
             0,
-            static_cast<int>(_num_vecs)
+            static_cast<int>(upper_bound)
         );
     }
 
     /**
-     * @brief Generate random numbers in a thread-safe manner.
-     *        It automatically uses a random stream unique to the calling thread.
-     *        This method can be called by single-threaded or multi-threaded code.
+     * @brief Generate uniformly random integers in @c [0, upper_bound) in a
+     *        thread-safe manner. Automatically uses a random stream unique
+     *        to the calling thread; can be called from single- or
+     *        multi-threaded code.
      * @param rand_ids_ptr Pointer to the array where the generated random numbers will be stored.
+     * @param upper_bound Exclusive upper bound for the generated values.
      * @param num_rand_ids The total number of random numbers to generate.
-     * @note  Caller must ensure that the memory pointed by rand_ids_ptr is large enough
-     *        to hold num_rand_ids elements.
+     * @note  Caller must ensure that the memory pointed by @p rand_ids_ptr is large enough
+     *        to hold @p num_rand_ids elements.
      */
-    auto generate(vec_id_t* rand_ids_ptr, const vec_num_t num_rand_ids) -> void {
+    auto generate(vec_id_t* rand_ids_ptr, const vec_num_t upper_bound, const vec_num_t num_rand_ids) -> void {
         // Get the MKL stream specific to the current thread.
         // If one doesn't exist yet for this thread, TBB creates it using our factory.
         VSLStreamStatePtr& local_stream = _tl_streams.local();
@@ -107,19 +113,21 @@ public:
             local_stream, num_rand_ids,
             reinterpret_cast<int*>(rand_ids_ptr),
             0,
-            static_cast<int>(_num_vecs)
+            static_cast<int>(upper_bound)
         );
     }
 
     /**
-     * @brief Generate random numbers in a thread-safe manner.
-     *        It automatically uses a random stream unique to the calling thread.
-     *        This method can be called by single-threaded or multi-threaded code.
+     * @brief Generate uniformly random integers in @c [0, upper_bound) in a
+     *        thread-safe manner. Automatically uses a random stream unique
+     *        to the calling thread; can be called from single- or
+     *        multi-threaded code.
      * @param rand_ids Reference to the cache-aligned container where the generated random numbers will be stored.
+     * @param upper_bound Exclusive upper bound for the generated values.
      * @param num_rand_ids The total number of random numbers to generate.
-     * @note  Caller must ensure that the size of rand_ids is at least num_rand_ids.
+     * @note  Caller must ensure that the size of @p rand_ids is at least @p num_rand_ids.
      */
-    auto generate(cache_aligned_container_t<vec_id_t>& rand_ids, const vec_num_t num_rand_ids) -> void {
+    auto generate(cache_aligned_container_t<vec_id_t>& rand_ids, const vec_num_t upper_bound, const vec_num_t num_rand_ids) -> void {
         vec_id_t* rand_ids_ptr = rand_ids.data();
 
         // Get the MKL stream specific to the current thread.
@@ -131,14 +139,11 @@ public:
             local_stream, num_rand_ids,
             reinterpret_cast<int*>(rand_ids_ptr),
             0,
-            static_cast<int>(_num_vecs)
+            static_cast<int>(upper_bound)
         );
     }
 
 private:
-    /** @brief The upper bound for the random numbers. */
-    const vec_num_t _num_vecs;
-
     /**
      * @brief Thread-local storage for MKL stream pointers.
      * Each thread gets its own VSLStreamStatePtr, managed by this container.

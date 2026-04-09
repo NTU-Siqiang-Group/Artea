@@ -69,7 +69,7 @@ public:
         _compact_descent_graph(compact_descent_graph),
         _candidate_queue_size(candidate_queue_size),
         _visited_table_pool(vecs_data.get_num_vecs()),
-        _random_seq(vecs_data.get_num_vecs())
+        _random_seq()
     {
         if (candidate_queue_size < topk) {
             ARTEA_ERROR(fmt::format(
@@ -316,7 +316,7 @@ private:
             [&](const tbb::blocked_range<int>&) {
                 // Trigger thread-local MKL stream initialization
                 std::vector<vertex_id_t> dummy(1);
-                _random_seq.generate(dummy, 1);
+                _random_seq.generate(dummy, /*upper_bound=*/1, /*num=*/1);
             }
         );
     }

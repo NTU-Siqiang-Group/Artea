@@ -74,7 +74,11 @@
 #include <artea/cpu/router/bruteforce_router.hpp>
 #include <artea/cpu/router/compact_descent_graph_router.hpp>
 #include <artea/cpu/router/descent_graph_router.hpp>
-#include <artea/cpu/router/data_structures/candidate_entry.hpp>
+#include <artea/cpu/router/internal_graph_router.hpp>
+#include <artea/cpu/router/hierarchical_graph_router.hpp>
+#include <artea/cpu/router/data_structures/candidate_entry_concept.hpp>
+#include <artea/cpu/router/data_structures/dnbr_candidate_entry.hpp>
+#include <artea/cpu/router/data_structures/lnbr_candidate_entry.hpp>
 #include <artea/cpu/router/candidate_queue_concept.hpp>
 #include <artea/cpu/router/visited_table_concept.hpp>
 #include <artea/cpu/router/data_structures/visited_table_pool.hpp>

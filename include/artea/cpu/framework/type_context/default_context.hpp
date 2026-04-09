@@ -136,15 +136,20 @@ using random_vg_t = typename vertex_generator_traits_t::random_vg_t;
 using graph_mis_vg_t = typename vertex_generator_traits_t::graph_mis_vg_t;
 
 // Router types from RouterTraits
+using dnbr_candidate_entry_t = typename router_traits_t::dnbr_candidate_entry_t;
+using lnbr_candidate_entry_t = typename router_traits_t::lnbr_candidate_entry_t;
 using candidate_entry_t = typename router_traits_t::candidate_entry_t;
 using result_entry_t = typename router_traits_t::result_entry_t;
 using knn_results_t = typename router_traits_t::knn_results_t;
 using std_candidate_queue_t = typename router_traits_t::std_candidate_queue_t;
+using std_lnbr_candidate_queue_t = typename router_traits_t::std_lnbr_candidate_queue_t;
 using linear_candidate_queue_t = typename router_traits_t::linear_candidate_queue_t;
 using fh_candidate_queue_t = typename router_traits_t::fh_candidate_queue_t;
 using candidate_queue_t = typename router_traits_t::candidate_queue_t;
 using visited_table_pool_t = typename router_traits_t::visited_table_pool_t;
 using bruteforce_router_t = typename router_traits_t::bruteforce_router_t;
+using internal_graph_router_t = typename router_traits_t::internal_graph_router_t;
+using hierarchical_graph_router_t = typename router_traits_t::hierarchical_graph_router_t;
 
 // alias for routers with customizable GraphModeT
 using graph_mode_t = typename router_traits_t::graph_mode_t;

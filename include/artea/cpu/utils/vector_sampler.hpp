@@ -66,8 +66,9 @@ public:
 
         std::vector<vertex_id_t> indices(sample_count);
 
-        // Initialize the random sequence generator with the range [0, total_vertices)
-        random_seq_t random_seq(total_vertices);
+        // Initialize the random sequence generator. Per-call upper bound
+        // is supplied at each generate() invocation.
+        random_seq_t random_seq;
 
         // Generate random indices in parallel chunks to maximize throughput
         tbb::parallel_for(tbb::blocked_range<vertex_num_t>(0, sample_count),
@@ -75,7 +76,7 @@ public:
                 // Calculate the pointer to the current segment of the indices array
                 vertex_id_t* current_segment_ptr = indices.data() + r.begin();
                 // Generate random numbers for this specific segment using the thread-local stream
-                random_seq.generate(current_segment_ptr, r.size());
+                random_seq.generate(current_segment_ptr, total_vertices, r.size());
             }
         );
 

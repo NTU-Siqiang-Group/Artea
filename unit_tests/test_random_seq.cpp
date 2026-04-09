@@ -139,10 +139,10 @@ TEST_F(RandomSeqTest, CppStandardLibrarySerial) {
 TEST_F(RandomSeqTest, MklSingleThreaded) {
     ARTEA_INFO(" -> Running Quality Check for Single-Threaded Vectorized (MKL)...");
 
-    random_seq_t mkl_rng(g_config.num_vecs);
+    random_seq_t mkl_rng;
     std::vector<vec_id_t> random_data(g_config.num_rand_nbrs);
 
-    mkl_rng.generate(random_data, g_config.num_rand_nbrs);
+    mkl_rng.generate(random_data, g_config.num_vecs, g_config.num_rand_nbrs);
 
     verify_and_log_stats(random_data, g_config.num_vecs, "Single-Threaded Vectorized (MKL)");
 }
@@ -151,7 +151,7 @@ TEST_F(RandomSeqTest, MklMultiThreaded) {
     size_t num_threads = std::thread::hardware_concurrency();
     ARTEA_INFO(fmt::format(" -> Running Quality Check for Multi-Threaded Vectorized (MKL) with {} threads...", num_threads));
 
-    random_seq_t mkl_rng(g_config.num_vecs);
+    random_seq_t mkl_rng;
     std::vector<vec_id_t> random_data(g_config.num_rand_nbrs);
 
     // Using TBB to generate in parallel chunks
@@ -159,7 +159,7 @@ TEST_F(RandomSeqTest, MklMultiThreaded) {
         [&](const tbb::blocked_range<uint32_t>& r) {
             std::vector<vec_id_t> local_data(r.size());
             // Generate logic
-            mkl_rng.generate(local_data, r.size());
+            mkl_rng.generate(local_data, g_config.num_vecs, r.size());
             // Copy back to main buffer
             std::copy(local_data.data(), local_data.data() + r.size(), random_data.data() + r.begin());
         });

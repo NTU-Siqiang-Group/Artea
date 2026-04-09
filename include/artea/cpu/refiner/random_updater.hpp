@@ -66,8 +66,9 @@ public:
         const vertex_num_t num_vertices,
         const vertex_num_t rand_gen_size
     ) : base_class_t(dist_func, vecs_data, log_table, descent_graph),
+        _num_vertices(num_vertices),
         _rand_gen_size(rand_gen_size),
-        _random_seq(num_vertices) {}
+        _random_seq() {}
 
     /**
      * @brief Generate random neighbors for the pivot vertex.
@@ -88,7 +89,7 @@ public:
         dnbr_arr_t& origin_nbrs
     ) -> void {
         std::vector<vertex_id_t> rand_ids_buffer(_rand_gen_size);
-        _random_seq.generate(rand_ids_buffer, _rand_gen_size);
+        _random_seq.generate(rand_ids_buffer, _num_vertices, _rand_gen_size);
 
         const vec_ele_t* pivot_vec = this->_vecs_data.get(pivot_vid);
         const vertex_num_t max_sz = this->_descent_graph.layer_config().max_nbr_size();
@@ -116,6 +117,9 @@ public:
     }
 
 private:
+    /** @brief Total number of vertices in the graph (upper bound for random ID generation). */
+    const vertex_num_t _num_vertices;
+
     /** @brief Number of random neighbors to generate per vertex. */
     const vertex_num_t _rand_gen_size;
 

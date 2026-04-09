@@ -133,8 +133,8 @@ static void BM_RandomVG_IDGeneration(benchmark::State& state) {
     uint32_t result_size = state.range(0);
 
     for (auto _ : state) {
-        random_seq_nr_t random_seq_nr(g_num_vecs);
-        auto random_ids = random_seq_nr.generate(result_size);
+        random_seq_nr_t random_seq_nr;
+        auto random_ids = random_seq_nr.generate(result_size, g_num_vecs);
 
         std::vector<uint32_t> vec_ids;
         vec_ids.insert(vec_ids.end(), random_ids.begin(), random_ids.end());
@@ -158,8 +158,8 @@ static void BM_RandomVG_VectorExtraction(benchmark::State& state) {
     uint32_t result_size = state.range(0);
 
     // Pre-generate sorted IDs
-    random_seq_nr_t random_seq_nr(g_num_vecs);
-    auto random_ids = random_seq_nr.generate(result_size);
+    random_seq_nr_t random_seq_nr;
+    auto random_ids = random_seq_nr.generate(result_size, g_num_vecs);
     std::vector<uint32_t> vec_ids;
     vec_ids.insert(vec_ids.end(), random_ids.begin(), random_ids.end());
     std::sort(vec_ids.begin(), vec_ids.end());

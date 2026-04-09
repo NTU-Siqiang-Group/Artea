@@ -84,19 +84,19 @@ TEST_F(DistanceProberTest, ProbeMultiQuantiles) {
     ARTEA_INFO(fmt::format("Sampling {} independent vector pairs from {} vectors...", num_pairs, total_vecs));
 
     // Sample two independent sets of random vector IDs
-    random_seq_t rand_gen(total_vecs);
+    random_seq_t rand_gen;
     std::vector<vec_id_t> ids_1(num_pairs), ids_2(num_pairs);
 
     tbb::parallel_for(
         tbb::blocked_range<vec_num_t>(0, num_pairs),
         [&](const tbb::blocked_range<vec_num_t>& r) {
-            rand_gen.generate(ids_1.data() + r.begin(), r.size());
+            rand_gen.generate(ids_1.data() + r.begin(), total_vecs, r.size());
         }
     );
     tbb::parallel_for(
         tbb::blocked_range<vec_num_t>(0, num_pairs),
         [&](const tbb::blocked_range<vec_num_t>& r) {
-            rand_gen.generate(ids_2.data() + r.begin(), r.size());
+            rand_gen.generate(ids_2.data() + r.begin(), total_vecs, r.size());
         }
     );
 

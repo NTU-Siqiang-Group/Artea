@@ -25,6 +25,8 @@
 #include <limits>
 #include <algorithm>
 #include <cassert>
+#include <type_traits>
+#include <utility>
 
 namespace artea {
 namespace cpu {
@@ -59,16 +61,20 @@ namespace cpu {
  * - Memory: O(L) for both heaps
  *
  * @tparam RouterTraitsT Traits defining vertex types, distance types, and candidate entry types.
+ * @tparam EntryT Candidate-entry type carried by the queue. Defaults to the
+ *         router traits' dnbr candidate entry, preserving existing behavior.
  */
-template <typename RouterTraitsT>
+template <typename RouterTraitsT,
+          typename EntryT = typename RouterTraitsT::dnbr_candidate_entry_t>
 class StdCandidateQueue {
 
 public:
     // Type aliases for clarity and convenience
     using vertex_id_t = typename RouterTraitsT::vertex_id_t;
     using distance_t = typename RouterTraitsT::distance_t;
-    using candidate_entry_t = typename RouterTraitsT::candidate_entry_t;
-    using knn_results_t = typename RouterTraitsT::knn_results_t;
+    using candidate_entry_t = EntryT;
+    /** @brief knn_results_t is now a queue-local type that tracks @c EntryT. */
+    using knn_results_t = std::vector<candidate_entry_t>;
     using random_seq_t = typename RouterTraitsT::random_seq_t;
     using dist_func_t = typename RouterTraitsT::dist_func_t;
     using vec_ele_t = typename RouterTraitsT::vec_ele_t;
@@ -82,7 +88,8 @@ public:
     static constexpr vertex_id_t invalid_vertex_id = RouterTraitsT::invalid_vertex_id;
 
     /** @brief Sentinel value representing an invalid/non-existent candidate. */
-    static constexpr candidate_entry_t invalid_candidate_entry = RouterTraitsT::invalid_candidate_entry;
+    static constexpr candidate_entry_t invalid_candidate_entry =
+        candidate_entry_t::make_invalid_entry();
 
     /**
      * @brief Comparator for Min-Heap (smallest distance at top).
@@ -91,7 +98,7 @@ public:
     struct MinHeapComparator {
         __attribute__((always_inline))
         constexpr bool operator()(const candidate_entry_t& a, const candidate_entry_t& b) const noexcept {
-            return a.distance > b.distance;  // Reverse comparison for min-heap
+            return a.get_distance() > b.get_distance();  // Reverse comparison for min-heap
         }
     };
 
@@ -102,7 +109,7 @@ public:
     struct MaxHeapComparator {
         __attribute__((always_inline))
         constexpr bool operator()(const candidate_entry_t& a, const candidate_entry_t& b) const noexcept {
-            return a.distance < b.distance;  // Standard comparison for max-heap
+            return a.get_distance() < b.get_distance();  // Standard comparison for max-heap
         }
     };
 
@@ -176,7 +183,7 @@ public:
     ) {
         // Generate random vertex IDs directly into std::vector
         std::vector<vertex_id_t> init_vids(_capacity);
-        random_seq.generate(init_vids, _capacity);
+        random_seq.generate(init_vids, base_vecs.get_num_vecs(), _capacity);
 
         // Call seeded_initialize with the generated IDs
         seeded_initialize(init_vids, dist_func, query_vec, base_vecs, visited_table);
@@ -199,6 +206,14 @@ public:
         const vector_array_t& base_vecs,
         visited_table_t& visited_table
     ) {
+        // This overload assumes a dnbr-style 2-arg entry constructor
+        // (vertex_id, distance). It is NOT meaningful for lnbr entries,
+        // which carry a second identifier; lnbr callers should seed
+        // manually via try_push(...) instead.
+        static_assert(
+            std::is_constructible_v<candidate_entry_t, vertex_id_t, distance_t>,
+            "seeded_initialize requires an entry with (vid, dist) constructor");
+
         // Create candidate entries with computed distances
         std::vector<candidate_entry_t> init_candidates;
         init_candidates.reserve(init_vids.size());
@@ -215,7 +230,7 @@ public:
                 init_candidates.begin() + _capacity,
                 init_candidates.end(),
                 [](const candidate_entry_t& a, const candidate_entry_t& b) {
-                    return a.distance < b.distance;
+                    return a.get_distance() < b.get_distance();
                 }
             );
             init_candidates.resize(_capacity);
@@ -285,26 +300,38 @@ public:
     /**
      * @brief Attempt to insert a new candidate entry into the queue.
      *
-     * Insertion Strategy (following hnswlib approach):
-     * 1. Fast Rejection: If top_candidates is full and new distance >= lower_bound, reject (O(1)).
-     * 2. Add to Unexplored Set: Insert into min-heap for future exploration (O(log L)).
-     * 3. Add to Top Candidates: Insert into max-heap to maintain best L candidates (O(log L)).
-     * 4. Trim: If top_candidates exceeds capacity, remove worst candidate (O(log L)).
-     * 5. Update Lower Bound: Set to the worst distance in top_candidates (O(1)).
+     * Variadic-perfect-forwarding API: the arguments are forwarded directly
+     * into the entry type's constructor (plus a trailing @c false for the
+     * explored flag). This lets one queue implementation carry either
+     * @c DnbrCandidateEntry ("try_push(vid, dist)") or @c LnbrCandidateEntry
+     * ("try_push(base_vid, layer_vid, dist)") without any source-level
+     * divergence.
      *
-     * @param vertex_id The vertex ID to insert.
-     * @param distance The distance to the vertex.
+     * Insertion Strategy (following hnswlib approach):
+     * 1. Build the entry via perfect-forwarding.
+     * 2. Fast Rejection: If top_candidates is full and new distance >= lower_bound, reject (O(1)).
+     * 3. Add to Unexplored Set: Insert into min-heap for future exploration (O(log L)).
+     * 4. Add to Top Candidates: Insert into max-heap to maintain best L candidates (O(log L)).
+     * 5. Trim: If top_candidates exceeds capacity, remove worst candidate (O(log L)).
+     * 6. Update Lower Bound: Set to the worst distance in top_candidates (O(1)).
+     *
      * @return true if the entry was inserted, false if rejected.
      * @complexity O(log L) for heap operations, but O(1) for rejected entries.
      */
+    template <typename... Args>
     __attribute__((always_inline))
-    auto try_push(vertex_id_t vertex_id, distance_t distance) -> bool {
+    auto try_push(Args&&... args) -> bool {
+        static_assert(
+            std::is_constructible_v<candidate_entry_t, Args..., bool>,
+            "EntryT must accept these args plus a trailing bool is_explored flag");
+
+        candidate_entry_t entry(std::forward<Args>(args)..., /*is_explored=*/false);
+        const distance_t entry_dist = entry.get_distance();
+
         // Fast rejection: O(1) check before expensive heap operations
-        if (_top_candidates.size() >= _capacity && distance >= _lower_bound) {
+        if (_top_candidates.size() >= _capacity && entry_dist >= _lower_bound) {
             return false;
         }
-
-        candidate_entry_t entry(vertex_id, distance);
 
         // Add to unexplored set for exploration (min-heap)
         _unexplored_set.push(entry);
@@ -324,12 +351,30 @@ public:
     }
 
     /**
+     * @brief Retrieve and return the FULL best-unexplored entry.
+     *
+     * Returns the complete @c candidate_entry_t so callers working with
+     * lnbr-style entries can recover both @c base_vid and @c layer_vid.
+     *
+     * @return The entry with smallest distance in the unexplored set, or an
+     *         invalid sentinel entry if the unexplored set is empty.
+     */
+    __attribute__((always_inline))
+    auto pop_best_unexplored_entry() -> candidate_entry_t {
+        if (_unexplored_set.empty()) {
+            return invalid_candidate_entry;
+        }
+        candidate_entry_t entry = _unexplored_set.top();
+        _unexplored_set.pop();
+        return entry;
+    }
+
+    /**
      * @brief Retrieve and mark the best unexplored candidate.
      *
-     * Extraction Strategy:
-     * - Pop the top element from unexplored_set (min-heap), which is the closest unexplored candidate.
-     * - Mark it as explored before returning.
-     * - If candidate_set is empty, return (invalid_vertex_id, max_distance).
+     * Legacy 2-element pair overload kept for backward compatibility with
+     * existing descent-graph routers. Internally implemented in terms of
+     * @c pop_best_unexplored_entry().
      *
      * @return Pair of (vertex_id, distance) for the best unexplored candidate,
      *         or (invalid_vertex_id, max_distance) if none found.
@@ -337,12 +382,10 @@ public:
      */
     __attribute__((always_inline))
     auto pop_best_unexplored() -> std::pair<vertex_id_t, distance_t> {
-        if (_unexplored_set.empty()) {
+        const candidate_entry_t entry = pop_best_unexplored_entry();
+        if (entry.is_invalid()) {
             return {invalid_vertex_id, max_distance};
         }
-        // Extract the closest candidate
-        candidate_entry_t entry = _unexplored_set.top();
-        _unexplored_set.pop();
         return {entry.get_id(), entry.get_distance()};
     }
 
@@ -364,7 +407,7 @@ public:
             return false;
         }
         // Check if closest unexplored > worst in top candidates
-        return _unexplored_set.top().distance > _lower_bound;
+        return _unexplored_set.top().get_distance() > _lower_bound;
     }
 
     /**
@@ -423,7 +466,7 @@ private:
     __attribute__((always_inline))
     auto _update_lower_bound() -> void {
         _lower_bound = (!_top_candidates.empty()) ?
-            _top_candidates.top().distance : max_distance;
+            _top_candidates.top().get_distance() : max_distance;
     }
 
 };  // class StdCandidateQueue

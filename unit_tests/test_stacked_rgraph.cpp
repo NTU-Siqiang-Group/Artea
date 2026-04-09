@@ -162,51 +162,16 @@ private:
 namespace {
 
 /**
- * @brief Simple FIFO eviction functor: shift-left and drop the oldest,
- *        insert @p new_nbr at the tail. Matches the pattern used in the
- *        existing InternalGraph tests.
+ * @brief Simple FIFO pruning functor: shift-left and drop the oldest
+ *        neighbor, insert @p new_nbr at the tail. Matches the pattern used
+ *        in the existing InternalGraph tests.
  */
-struct fifo_evict_fn_t {
+struct fifo_pruning_fn_t {
     vertex_num_t max_nbr_size;
     auto operator()(lnbr_t* slots, const lnbr_t new_nbr) const -> uint64_t {
         for (vertex_num_t i = 1; i < max_nbr_size; ++i) slots[i - 1] = slots[i];
         slots[max_nbr_size - 1] = new_nbr;
         return max_nbr_size;
-    }
-};
-
-/**
- * @brief Minimal ARC-Prune: take the closest up to @p max_nbr_size
- *        candidates within covering radius @c 2 * R_h. If fewer than
- *        @p max_nbr_size candidates fit, fall back to taking the top
- *        @p max_nbr_size overall.
- */
-struct simple_select_initial_fn_t {
-    template <typename DistFuncT>
-    auto operator()(
-        const vec_ele_t* /*p_coords*/,
-        const distance_t R_h,
-        const vertex_num_t max_nbr_size,
-        const std::vector<std::pair<distance_t, lnbr_t>>& sorted_candidates,
-        const vector_array_t& /*base_vecs*/,
-        DistFuncT& /*dist_func*/
-    ) const -> std::vector<lnbr_t> {
-        std::vector<lnbr_t> out;
-        out.reserve(std::min<size_t>(max_nbr_size, sorted_candidates.size()));
-        const distance_t limit = 2 * R_h;
-        for (const auto& [d, nbr] : sorted_candidates) {
-            if (out.size() >= max_nbr_size) break;
-            if (d > limit) break;
-            out.push_back(nbr);
-        }
-        if (out.empty() && !sorted_candidates.empty()) {
-            const size_t take = std::min<size_t>(
-                max_nbr_size, sorted_candidates.size());
-            for (size_t i = 0; i < take; ++i) {
-                out.push_back(sorted_candidates[i].second);
-            }
-        }
-        return out;
     }
 };
 
@@ -246,8 +211,7 @@ protected:
         auto t0 = std::chrono::high_resolution_clock::now();
         _graph = stacked_rgraph::factory_t::construct_graph(
             base_vecs, dist_func,
-            simple_select_initial_fn_t{},
-            fifo_evict_fn_t{static_cast<vertex_num_t>(g_config.max_nbr_size)},
+            fifo_pruning_fn_t{static_cast<vertex_num_t>(g_config.max_nbr_size)},
             /*rnet_beta=*/beta,
             /*L1_rnet_radius=*/l1_radius,
             /*search_nn_qs=*/static_cast<vertex_num_t>(g_config.search_nn_qs),

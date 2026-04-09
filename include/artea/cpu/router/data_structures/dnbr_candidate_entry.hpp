@@ -13,9 +13,11 @@
 // limitations under the License.
 
 /*
- * @FilePath: /Artea/include/artea/cpu/router/candidate_entry.hpp
+ * @FilePath: /Artea/include/artea/cpu/router/data_structures/dnbr_candidate_entry.hpp
  * @Author: Chandler (Weitang Ye) <weitang.ye@ntu.edu.sg>
- * @Description: Stateful candidate entry with embedded explored/unexplored status.
+ * @Description: Dnbr-flavored candidate entry (vertex_id + explored bit +
+ *               distance, 8 bytes). Carries exactly the information a
+ *               descent-graph router needs during beam search.
  */
 
 #pragma once
@@ -24,11 +26,13 @@
 #include <type_traits>
 #include <limits>
 
+#include <artea/cpu/router/data_structures/candidate_entry_concept.hpp>
+
 namespace artea {
 namespace cpu {
 
 /**
- * @brief Stateful candidate entry with embedded explored/unexplored status.
+ * @brief Dnbr-flavored candidate entry with embedded explored/unexplored status.
  *
  * Design Philosophy:
  * This structure embeds the explored/unexplored state directly into the vertex ID
@@ -43,7 +47,7 @@ namespace cpu {
  * @tparam RouterTraitsT Traits defining vertex types and distance types.
  */
 template <typename RouterTraitsT>
-struct alignas(8) CandidateEntry {   // 8 bytes
+struct alignas(8) DnbrCandidateEntry {   // 8 bytes
 
     using vertex_num_t = typename RouterTraitsT::vertex_num_t;
     using vertex_id_t = typename RouterTraitsT::vertex_id_t;
@@ -81,43 +85,43 @@ private:
     }
 
 public:
-    constexpr CandidateEntry() : entry_id_and_status(invalid_vertex_id), distance(0.0) {}
+    constexpr DnbrCandidateEntry() : entry_id_and_status(invalid_vertex_id), distance(0.0) {}
 
-    constexpr CandidateEntry(const CandidateEntry&) = default;
-    constexpr CandidateEntry& operator=(const CandidateEntry&) = default;
-    CandidateEntry(CandidateEntry&&) = default;
-    CandidateEntry& operator=(CandidateEntry&&) = default;
-    ~CandidateEntry() = default;
+    constexpr DnbrCandidateEntry(const DnbrCandidateEntry&) = default;
+    constexpr DnbrCandidateEntry& operator=(const DnbrCandidateEntry&) = default;
+    DnbrCandidateEntry(DnbrCandidateEntry&&) = default;
+    DnbrCandidateEntry& operator=(DnbrCandidateEntry&&) = default;
+    ~DnbrCandidateEntry() = default;
 
-    /** @brief Create a new CandidateEntry with given ID and distance (unexplored by default). */
-    constexpr CandidateEntry(
+    /** @brief Create a new DnbrCandidateEntry with given ID and distance (unexplored by default). */
+    constexpr DnbrCandidateEntry(
         const vertex_id_t entry_id,
         const distance_t distance
     ) : entry_id_and_status(entry_id & MASK_ID), distance(distance) {}
 
-    /** @brief Create a new CandidateEntry with given ID, distance, and explored status. */
-    constexpr CandidateEntry(
+    /** @brief Create a new DnbrCandidateEntry with given ID, distance, and explored status. */
+    constexpr DnbrCandidateEntry(
         const vertex_id_t entry_id,
         const distance_t distance,
         const bool is_explored
     ) : entry_id_and_status(compute_id_and_status(entry_id, is_explored)), distance(distance) {}
 
-    static constexpr auto make_invalid_entry() -> CandidateEntry {
-        return CandidateEntry(invalid_vertex_id, max_distance);
+    static constexpr auto make_invalid_entry() -> DnbrCandidateEntry {
+        return DnbrCandidateEntry(invalid_vertex_id, max_distance);
     }
 
     /** @brief Create a sentinel entry with minimum distance (for max-heap sentinel). */
-    static constexpr auto make_min_entry() -> CandidateEntry {
-        return CandidateEntry(invalid_vertex_id, min_distance);
+    static constexpr auto make_min_entry() -> DnbrCandidateEntry {
+        return DnbrCandidateEntry(invalid_vertex_id, min_distance);
     }
 
-    /** @brief Create a new CandidateEntry with given ID and distance (unexplored by default). */
+    /** @brief Create a new DnbrCandidateEntry with given ID and distance (unexplored by default). */
     __attribute__((always_inline))
     static auto make_entry(
         const vertex_id_t entry_id,
         const distance_t distance
-    ) -> CandidateEntry {
-        return CandidateEntry{entry_id, distance};
+    ) -> DnbrCandidateEntry {
+        return DnbrCandidateEntry{entry_id, distance};
     }
 
     /** @brief Get the entry ID masking out status bit (Bit 31). */
@@ -177,56 +181,47 @@ public:
 
     /** @brief Comparison operators based on distance. */
     __attribute__((always_inline))
-    constexpr bool operator<(const CandidateEntry& other) const noexcept {
+    constexpr bool operator<(const DnbrCandidateEntry& other) const noexcept {
         return distance < other.distance;
     }
 
     __attribute__((always_inline))
-    constexpr bool operator>(const CandidateEntry& other) const noexcept {
+    constexpr bool operator>(const DnbrCandidateEntry& other) const noexcept {
         return distance > other.distance;
     }
 
     __attribute__((always_inline))
-    constexpr bool operator<=(const CandidateEntry& other) const noexcept {
+    constexpr bool operator<=(const DnbrCandidateEntry& other) const noexcept {
         return distance <= other.distance;
     }
 
     __attribute__((always_inline))
-    constexpr bool operator>=(const CandidateEntry& other) const noexcept {
+    constexpr bool operator>=(const DnbrCandidateEntry& other) const noexcept {
         return distance >= other.distance;
     }
 
     __attribute__((always_inline))
-    constexpr bool operator==(const CandidateEntry& other) const noexcept {
+    constexpr bool operator==(const DnbrCandidateEntry& other) const noexcept {
         return distance == other.distance;
     }
 
     __attribute__((always_inline))
-    constexpr bool operator!=(const CandidateEntry& other) const noexcept {
+    constexpr bool operator!=(const DnbrCandidateEntry& other) const noexcept {
         return distance != other.distance;
     }
 
-};  // struct CandidateEntry
+};  // struct DnbrCandidateEntry
 
-// TO enable optimizations for POD types
+/** @brief Comparator for DnbrCandidateEntry by distance. */
 template <typename RouterTraitsT>
-inline constexpr bool __candidate_entry_is_trivially_copyable =
-    std::is_trivially_copyable<CandidateEntry<RouterTraitsT>>::value;
-
-template <typename RouterTraitsT>
-inline constexpr bool __candidate_entry_is_trivially_destructible =
-    std::is_trivially_destructible<CandidateEntry<RouterTraitsT>>::value;
-
-/** @brief Comparator for CandidateEntry by distance. */
-template <typename RouterTraitsT>
-struct CandidateEntryComparator {
-    using entry_t = CandidateEntry<RouterTraitsT>;
+struct DnbrCandidateEntryComparator {
+    using entry_t = DnbrCandidateEntry<RouterTraitsT>;
 
     __attribute__((always_inline))
     constexpr bool operator()(const entry_t& a, const entry_t& b) const noexcept {
         return a.get_distance() < b.get_distance();
     }
-};  // struct CandidateEntryComparator
+};  // struct DnbrCandidateEntryComparator
 
 }   // namespace cpu
 }   // namespace artea

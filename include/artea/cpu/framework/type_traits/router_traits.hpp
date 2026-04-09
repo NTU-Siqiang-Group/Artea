@@ -41,11 +41,15 @@ enum class GraphModeT {
 template <typename RouterTraitsT, typename DerivedClassT> class VectorRouter;
 template <typename RouterTraitsT> class BruteforceRouter;
 template <typename RouterTraitsT, GraphModeT Mode = GraphModeT::compact_mode> class DescentGraphRouter;
-template <typename RouterTraitsT> struct CandidateEntry;
-template <typename RouterTraitsT> struct CandidateEntryComparator;
-template <typename RouterTraitsT> class StdCandidateQueue;
-template <typename RouterTraitsT> class LinearCandidateQueue;
-template <typename RouterTraitsT> class FHCandidateQueue;
+template <typename RouterTraitsT> class InternalGraphRouter;
+template <typename RouterTraitsT> class HierarchicalGraphRouter;
+template <typename RouterTraitsT> struct DnbrCandidateEntry;
+template <typename RouterTraitsT> struct DnbrCandidateEntryComparator;
+template <typename RouterTraitsT> struct LnbrCandidateEntry;
+template <typename RouterTraitsT> struct LnbrCandidateEntryComparator;
+template <typename RouterTraitsT, typename EntryT> class StdCandidateQueue;
+template <typename RouterTraitsT, typename EntryT> class LinearCandidateQueue;
+template <typename RouterTraitsT, typename EntryT> class FHCandidateQueue;
 template <typename RouterTraitsT, VisitedTable VisitedTableT> class VisitedTablePool;
 
 /** @brief Traits for routing to queried vectors */
@@ -55,8 +59,19 @@ struct RouterTraits : virtual public ComputerTraitsT, virtual public IndexTraits
     /** ------ Self Traits ------ **/
     using router_traits_t = RouterTraits<ComputerTraitsT, IndexTraitsT, IntraQueryParallel>;
 
-    /** @brief Type for candidate entry. */
-    using candidate_entry_t = CandidateEntry<router_traits_t>;
+    // --- Candidate-entry types ---
+
+    /** @brief Dnbr-flavored candidate entry (vertex_id + distance, 8 bytes). */
+    using dnbr_candidate_entry_t      = DnbrCandidateEntry<router_traits_t>;
+    using dnbr_candidate_entry_comp_t = DnbrCandidateEntryComparator<router_traits_t>;
+
+    /** @brief Lnbr-flavored candidate entry (base_vid + layer_vid + distance). */
+    using lnbr_candidate_entry_t      = LnbrCandidateEntry<router_traits_t>;
+    using lnbr_candidate_entry_comp_t = LnbrCandidateEntryComparator<router_traits_t>;
+
+    /** @brief Default candidate entry alias (dnbr). Kept for backward compat
+     *         with every existing router, test, and benchmark. */
+    using candidate_entry_t = dnbr_candidate_entry_t;
 
     /** @brief Type for result entry (alias for candidate_entry_t). */
     using result_entry_t = candidate_entry_t;
@@ -75,8 +90,8 @@ struct RouterTraits : virtual public ComputerTraitsT, virtual public IndexTraits
     static constexpr candidate_entry_t min_candidate_entry =
         candidate_entry_t::make_min_entry();
 
-    /** @brief Type for candidate entry comparator. */
-    using entry_comp_t = CandidateEntryComparator<router_traits_t>;
+    /** @brief Type for candidate entry comparator (dnbr). */
+    using entry_comp_t = dnbr_candidate_entry_comp_t;
 
     /** @brief 4-ary heap type for candidate entries, parameterized by comparator. */
     template <typename Compare>
@@ -88,17 +103,24 @@ struct RouterTraits : virtual public ComputerTraitsT, virtual public IndexTraits
     /** @brief Type for bruteforce router. */
     using bruteforce_router_t = BruteforceRouter<router_traits_t>;
 
-    /** @brief Type for standard candidate queue. */
-    using std_candidate_queue_t = StdCandidateQueue<router_traits_t>;
+    // --- Candidate queues (default EntryT = dnbr_candidate_entry_t) ---
 
-    /** @brief Type for linear candidate queue */
-    using linear_candidate_queue_t = LinearCandidateQueue<router_traits_t>;
+    /** @brief Type for standard candidate queue (dnbr-backed by default). */
+    using std_candidate_queue_t = StdCandidateQueue<router_traits_t, dnbr_candidate_entry_t>;
 
-    /** @brief Type for four-ary heap candidate queue */
-    using fh_candidate_queue_t = FHCandidateQueue<router_traits_t>;
+    /** @brief Type for linear candidate queue (dnbr-backed by default). */
+    using linear_candidate_queue_t = LinearCandidateQueue<router_traits_t, dnbr_candidate_entry_t>;
+
+    /** @brief Type for four-ary heap candidate queue (dnbr-backed by default). */
+    using fh_candidate_queue_t = FHCandidateQueue<router_traits_t, dnbr_candidate_entry_t>;
 
     /** @brief Type for candidate queue */
     using candidate_queue_t = typename router_traits_t::linear_candidate_queue_t;
+
+    /** @brief Lnbr-backed std candidate queue, used by the internal-graph
+     *         router family to carry both base_vid and layer_vid through
+     *         beam search without a side-channel lookup table. */
+    using std_lnbr_candidate_queue_t = StdCandidateQueue<router_traits_t, lnbr_candidate_entry_t>;
 
     /** @brief Default visited table type (used by candidate queues and routers). */
     using visited_table_t = typename router_traits_t::thread_local_bitmap_t;
@@ -109,6 +131,12 @@ struct RouterTraits : virtual public ComputerTraitsT, virtual public IndexTraits
     /** @brief Type for descent graph router (template on GraphModeT). */
     template <GraphModeT Mode = GraphModeT::compact_mode>
     using descent_graph_router_t = DescentGraphRouter<router_traits_t, Mode>;
+
+    /** @brief Type for internal graph (single-layer) router. */
+    using internal_graph_router_t = InternalGraphRouter<router_traits_t>;
+
+    /** @brief Type for hierarchical graph (multi-layer) router. */
+    using hierarchical_graph_router_t = HierarchicalGraphRouter<router_traits_t>;
 
     /** @brief Graph mode enum alias. */
     using graph_mode_t = GraphModeT;

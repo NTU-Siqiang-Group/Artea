@@ -70,7 +70,7 @@ public:
         const vector_array_t& vecs_data = descent_graph.get_vecs_data();
 
         // RandomSeq uses thread-local storage internally, so it's safe to share across threads
-        random_seq_t random_seq(num_vertices);
+        random_seq_t random_seq;
 
         tbb::parallel_for(
             tbb::blocked_range<vertex_id_t>(0, num_vertices),
@@ -83,7 +83,7 @@ public:
                     const vec_ele_t* query_vec = vecs_data.get(vid);
 
                     // Generate random neighbor IDs
-                    random_seq.generate(random_nbr_ids, init_nbr_size);
+                    random_seq.generate(random_nbr_ids, num_vertices, init_nbr_size);
 
                     // Create neighbors with distances
                     nbrs.clear();

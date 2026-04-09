@@ -59,8 +59,8 @@ public:
         const vertex_num_t actual_result_size = std::min(result_size, static_cast<vertex_num_t>(total_vecs));
 
         // Generate random indices using RandomSeqNR
-        random_seq_nr_t random_seq_nr(total_vecs);
-        auto random_ids = random_seq_nr.generate(actual_result_size);
+        random_seq_nr_t random_seq_nr;
+        auto random_ids = random_seq_nr.generate(actual_result_size, total_vecs);
 
         // Copy to vec_ids (keep original random order)
         vertex_subset.vec_ids.insert(vertex_subset.vec_ids.end(), random_ids.begin(), random_ids.end());
