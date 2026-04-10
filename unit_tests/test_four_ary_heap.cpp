@@ -351,7 +351,7 @@ TEST_F(FourAryHeapTest, EdgeCaseSingleElement) {
 
     EXPECT_EQ(heap.size(), 1);
     EXPECT_FLOAT_EQ(heap.top().get_distance(), 3.14f);
-    EXPECT_EQ(heap.top().get_id(), 42);
+    EXPECT_EQ(heap.top().get_layer_id(), 42);
 
     heap.pop();
     EXPECT_TRUE(heap.empty());
@@ -403,7 +403,7 @@ TEST_F(FourAryHeapTest, EdgeCaseDuplicateDistances) {
     std::vector<vertex_id_t> ids;
     while (!heap.empty()) {
         EXPECT_FLOAT_EQ(heap.top().get_distance(), 10.0f);
-        ids.push_back(heap.top().get_id());
+        ids.push_back(heap.top().get_layer_id());
         heap.pop();
     }
 

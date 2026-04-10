@@ -870,7 +870,7 @@ TEST_F(CandidateQueueTest, ExtractResultIds_StdQueue) {
 
     // Verify IDs are in ascending order (since ID == distance)
     for (std::size_t i = 1; i < results.size(); ++i) {
-        EXPECT_LE(results[i - 1].get_id(), results[i].get_id())
+        EXPECT_LE(results[i - 1].get_layer_id(), results[i].get_layer_id())
             << "StdQueue extract_results: order violated at position " << i;
     }
 
@@ -897,7 +897,7 @@ TEST_F(CandidateQueueTest, ExtractResultIds_LinearQueue) {
     ASSERT_EQ(results.size(), K);
 
     for (std::size_t i = 1; i < results.size(); ++i) {
-        EXPECT_LE(results[i - 1].get_id(), results[i].get_id())
+        EXPECT_LE(results[i - 1].get_layer_id(), results[i].get_layer_id())
             << "LinearQueue extract_results: order violated at position " << i;
     }
 
@@ -924,7 +924,7 @@ TEST_F(CandidateQueueTest, ExtractResultIds_FHQueue) {
     ASSERT_EQ(results.size(), K);
 
     for (std::size_t i = 1; i < results.size(); ++i) {
-        EXPECT_LE(results[i - 1].get_id(), results[i].get_id())
+        EXPECT_LE(results[i - 1].get_layer_id(), results[i].get_layer_id())
             << "FHQueue extract_results: order violated at position " << i;
     }
 

@@ -124,9 +124,15 @@ public:
         return DnbrCandidateEntry{entry_id, distance};
     }
 
-    /** @brief Get the entry ID masking out status bit (Bit 31). */
+    /** @brief Get the base dataset ID (= stored vertex_id, masking out status bit). */
     __attribute__((always_inline))
-    auto get_id() const -> vertex_id_t {
+    auto get_base_id() const -> vertex_id_t {
+        return static_cast<vertex_id_t>(entry_id_and_status & MASK_ID);
+    }
+
+    /** @brief Get the layer-local ID. In descent-graph context, layer_id == base_id. */
+    __attribute__((always_inline))
+    auto get_layer_id() const -> vertex_id_t {
         return static_cast<vertex_id_t>(entry_id_and_status & MASK_ID);
     }
 

@@ -96,13 +96,13 @@ public:
         const vertex_num_t max_sz = this->_descent_graph.layer_config().max_nbr_size();
         for (const auto& entry : knn_results) {
             if (entry.is_invalid()) { continue; }
-            if (entry.get_id() == pivot_vid) { continue; }
+            if (entry.get_base_id() == pivot_vid) { continue; }
             const dnbr_arr_t& target_nbrs = this->_descent_graph.fetch_nbrs(pivot_vid);
             if (target_nbrs.size() >= max_sz &&
                 target_nbrs[max_sz - 1].get_distance() <= entry.get_distance()) {
                 continue;
             }
-            knn_ids.push_back(entry.get_id());
+            knn_ids.push_back(entry.get_base_id());
             knn_dists.push_back(entry.get_distance());
         }
 

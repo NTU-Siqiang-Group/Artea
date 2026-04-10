@@ -129,9 +129,15 @@ public:
 
     // --- Concept-required API ---
 
-    /** @brief Get the dedup key (= layer_vid) with the explored bit masked out. */
+    /** @brief Get the base dataset ID (= base_vid). */
     __attribute__((always_inline))
-    auto get_id() const -> vertex_id_t {
+    auto get_base_id() const -> vertex_id_t {
+        return base_vid;
+    }
+
+    /** @brief Get the layer-local ID (= layer_vid, with explored bit masked out). */
+    __attribute__((always_inline))
+    auto get_layer_id() const -> vertex_id_t {
         return static_cast<vertex_id_t>(layer_vid_and_status & MASK_ID);
     }
 
@@ -177,19 +183,15 @@ public:
         distance = dist;
     }
 
-    // --- Lnbr-specific accessors (not part of the concept) ---
+    // --- Lnbr-specific convenience aliases ---
 
-    /** @brief Get the base dataset id. */
+    /** @brief Alias for get_base_id(). */
     __attribute__((always_inline))
-    auto get_base_vid() const -> vertex_id_t {
-        return base_vid;
-    }
+    auto get_base_vid() const -> vertex_id_t { return get_base_id(); }
 
-    /** @brief Get the layer_vid (alias of get_id). */
+    /** @brief Alias for get_layer_id(). */
     __attribute__((always_inline))
-    auto get_layer_vid() const -> vertex_id_t {
-        return get_id();
-    }
+    auto get_layer_vid() const -> vertex_id_t { return get_layer_id(); }
 
     // --- Distance-based comparison operators ---
 

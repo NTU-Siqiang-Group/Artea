@@ -216,7 +216,7 @@ TEST_F(ConvGraphSearchTest, SearchModeParallelSingleQuery) {
                         continue;
                     }
                     for (const auto& e : res) {
-                        if (!e.is_invalid() && e.get_id() >= g_results.num_base)
+                        if (!e.is_invalid() && e.get_base_id() >= g_results.num_base)
                             error_count.fetch_add(1, std::memory_order_relaxed);
                     }
                     std::copy(res.begin(), res.end(), all_results.begin() + i * g_config.topk);

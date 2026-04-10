@@ -128,9 +128,9 @@ TEST_F(RadiusProberTest, CompareWithBruteforce) {
         auto results = bf_router.query(query_vec);
         // Skip self (bruteforce returns the query vertex itself with distance=0).
         for (const auto& entry : results) {
-            if (entry.get_id() != vid) {
+            if (entry.get_base_id() != vid) {
                 bf_nn_distances[i] = entry.get_distance();
-                results_cache[i] = entry.get_id();
+                results_cache[i] = entry.get_base_id();
                 break;
             }
         }

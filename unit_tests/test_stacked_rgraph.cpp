@@ -25,7 +25,9 @@
 #include <chrono>
 #include <cstdint>
 #include <filesystem>
+#include <fstream>
 #include <iostream>
+#include <unordered_map>
 #include <limits>
 #include <memory>
 #include <stdexcept>
@@ -537,6 +539,93 @@ TEST_F(StackedRGraphTest, SeparationRate) {
             << "Layer " << l << " separation rate is suspiciously low: "
             << rate << "%";
     }
+}
+
+// ============================================================
+//  Benchmark: upper-layer beam-search latency for all base vertices
+// ============================================================
+
+TEST_F(StackedRGraphTest, UpperLayerSearchLatency) {
+    const auto& base_vecs = DataProvider::instance().get_dataset().get_base_vecs();
+    auto& dist_func = DataProvider::instance().get_dist_func();
+    const auto& vecs_storage = _graph->get_vecs_storage();
+    const vertex_num_t n =
+        static_cast<vertex_num_t>(vecs_storage.get_num_vecs());
+
+    constexpr vertex_num_t search_nn_qs = 40;
+
+    hierarchical_graph_router_t router(
+        vecs_storage, dist_func,
+        /*topk=*/1,
+        /*search_nn_qs=*/search_nn_qs,
+        /*candidate_queue_size=*/search_nn_qs);
+
+    const auto& hg = _graph->get_hierarchical_graph();
+
+    // l1_nn[i] = base_vid of the 1-NN found by upper-layer search for
+    // base vertex i.
+    std::vector<vertex_id_t> l1_nn(n, base_traits_t::invalid_vertex_id);
+
+    // Warm up: a few queries to prime the visited-table pool / caches.
+    for (vertex_num_t i = 0; i < std::min<vertex_num_t>(100, n); ++i) {
+        router.beam_search(vecs_storage.get(i), hg);
+    }
+
+    auto t0 = std::chrono::high_resolution_clock::now();
+
+    tbb::parallel_for(
+        tbb::blocked_range<vertex_num_t>(0, n),
+        [&](const tbb::blocked_range<vertex_num_t>& r) {
+            for (vertex_num_t i = r.begin(); i != r.end(); ++i) {
+                auto results = router.beam_search(vecs_storage.get(i), hg);
+                if (!results.empty()) {
+                    l1_nn[i] = results[0].get_base_id();
+                }
+            }
+        }
+    );
+
+    auto t1 = std::chrono::high_resolution_clock::now();
+    const double elapsed_ms =
+        std::chrono::duration_cast<std::chrono::microseconds>(t1 - t0).count()
+        / 1000.0;
+    const double per_query_us =
+        std::chrono::duration_cast<std::chrono::microseconds>(t1 - t0).count()
+        / static_cast<double>(n);
+
+    ARTEA_INFO(fmt::format(
+        "UpperLayerSearch: {} queries, search_nn_qs={}, "
+        "total = {:.1f} ms, per-query = {:.2f} us",
+        n, search_nn_qs, elapsed_ms, per_query_us));
+
+    // Count how many base vertices choose each L1 vertex as their 1-NN.
+    const auto& layer0 = _graph->get_layer_graph(0);
+    const vertex_num_t n_l1 = layer0.get_num_vertices();
+
+    // Map from L1 base_vid → count of base vertices claiming it as 1-NN.
+    std::unordered_map<vertex_id_t, vertex_num_t> nn_count;
+    for (vertex_num_t v = 0; v < n_l1; ++v) {
+        nn_count[layer0.get_base_vid(v)] = 0;
+    }
+    for (vertex_num_t i = 0; i < n; ++i) {
+        if (l1_nn[i] != base_traits_t::invalid_vertex_id) {
+            ++nn_count[l1_nn[i]];
+        }
+    }
+
+    const auto out_path =
+        std::filesystem::path("temp") / "test_stacked_rgraph.output";
+    std::filesystem::create_directories(out_path.parent_path());
+    std::ofstream ofs(out_path);
+    ASSERT_TRUE(ofs.is_open()) << "Cannot open " << out_path;
+    ofs << "# l1_base_vid  nn_count\n";
+    for (vertex_num_t v = 0; v < n_l1; ++v) {
+        const vertex_id_t bv = layer0.get_base_vid(v);
+        ofs << bv << "  " << nn_count[bv] << "\n";
+    }
+    ofs.close();
+    ARTEA_INFO(fmt::format(
+        "Wrote L1 nn_count ({} L1 vertices) to {}", n_l1, out_path.string()));
 }
 
 // ============================================================

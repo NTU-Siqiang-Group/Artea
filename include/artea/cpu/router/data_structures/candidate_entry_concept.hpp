@@ -48,8 +48,9 @@ namespace cpu {
  *     queues forward their @c try_push arguments into the entry via variadic
  *     perfect-forwarding, so the constructor signature is enforced at the
  *     call site (not by this concept).
- *   - @c get_id() returns the "dedup key" the queue hands to the visited
- *     table. For Dnbr this is the vertex_id; for Lnbr it's the layer_vid.
+ *   - @c get_base_id() returns the base-dataset identity (for recall).
+ *   - @c get_layer_id() returns the per-graph dedup key handed to the
+ *     visited table. For Dnbr, layer_id == base_id; for Lnbr they differ.
  *   - Ordering is distance-based. Comparators sort by @c get_distance().
  *
  * @tparam EntryT The candidate-entry type to check.
@@ -61,8 +62,8 @@ concept CandidateEntry = requires(EntryT e, const EntryT ce) {
     typename EntryT::vertex_id_t;
     typename EntryT::distance_t;
 
-    // --- Dedup key (returned to the queue for visited-table tracking) ---
-    { ce.get_id() } -> std::convertible_to<typename EntryT::vertex_id_t>;
+    // --- Layer-local identity (dedup key for visited table / candidate queue) ---
+    { ce.get_layer_id() } -> std::convertible_to<typename EntryT::vertex_id_t>;
 
     // --- Distance accessors ---
     { ce.get_distance() } -> std::convertible_to<typename EntryT::distance_t>;

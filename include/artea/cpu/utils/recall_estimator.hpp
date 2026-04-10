@@ -15,6 +15,7 @@
 #include <tbb/enumerable_thread_specific.h>
 #include <fmt/format.h>
 #include <artea/common/logger.hpp>
+#include <artea/cpu/router/data_structures/result_entry_concept.hpp>
 
 namespace artea {
 namespace cpu {
@@ -145,7 +146,7 @@ public:
      * @param num_queries Number of queries.
      * @return double Recall@K score.
      */
-    template <typename ResultEntryT>
+    template <ResultEntry ResultEntryT>
     auto calculate_recall_at_k(
         const std::vector<ResultEntryT>& predictions,
         const idlist_array_t& gt_vecs,
@@ -202,7 +203,7 @@ public:
 
                     buffers.sorted_pred.resize(k);
                     for (std::size_t j = 0; j < k; ++j) {
-                        buffers.sorted_pred[j] = pred_row[j].get_id();
+                        buffers.sorted_pred[j] = pred_row[j].get_base_id();
                     }
                     std::sort(buffers.sorted_pred.begin(), buffers.sorted_pred.end());
 
