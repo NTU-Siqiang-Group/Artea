@@ -136,6 +136,89 @@ TEST_F(DatasetProberTest, Probe) {
     }
 }
 
+/**
+ * @brief Probe query set using ground truth: nn_rank 1..k x all quantiles.
+ *        For each query, compute distances to its top-k ground truth IDs
+ *        with _dist_func and print the column-wise quantiles.
+ */
+TEST_F(DatasetProberTest, ProbeQuery) {
+    auto& provider = DataProvider::instance();
+    auto& dataset = provider.get_dataset();
+    auto& dist_func = provider.get_dist_func();
+
+    const auto& base_vecs = dataset.get_base_vecs();
+    const auto& query_vecs = dataset.get_query_vecs();
+    const auto& gt_vecs = dataset.get_gt_vecs();
+
+    dataset_prober_t prober(base_vecs, dist_func);
+
+    std::vector<float> quantiles = {
+        0.001f, 0.01f, 0.05f, 0.1f, 0.25f, 0.5f, 0.75f, 0.9f, 0.95f, 0.99f
+    };
+
+    ARTEA_INFO(fmt::format(
+        "Probing query set: {} queries x {} ground-truth NNs per query...",
+        query_vecs.get_num_vecs(), gt_vecs.get_vec_dim()));
+
+    auto t0 = std::chrono::high_resolution_clock::now();
+    auto result = prober.probe_query(query_vecs, gt_vecs, quantiles);
+    auto t1 = std::chrono::high_resolution_clock::now();
+    double elapsed_s = std::chrono::duration_cast<std::chrono::microseconds>(t1 - t0).count() / 1e6;
+
+    ARTEA_INFO(fmt::format(
+        "Query probe completed in {:.2f} s ({} queries x {} ranks)",
+        elapsed_s, result.num_queries, result.nn_ranks.size()));
+
+    // Print table in chunks of at most 10 nn_rank columns
+    const uint32_t total_ranks = static_cast<uint32_t>(result.nn_ranks.size());
+    const uint32_t cols_per_chunk = 10;
+
+    for (uint32_t chunk_start = 0; chunk_start < total_ranks; chunk_start += cols_per_chunk) {
+        uint32_t chunk_end = std::min(chunk_start + cols_per_chunk, total_ranks);
+
+        // Header
+        std::string header = fmt::format("  {:>8s}", "quantile");
+        for (uint32_t c = chunk_start; c < chunk_end; ++c) {
+            header += fmt::format(" {:>10d}", result.nn_ranks[c]);
+        }
+        ARTEA_INFO(fmt::format("--- nn_rank [{}, {}] ---", result.nn_ranks[chunk_start], result.nn_ranks[chunk_end - 1]));
+        ARTEA_INFO(header);
+
+        // Data rows
+        for (size_t qi = 0; qi < result.quantiles.size(); ++qi) {
+            std::string row = fmt::format("  {:>7.3f}%", result.quantiles[qi] * 100.0f);
+            for (uint32_t c = chunk_start; c < chunk_end; ++c) {
+                row += fmt::format(" {:>10.2f}", result.table[c][qi]);
+            }
+            ARTEA_INFO(row);
+        }
+    }
+
+    // Verify: shape is consistent
+    EXPECT_EQ(result.nn_ranks.size(), gt_vecs.get_vec_dim());
+    EXPECT_EQ(result.table.size(), gt_vecs.get_vec_dim());
+    EXPECT_EQ(result.num_queries, query_vecs.get_num_vecs());
+
+    // Verify: for each quantile, distances should be non-decreasing across nn_ranks
+    for (size_t qi = 0; qi < result.quantiles.size(); ++qi) {
+        for (uint32_t r = 1; r < total_ranks; ++r) {
+            EXPECT_LE(result.table[r - 1][qi], result.table[r][qi])
+                << fmt::format("rank ordering violated at quantile={:.3f}: rank {}={:.6f} > rank {}={:.6f}",
+                    result.quantiles[qi], r, result.table[r - 1][qi], r + 1, result.table[r][qi]);
+        }
+    }
+
+    // Verify: for each nn_rank, distances should be non-decreasing across quantiles
+    for (uint32_t r = 0; r < total_ranks; ++r) {
+        for (size_t qi = 1; qi < result.quantiles.size(); ++qi) {
+            EXPECT_LE(result.table[r][qi - 1], result.table[r][qi])
+                << fmt::format("quantile ordering violated at rank {}: q={:.3f} ({:.6f}) > q={:.3f} ({:.6f})",
+                    r + 1, result.quantiles[qi - 1], result.table[r][qi - 1],
+                    result.quantiles[qi], result.table[r][qi]);
+        }
+    }
+}
+
 int main(int argc, char** argv) {
     ::testing::InitGoogleTest(&argc, argv);
 

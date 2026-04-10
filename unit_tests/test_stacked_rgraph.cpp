@@ -209,14 +209,32 @@ protected:
             g_config.search_nn_qs, g_config.select_nbrs_qs));
 
         auto t0 = std::chrono::high_resolution_clock::now();
-        _graph = stacked_rgraph::factory_t::construct_graph(
-            base_vecs, dist_func,
-            fifo_pruning_fn_t{static_cast<vertex_num_t>(g_config.max_nbr_size)},
+
+        // Build via the incremental interface only:
+        //   1. Construct an empty IndexStructure with the chosen knobs.
+        //   2. Produce an owned clone of the caller's base_vecs (we hold
+        //      it by const& from the DataProvider, so we cannot move it).
+        //   3. Hand the clone to add_vertices by move; inside
+        //      add_vertices the clone is moved into the index's
+        //      (currently empty) owned base storage via append_batch's
+        //      zero-copy fast path.
+        const vertex_num_t total_vertices =
+            static_cast<vertex_num_t>(base_vecs.get_num_vecs());
+        _graph = std::make_unique<stacked_rgraph::index_t>(
+            total_vertices,
             /*rnet_beta=*/beta,
             /*L1_rnet_radius=*/l1_radius,
             /*search_nn_qs=*/static_cast<vertex_num_t>(g_config.search_nn_qs),
             /*select_nbrs_qs=*/static_cast<vertex_num_t>(g_config.select_nbrs_qs),
             /*max_nbr_size=*/g_config.max_nbr_size);
+
+        vector_array_t owned_batch = base_vecs.extract_subset(0, total_vertices);
+        stacked_rgraph::factory_t::add_vertices(
+            *_graph,
+            std::move(owned_batch),
+            dist_func,
+            fifo_pruning_fn_t{static_cast<vertex_num_t>(g_config.max_nbr_size)});
+
         auto t1 = std::chrono::high_resolution_clock::now();
         _build_ms = std::chrono::duration_cast<std::chrono::milliseconds>(t1 - t0).count();
 

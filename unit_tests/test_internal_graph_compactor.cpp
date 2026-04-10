@@ -33,7 +33,9 @@ using namespace artea::cpu;
 
 class InternalGraphCompactorTest : public ::testing::Test {
 protected:
-    static constexpr vertex_num_t max_num_vertices = 10000;
+    // Sized to accommodate LargeScale's 100k-vertex population; all
+    // other tests use smaller counts and fit comfortably.
+    static constexpr vertex_num_t max_num_vertices = 100'000;
     static constexpr vertex_num_t src_max_nbr_size = 63;
 
     void SetUp() override {

@@ -16,8 +16,12 @@
  * @FilePath: /Artea/include/artea/cpu/index/stacked_rgraph/index_structure.hpp
  * @Author: Chandler (Weitang Ye) <weitang.ye@ntu.edu.sg>
  * @Description: Data structure of the dynamic Stacked R-Net index. Holds
- *               configuration and the layered hierarchy state only; the
- *               online insertion algorithm lives in
+ *               configuration, the layered hierarchy state, and the owned
+ *               base-vector storage. The underlying @c HierarchicalGraph
+ *               is held by composition (via @c std::unique_ptr, because
+ *               @c HierarchicalGraph is move-deleted), and its public API
+ *               is forwarded so existing call sites keep working.
+ *               Construction and dynamic insertion are performed by
  *               @c stacked_rgraph::IndexFactory.
  */
 
@@ -26,6 +30,9 @@
 #include <algorithm>
 #include <cmath>
 #include <cstdint>
+#include <memory>
+#include <utility>
+#include <vector>
 
 #include <artea/common/logger.hpp>
 #include <artea/cpu/index/hierarchical_graph.hpp>
@@ -35,14 +42,24 @@ namespace cpu {
 namespace stacked_rgraph {
 
 /**
- * @brief Dynamic hierarchical r-net index: holds the layer storage (via
- *        @c HierarchicalGraph) and the per-graph configuration used by
- *        the insertion algorithm. Construction and dynamic insertion are
- *        performed by @c stacked_rgraph::IndexFactory.
+ * @brief Dynamic hierarchical r-net index: composes a @c HierarchicalGraph
+ *        (the layer storage) with the per-graph configuration and the
+ *        owned vector storage used by the insertion algorithm.
+ *        Construction and dynamic insertion are performed by
+ *        @c stacked_rgraph::IndexFactory.
+ *
+ * This class used to inherit from @c HierarchicalGraph. It now holds it
+ * through a @c std::unique_ptr (HierarchicalGraph is copy-/move-deleted
+ * because it contains a @c std::atomic and a @c std::mutex). Exposing
+ * the composed graph via @c get_hierarchical_graph() makes it cheap to
+ * hand the raw graph to another subsystem without dragging the r-net
+ * configuration along. The common @c HierarchicalGraph public API is
+ * also forwarded below so direct call sites like
+ * @c index.get_num_layers() keep compiling unchanged.
  *
  * Each upper-layer vertex stores its dual identity via @c lnbr_t
- * (@c base_vid is the position in the caller's base_vecs; @c layer_vid is
- * the position in the layer's @c InternalGraph).
+ * (@c base_vid is the position in the owned @c _vecs_storage; @c layer_vid
+ * is the position in the layer's @c InternalGraph).
  *
  * Per-layer covering radius: @c R_h = L1_rnet_radius * rnet_beta^(h-1),
  * with @c h = 1 being the lowest upper layer (layer_id == 0 internally).
@@ -50,20 +67,28 @@ namespace stacked_rgraph {
  * @tparam IndexTraitsT The index traits type.
  */
 template <typename IndexTraitsT>
-class IndexStructure : public HierarchicalGraph<IndexTraitsT> {
+class IndexStructure {
 
-    using base_t           = HierarchicalGraph<IndexTraitsT>;
+    using vertex_num_t         = typename IndexTraitsT::vertex_num_t;
+    using vertex_id_t          = typename IndexTraitsT::vertex_id_t;
+    using layer_num_t          = typename IndexTraitsT::layer_num_t;
+    using layer_id_t           = typename IndexTraitsT::layer_id_t;
+    using distance_t           = typename IndexTraitsT::distance_t;
+    using ratio_t              = typename IndexTraitsT::ratio_t;
+    using internal_graph_t     = typename IndexTraitsT::internal_graph_t;
+    using vector_array_t       = typename IndexTraitsT::vector_array_t;
+    using vecs_storage_t       = typename IndexTraitsT::vecs_storage_t;
 
-    using vertex_num_t     = typename IndexTraitsT::vertex_num_t;
-    using vertex_id_t      = typename IndexTraitsT::vertex_id_t;
-    using layer_num_t      = typename IndexTraitsT::layer_num_t;
-    using layer_id_t       = typename IndexTraitsT::layer_id_t;
-    using distance_t       = typename IndexTraitsT::distance_t;
-    using ratio_t          = typename IndexTraitsT::ratio_t;
+    using hierarchical_graph_t = HierarchicalGraph<IndexTraitsT>;
 
 public:
     /**
      * @brief Construct an empty IndexStructure.
+     *
+     * The composed @c HierarchicalGraph is created with capacity
+     * @c _compute_max_restrict_level(total_vertices); the owned vector
+     * storage @c _vecs_storage starts empty and is grown in-place by
+     * @c append_vecs on every incremental build pass.
      *
      * @param total_vertices       Expected size of the caller's base dataset
      *                             (i.e. layer 0). Used to derive the
@@ -94,7 +119,8 @@ public:
         const ratio_t layer_cap_ratio = ratio_t(1),
         const vertex_num_t min_layer_cap = 1024
     ) :
-        base_t(_compute_max_restrict_level(total_vertices)),
+        _hierarchical_graph(std::make_unique<hierarchical_graph_t>(
+            _compute_max_restrict_level(total_vertices))),
         _rnet_beta(rnet_beta),
         _L1_rnet_radius(L1_rnet_radius),
         _max_restrict_level(_compute_max_restrict_level(total_vertices)),
@@ -102,7 +128,8 @@ public:
         _select_nbrs_qs(select_nbrs_qs),
         _max_nbr_size(max_nbr_size),
         _layer_cap_ratio(layer_cap_ratio),
-        _min_layer_cap(min_layer_cap)
+        _min_layer_cap(min_layer_cap),
+        _vecs_storage()
     {
         if (rnet_beta <= ratio_t(1)) {
             ARTEA_ERROR(fmt::format("rnet_beta ({}) must be > 1", rnet_beta));
@@ -121,7 +148,98 @@ public:
         }
     }
 
-    // Inherits copy/move-deleted from HierarchicalGraph.
+    // Copy and move both deleted: the composed HierarchicalGraph is
+    // non-movable (atomic + mutex members), so moving IndexStructure
+    // would leave the graph behind. Clients should keep IndexStructure
+    // inside a std::unique_ptr, as the test and factory already do.
+    IndexStructure(const IndexStructure&) = delete;
+    IndexStructure& operator=(const IndexStructure&) = delete;
+    IndexStructure(IndexStructure&&) = delete;
+    IndexStructure& operator=(IndexStructure&&) = delete;
+
+    // --- Composed graph accessor ---
+
+    /**
+     * @brief Access the underlying @c HierarchicalGraph instance. Use
+     *        this to hand the raw graph to another subsystem (e.g.
+     *        a serializer or a query-path router) without dragging the
+     *        r-net configuration knobs along.
+     */
+    __attribute__((always_inline))
+    auto get_hierarchical_graph() -> hierarchical_graph_t& {
+        return *_hierarchical_graph;
+    }
+
+    __attribute__((always_inline))
+    auto get_hierarchical_graph() const -> const hierarchical_graph_t& {
+        return *_hierarchical_graph;
+    }
+
+    // --- HierarchicalGraph public API forwarders ---
+    //
+    // These keep call sites that previously relied on inheritance working
+    // unchanged. Every forwarder is a thin inline call to the matching
+    // method on @c *_hierarchical_graph.
+
+    __attribute__((always_inline))
+    auto get_num_layers() const -> layer_num_t {
+        return _hierarchical_graph->get_num_layers();
+    }
+
+    __attribute__((always_inline))
+    auto max_layers() const -> layer_num_t {
+        return _hierarchical_graph->max_layers();
+    }
+
+    __attribute__((always_inline))
+    auto get_layer_graph(const layer_id_t layer_id) -> internal_graph_t& {
+        return _hierarchical_graph->get_layer_graph(layer_id);
+    }
+
+    __attribute__((always_inline))
+    auto get_layer_graph(const layer_id_t layer_id) const -> const internal_graph_t& {
+        return _hierarchical_graph->get_layer_graph(layer_id);
+    }
+
+    __attribute__((always_inline))
+    auto set_layer_graph(const layer_id_t layer_id,
+                         std::unique_ptr<internal_graph_t> graph) -> void {
+        _hierarchical_graph->set_layer_graph(layer_id, std::move(graph));
+    }
+
+    __attribute__((always_inline))
+    auto commit_layer(const layer_id_t layer_id) -> void {
+        _hierarchical_graph->commit_layer(layer_id);
+    }
+
+    template <typename LayerFactoryFnT>
+    auto grow_layers(const layer_num_t target_num_layers,
+                     LayerFactoryFnT&& layer_factory) -> layer_num_t {
+        return _hierarchical_graph->grow_layers(
+            target_num_layers,
+            std::forward<LayerFactoryFnT>(layer_factory));
+    }
+
+    template <typename LayerFactoryFnT, typename SeedFnT>
+    auto extend_and_seed(const layer_num_t target_num_layers,
+                         LayerFactoryFnT&& layer_factory,
+                         SeedFnT&& seed_fn) -> bool {
+        return _hierarchical_graph->extend_and_seed(
+            target_num_layers,
+            std::forward<LayerFactoryFnT>(layer_factory),
+            std::forward<SeedFnT>(seed_fn));
+    }
+
+    __attribute__((always_inline))
+    auto get_layer_graphs() -> std::vector<std::unique_ptr<internal_graph_t>>& {
+        return _hierarchical_graph->get_layer_graphs();
+    }
+
+    __attribute__((always_inline))
+    auto get_layer_graphs() const
+        -> const std::vector<std::unique_ptr<internal_graph_t>>& {
+        return _hierarchical_graph->get_layer_graphs();
+    }
 
     // --- Config accessors ---
 
@@ -133,6 +251,30 @@ public:
     auto select_nbrs_qs()       const -> vertex_num_t { return _select_nbrs_qs; }
     auto layer_cap_ratio()      const -> ratio_t      { return _layer_cap_ratio; }
     auto min_layer_cap()        const -> vertex_num_t { return _min_layer_cap; }
+
+    // --- Owned vector storage ---
+
+    /**
+     * @brief Access the owned vector storage. The index stores the full
+     *        base dataset internally so that incremental @c add_vertices
+     *        calls can append new batches in-place; all @c base_vid values
+     *        referenced by the hierarchy index into this array.
+     */
+    auto get_vecs_storage()       -> vecs_storage_t&       { return _vecs_storage; }
+    auto get_vecs_storage() const -> const vecs_storage_t& { return _vecs_storage; }
+
+    /**
+     * @brief Append a batch of vectors to the owned vector storage.
+     *
+     * Delegates to @c VectorArray::append_batch: if the owned storage is
+     * currently empty, @p batch_vecs is moved in wholesale; otherwise the
+     * new vectors are copied in parallel to the end of the existing
+     * storage. After this call the new vertices occupy base_vid range
+     * @c [old_size, old_size + batch_size).
+     */
+    auto append_vecs(vector_array_t&& batch_vecs) -> void {
+        _vecs_storage.append_batch(std::move(batch_vecs));
+    }
 
     /**
      * @brief Covering radius for 1-indexed layer @p h (paper convention).
@@ -186,6 +328,12 @@ private:
         return std::max<layer_num_t>(ceiled, layer_num_t(1));
     }
 
+    /// @brief Composed @c HierarchicalGraph. Held by @c unique_ptr because
+    ///        @c HierarchicalGraph is move-deleted (contains std::atomic
+    ///        and std::mutex). Allocated once in the constructor and then
+    ///        grown in-place via @c grow_layers / @c extend_and_seed.
+    std::unique_ptr<hierarchical_graph_t> _hierarchical_graph;
+
     /// @brief Radius growth factor between consecutive upper layers:
     ///        @c R_h = L1_rnet_radius * rnet_beta^(h-1). Must be > 1.
     ratio_t      _rnet_beta;
@@ -218,6 +366,10 @@ private:
     /// @brief Floor on per-layer CSR capacity; guards against over-shrinking
     ///        upper layers when @c _layer_cap_ratio > 1.
     vertex_num_t _min_layer_cap;
+
+    /// @brief Owned vector storage. Grown in-place by @c append_vecs;
+    ///        every @c base_vid in the hierarchy indexes into this array.
+    vecs_storage_t _vecs_storage;
 };
 
 }   // namespace stacked_rgraph

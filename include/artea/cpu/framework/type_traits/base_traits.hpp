@@ -168,6 +168,15 @@ public:
     /** @brief vector arrays. */
     using vector_array_t = VectorArray<vertex_num_t, vec_ele_t>;
 
+    /** @brief Owned vector storage held inside an index (dynamic indices
+     *         like @c stacked_rgraph::IndexStructure copy/move incoming
+     *         batches into a member of this type, and every @c base_vid
+     *         in the hierarchy indexes into it). Alias of @c vector_array_t
+     *         — introduced purely as a naming convention to distinguish
+     *         an index's owned storage from a caller-supplied input
+     *         batch of the same underlying type. */
+    using vecs_storage_t = vector_array_t;
+
     /** @brief id list array */
     using idlist_array_t = VectorArray<vertex_num_t, vec_id_t>;
 

@@ -88,6 +88,8 @@ class DatasetProber {
     using vec_ele_t = typename ComputerTraitsT::vec_ele_t;
     using distance_t = typename ComputerTraitsT::distance_t;
     using vector_array_t = typename ComputerTraitsT::vector_array_t;
+    using query_vecs_t = typename ComputerTraitsT::query_vecs_t;
+    using ground_truth_t = typename ComputerTraitsT::ground_truth_t;
     using random_seq_t = typename ComputerTraitsT::random_seq_t;
     using dist_func_t = typename ComputerTraitsT::dist_func_t;
 
@@ -105,6 +107,23 @@ public:
         std::vector<std::vector<distance_t>> table;             // table[rank_idx][quantile_idx]
         vec_num_t num_samples;                                  // number of sampled vertices
         float lid;                                              // estimated Local Intrinsic Dimensionality
+    };
+
+    /**
+     * @brief Probe result for the query/ground-truth variant.
+     *
+     * Unlike @c ProbeResult which builds the table by brute-force scanning the
+     * full base dataset, this result is derived from the precomputed ground
+     * truth: for each query, @c probe_query uses the top-K ground truth IDs
+     * directly and recomputes the query-to-GT distances with @c _dist_func.
+     * No LID is reported because the queries are not necessarily drawn from
+     * the base distribution.
+     */
+    struct QueryProbeResult {
+        std::vector<uint32_t> nn_ranks;                         // nn_ranks (1-based): 1..k
+        std::vector<float> quantiles;                           // quantile values
+        std::vector<std::vector<distance_t>> table;             // table[rank_idx][quantile_idx]
+        vec_num_t num_queries;                                  // number of queries processed
     };
 
     DatasetProber(const vector_array_t& base_vecs, const dist_func_t& dist_func)
@@ -166,6 +185,123 @@ public:
         result.table = std::move(table);
         result.num_samples = num_samples;
         result.lid = lid;
+        return result;
+    }
+
+    /**
+     * @brief Probe the query-to-nearest-base-vertex distance distribution
+     *        using the dataset's ground truth.
+     *
+     * For every query @c q:
+     *   - Read the top-@c k ground truth vertex IDs from @p gt_vecs (@c k ==
+     *     @c gt_vecs.get_vec_dim()).
+     *   - Compute distance @c dist_func(q, base_vecs.get(gt_id)) for each of
+     *     the @c k ground-truth IDs.
+     *   - Sort the @c k computed distances ascending (ground truth rows are
+     *     typically already sorted, but we re-sort defensively in case of
+     *     tie-breaking differences between the ground-truth generator's
+     *     distance metric and @c _dist_func).
+     *
+     * Then, for each nn_rank in @c 1..k, collect the distance column across
+     * all queries, sort, and extract the requested quantiles — matching the
+     * shape of @c ProbeResult::table.
+     *
+     * @param query_vecs  Query set, sized @c num_queries x @c vec_dim.
+     * @param gt_vecs     Ground truth ID array, sized @c num_queries x @c k.
+     * @param quantiles   Vector of target quantiles, each in (0, 1).
+     * @return            @c QueryProbeResult containing the rank x quantile table.
+     */
+    auto probe_query(
+        const query_vecs_t& query_vecs,
+        const ground_truth_t& gt_vecs,
+        const std::vector<float>& quantiles
+    ) -> QueryProbeResult {
+
+        const vec_num_t num_queries = static_cast<vec_num_t>(gt_vecs.get_num_vecs());
+        const uint32_t  k           = static_cast<uint32_t>(gt_vecs.get_vec_dim());
+
+        if (num_queries == 0) {
+            ARTEA_ERROR("probe_query: ground truth has zero queries");
+        }
+        if (k == 0) {
+            ARTEA_ERROR("probe_query: ground truth vec_dim (k) is zero");
+        }
+        if (query_vecs.get_num_vecs() != num_queries) {
+            ARTEA_ERROR(fmt::format(
+                "probe_query: query count ({}) does not match ground truth count ({})",
+                query_vecs.get_num_vecs(), num_queries));
+        }
+        if (query_vecs.get_vec_dim() != _base_vecs.get_vec_dim()) {
+            ARTEA_ERROR(fmt::format(
+                "probe_query: query vec_dim ({}) does not match base vec_dim ({})",
+                query_vecs.get_vec_dim(), _base_vecs.get_vec_dim()));
+        }
+
+        // Flat table: num_queries x k, row-major, each row sorted ascending.
+        std::vector<distance_t> dist_table(
+            static_cast<size_t>(num_queries) * static_cast<size_t>(k));
+
+        tbb::parallel_for(
+            tbb::blocked_range<vec_num_t>(0, num_queries),
+            [&](const tbb::blocked_range<vec_num_t>& r) {
+                for (vec_num_t q = r.begin(); q != r.end(); ++q) {
+                    const vec_ele_t* query_vec = query_vecs.get(q);
+                    const vec_id_t*  gt_row    = gt_vecs.get(q);
+                    distance_t*      dist_row  =
+                        dist_table.data() + static_cast<size_t>(q) * k;
+
+                    for (uint32_t j = 0; j < k; ++j) {
+                        const vec_id_t nn_id = gt_row[j];
+                        dist_row[j] = _dist_func(query_vec, _base_vecs.get(nn_id));
+                    }
+
+                    // Defensive sort: GT rows are typically already sorted by
+                    // distance under the dataset provider's metric, but may
+                    // differ from our dist_func on ties.
+                    std::sort(dist_row, dist_row + k);
+                }
+            }
+        );
+
+        // Build nn_ranks: 1..k
+        std::vector<uint32_t> nn_ranks(k);
+        for (uint32_t r = 0; r < k; ++r) {
+            nn_ranks[r] = r + 1;
+        }
+
+        // Build quantile table: for each nn_rank, sort the column and
+        // extract quantiles. Mirrors the probe() code path.
+        std::vector<std::vector<distance_t>> table(k);
+
+        tbb::parallel_for(
+            tbb::blocked_range<uint32_t>(0, k),
+            [&](const tbb::blocked_range<uint32_t>& r) {
+                for (uint32_t col = r.begin(); col != r.end(); ++col) {
+                    std::vector<distance_t> column(num_queries);
+                    for (vec_num_t i = 0; i < num_queries; ++i) {
+                        column[i] = dist_table[
+                            static_cast<size_t>(i) * k + col];
+                    }
+
+                    std::sort(std::execution::par, column.begin(), column.end());
+
+                    table[col].reserve(quantiles.size());
+                    for (float q : quantiles) {
+                        vec_num_t idx = static_cast<vec_num_t>(q * column.size());
+                        if (idx >= column.size()) {
+                            idx = column.size() - 1;
+                        }
+                        table[col].push_back(column[idx]);
+                    }
+                }
+            }
+        );
+
+        QueryProbeResult result;
+        result.nn_ranks = std::move(nn_ranks);
+        result.quantiles = quantiles;
+        result.table = std::move(table);
+        result.num_queries = num_queries;
         return result;
     }
 

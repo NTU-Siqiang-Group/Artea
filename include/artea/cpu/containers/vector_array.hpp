@@ -279,6 +279,67 @@ public:
     }
 
     /**
+     * @brief Append another VectorArray's contents in bulk.
+     *
+     * Semantics:
+     *  - If @c *this is empty: @p other is moved into @c *this (constant-time
+     *    storage ownership transfer). @p other becomes empty afterwards.
+     *  - If @c *this is non-empty: @p other's vectors are copied to the end
+     *    of @c *this in parallel (TBB). @p other is left unchanged in
+     *    this branch.
+     *
+     * Dimension check applies only when @c *this is non-empty; the empty
+     * branch inherits @p other's dimension unconditionally.
+     *
+     * @param other Source array to absorb. Pass by rvalue-ref to make the
+     *              move-vs-copy decision explicit at call sites.
+     */
+    auto append_batch(VectorArray&& other) -> void {
+        if (other.get_num_vecs() == 0) return;
+
+        // Fast path: *this is empty — take over other's storage.
+        if (_num_vecs == 0) {
+            *this = std::move(other);
+            return;
+        }
+
+        // Slow path: dimensions must match, then parallel copy.
+        if (other.get_vec_dim() != _vec_dim) {
+            ARTEA_ERROR(fmt::format(
+                "VectorArray::append_batch: dimension mismatch ({} vs {})",
+                other.get_vec_dim(), _vec_dim));
+        }
+
+        const vec_num_t add_num = other.get_num_vecs();
+        const vec_num_t old_num = _num_vecs;
+        const std::size_t old_elems =
+            static_cast<std::size_t>(old_num) * _vec_dim;
+        const std::size_t new_total_elems =
+            static_cast<std::size_t>(old_num + add_num) * _vec_dim;
+
+        _storage.resize(new_total_elems);
+        _num_vecs = old_num + add_num;
+
+        const vec_ele_t* src = other.get_all();
+        vec_ele_t* dst = _storage.data() + old_elems;
+
+        // Parallel copy over vec_num_t (one iter == one vector) so the
+        // block size stays meaningful regardless of dimension.
+        const vec_dim_t dim = _vec_dim;
+        tbb::parallel_for(
+            tbb::blocked_range<vec_num_t>(0, add_num),
+            [&, dim](const tbb::blocked_range<vec_num_t>& r) {
+                const std::size_t start_elem =
+                    static_cast<std::size_t>(r.begin()) * dim;
+                const std::size_t count_elem =
+                    static_cast<std::size_t>(r.end() - r.begin()) * dim;
+                std::copy(src + start_elem,
+                          src + start_elem + count_elem,
+                          dst + start_elem);
+            });
+    }
+
+    /**
      * @brief Creates and returns a subset of vectors.
      * @param start The starting index of the subset to copy.
      * @param count The number of vectors to copy.
