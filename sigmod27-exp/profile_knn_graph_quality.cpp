@@ -32,9 +32,6 @@ struct TestConfig {
     std::string config_path;
     std::string dataset_name;
     layer_config_t layer_config{16, 32};
-    static constexpr float knn_scale_coeffs = 1.0f;
-    static constexpr float knn_shifted_coeffs = 0.0f;
-    knn_graph::pruning_config_t pruning_config{knn_scale_coeffs, knn_shifted_coeffs};
     knn_graph::propagate_config_t propagate_config{4, 14};
     uint32_t extracted_nbr_size;
     uint32_t topk;
@@ -93,20 +90,18 @@ public:
         knn_graph::factory_t::profile_graph_quality(
             *dataset_,
             g_config.layer_config,
-            g_config.pruning_config,
             g_config.propagate_config
         );
         descent_graph_ = std::make_unique<knn_graph::index_t>(knn_graph::factory_t::construct_graph(
             dataset_->get_base_vecs(),
             g_config.layer_config,
-            g_config.pruning_config,
             g_config.propagate_config
         ));
 
         // Convert to flat search graph
         ARTEA_INFO("Converting to flat search graph...");
         auto t0 = std::chrono::high_resolution_clock::now();
-        compact_descent_graph_ = std::make_unique<compact_descent_graph_t>(
+        compact_descent_graph_ = std::make_unique<compact::descent_graph_t>(
             descent_graph_compactor_t::from_descent_graph(*descent_graph_, g_config.extracted_nbr_size)
         );
         auto t1 = std::chrono::high_resolution_clock::now();
@@ -117,7 +112,7 @@ public:
 
     vector_dataset_t& get_dataset() { return *dataset_; }
     dist_func_t& get_dist_func() { return *dist_func_; }
-    compact_descent_graph_t& get_compact_descent_graph() { return *compact_descent_graph_; }
+    compact::descent_graph_t& get_compact_descent_graph() { return *compact_descent_graph_; }
     const idlist_array_t& get_groundtruth() { return dataset_->get_gt_vecs(); }
 
 private:
@@ -125,7 +120,7 @@ private:
     std::unique_ptr<vector_dataset_t> dataset_;
     std::unique_ptr<dist_func_t> dist_func_;
     std::unique_ptr<knn_graph::index_t> descent_graph_;
-    std::unique_ptr<compact_descent_graph_t> compact_descent_graph_;
+    std::unique_ptr<compact::descent_graph_t> compact_descent_graph_;
 };
 
 class KnnGraphQualityTest : public ::testing::Test {};
@@ -146,7 +141,7 @@ TEST_F(KnnGraphQualityTest, QueryRecall) {
         g_config.queue_start, g_config.queue_end, g_config.queue_step));
 
     for (uint32_t queue_size = g_config.queue_start; queue_size <= g_config.queue_end; queue_size += g_config.queue_step) {
-        descent_graph_router_t<graph_mode_t::compact_mode> router(base_vecs, dist_func, compact_descent_graph, g_config.topk, queue_size);
+        compact::descent_graph_router_t router(base_vecs, dist_func, compact_descent_graph, g_config.topk, queue_size);
         router.initialize();
 
         // Warmup runs

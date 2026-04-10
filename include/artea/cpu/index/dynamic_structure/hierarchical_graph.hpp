@@ -30,6 +30,7 @@
 
 namespace artea {
 namespace cpu {
+namespace dynamic {
 
 /**
  * @brief Hierarchical graph that holds @c InternalGraph layers and tracks
@@ -62,7 +63,7 @@ class HierarchicalGraph {
     using layer_num_t      = typename IndexTraitsT::layer_num_t;
     using layer_id_t       = typename IndexTraitsT::layer_id_t;
     using lnbr_t           = typename IndexTraitsT::lnbr_t;
-    using internal_graph_t = typename IndexTraitsT::internal_graph_t;
+    using internal_graph_t = typename IndexTraitsT::dynamic::internal_graph_t;
 
 public:
     /**
@@ -290,5 +291,6 @@ private:
 
 };  // class HierarchicalGraph
 
+}   // namespace dynamic
 }   // namespace cpu
 }   // namespace artea

@@ -34,7 +34,7 @@ template <typename IndexTraitsT>
 class IndexSizeCalculator {
     using vertex_id_t = typename IndexTraitsT::vertex_id_t;
     using vertex_num_t = typename IndexTraitsT::vertex_num_t;
-    using compact_descent_graph_t = typename IndexTraitsT::compact_descent_graph_t;
+    using compact = typename IndexTraitsT::compact;
 
 public:
     /**
@@ -58,7 +58,7 @@ public:
      * @brief Calculate size of a flat search graph (uses extracted_nbr_size)
      * CSR format: num_vertices * extracted_nbr_size.
      */
-    static auto calculate_size(const compact_descent_graph_t& search_graph) -> IndexSizeInfo {
+    static auto calculate_size(const compact::descent_graph_t& search_graph) -> IndexSizeInfo {
         IndexSizeInfo info;
 
         vertex_num_t num_vertices = search_graph.get_num_vertices();

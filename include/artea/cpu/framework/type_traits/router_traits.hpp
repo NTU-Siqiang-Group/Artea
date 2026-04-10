@@ -20,29 +20,19 @@
 
 #pragma once
 
-#include <artea/cpu/router/candidate_queue_concept.hpp>
+#include <artea/cpu/router/data_structures/candidate_queue_concept.hpp>
 #include <artea/cpu/router/visited_table_concept.hpp>
 
 namespace artea {
 namespace cpu {
 
-/** ------ Graph Mode ------ **/
-
-/** @brief Graph mode selector for proximity graph routers.
- *  - dynamic_mode: operates on DescentGraph (build-time, dnbr_t neighbors)
- *  - compact_mode: operates on CompactDescentGraph (query-time, vertex_id_t CSR)
- */
-enum class GraphModeT {
-    dynamic_mode,
-    compact_mode
-};
-
 /** ------ Forward Declaration  ------ **/
 template <typename RouterTraitsT, typename DerivedClassT> class VectorRouter;
 template <typename RouterTraitsT> class BruteforceRouter;
-template <typename RouterTraitsT, GraphModeT Mode = GraphModeT::compact_mode> class DescentGraphRouter;
-template <typename RouterTraitsT> class InternalGraphRouter;
-template <typename RouterTraitsT> class HierarchicalGraphRouter;
+namespace compact { template <typename RouterTraitsT> class DescentGraphRouter; }
+namespace dynamic { template <typename RouterTraitsT> class DescentGraphRouter; }
+namespace dynamic { template <typename RouterTraitsT> class InternalGraphRouter; }
+namespace dynamic { template <typename RouterTraitsT> class HierarchicalGraphRouter; }
 template <typename RouterTraitsT> struct DnbrCandidateEntry;
 template <typename RouterTraitsT> struct DnbrCandidateEntryComparator;
 template <typename RouterTraitsT> struct LnbrCandidateEntry;
@@ -128,18 +118,15 @@ struct RouterTraits : virtual public ComputerTraitsT, virtual public IndexTraits
     /** @brief Type for visited table pool (default uses thread_local_bitmap_t). */
     using visited_table_pool_t = VisitedTablePool<router_traits_t, visited_table_t>;
 
-    /** @brief Type for descent graph router (template on GraphModeT). */
-    template <GraphModeT Mode = GraphModeT::compact_mode>
-    using descent_graph_router_t = DescentGraphRouter<router_traits_t, Mode>;
-
-    /** @brief Type for internal graph (single-layer) router. */
-    using internal_graph_router_t = InternalGraphRouter<router_traits_t>;
-
-    /** @brief Type for hierarchical graph (multi-layer) router. */
-    using hierarchical_graph_router_t = HierarchicalGraphRouter<router_traits_t>;
-
-    /** @brief Graph mode enum alias. */
-    using graph_mode_t = GraphModeT;
+    /** @brief Router + graph types grouped by mode. Inherits graph types from IndexTraits. */
+    struct compact : IndexTraitsT::compact {
+        using descent_graph_router_t = cpu::compact::DescentGraphRouter<router_traits_t>;
+    };
+    struct dynamic : IndexTraitsT::dynamic {
+        using descent_graph_router_t      = cpu::dynamic::DescentGraphRouter<router_traits_t>;
+        using internal_graph_router_t     = cpu::dynamic::InternalGraphRouter<router_traits_t>;
+        using hierarchical_graph_router_t = cpu::dynamic::HierarchicalGraphRouter<router_traits_t>;
+    };
 
     /** @brief Indicates whether to enable intra-query parallelism. */
     static constexpr bool intra_query_parallel = IntraQueryParallel;

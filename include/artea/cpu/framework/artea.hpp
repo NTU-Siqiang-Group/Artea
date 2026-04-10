@@ -46,11 +46,11 @@
 #include <artea/cpu/index/layer_config.hpp>
 #include <artea/cpu/index/layer_nbr.hpp>
 #include <artea/cpu/index/descent_nbr.hpp>
-#include <artea/cpu/index/compact_internal_graph.hpp>
-#include <artea/cpu/index/internal_graph.hpp>
-#include <artea/cpu/index/descent_graph.hpp>
-#include <artea/cpu/index/compact_descent_graph.hpp>
-#include <artea/cpu/index/hierarchical_graph.hpp>
+#include <artea/cpu/index/compact_structure/internal_graph.hpp>
+#include <artea/cpu/index/dynamic_structure/internal_graph.hpp>
+#include <artea/cpu/index/dynamic_structure/descent_graph.hpp>
+#include <artea/cpu/index/compact_structure/descent_graph.hpp>
+#include <artea/cpu/index/dynamic_structure/hierarchical_graph.hpp>
 #include <artea/cpu/index/compactor/descent_graph_compactor.hpp>
 #include <artea/cpu/index/compactor/internal_graph_compactor.hpp>
 #include <artea/cpu/index/index_size_calculator.hpp>
@@ -72,14 +72,14 @@
 
 #include <artea/cpu/router/vector_router.hpp>
 #include <artea/cpu/router/bruteforce_router.hpp>
-#include <artea/cpu/router/compact_descent_graph_router.hpp>
-#include <artea/cpu/router/descent_graph_router.hpp>
-#include <artea/cpu/router/internal_graph_router.hpp>
-#include <artea/cpu/router/hierarchical_graph_router.hpp>
+#include <artea/cpu/router/compact/descent_graph_router.hpp>
+#include <artea/cpu/router/dynamic/descent_graph_router.hpp>
+#include <artea/cpu/router/dynamic/internal_graph_router.hpp>
+#include <artea/cpu/router/dynamic/hierarchical_graph_router.hpp>
 #include <artea/cpu/router/data_structures/candidate_entry_concept.hpp>
 #include <artea/cpu/router/data_structures/dnbr_candidate_entry.hpp>
 #include <artea/cpu/router/data_structures/lnbr_candidate_entry.hpp>
-#include <artea/cpu/router/candidate_queue_concept.hpp>
+#include <artea/cpu/router/data_structures/candidate_queue_concept.hpp>
 #include <artea/cpu/router/visited_table_concept.hpp>
 #include <artea/cpu/router/data_structures/visited_table_pool.hpp>
 #include <artea/cpu/router/data_structures/std_candidate_queue.hpp>

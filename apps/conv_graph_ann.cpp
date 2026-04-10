@@ -66,7 +66,7 @@ auto find_latest_index(const std::string& base_dir, const std::string& dataset_n
 }
 
 auto run_benchmark(
-    descent_graph_router_t<graph_mode_t::compact_mode>& router,
+    compact::descent_graph_router_t& router,
     const vector_array_t& query_vecs,
     const idlist_array_t& groundtruth,
     const vector_array_t& base_vecs,
@@ -204,13 +204,13 @@ int main(int argc, char** argv) {
 
     // Convert to flat search graph
     ARTEA_INFO("Converting to flat search graph...");
-    compact_descent_graph_t compact_descent_graph = descent_graph_compactor_t::from_descent_graph(
+    compact::descent_graph_t compact_descent_graph = descent_graph_compactor_t::from_descent_graph(
         descent_graph,
         extracted_nbr_size
     );
 
     // Create router
-    descent_graph_router_t<graph_mode_t::compact_mode> router(
+    compact::descent_graph_router_t router(
         base_vecs,
         dist_func,
         compact_descent_graph,

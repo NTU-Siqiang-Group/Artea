@@ -47,8 +47,7 @@ class RoutingUpdater :
     using dnbr_arr_t = typename RefinerTraitsT::dnbr_arr_t;
     using log_table_t = typename RefinerTraitsT::log_table_t;
     using dist_func_t = typename RefinerTraitsT::dist_func_t;
-    using graph_mode_t = typename RefinerTraitsT::graph_mode_t;
-    using router_t = typename RefinerTraitsT::template descent_graph_router_t<graph_mode_t::dynamic_mode>;
+    using router_t = typename RefinerTraitsT::dynamic::descent_graph_router_t;
     using base_class_t = typename RefinerTraitsT::template neighbor_updater_t<DescentGraphT, RoutingUpdater<RefinerTraitsT, DescentGraphT>>;
 
 public:

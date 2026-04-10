@@ -40,7 +40,7 @@ class DescentGraphCompactor {
     using layer_id_t = typename IndexTraitsT::layer_id_t;
     using vector_array_t = typename IndexTraitsT::vector_array_t;
     using index_t = typename IndexTraitsT::conv_graph::index_t;
-    using compact_descent_graph_t = typename IndexTraitsT::compact_descent_graph_t;
+    using compact = typename IndexTraitsT::compact;
     using nbr_arr_checker_t = typename IndexTraitsT::nbr_arr_checker_t;
 
 public:
@@ -54,7 +54,7 @@ public:
     static auto from_descent_graph(
         const DescentGraphT& descent_graph,
         const vertex_num_t extracted_nbr_size
-    ) -> compact_descent_graph_t {
+    ) -> typename compact::descent_graph_t {
         const vertex_num_t max_nbr_size = descent_graph.layer_config().max_nbr_size();
 
         // Validate extracted_nbr_size does not exceed max_nbr_size
@@ -70,7 +70,7 @@ public:
         const auto& nbrs_arr = descent_graph.get_nbrs_arr();
 
         // Create the flat search graph
-        compact_descent_graph_t compact_descent_graph(vecs_data, extracted_nbr_size);
+        typename compact::descent_graph_t compact_descent_graph(vecs_data, extracted_nbr_size);
 
         // Copy neighbors from DescentGraph to CompactDescentGraph in parallel
         auto& csr_nbrs = compact_descent_graph.get_csr_nbrs();
@@ -111,7 +111,7 @@ public:
         const std::string& file_path,
         const vertex_num_t extracted_nbr_size,
         const vector_array_t& vecs_data
-    ) -> compact_descent_graph_t {
+    ) -> typename compact::descent_graph_t {
         // Load DescentGraph from file
         index_t descent_graph = index_t::restore(file_path, vecs_data);
 

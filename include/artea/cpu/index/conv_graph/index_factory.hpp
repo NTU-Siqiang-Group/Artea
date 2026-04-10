@@ -65,8 +65,7 @@ class IndexFactory {
     using query_vecs_t = typename GraphFactoryTraitsT::query_vecs_t;
     using ground_truth_t = typename GraphFactoryTraitsT::ground_truth_t;
     using recall_estimator_t = typename GraphFactoryTraitsT::recall_estimator_t;
-    using graph_mode_t = typename GraphFactoryTraitsT::graph_mode_t;
-    using descent_graph_router_t = typename GraphFactoryTraitsT::template descent_graph_router_t<graph_mode_t::dynamic_mode>;
+    using descent_graph_router_t = typename GraphFactoryTraitsT::dynamic::descent_graph_router_t;
     using knn_graph = typename GraphFactoryTraitsT::knn_graph;
 
 public:
@@ -99,8 +98,13 @@ public:
         typename knn_graph::index_t&& knn_graph_index,
         const pruning_config_t pruning_config
     ) -> this_index_t {
-        this_index_t descent_graph(std::move(knn_graph_index));
-        descent_graph.pruning_config() = pruning_config;
+        // Build a conv_graph shell with the same topology, then steal
+        // the neighbor arrays from the knn_graph.
+        const auto& vecs_data = knn_graph_index.get_vecs_data();
+        const auto layer_config = knn_graph_index.layer_config();
+        propagate_config_t propagate_config(0, 0);  // unused: edges already built
+        this_index_t descent_graph(vecs_data, layer_config, pruning_config, propagate_config);
+        descent_graph.get_nbrs_arr() = std::move(knn_graph_index.get_nbrs_arr());
 
         const vertex_num_t num_vertices = descent_graph.get_num_vertices();
         dist_func_t dist_func(descent_graph.get_vecs_data().get_vec_dim());

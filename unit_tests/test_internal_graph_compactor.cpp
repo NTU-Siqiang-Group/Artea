@@ -39,7 +39,7 @@ protected:
     static constexpr vertex_num_t src_max_nbr_size = 63;
 
     void SetUp() override {
-        src_graph_ = std::make_unique<internal_graph_t>(max_num_vertices, src_max_nbr_size);
+        src_graph_ = std::make_unique<dynamic::internal_graph_t>(max_num_vertices, src_max_nbr_size);
     }
 
     /**
@@ -63,7 +63,7 @@ protected:
         }
     }
 
-    std::unique_ptr<internal_graph_t> src_graph_;
+    std::unique_ptr<dynamic::internal_graph_t> src_graph_;
 };
 
 TEST_F(InternalGraphCompactorTest, EmptyGraph) {

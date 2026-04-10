@@ -41,8 +41,8 @@ class InternalGraphCompactor {
     using vertex_num_t = typename IndexTraitsT::vertex_num_t;
     using vertex_id_t = typename IndexTraitsT::vertex_id_t;
     using lnbr_t = typename IndexTraitsT::lnbr_t;
-    using internal_graph_t = typename IndexTraitsT::internal_graph_t;
-    using compact_internal_graph_t = typename IndexTraitsT::compact_internal_graph_t;
+    using compact = typename IndexTraitsT::compact;
+    using dynamic = typename IndexTraitsT::dynamic;
 
 public:
     /**
@@ -63,9 +63,9 @@ public:
      * @return A new CompactInternalGraph with the same number of vertices.
      */
     static auto from_internal_graph(
-        const internal_graph_t& internal_graph,
+        const typename dynamic::internal_graph_t& internal_graph,
         const vertex_num_t extracted_nbr_size
-    ) -> compact_internal_graph_t {
+    ) -> typename compact::internal_graph_t {
         const vertex_num_t src_max_nbr_size = internal_graph.max_nbr_size();
 
         if (extracted_nbr_size > src_max_nbr_size) {
@@ -76,7 +76,7 @@ public:
         }
 
         const vertex_num_t num_vertices = internal_graph.get_num_vertices();
-        compact_internal_graph_t compact_graph(num_vertices, extracted_nbr_size);
+        typename compact::internal_graph_t compact_graph(num_vertices, extracted_nbr_size);
 
         tbb::parallel_for(
             tbb::blocked_range<vertex_id_t>(0, num_vertices),

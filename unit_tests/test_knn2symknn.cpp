@@ -42,9 +42,6 @@ struct TestConfig {
     std::string dataset_name;
 
     layer_config_t knn_layer_config{64, 96};
-    static constexpr float knn_scale_coeffs = 1.0f;
-    static constexpr float knn_shifted_coeffs = 0.0f;
-    knn_graph::pruning_config_t knn_pruning_config{knn_scale_coeffs, knn_shifted_coeffs};
     knn_graph::propagate_config_t knn_propagate_config{4, 14};
 
     bool verbose;
@@ -81,7 +78,6 @@ public:
         knn_graph::index_t knn_index = knn_graph::factory_t::construct_graph(
             base_vecs,
             g_config.knn_layer_config,
-            g_config.knn_pruning_config,
             g_config.knn_propagate_config
         );
 

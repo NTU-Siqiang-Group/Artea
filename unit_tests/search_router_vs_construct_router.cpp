@@ -114,7 +114,7 @@ public:
         // Convert to flat search graph
         ARTEA_INFO("Converting to flat search graph...");
         auto tc0 = std::chrono::high_resolution_clock::now();
-        compact_descent_graph_ = std::make_unique<compact_descent_graph_t>(
+        compact_descent_graph_ = std::make_unique<compact::descent_graph_t>(
             descent_graph_compactor_t::from_descent_graph(*descent_graph_, g_config.extracted_nbr_size)
         );
         auto tc1 = std::chrono::high_resolution_clock::now();
@@ -128,7 +128,7 @@ public:
     vector_dataset_t&    get_dataset()           { return *dataset_; }
     dist_func_t&         get_dist_func()          { return *dist_func_; }
     conv_graph::index_t&        get_descent_graph()          { return *descent_graph_; }
-    compact_descent_graph_t& get_compact_descent_graph()  { return *compact_descent_graph_; }
+    compact::descent_graph_t& get_compact_descent_graph()  { return *compact_descent_graph_; }
     const idlist_array_t& get_gt()               { return dataset_->get_gt_vecs(); }
 
 private:
@@ -136,7 +136,7 @@ private:
     std::unique_ptr<vector_dataset_t>    dataset_;
     std::unique_ptr<dist_func_t>         dist_func_;
     std::unique_ptr<conv_graph::index_t>        descent_graph_;
-    std::unique_ptr<compact_descent_graph_t> compact_descent_graph_;
+    std::unique_ptr<compact::descent_graph_t> compact_descent_graph_;
 };
 
 // ============================================================
@@ -154,7 +154,7 @@ TEST_F(RouterComparisonTest, ConstructModeRouter) {
     const auto& base_vecs  = p.get_dataset().get_base_vecs();
     const auto& query_vecs = p.get_dataset().get_query_vecs();
 
-    descent_graph_router_t<graph_mode_t::dynamic_mode> router(
+    dynamic::descent_graph_router_t router(
         base_vecs, p.get_dist_func(),
         g_config.topk, g_config.queue_size
     );
@@ -184,7 +184,7 @@ TEST_F(RouterComparisonTest, SearchModeRouter) {
     const auto& base_vecs  = p.get_dataset().get_base_vecs();
     const auto& query_vecs = p.get_dataset().get_query_vecs();
 
-    descent_graph_router_t<graph_mode_t::compact_mode> router(
+    compact::descent_graph_router_t router(
         base_vecs, p.get_dist_func(), p.get_compact_descent_graph(),
         g_config.topk, g_config.queue_size
     );

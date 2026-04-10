@@ -105,15 +105,26 @@ using log_table_t = typename buffer_traits_t::log_table_t;
 using layer_config_t = typename base_traits_t::layer_config_t;
 
 // Index types from IndexTraits
-using compact_descent_graph_t = typename index_traits_t::compact_descent_graph_t;
 using descent_graph_compactor_t = typename index_traits_t::descent_graph_compactor_t;
 using flat_graph_file_manager_t = typename index_traits_t::flat_graph_file_manager_t;
 using index_size_calculator_t = typename index_traits_t::index_size_calculator_t;
 using radius_prober_t = typename index_traits_t::radius_prober_t;
-using compact_internal_graph_t = typename index_traits_t::compact_internal_graph_t;
-using internal_graph_t = typename index_traits_t::internal_graph_t;
 using internal_graph_compactor_t = typename index_traits_t::internal_graph_compactor_t;
-using hierarchical_graph_t = typename index_traits_t::hierarchical_graph_t;
+
+}   // close namespace cpu temporarily
+namespace cpu::compact {
+    using descent_graph_t        = cpu::index_traits_t::compact::descent_graph_t;
+    using internal_graph_t       = cpu::index_traits_t::compact::internal_graph_t;
+    using descent_graph_router_t = cpu::router_traits_t::compact::descent_graph_router_t;
+}   // namespace cpu::compact
+namespace cpu::dynamic {
+    using internal_graph_t            = cpu::index_traits_t::dynamic::internal_graph_t;
+    using hierarchical_graph_t        = cpu::index_traits_t::dynamic::hierarchical_graph_t;
+    using descent_graph_router_t      = cpu::router_traits_t::dynamic::descent_graph_router_t;
+    using internal_graph_router_t     = cpu::router_traits_t::dynamic::internal_graph_router_t;
+    using hierarchical_graph_router_t = cpu::router_traits_t::dynamic::hierarchical_graph_router_t;
+}   // namespace cpu::dynamic
+namespace cpu {   // reopen namespace cpu
 
 // Refiner types from RefinerTraits
 using triangle_updater_t = typename refiner_traits_t::template triangle_updater_t<typename index_traits_t::conv_graph::index_t>;
@@ -148,14 +159,6 @@ using fh_candidate_queue_t = typename router_traits_t::fh_candidate_queue_t;
 using candidate_queue_t = typename router_traits_t::candidate_queue_t;
 using visited_table_pool_t = typename router_traits_t::visited_table_pool_t;
 using bruteforce_router_t = typename router_traits_t::bruteforce_router_t;
-using internal_graph_router_t = typename router_traits_t::internal_graph_router_t;
-using hierarchical_graph_router_t = typename router_traits_t::hierarchical_graph_router_t;
-
-// alias for routers with customizable GraphModeT
-using graph_mode_t = typename router_traits_t::graph_mode_t;
-
-template <GraphModeT Mode = GraphModeT::compact_mode>
-using descent_graph_router_t = typename router_traits_t::template descent_graph_router_t<Mode>;
 
 // Utility types
 using index_register_util_t = IndexRegisterUtil;

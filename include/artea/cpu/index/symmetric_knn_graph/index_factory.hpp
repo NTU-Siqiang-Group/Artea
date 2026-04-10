@@ -48,8 +48,7 @@ class IndexFactory {
     using query_vecs_t = typename GraphFactoryTraitsT::query_vecs_t;
     using ground_truth_t = typename GraphFactoryTraitsT::ground_truth_t;
     using recall_estimator_t = typename GraphFactoryTraitsT::recall_estimator_t;
-    using graph_mode_t = typename GraphFactoryTraitsT::graph_mode_t;
-    using descent_graph_router_t = typename GraphFactoryTraitsT::template descent_graph_router_t<graph_mode_t::dynamic_mode>;
+    using descent_graph_router_t = typename GraphFactoryTraitsT::dynamic::descent_graph_router_t;
     using knn_graph = typename GraphFactoryTraitsT::knn_graph;
 
 public:
@@ -57,12 +56,11 @@ public:
     static auto construct_graph(
         const vector_array_t& base_vecs,
         const layer_config_t layer_config,
-        const pruning_config_t pruning_config,
         const propagate_config_t propagate_config
     ) -> this_index_t {
-        this_index_t descent_graph(base_vecs, layer_config, pruning_config, propagate_config);
+        this_index_t descent_graph(base_vecs, layer_config, propagate_config);
         dist_func_t dist_func(base_vecs.get_vec_dim());
-        _build_loop(descent_graph, dist_func, pruning_config, propagate_config);
+        _build_loop(descent_graph, dist_func, propagate_config);
         return descent_graph;
     }
 
@@ -98,14 +96,13 @@ public:
     static auto profile_graph_quality(
         const vector_dataset_t& dataset,
         const layer_config_t layer_config,
-        const pruning_config_t pruning_config,
         const propagate_config_t propagate_config
     ) -> void {
         const vector_array_t& base_vecs = dataset.get_base_vecs();
         const query_vecs_t& query_vecs = dataset.get_query_vecs();
         const ground_truth_t& groundtruth = dataset.get_gt_vecs();
 
-        this_index_t descent_graph(base_vecs, layer_config, pruning_config, propagate_config);
+        this_index_t descent_graph(base_vecs, layer_config, propagate_config);
         dist_func_t dist_func(base_vecs.get_vec_dim());
 
         recall_estimator_t recall_estimator;
@@ -114,7 +111,7 @@ public:
         descent_graph_router_t router(base_vecs, dist_func, topk, candidate_queue_size);
         router.initialize();
 
-        _build_loop(descent_graph, dist_func, pruning_config, propagate_config,
+        _build_loop(descent_graph, dist_func, propagate_config,
             [&](iter_t build_loop) {
                 auto t0 = std::chrono::high_resolution_clock::now();
                 auto results = router.batch_query(query_vecs, descent_graph);
@@ -140,7 +137,6 @@ private:
     static auto _build_loop(
         this_index_t& descent_graph,
         const dist_func_t& dist_func,
-        const pruning_config_t& pruning_config,
         const propagate_config_t& propagate_config,
         std::function<void(iter_t)> on_iter_end = nullptr
     ) -> void {
@@ -159,6 +155,7 @@ private:
         propagate_engine_t propagate_engine(num_vertices, dist_func);
         propagate_engine.set_graph(descent_graph);
 
+        const auto& pruning_config = descent_graph.pruning_config();
         auto triangle_updater  = propagate_engine.template make_updater<triangle_updater_t>(
             pruning_config.scale_coeffs(), pruning_config.shifted_coeffs());
         auto reverse_updater   = propagate_engine.template make_updater<reverse_updater_t>();

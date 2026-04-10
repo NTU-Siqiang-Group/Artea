@@ -31,6 +31,7 @@
 
 namespace artea {
 namespace cpu {
+namespace dynamic {
 
 /**
  * @brief Internal graph supporting concurrent vertex insertion.
@@ -502,5 +503,6 @@ private:
 
 };  // class InternalGraph
 
+}   // namespace dynamic
 }   // namespace cpu
 }   // namespace artea

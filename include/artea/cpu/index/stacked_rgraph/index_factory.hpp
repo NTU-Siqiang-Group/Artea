@@ -37,9 +37,6 @@
 #include <tbb/blocked_range.h>
 
 #include <artea/common/logger.hpp>
-#include <artea/cpu/index/stacked_rgraph/index_structure.hpp>
-#include <artea/cpu/router/hierarchical_graph_router.hpp>
-#include <artea/cpu/router/internal_graph_router.hpp>
 
 namespace artea {
 namespace cpu {
@@ -83,7 +80,7 @@ class IndexFactory {
     using vec_ele_t        = typename GraphFactoryTraitsT::vec_ele_t;
     using lnbr_t           = typename GraphFactoryTraitsT::lnbr_t;
     using vector_array_t   = typename GraphFactoryTraitsT::vector_array_t;
-    using internal_graph_t = typename GraphFactoryTraitsT::internal_graph_t;
+    using internal_graph_t = typename GraphFactoryTraitsT::dynamic::internal_graph_t;
 
     // Distance function (inherited via RefinerTraits → ComputerTraits).
     using dist_func_t = typename GraphFactoryTraitsT::dist_func_t;
@@ -91,7 +88,7 @@ class IndexFactory {
     // Router-side types (inherited via RefinerTraits → RouterTraits).
     using visited_table_t         = typename GraphFactoryTraitsT::visited_table_t;
     using lnbr_candidate_entry_t  = typename GraphFactoryTraitsT::lnbr_candidate_entry_t;
-    using hg_router_t             = typename GraphFactoryTraitsT::hierarchical_graph_router_t;
+    using hg_router_t             = typename GraphFactoryTraitsT::dynamic::hierarchical_graph_router_t;
 
     static constexpr vertex_id_t invalid_vertex_id = GraphFactoryTraitsT::invalid_vertex_id;
 

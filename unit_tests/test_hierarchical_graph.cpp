@@ -51,10 +51,10 @@ protected:
         const layer_num_t num_layers,
         const vertex_num_t max_num_vertices_per_layer,
         const vertex_num_t max_nbr_size
-    ) -> std::unique_ptr<hierarchical_graph_t> {
-        auto hg = std::make_unique<hierarchical_graph_t>(num_layers);
+    ) -> std::unique_ptr<dynamic::hierarchical_graph_t> {
+        auto hg = std::make_unique<dynamic::hierarchical_graph_t>(num_layers);
         hg->grow_layers(num_layers, [&](layer_id_t) {
-            return std::make_unique<internal_graph_t>(
+            return std::make_unique<dynamic::internal_graph_t>(
                 max_num_vertices_per_layer, max_nbr_size
             );
         });
@@ -67,13 +67,13 @@ protected:
 // ============================================================
 
 TEST_F(HierarchicalGraphTest, ConstructionEmpty) {
-    hierarchical_graph_t hg(/*max_layers=*/0);
+    dynamic::hierarchical_graph_t hg(/*max_layers=*/0);
     EXPECT_EQ(hg.get_num_layers(), 0u);
     EXPECT_EQ(hg.max_layers(), 0u);
 }
 
 TEST_F(HierarchicalGraphTest, ConstructionReservesCapacity) {
-    hierarchical_graph_t hg(/*max_layers=*/5);
+    dynamic::hierarchical_graph_t hg(/*max_layers=*/5);
     // Visible count starts at 0 because no layers have been committed yet.
     EXPECT_EQ(hg.get_num_layers(), 0u);
     EXPECT_EQ(hg.max_layers(), 5u);
@@ -84,11 +84,11 @@ TEST_F(HierarchicalGraphTest, ConstructionReservesCapacity) {
 }
 
 TEST_F(HierarchicalGraphTest, GrowLayersCommitsProgressively) {
-    hierarchical_graph_t hg(/*max_layers=*/4);
+    dynamic::hierarchical_graph_t hg(/*max_layers=*/4);
     std::atomic<uint32_t> factory_calls{0};
     auto factory = [&](layer_id_t) {
         factory_calls.fetch_add(1);
-        return std::make_unique<internal_graph_t>(/*max=*/128, /*nbr=*/8);
+        return std::make_unique<dynamic::internal_graph_t>(/*max=*/128, /*nbr=*/8);
     };
 
     EXPECT_EQ(hg.get_num_layers(), 0u);
@@ -110,12 +110,12 @@ TEST_F(HierarchicalGraphTest, GrowLayersCommitsProgressively) {
 TEST_F(HierarchicalGraphTest, GrowLayersConcurrentCallersNoDoubleFactory) {
     // Multiple threads all asking for the same growth target. The factory
     // must run exactly N times in total (not N × num_threads).
-    hierarchical_graph_t hg(/*max_layers=*/8);
+    dynamic::hierarchical_graph_t hg(/*max_layers=*/8);
     constexpr layer_num_t target = 5;
     std::atomic<uint32_t> factory_calls{0};
     auto factory = [&](layer_id_t) {
         factory_calls.fetch_add(1);
-        return std::make_unique<internal_graph_t>(/*max=*/64, /*nbr=*/8);
+        return std::make_unique<dynamic::internal_graph_t>(/*max=*/64, /*nbr=*/8);
     };
 
     constexpr uint32_t num_threads = 16;
@@ -135,16 +135,16 @@ TEST_F(HierarchicalGraphTest, GrowLayersConcurrentCallersNoDoubleFactory) {
 
 TEST_F(HierarchicalGraphTest, CommitLayerAfterSetLayerGraph) {
     // Legacy two-step flow: set_layer_graph then commit_layer.
-    hierarchical_graph_t hg(/*max_layers=*/3);
+    dynamic::hierarchical_graph_t hg(/*max_layers=*/3);
     EXPECT_EQ(hg.get_num_layers(), 0u);
 
-    hg.set_layer_graph(0, std::make_unique<internal_graph_t>(/*max=*/256, /*nbr=*/16));
+    hg.set_layer_graph(0, std::make_unique<dynamic::internal_graph_t>(/*max=*/256, /*nbr=*/16));
     // Not yet visible.
     EXPECT_EQ(hg.get_num_layers(), 0u);
     hg.commit_layer(0);
     EXPECT_EQ(hg.get_num_layers(), 1u);
 
-    hg.set_layer_graph(1, std::make_unique<internal_graph_t>(/*max=*/256, /*nbr=*/16));
+    hg.set_layer_graph(1, std::make_unique<dynamic::internal_graph_t>(/*max=*/256, /*nbr=*/16));
     hg.commit_layer(1);
     EXPECT_EQ(hg.get_num_layers(), 2u);
 }

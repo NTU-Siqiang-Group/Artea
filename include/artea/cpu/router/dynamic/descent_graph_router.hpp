@@ -28,16 +28,16 @@
 #include <tbb/blocked_range.h>
 
 #include <artea/cpu/utils/parallel.hpp>
-#include <artea/cpu/framework/type_traits/router_traits.hpp>
-#include <artea/cpu/router/candidate_queue_concept.hpp>
+#include <artea/cpu/router/data_structures/candidate_queue_concept.hpp>
 #include <artea/cpu/router/visited_table_concept.hpp>
 
 namespace artea {
 namespace cpu {
+namespace dynamic {
 
 template <typename RouterTraitsT>
-class DescentGraphRouter<RouterTraitsT, GraphModeT::dynamic_mode> :
-    public RouterTraitsT::template vector_router_t<DescentGraphRouter<RouterTraitsT, GraphModeT::dynamic_mode>>
+class DescentGraphRouter :
+    public RouterTraitsT::template vector_router_t<DescentGraphRouter<RouterTraitsT>>
 {
     using vertex_num_t = typename RouterTraitsT::vertex_num_t;
     using vertex_id_t = typename RouterTraitsT::vertex_id_t;
@@ -51,7 +51,7 @@ class DescentGraphRouter<RouterTraitsT, GraphModeT::dynamic_mode> :
     using visited_table_t = typename RouterTraitsT::visited_table_t;
     using visited_table_pool_t = typename RouterTraitsT::visited_table_pool_t;
     using knn_results_t = typename RouterTraitsT::knn_results_t;
-    using base_class_t = typename RouterTraitsT::template vector_router_t<DescentGraphRouter<RouterTraitsT, GraphModeT::dynamic_mode>>;
+    using base_class_t = typename RouterTraitsT::template vector_router_t<DescentGraphRouter<RouterTraitsT>>;
 
 public:
 
@@ -190,7 +190,8 @@ private:
     /** @brief Pool of thread-local visited bitmaps for parallel beam search. */
     mutable visited_table_pool_t _visited_table_pool;
 
-};  // class DescentGraphRouter<RouterTraitsT, GraphModeT::dynamic_mode>
+};  // class DescentGraphRouter
 
+}   // namespace dynamic
 }   // namespace cpu
 }   // namespace artea

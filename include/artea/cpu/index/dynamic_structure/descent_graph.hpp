@@ -12,6 +12,7 @@
 
 namespace artea {
 namespace cpu {
+namespace dynamic {
 
 /**
  * @brief Descent Graph: CRTP base graph structure suitable for gradient descent scenarios.
@@ -123,5 +124,6 @@ protected:
 
 };  // class DescentGraph
 
+}   // namespace dynamic
 }   // namespace cpu
 }   // namespace artea

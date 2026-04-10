@@ -37,11 +37,10 @@
 
 #include <artea/common/logger.hpp>
 #include <artea/cpu/utils/parallel.hpp>
-#include <artea/cpu/framework/type_traits/router_traits.hpp>
-#include <artea/cpu/router/internal_graph_router.hpp>
 
 namespace artea {
 namespace cpu {
+namespace dynamic {
 
 /**
  * @brief Multi-layer proximity-graph router over a @c HierarchicalGraph.
@@ -411,5 +410,6 @@ private:
 
 };  // class HierarchicalGraphRouter
 
+}   // namespace dynamic
 }   // namespace cpu
 }   // namespace artea

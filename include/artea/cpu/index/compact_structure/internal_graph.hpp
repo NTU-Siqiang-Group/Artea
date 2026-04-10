@@ -26,6 +26,7 @@
 
 namespace artea {
 namespace cpu {
+namespace compact {
 
 /**
  * @brief Compact internal graph storing layer neighbors in CSR format
@@ -45,7 +46,7 @@ namespace cpu {
  * @tparam IndexTraitsT The index traits type.
  */
 template <typename IndexTraitsT>
-class CompactInternalGraph {
+class InternalGraph {
 
     using vertex_num_t = typename IndexTraitsT::vertex_num_t;
     using vertex_id_t = typename IndexTraitsT::vertex_id_t;
@@ -58,11 +59,11 @@ class CompactInternalGraph {
 
 public:
     /**
-     * @brief Construct a CompactInternalGraph.
+     * @brief Construct a InternalGraph.
      * @param num_vertices Number of vertices in this layer.
      * @param max_nbr_size Fixed number of neighbor slots per vertex.
      */
-    CompactInternalGraph(
+    InternalGraph(
         const vertex_num_t num_vertices,
         const vertex_num_t max_nbr_size
     ) :
@@ -76,14 +77,14 @@ public:
     }
 
     // Copying is deleted
-    CompactInternalGraph(const CompactInternalGraph&) = delete;
-    CompactInternalGraph& operator=(const CompactInternalGraph&) = delete;
+    InternalGraph(const InternalGraph&) = delete;
+    InternalGraph& operator=(const InternalGraph&) = delete;
 
     // Default move semantics
-    CompactInternalGraph(CompactInternalGraph&&) noexcept = default;
-    CompactInternalGraph& operator=(CompactInternalGraph&&) noexcept = default;
+    InternalGraph(InternalGraph&&) noexcept = default;
+    InternalGraph& operator=(InternalGraph&&) noexcept = default;
 
-    ~CompactInternalGraph() = default;
+    ~InternalGraph() = default;
 
     // --- Neighbor Access ---
 
@@ -194,7 +195,8 @@ private:
      */
     inter_layer_links_arr_t _inter_layer_links;
 
-};  // class CompactInternalGraph
+};  // class InternalGraph
 
+}   // namespace compact
 }   // namespace cpu
 }   // namespace artea

@@ -71,14 +71,13 @@ public:
 
         // Build KNN graph
         layer_config_t layer_config(g_config.max_nbr_size, static_cast<uint32_t>(g_config.max_nbr_size * 1.5));
-        knn_graph::pruning_config_t pruning_config(1.0f, 0.0f);
         knn_graph::propagate_config_t propagate_config(5, 12, g_config.prefill_ratio, 1,
         g_config.routing_topk, g_config.routing_queue_size);
 
         ARTEA_INFO("Building KNN graph...");
         auto t0 = std::chrono::high_resolution_clock::now();
         knn_graph_ = std::make_unique<knn_graph::index_t>(knn_graph::factory_t::construct_graph(
-            base_vecs, layer_config, pruning_config, propagate_config
+            base_vecs, layer_config, propagate_config
         ));
         auto t1 = std::chrono::high_resolution_clock::now();
         g_results.knn_build_time_s = std::chrono::duration_cast<std::chrono::microseconds>(t1 - t0).count() / 1e6;

@@ -35,7 +35,6 @@
 #include <vector>
 
 #include <artea/common/logger.hpp>
-#include <artea/cpu/index/hierarchical_graph.hpp>
 
 namespace artea {
 namespace cpu {
@@ -75,11 +74,11 @@ class IndexStructure {
     using layer_id_t           = typename IndexTraitsT::layer_id_t;
     using distance_t           = typename IndexTraitsT::distance_t;
     using ratio_t              = typename IndexTraitsT::ratio_t;
-    using internal_graph_t     = typename IndexTraitsT::internal_graph_t;
+    using internal_graph_t     = typename IndexTraitsT::dynamic::internal_graph_t;
     using vector_array_t       = typename IndexTraitsT::vector_array_t;
     using vecs_storage_t       = typename IndexTraitsT::vecs_storage_t;
 
-    using hierarchical_graph_t = HierarchicalGraph<IndexTraitsT>;
+    using hierarchical_graph_t = typename IndexTraitsT::dynamic::hierarchical_graph_t;
 
 public:
     /**

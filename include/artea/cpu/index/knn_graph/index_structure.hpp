@@ -1,19 +1,140 @@
 /*
  * @FilePath: /Artea/include/artea/cpu/index/knn_graph/index_structure.hpp
  * @Author: Chandler (Weitang Ye) <weitang.ye@ntu.edu.sg>
- * @Description: KNN graph index structure, reusing conv_graph::IndexStructure.
+ * @Description: KNN graph index structure. Composes a DescentGraph plus
+ *               propagation config. Pruning is hardcoded to identity
+ *               (scale_coeffs=1.0, shifted_coeffs=0.0) since a KNN graph
+ *               does not use RNG-style pruning.
  */
 
 #pragma once
 
-#include <artea/cpu/index/conv_graph/index_structure.hpp>
+#include <memory>
+#include <utility>
+#include <vector>
+
+#include <nlohmann/json.hpp>
 
 namespace artea {
 namespace cpu {
 namespace knn_graph {
 
+/**
+ * @brief KNN graph index. Composes a @c DescentGraph with a fixed
+ *        identity pruning config and a caller-supplied propagation config.
+ *
+ * Unlike @c conv_graph::IndexStructure, the pruning configuration is NOT
+ * a constructor parameter — it is always @c {1.0, 0.0} (no RNG pruning).
+ * This makes the API cleaner for KNN-graph callers who should never have
+ * to think about pruning coefficients.
+ *
+ * @tparam IndexTraitsT The index traits type.
+ */
 template <typename IndexTraitsT>
-using IndexStructure = conv_graph::IndexStructure<IndexTraitsT>;
+class IndexStructure {
+
+    using descent_graph_t    = typename IndexTraitsT::template descent_graph_t<IndexStructure<IndexTraitsT>>;
+    using vertex_num_t       = typename IndexTraitsT::vertex_num_t;
+    using vertex_id_t        = typename IndexTraitsT::vertex_id_t;
+    using dnbr_arr_t         = typename IndexTraitsT::dnbr_arr_t;
+    using vector_array_t     = typename IndexTraitsT::vector_array_t;
+    using layer_config_t     = typename IndexTraitsT::layer_config_t;
+    using propagate_config_t = typename IndexTraitsT::knn_graph::propagate_config_t;
+    using pruning_config_t   = typename IndexTraitsT::knn_graph::pruning_config_t;
+    using ratio_t            = typename IndexTraitsT::ratio_t;
+
+public:
+    /**
+     * @brief Construct a new KNN graph index.
+     * @param vecs_data        Reference to the vector data.
+     * @param layer_config     Layer configuration (max_nbr_size, reserved_nbr_size).
+     * @param propagate_config Propagation configuration.
+     */
+    IndexStructure(
+        const vector_array_t& vecs_data,
+        const layer_config_t layer_config,
+        const propagate_config_t propagate_config
+    ) : _descent_graph(std::make_unique<descent_graph_t>(vecs_data, layer_config)),
+        _pruning_config(ratio_t(1.0), ratio_t(0.0)),
+        _propagate_config(propagate_config)
+    {}
+
+    IndexStructure(const IndexStructure&) = delete;
+    IndexStructure& operator=(const IndexStructure&) = delete;
+
+    IndexStructure(IndexStructure&&) noexcept = default;
+    IndexStructure& operator=(IndexStructure&&) noexcept = default;
+
+    // --- Composed graph accessor ---
+
+    __attribute__((always_inline))
+    auto get_descent_graph() -> descent_graph_t& { return *_descent_graph; }
+
+    __attribute__((always_inline))
+    auto get_descent_graph() const -> const descent_graph_t& { return *_descent_graph; }
+
+    // --- DescentGraph public API forwarders ---
+
+    __attribute__((always_inline))
+    auto get_num_vertices() const -> vertex_num_t {
+        return _descent_graph->get_num_vertices();
+    }
+
+    __attribute__((always_inline))
+    auto layer_config() const -> const layer_config_t& {
+        return _descent_graph->layer_config();
+    }
+
+    __attribute__((always_inline))
+    auto layer_config() -> layer_config_t& {
+        return _descent_graph->layer_config();
+    }
+
+    __attribute__((always_inline))
+    auto get_nbrs_arr() -> std::vector<dnbr_arr_t>& {
+        return _descent_graph->get_nbrs_arr();
+    }
+
+    __attribute__((always_inline))
+    auto get_nbrs_arr() const -> const std::vector<dnbr_arr_t>& {
+        return _descent_graph->get_nbrs_arr();
+    }
+
+    __attribute__((always_inline))
+    auto fetch_nbrs(const vertex_id_t src) const -> const dnbr_arr_t& {
+        return _descent_graph->fetch_nbrs(src);
+    }
+
+    __attribute__((always_inline))
+    auto fetch_nbrs(const vertex_id_t src) -> dnbr_arr_t& {
+        return _descent_graph->fetch_nbrs(src);
+    }
+
+    __attribute__((always_inline))
+    auto get_vecs_data() const -> const vector_array_t& {
+        return _descent_graph->get_vecs_data();
+    }
+
+    auto get_base_metadata() const -> nlohmann::json {
+        return _descent_graph->get_base_metadata();
+    }
+
+    // --- Config accessors ---
+
+    __attribute__((always_inline))
+    auto pruning_config() const -> const pruning_config_t& { return _pruning_config; }
+
+    __attribute__((always_inline))
+    auto propagate_config() const -> const propagate_config_t& { return _propagate_config; }
+
+    __attribute__((always_inline))
+    auto propagate_config() -> propagate_config_t& { return _propagate_config; }
+
+private:
+    std::unique_ptr<descent_graph_t> _descent_graph;
+    pruning_config_t   _pruning_config;
+    propagate_config_t _propagate_config;
+};
 
 }   // namespace knn_graph
 }   // namespace cpu

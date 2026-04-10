@@ -554,7 +554,7 @@ TEST_F(StackedRGraphTest, UpperLayerSearchLatency) {
 
     constexpr vertex_num_t search_nn_qs = 40;
 
-    hierarchical_graph_router_t router(
+    dynamic::hierarchical_graph_router_t router(
         vecs_storage, dist_func,
         /*topk=*/1,
         /*search_nn_qs=*/search_nn_qs,

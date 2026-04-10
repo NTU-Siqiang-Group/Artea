@@ -42,9 +42,6 @@ struct TestConfig {
     std::string dataset_name;
 
     layer_config_t layer_config{64, 96};
-    static constexpr float scale_coeffs = 1.0f;
-    static constexpr float shifted_coeffs = 0.0f;
-    symmetric_knn_graph::pruning_config_t pruning_config{scale_coeffs, shifted_coeffs};
     symmetric_knn_graph::propagate_config_t propagate_config{4, 14};
 
     uint32_t extracted_nbr_size;
@@ -99,7 +96,6 @@ public:
             symmetric_knn_graph::factory_t::construct_graph(
                 base_vecs,
                 g_config.layer_config,
-                g_config.pruning_config,
                 g_config.propagate_config
             )
         );
@@ -120,7 +116,7 @@ public:
         ARTEA_INFO("Converting to flat search graph...");
         start_time = std::chrono::high_resolution_clock::now();
 
-        compact_descent_graph_ = std::make_unique<compact_descent_graph_t>(
+        compact_descent_graph_ = std::make_unique<compact::descent_graph_t>(
             descent_graph_compactor_t::from_descent_graph(*descent_graph_, g_config.extracted_nbr_size)
         );
 
@@ -136,7 +132,7 @@ public:
 
     vector_dataset_t& get_dataset() { return *dataset_; }
     dist_func_t& get_dist_func() { return *dist_func_; }
-    compact_descent_graph_t& get_compact_descent_graph() { return *compact_descent_graph_; }
+    compact::descent_graph_t& get_compact_descent_graph() { return *compact_descent_graph_; }
     const idlist_array_t& get_groundtruth() { return dataset_->get_gt_vecs(); }
 
 private:
@@ -144,7 +140,7 @@ private:
     std::unique_ptr<vector_dataset_t> dataset_;
     std::unique_ptr<dist_func_t> dist_func_;
     std::unique_ptr<symmetric_knn_graph::index_t> descent_graph_;
-    std::unique_ptr<compact_descent_graph_t> compact_descent_graph_;
+    std::unique_ptr<compact::descent_graph_t> compact_descent_graph_;
 };
 
 class SymKnnGraphTest : public ::testing::Test {};
@@ -165,7 +161,7 @@ TEST_F(SymKnnGraphTest, QueryRecall) {
         g_config.queue_start, g_config.queue_end, g_config.queue_step));
 
     for (uint32_t queue_size = g_config.queue_start; queue_size <= g_config.queue_end; queue_size += g_config.queue_step) {
-        descent_graph_router_t<graph_mode_t::compact_mode> router(
+        compact::descent_graph_router_t router(
             base_vecs, dist_func, compact_descent_graph, g_config.topk, queue_size);
         router.initialize();
 

@@ -13,13 +13,14 @@
 
 namespace artea {
 namespace cpu {
+namespace compact {
 
 /**
  * @brief Compact descent graph using CSR (Compressed Sparse Row) format for efficient neighbor access.
  * @tparam IndexTraitsT The index traits type.
  */
 template <typename IndexTraitsT>
-class CompactDescentGraph {
+class DescentGraph {
 
     using vertex_num_t = typename IndexTraitsT::vertex_num_t;
     using vertex_id_t = typename IndexTraitsT::vertex_id_t;
@@ -33,7 +34,7 @@ public:
      * @param vecs_data Reference to the vector data for this graph.
      * @param extracted_nbr_size Fixed number of neighbors per vertex.
      */
-    CompactDescentGraph(
+    DescentGraph(
         const vector_array_t& vecs_data,
         const vertex_num_t extracted_nbr_size
     ) :
@@ -48,12 +49,12 @@ public:
     }
 
     // Copying is deleted
-    CompactDescentGraph(const CompactDescentGraph&) = delete;
-    CompactDescentGraph& operator=(const CompactDescentGraph&) = delete;
+    DescentGraph(const DescentGraph&) = delete;
+    DescentGraph& operator=(const DescentGraph&) = delete;
 
     // default move constructor and assignment
-    CompactDescentGraph(CompactDescentGraph&&) noexcept = default;
-    CompactDescentGraph& operator=(CompactDescentGraph&&) noexcept = default;
+    DescentGraph(DescentGraph&&) noexcept = default;
+    DescentGraph& operator=(DescentGraph&&) noexcept = default;
 
     // --- Public Interface ---
 
@@ -141,7 +142,8 @@ private:
     /** @brief Const reference to vector data for this graph. */
     const vector_array_t& _vecs_data;
 
-};  // class CompactDescentGraph
+};  // class DescentGraph
 
+}   // namespace compact
 }   // namespace cpu
 }   // namespace artea

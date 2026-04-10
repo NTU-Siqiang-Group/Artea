@@ -37,12 +37,12 @@
 
 #include <artea/common/logger.hpp>
 #include <artea/cpu/utils/parallel.hpp>
-#include <artea/cpu/framework/type_traits/router_traits.hpp>
-#include <artea/cpu/router/candidate_queue_concept.hpp>
+#include <artea/cpu/router/data_structures/candidate_queue_concept.hpp>
 #include <artea/cpu/router/visited_table_concept.hpp>
 
 namespace artea {
 namespace cpu {
+namespace dynamic {
 
 /**
  * @brief Single-layer proximity-graph router operating on an InternalGraph.
@@ -510,5 +510,6 @@ private:
 
 };  // class InternalGraphRouter
 
+}   // namespace dynamic
 }   // namespace cpu
 }   // namespace artea

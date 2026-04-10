@@ -29,22 +29,26 @@ namespace conv_graph {
     template <typename IndexTraitsT> class IndexStructure;
 }
 namespace knn_graph {
-    template <typename IndexTraitsT>
-    using IndexStructure = conv_graph::IndexStructure<IndexTraitsT>;
+    template <typename IndexTraitsT> class IndexStructure;
 }
 namespace symmetric_knn_graph {
     template <typename IndexTraitsT>
-    using IndexStructure = conv_graph::IndexStructure<IndexTraitsT>;
+    using IndexStructure = knn_graph::IndexStructure<IndexTraitsT>;
 }
-template <typename IndexTraitsT> class CompactDescentGraph;
+namespace compact {
+    template <typename IndexTraitsT> class DescentGraph;
+    template <typename IndexTraitsT> class InternalGraph;
+}
+namespace dynamic {
+    template <typename IndexTraitsT, typename DerivedClassT> class DescentGraph;
+    template <typename IndexTraitsT> class InternalGraph;
+    template <typename IndexTraitsT> class HierarchicalGraph;
+}
 template <typename IndexTraitsT> class DescentGraphCompactor;
 template <typename IndexTraitsT> class FlatGraphFileManager;
 template <typename IndexTraitsT> class IndexSizeCalculator;
 template <typename IndexTraitsT> class RadiusProber;
-template <typename IndexTraitsT> class CompactInternalGraph;
-template <typename IndexTraitsT> class InternalGraph;
 template <typename IndexTraitsT> class InternalGraphCompactor;
-template <typename IndexTraitsT> class HierarchicalGraph;
 namespace stacked_rgraph {
     template <typename IndexTraitsT> class IndexStructure;
 }
@@ -60,10 +64,19 @@ struct IndexTraits : virtual public BaseTraitsT {
 
     /** @brief CRTP base descent graph type (template on DerivedClassT). */
     template <typename DerivedClassT>
-    using descent_graph_t = DescentGraph<index_traits_t, DerivedClassT>;
+    using descent_graph_t = dynamic::DescentGraph<index_traits_t, DerivedClassT>;
 
-    /** @brief Flat search graph type (CSR format). */
-    using compact_descent_graph_t = CompactDescentGraph<index_traits_t>;
+    /** @brief Graph structures grouped by mode. */
+    struct compact {
+        compact() = delete;
+        using descent_graph_t  = cpu::compact::DescentGraph<index_traits_t>;
+        using internal_graph_t = cpu::compact::InternalGraph<index_traits_t>;
+    };
+    struct dynamic {
+        dynamic() = delete;
+        using internal_graph_t      = cpu::dynamic::InternalGraph<index_traits_t>;
+        using hierarchical_graph_t  = cpu::dynamic::HierarchicalGraph<index_traits_t>;
+    };
 
     /** @brief Namespace-scoped index types for conv_graph, extending BaseTraits::conv_graph. */
     struct conv_graph : BaseTraitsT::conv_graph {
@@ -95,17 +108,8 @@ struct IndexTraits : virtual public BaseTraitsT {
     /** @brief Radius prober type. */
     using radius_prober_t = RadiusProber<index_traits_t>;
 
-    /** @brief Compact internal graph type. */
-    using compact_internal_graph_t = CompactInternalGraph<index_traits_t>;
-
-    /** @brief Internal graph type (supports concurrent vertex/neighbor insertion). */
-    using internal_graph_t = InternalGraph<index_traits_t>;
-
-    /** @brief Single-layer compactor: InternalGraph -> CompactInternalGraph. */
+    /** @brief Single-layer compactor: dynamic::InternalGraph -> compact::InternalGraph. */
     using internal_graph_compactor_t = InternalGraphCompactor<index_traits_t>;
-
-    /** @brief Hierarchical graph type (holds InternalGraph layers with atomic layer growth). */
-    using hierarchical_graph_t = HierarchicalGraph<index_traits_t>;
 
     /** @brief Namespace-scoped index types for stacked_rgraph
      *  (dynamic r-net insertion over HierarchicalGraph). */

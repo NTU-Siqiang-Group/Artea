@@ -30,16 +30,16 @@
 #include <tbb/blocked_range.h>
 
 #include <artea/cpu/utils/parallel.hpp>
-#include <artea/cpu/framework/type_traits/router_traits.hpp>
-#include <artea/cpu/router/candidate_queue_concept.hpp>
+#include <artea/cpu/router/data_structures/candidate_queue_concept.hpp>
 #include <artea/cpu/router/visited_table_concept.hpp>
 
 namespace artea {
 namespace cpu {
+namespace compact {
 
 template <typename RouterTraitsT>
-class DescentGraphRouter<RouterTraitsT, GraphModeT::compact_mode> :
-    public RouterTraitsT::template vector_router_t<DescentGraphRouter<RouterTraitsT, GraphModeT::compact_mode>>
+class DescentGraphRouter :
+    public RouterTraitsT::template vector_router_t<DescentGraphRouter<RouterTraitsT>>
 {
 
     using vertex_num_t = typename RouterTraitsT::vertex_num_t;
@@ -49,20 +49,20 @@ class DescentGraphRouter<RouterTraitsT, GraphModeT::compact_mode> :
     using dist_func_t = typename RouterTraitsT::dist_func_t;
     using vector_array_t = typename RouterTraitsT::vector_array_t;
     using query_vecs_t = typename RouterTraitsT::query_vecs_t;
-    using compact_descent_graph_t = typename RouterTraitsT::compact_descent_graph_t;
+    using compact = typename RouterTraitsT::compact;
     using random_seq_t = typename RouterTraitsT::random_seq_t;
     using candidate_queue_t = typename RouterTraitsT::candidate_queue_t;
     using visited_table_t = typename RouterTraitsT::visited_table_t;
     using visited_table_pool_t = typename RouterTraitsT::visited_table_pool_t;
     using knn_results_t = typename RouterTraitsT::knn_results_t;
-    using base_class_t = typename RouterTraitsT::template vector_router_t<DescentGraphRouter<RouterTraitsT, GraphModeT::compact_mode>>;
+    using base_class_t = typename RouterTraitsT::template vector_router_t<DescentGraphRouter<RouterTraitsT>>;
 
 public:
 
     DescentGraphRouter(
         const vector_array_t& vecs_data,
         const dist_func_t& dist_func,
-        const compact_descent_graph_t& compact_descent_graph,
+        const compact::descent_graph_t& compact_descent_graph,
         const uint32_t topk,
         const vertex_num_t candidate_queue_size = 16
     ) : base_class_t(vecs_data, dist_func, topk),
@@ -322,7 +322,7 @@ private:
     }
 
     /** @brief Reference to the flat search graph for neighbor access. */
-    const compact_descent_graph_t& _compact_descent_graph;
+    const compact::descent_graph_t& _compact_descent_graph;
 
     /** @brief Candidate queue size for beam search. */
     vertex_num_t _candidate_queue_size = 0;
@@ -333,7 +333,8 @@ private:
     /** @brief Thread-safe random sequence generator (internally uses thread-local MKL streams). */
     mutable random_seq_t _random_seq;
 
-};  // class DescentGraphRouter<RouterTraitsT, GraphModeT::compact_mode>
+};  // class DescentGraphRouter
 
+}   // namespace compact
 }   // namespace cpu
 }   // namespace artea
