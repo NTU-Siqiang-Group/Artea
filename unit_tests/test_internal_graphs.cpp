@@ -686,6 +686,170 @@ TEST_F(InternalGraphTest, ParallelAddNbrSameVertexHighContention) {
     }
 }
 
+// ============================================================
+//  InternalGraphCompactor Tests
+//  (dynamic::InternalGraph -> compact::InternalGraph)
+// ============================================================
+
+class InternalGraphCompactorTest : public ::testing::Test {
+protected:
+    static constexpr vertex_num_t max_num_vertices = 100'000;
+    static constexpr vertex_num_t src_max_nbr_size = 63;
+
+    void SetUp() override {
+        src_graph_ = std::make_unique<dynamic::internal_graph_t>(max_num_vertices, src_max_nbr_size);
+    }
+
+    void populate_src_graph(const vertex_num_t num_vertices) {
+        for (vertex_num_t i = 0; i < num_vertices; ++i) {
+            const vertex_id_t v = src_graph_->add_vertex(i + 7);
+            const uint64_t valid_count = i % (src_max_nbr_size + 1);
+            auto block = src_graph_->fetch_nbrs(v);
+            for (uint64_t j = 0; j < valid_count; ++j) {
+                block[1 + j] = lnbr_t(i * 1000 + static_cast<vertex_id_t>(j),
+                                      static_cast<vertex_id_t>(j));
+            }
+            src_graph_->num_valid_nbrs(v, valid_count);
+        }
+    }
+
+    std::unique_ptr<dynamic::internal_graph_t> src_graph_;
+};
+
+TEST_F(InternalGraphCompactorTest, EmptyGraph) {
+    auto compact = internal_graph_compactor_t::compact_graph(*src_graph_, src_max_nbr_size);
+    EXPECT_EQ(compact.get_num_vertices(), 0u);
+    EXPECT_EQ(compact.max_nbr_size(), src_max_nbr_size);
+}
+
+TEST_F(InternalGraphCompactorTest, BasicConversionEqualSize) {
+    const vertex_num_t num = 1000;
+    populate_src_graph(num);
+
+    auto compact = internal_graph_compactor_t::compact_graph(*src_graph_, src_max_nbr_size);
+    EXPECT_EQ(compact.get_num_vertices(), num);
+
+    for (vertex_num_t i = 0; i < num; ++i) {
+        const vertex_id_t v = static_cast<vertex_id_t>(i);
+        const uint64_t valid_count = i % (src_max_nbr_size + 1);
+
+        auto compact_nbrs = compact.fetch_nbrs(v);
+        for (uint64_t j = 0; j < valid_count; ++j) {
+            EXPECT_EQ(compact_nbrs[j].base_vid, i * 1000 + static_cast<vertex_id_t>(j));
+        }
+        for (uint64_t j = valid_count; j < src_max_nbr_size; ++j) {
+            EXPECT_EQ(compact_nbrs[j], base_traits_t::invalid_lnbr);
+        }
+        EXPECT_EQ(compact.get_inter_layer_link(v), i + 7);
+    }
+}
+
+TEST_F(InternalGraphCompactorTest, ExtractedNbrSizeSmaller) {
+    const vertex_num_t num = 500;
+    populate_src_graph(num);
+
+    const vertex_num_t extracted = 16;
+    auto compact = internal_graph_compactor_t::compact_graph(*src_graph_, extracted);
+    EXPECT_EQ(compact.max_nbr_size(), extracted);
+
+    for (vertex_num_t i = 0; i < num; ++i) {
+        const uint64_t valid_count = i % (src_max_nbr_size + 1);
+        const uint64_t expected_copied = std::min(valid_count, static_cast<uint64_t>(extracted));
+        auto compact_nbrs = compact.fetch_nbrs(static_cast<vertex_id_t>(i));
+        for (uint64_t j = 0; j < expected_copied; ++j) {
+            EXPECT_EQ(compact_nbrs[j].base_vid, i * 1000 + static_cast<vertex_id_t>(j));
+        }
+        for (uint64_t j = expected_copied; j < extracted; ++j) {
+            EXPECT_EQ(compact_nbrs[j], base_traits_t::invalid_lnbr);
+        }
+    }
+}
+
+TEST_F(InternalGraphCompactorTest, ExtractedNbrSizeLargerThrows) {
+    populate_src_graph(10);
+    EXPECT_THROW({
+        internal_graph_compactor_t::compact_graph(*src_graph_, src_max_nbr_size + 1);
+    }, std::runtime_error);
+}
+
+TEST_F(InternalGraphCompactorTest, AllVerticesFull) {
+    const vertex_num_t num = 1000;
+    for (vertex_num_t i = 0; i < num; ++i) {
+        const vertex_id_t v = src_graph_->add_vertex(i);
+        auto block = src_graph_->fetch_nbrs(v);
+        for (uint64_t j = 0; j < src_max_nbr_size; ++j) {
+            block[1 + j] = lnbr_t(i + static_cast<vertex_id_t>(j),
+                                  static_cast<vertex_id_t>(j));
+        }
+        src_graph_->num_valid_nbrs(v, src_max_nbr_size);
+    }
+
+    auto compact = internal_graph_compactor_t::compact_graph(*src_graph_, src_max_nbr_size);
+    for (vertex_id_t v = 0; v < num; ++v) {
+        auto compact_nbrs = compact.fetch_nbrs(v);
+        for (uint64_t j = 0; j < src_max_nbr_size; ++j) {
+            EXPECT_EQ(compact_nbrs[j].base_vid, v + static_cast<vertex_id_t>(j));
+        }
+    }
+}
+
+TEST_F(InternalGraphCompactorTest, AllVerticesEmpty) {
+    const vertex_num_t num = 1000;
+    for (vertex_num_t i = 0; i < num; ++i) {
+        src_graph_->add_vertex(i);
+    }
+
+    auto compact = internal_graph_compactor_t::compact_graph(*src_graph_, src_max_nbr_size);
+    for (vertex_id_t v = 0; v < num; ++v) {
+        auto compact_nbrs = compact.fetch_nbrs(v);
+        for (uint64_t j = 0; j < src_max_nbr_size; ++j) {
+            EXPECT_EQ(compact_nbrs[j], base_traits_t::invalid_lnbr);
+        }
+    }
+}
+
+TEST_F(InternalGraphCompactorTest, LargeScaleParallel) {
+    const vertex_num_t num = 100'000;
+    populate_src_graph(num);
+
+    auto compact = internal_graph_compactor_t::compact_graph(*src_graph_, src_max_nbr_size);
+    EXPECT_EQ(compact.get_num_vertices(), num);
+
+    std::atomic<uint32_t> errors{0};
+    tbb::parallel_for(
+        tbb::blocked_range<vertex_num_t>(0, num),
+        [&](const tbb::blocked_range<vertex_num_t>& range) {
+            for (vertex_num_t i = range.begin(); i < range.end(); ++i) {
+                const uint64_t valid_count = i % (src_max_nbr_size + 1);
+                auto compact_nbrs = compact.fetch_nbrs(static_cast<vertex_id_t>(i));
+                for (uint64_t j = 0; j < valid_count; ++j) {
+                    if (compact_nbrs[j].base_vid != i * 1000 + static_cast<vertex_id_t>(j)) {
+                        errors.fetch_add(1, std::memory_order_relaxed);
+                    }
+                }
+                if (compact.get_inter_layer_link(static_cast<vertex_id_t>(i)) != i + 7) {
+                    errors.fetch_add(1, std::memory_order_relaxed);
+                }
+            }
+        }
+    );
+    EXPECT_EQ(errors.load(), 0u);
+}
+
+TEST_F(InternalGraphCompactorTest, SourceUnchangedAfterCompaction) {
+    const vertex_num_t num = 200;
+    populate_src_graph(num);
+
+    auto compact = internal_graph_compactor_t::compact_graph(*src_graph_, src_max_nbr_size);
+
+    EXPECT_EQ(src_graph_->get_num_vertices(), num);
+    for (vertex_num_t i = 0; i < num; ++i) {
+        const uint64_t valid_count = i % (src_max_nbr_size + 1);
+        EXPECT_EQ(src_graph_->num_valid_nbrs(static_cast<vertex_id_t>(i)), valid_count);
+        EXPECT_EQ(src_graph_->get_inter_layer_link(static_cast<vertex_id_t>(i)), i + 7);
+    }
+}
+
 int main(int argc, char** argv) {
     ::testing::InitGoogleTest(&argc, argv);
     return RUN_ALL_TESTS();

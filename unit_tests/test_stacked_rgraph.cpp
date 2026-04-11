@@ -357,66 +357,98 @@ TEST_F(StackedRGraphTest, NeighborListsAreValid) {
 }
 
 // ============================================================
-//  Coverage rate: for each layer h, what fraction of sampled base
-//  points have brute-force nearest-neighbor distance <= R_h?
+//  Coverage rate: does layer h+1 cover layer h?
 //
-//  An ideal r-net has coverage = 100% at every layer. The dynamic
-//  insertion algorithm is approximate, so we expect high coverage at
-//  the lower (denser) layers and somewhat lower at the topmost layers
-//  (where vertices are few and data is sparse).
+//  R-net coverage property: every point in a lower layer must
+//  have at least one point in the layer directly above within
+//  covering radius R_{h+1}.
+//
+//  Specifically:
+//    - Layer 1 covers the base dataset: for sampled base points,
+//      is there a layer-1 vertex within R_1?
+//    - Layer h+1 covers layer h: for sampled layer-h vertices,
+//      is there a layer-(h+1) vertex within R_{h+1}?
+//    - The topmost layer has no layer above it → not tested.
 // ============================================================
 
 TEST_F(StackedRGraphTest, CoverageRate) {
     const auto& base_vecs = DataProvider::instance().get_dataset().get_base_vecs();
     auto& dist_func = DataProvider::instance().get_dist_func();
     const auto num_layers = _graph->get_num_layers();
-    const auto n = base_vecs.get_num_vecs();
+    const auto n = static_cast<vertex_num_t>(base_vecs.get_num_vecs());
 
-    const vertex_num_t num_samples = std::min<vertex_num_t>(
-        g_config.coverage_num_samples, n);
+    ARTEA_INFO(fmt::format("--- Coverage rate (num_samples={}) ---",
+        g_config.coverage_num_samples));
 
-    // Deterministic sample: even strides through the base dataset.
-    const vertex_num_t step = std::max<vertex_num_t>(1, n / num_samples);
-
-    ARTEA_INFO(fmt::format("--- Coverage rate (num_samples={}) ---", num_samples));
-
-    for (layer_id_t l = 0; l < num_layers; ++l) {
-        const auto& layer = _graph->get_layer_graph(l);
-        const vertex_num_t n_l = layer.get_num_vertices();
-        if (n_l == 0) continue;
+    // For each layer h (1-indexed), check that layer h covers the
+    // level below it. Layer 1 covers base; layer h+1 covers layer h.
+    // We iterate h = 1 .. num_layers, checking that layer h covers
+    // the level below.
+    for (layer_id_t h = 0; h < num_layers; ++h) {
+        const auto& covering_layer = _graph->get_layer_graph(h);
+        const vertex_num_t n_cover = covering_layer.get_num_vertices();
+        if (n_cover == 0) continue;
 
         const distance_t R_h = static_cast<distance_t>(
             radius_at_layer(DataProvider::instance().get_l1_radius(),
                             g_config.rnet_beta,
-                            static_cast<layer_num_t>(l + 1)));
+                            static_cast<layer_num_t>(h + 1)));
 
-        // Collect the base_vids present in layer l via the InternalGraph's
-        // O(1) per-vertex metadata (base_vid stored alongside layer_vid in
-        // _vertex_info).
-        std::vector<vertex_id_t> layer_base_vids(n_l);
-        for (vertex_num_t v = 0; v < n_l; ++v) {
-            layer_base_vids[v] = layer.get_base_vid(v);
+        // Collect base_vids of the covering layer (layer h).
+        std::vector<vertex_id_t> cover_base_vids(n_cover);
+        for (vertex_num_t v = 0; v < n_cover; ++v) {
+            cover_base_vids[v] = covering_layer.get_base_vid(v);
         }
 
-        // Parallel coverage test: for each sample, brute-force nearest over
-        // layer_base_vids and compare against R_h.
+        // Determine the query set: the level being covered.
+        // h == 0 (layer 1) covers the base dataset.
+        // h >= 1 (layer h+1) covers layer h (= layer_id h-1).
+        std::vector<vertex_id_t> query_base_vids;
+        if (h == 0) {
+            // Sample from the base dataset.
+            const vertex_num_t num_samples = std::min<vertex_num_t>(
+                g_config.coverage_num_samples, n);
+            const vertex_num_t step = std::max<vertex_num_t>(1, n / num_samples);
+            query_base_vids.reserve(num_samples);
+            for (vertex_num_t i = 0; i < num_samples; ++i) {
+                const vertex_id_t q = i * step;
+                if (q >= n) break;
+                query_base_vids.push_back(q);
+            }
+        } else {
+            // Sample from layer h-1.
+            const auto& lower_layer = _graph->get_layer_graph(h - 1);
+            const vertex_num_t n_lower = lower_layer.get_num_vertices();
+            const vertex_num_t num_samples = std::min<vertex_num_t>(
+                g_config.coverage_num_samples, n_lower);
+            const vertex_num_t step = std::max<vertex_num_t>(1, n_lower / num_samples);
+            query_base_vids.reserve(num_samples);
+            for (vertex_num_t i = 0; i < num_samples; ++i) {
+                const vertex_num_t v = i * step;
+                if (v >= n_lower) break;
+                query_base_vids.push_back(lower_layer.get_base_vid(v));
+            }
+        }
+
+        const vertex_num_t num_queries =
+            static_cast<vertex_num_t>(query_base_vids.size());
+
+        // Parallel coverage check.
         std::atomic<uint32_t> covered{0};
         std::atomic<uint32_t> tested{0};
         tbb::parallel_for(
-            tbb::blocked_range<vertex_num_t>(0, num_samples),
+            tbb::blocked_range<vertex_num_t>(0, num_queries),
             [&](const tbb::blocked_range<vertex_num_t>& r) {
                 uint32_t local_covered = 0;
                 uint32_t local_tested = 0;
                 for (vertex_num_t i = r.begin(); i < r.end(); ++i) {
-                    const vertex_id_t q = i * step;
-                    if (q >= n) break;
-                    const vec_ele_t* q_vec = base_vecs.get(q);
+                    const vec_ele_t* q_vec = base_vecs.get(query_base_vids[i]);
 
                     distance_t best = std::numeric_limits<distance_t>::max();
-                    for (const vertex_id_t bv : layer_base_vids) {
+                    for (const vertex_id_t bv : cover_base_vids) {
                         const distance_t d = dist_func(q_vec, base_vecs.get(bv));
                         if (d < best) best = d;
-                        if (best <= R_h) break;  // early exit: already covered
+                        if (best <= R_h) break;
                     }
                     ++local_tested;
                     if (best <= R_h) ++local_covered;
@@ -432,17 +464,16 @@ TEST_F(StackedRGraphTest, CoverageRate) {
             ? (100.0f * total_covered / total_tested)
             : 0.0f;
 
+        const std::string covered_level =
+            (h == 0) ? "base" : fmt::format("L{}", h);
         ARTEA_INFO(fmt::format(
-            "  Layer {}: |L_h|={:>8}, R_{}={:>12.4f}, coverage = {}/{} = {:.2f}%",
-            l + 1, n_l, l + 1, R_h, total_covered, total_tested, rate));
+            "  L{} covers {}: |L{}|={}, R_{}={:.4f}, coverage = {}/{} = {:.2f}%",
+            h + 1, covered_level, h + 1, n_cover, h + 1, R_h,
+            total_covered, total_tested, rate));
 
-        // Soft expectation: the bottom layer should cover most of the
-        // dataset. Upper layers may have arbitrarily low coverage (their
-        // radius is larger but their vertex count is much smaller).
-        if (l == 0) {
-            EXPECT_GE(rate, 50.0f)
-                << "Layer 0 coverage is suspiciously low: " << rate << "%";
-        }
+        EXPECT_GE(rate, 50.0f)
+            << "Layer " << (h + 1) << " coverage of " << covered_level
+            << " is suspiciously low: " << rate << "%";
     }
 }
 
