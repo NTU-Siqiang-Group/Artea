@@ -193,50 +193,43 @@ public:
     __attribute__((always_inline))
     auto get_layer_vid() const -> vertex_id_t { return get_layer_id(); }
 
-    // --- Distance-based comparison operators ---
-
+    /**
+     * @brief Comparison operators: primary key = distance, tie-break = base_vid
+     *        (smaller base_vid sorts first when distances are equal).
+     */
     __attribute__((always_inline))
     constexpr bool operator<(const LnbrCandidateEntry& other) const noexcept {
-        return distance < other.distance;
+        if (distance != other.distance) return distance < other.distance;
+        return base_vid < other.base_vid;
     }
 
     __attribute__((always_inline))
     constexpr bool operator>(const LnbrCandidateEntry& other) const noexcept {
-        return distance > other.distance;
+        if (distance != other.distance) return distance > other.distance;
+        return base_vid > other.base_vid;
     }
 
     __attribute__((always_inline))
     constexpr bool operator<=(const LnbrCandidateEntry& other) const noexcept {
-        return distance <= other.distance;
+        return !(*this > other);
     }
 
     __attribute__((always_inline))
     constexpr bool operator>=(const LnbrCandidateEntry& other) const noexcept {
-        return distance >= other.distance;
+        return !(*this < other);
     }
 
     __attribute__((always_inline))
     constexpr bool operator==(const LnbrCandidateEntry& other) const noexcept {
-        return distance == other.distance;
+        return distance == other.distance && base_vid == other.base_vid;
     }
 
     __attribute__((always_inline))
     constexpr bool operator!=(const LnbrCandidateEntry& other) const noexcept {
-        return distance != other.distance;
+        return !(*this == other);
     }
 
 };  // struct LnbrCandidateEntry
-
-/** @brief Comparator for LnbrCandidateEntry by distance. */
-template <typename RouterTraitsT>
-struct LnbrCandidateEntryComparator {
-    using entry_t = LnbrCandidateEntry<RouterTraitsT>;
-
-    __attribute__((always_inline))
-    constexpr bool operator()(const entry_t& a, const entry_t& b) const noexcept {
-        return a.get_distance() < b.get_distance();
-    }
-};  // struct LnbrCandidateEntryComparator
 
 }   // namespace cpu
 }   // namespace artea

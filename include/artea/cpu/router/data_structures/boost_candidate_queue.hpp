@@ -12,6 +12,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+/*
+ * @FilePath: /Artea/include/artea/cpu/router/data_structures/boost_candidate_queue.hpp
+ * @Author: Chandler (Weitang Ye) <weitang.ye@ntu.edu.sg>
+ * @Description: Dual boost::heap::d_ary_heap candidate queue implementation.
+ */
+
 #pragma once
 
 #include <vector>
@@ -20,28 +26,32 @@
 #include <cassert>
 #include <type_traits>
 #include <utility>
-#include <artea/cpu/containers/four_ary_heap.hpp>
-#include <artea/cpu/containers/allocator.hpp>
+#include <boost/heap/d_ary_heap.hpp>
 
 namespace artea {
 namespace cpu {
 
 /**
- * @brief Dual FourAryHeap Candidate Queue Implementation (inspired by hnswlib).
+ * @brief Dual d-ary Heap Candidate Queue backed by boost::heap::d_ary_heap.
  *
  * Design Philosophy:
- * This implementation uses two FourAryHeap instances to efficiently manage candidates during
- * graph search, following the approach used in hnswlib:
+ * Uses two boost::heap::d_ary_heap (arity 4) instances following the same
+ * dual-heap pattern as StdCandidateQueue and FHCandidateQueue:
  *
- * 1. Unexplored Set (Min-Heap): Stores candidates to be explored, ordered by distance (ascending).
- *    The top element is the closest unexplored candidate.
+ * 1. Unexplored Set (Min-Heap): Stores candidates to be explored, ordered
+ *    by distance ascending.  Top = closest unexplored candidate.
  *
- * 2. Top Candidates (Max-Heap): Maintains the best L candidates found so far, ordered by
- *    distance (descending). The top element is the worst among the best L candidates.
+ * 2. Top Candidates (Max-Heap): Maintains the best L candidates found so
+ *    far, ordered by distance descending.  Top = worst among best L.
+ *
+ * boost::heap::d_ary_heap natively supports begin()/end() ordered iteration,
+ * making this queue convenient for callers that need to traverse or modify
+ * entries in-place.
  *
  * Performance Characteristics:
  * - try_push: O(log_4 L) for heap insertion
  * - pop_best_unexplored: O(log_4 L) for heap extraction
+ * - begin()/end(): O(1) — returns iterators over the underlying container
  * - Memory: O(L) for both heaps
  *
  * @tparam RouterTraitsT Traits defining vertex types, distance types, and candidate entry types.
@@ -50,7 +60,7 @@ namespace cpu {
  */
 template <typename RouterTraitsT,
           typename EntryT = typename RouterTraitsT::dnbr_candidate_entry_t>
-class FHCandidateQueue {
+class BoostCandidateQueue {
 
 public:
     using vertex_id_t = typename RouterTraitsT::vertex_id_t;
@@ -58,7 +68,6 @@ public:
     using candidate_entry_t = EntryT;
     /** @brief knn_results_t is a queue-local type that tracks @c EntryT. */
     using knn_results_t = std::vector<candidate_entry_t>;
-    using container_t = cache_aligned_container_t<candidate_entry_t>;
     using random_seq_t = typename RouterTraitsT::random_seq_t;
     using dist_func_t = typename RouterTraitsT::dist_func_t;
     using vec_ele_t = typename RouterTraitsT::vec_ele_t;
@@ -71,46 +80,39 @@ public:
     /** @brief Invalid vertex ID constant. */
     static constexpr vertex_id_t invalid_vertex_id = RouterTraitsT::invalid_vertex_id;
 
-    /** @brief Sentinel value with max distance (for min-heap sentinel). */
+    /** @brief Sentinel value representing an invalid/non-existent candidate. */
     static constexpr candidate_entry_t invalid_candidate_entry =
         candidate_entry_t::make_invalid_entry();
 
-    /** @brief Sentinel value with min distance (for max-heap sentinel). */
-    static constexpr candidate_entry_t min_candidate_entry =
-        candidate_entry_t::make_min_entry();
+    /** @brief Min-heap type for unexplored set (closest candidates at top).
+     *  boost::heap is a max-heap by default; std::greater inverts to min-heap. */
+    using min_heap_t = boost::heap::d_ary_heap<
+        candidate_entry_t,
+        boost::heap::arity<4>,
+        boost::heap::compare<std::greater<candidate_entry_t>>>;
+
+    /** @brief Max-heap type for top candidates (worst of best at top).
+     *  std::less (default) yields a max-heap. */
+    using max_heap_t = boost::heap::d_ary_heap<
+        candidate_entry_t,
+        boost::heap::arity<4>,
+        boost::heap::compare<std::less<candidate_entry_t>>>;
 
     /**
-     * @brief Min-heap type (smallest distance at top).
-     * Compare = std::greater: comparator(a, b) = (a > b), so b wins when b < a.
-     * Sentinel = invalid_candidate_entry (max distance), never wins.
-     */
-    using min_heap_t = FourAryHeap<candidate_entry_t, container_t, std::greater<candidate_entry_t>>;
-
-    /**
-     * @brief Max-heap type (largest distance at top).
-     * Compare = std::less (default): comparator(a, b) = (a < b), so b wins when b > a.
-     * Sentinel = min_candidate_entry (min distance), never wins.
-     */
-    using max_heap_t = FourAryHeap<candidate_entry_t, container_t, std::less<candidate_entry_t>>;
-
-    /**
-     * @brief Construct a FHCandidateQueue with a fixed capacity.
+     * @brief Construct a BoostCandidateQueue with a fixed capacity.
      * @param capacity Maximum number of top candidates to maintain.
      */
-    explicit FHCandidateQueue(std::size_t capacity)
-        : _unexplored_set(invalid_candidate_entry),
-          _top_candidates(min_candidate_entry),
-          _capacity(capacity),
-          _lower_bound(max_distance) {
+    explicit BoostCandidateQueue(std::size_t capacity)
+        : _capacity(capacity), _lower_bound(max_distance) {
     }
 
     // Prevent accidental copy
-    FHCandidateQueue(const FHCandidateQueue&) = delete;
-    FHCandidateQueue& operator=(const FHCandidateQueue&) = delete;
+    BoostCandidateQueue(const BoostCandidateQueue&) = delete;
+    BoostCandidateQueue& operator=(const BoostCandidateQueue&) = delete;
 
     // Allow move semantics
-    FHCandidateQueue(FHCandidateQueue&&) = default;
-    FHCandidateQueue& operator=(FHCandidateQueue&&) = default;
+    BoostCandidateQueue(BoostCandidateQueue&&) = default;
+    BoostCandidateQueue& operator=(BoostCandidateQueue&&) = default;
 
     /**
      * @brief Initialize the queue with a set of candidate entries.
@@ -140,7 +142,6 @@ public:
      * @param query_vec Pointer to the query vector.
      * @param base_vecs Reference to the base vector array.
      * @param visited_table Reference to visited table to mark initial candidates.
-     * @note Generates random IDs, computes distances using dist_func, and calls seeded_initialize.
      * @complexity O(N) for generation + O(N log N) for heap operations.
      */
     void random_initialize(
@@ -150,11 +151,8 @@ public:
         const vector_array_t& base_vecs,
         visited_table_t& visited_table
     ) {
-        // Generate random vertex IDs directly into std::vector
         std::vector<vertex_id_t> init_vids(_capacity);
         random_seq.generate(init_vids, base_vecs.get_num_vecs(), _capacity);
-
-        // Call seeded_initialize with the generated IDs
         seeded_initialize(init_vids, dist_func, query_vec, base_vecs, visited_table);
     }
 
@@ -165,7 +163,6 @@ public:
      * @param query_vec Pointer to the query vector.
      * @param base_vecs Reference to the base vector array.
      * @param visited_table Reference to visited table to mark initial candidates.
-     * @note If init_vids.size() > capacity, only the best capacity candidates are kept.
      * @complexity O(N) for distance computation + O(N log N) for sorting + O(L log L) for heap operations.
      */
     void seeded_initialize(
@@ -175,14 +172,10 @@ public:
         const vector_array_t& base_vecs,
         visited_table_t& visited_table
     ) {
-        // This overload assumes a dnbr-style 2-arg entry constructor
-        // (vertex_id, distance). Lnbr callers should seed manually via
-        // try_push(...) instead.
         static_assert(
             std::is_constructible_v<candidate_entry_t, vertex_id_t, distance_t>,
             "seeded_initialize requires an entry with (vid, dist) constructor");
 
-        // Create candidate entries with computed distances
         std::vector<candidate_entry_t> init_candidates;
         init_candidates.reserve(init_vids.size());
         for (vertex_id_t vid : init_vids) {
@@ -191,7 +184,6 @@ public:
             init_candidates.emplace_back(vid, dist);
         }
 
-        // If we have more candidates than capacity, keep only the best capacity candidates
         if (init_candidates.size() > _capacity) {
             std::partial_sort(
                 init_candidates.begin(),
@@ -335,8 +327,9 @@ public:
      * @brief Check if the search should terminate early.
      *
      * Early Termination Condition (from hnswlib):
-     * If the closest unexplored candidate is farther than the worst candidate in top_candidates,
-     * and top_candidates is full, then no better candidates can be found.
+     * If the closest unexplored candidate is farther than the worst candidate
+     * in top_candidates, and top_candidates is full, then no better candidates
+     * can be found.
      *
      * @return true if search should terminate, false otherwise.
      */
@@ -353,7 +346,7 @@ public:
 
     /**
      * @brief Mutable iterator to the beginning of the result-set (top_candidates).
-     * @note Iteration order is heap-order (NOT sorted by distance).
+     * @note boost::heap::d_ary_heap provides ordered iteration.
      */
     auto begin()       { return _top_candidates.begin(); }
     auto end()         { return _top_candidates.end(); }
@@ -362,10 +355,10 @@ public:
 
     /**
      * @brief Create an independent deep copy of this queue.
-     * @return A new FHCandidateQueue with identical logical state.
+     * @return A new BoostCandidateQueue with identical logical state.
      */
-    auto clone() const -> FHCandidateQueue {
-        FHCandidateQueue copy(_capacity);
+    auto clone() const -> BoostCandidateQueue {
+        BoostCandidateQueue copy(_capacity);
         copy._unexplored_set = _unexplored_set;
         copy._top_candidates = _top_candidates;
         copy._lower_bound    = _lower_bound;
@@ -392,7 +385,7 @@ public:
             _top_candidates.pop();
         }
 
-        // Reverse to get ascending order (O(n) instead of O(n log n) sort)
+        // Reverse to get ascending order
         std::reverse(results.begin(), results.end());
         results.resize(k);
 
@@ -430,7 +423,7 @@ private:
             _top_candidates.top().get_distance() : max_distance;
     }
 
-};  // class FHCandidateQueue
+};  // class BoostCandidateQueue
 
-} // namespace cpu
-} // namespace artea
+}   // namespace cpu
+}   // namespace artea

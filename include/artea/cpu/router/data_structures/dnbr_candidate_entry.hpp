@@ -185,49 +185,43 @@ public:
         distance = dist;
     }
 
-    /** @brief Comparison operators based on distance. */
+    /**
+     * @brief Comparison operators: primary key = distance, tie-break = base_id
+     *        (smaller base_id sorts first when distances are equal).
+     */
     __attribute__((always_inline))
     constexpr bool operator<(const DnbrCandidateEntry& other) const noexcept {
-        return distance < other.distance;
+        if (distance != other.distance) return distance < other.distance;
+        return get_base_id() < other.get_base_id();
     }
 
     __attribute__((always_inline))
     constexpr bool operator>(const DnbrCandidateEntry& other) const noexcept {
-        return distance > other.distance;
+        if (distance != other.distance) return distance > other.distance;
+        return get_base_id() > other.get_base_id();
     }
 
     __attribute__((always_inline))
     constexpr bool operator<=(const DnbrCandidateEntry& other) const noexcept {
-        return distance <= other.distance;
+        return !(*this > other);
     }
 
     __attribute__((always_inline))
     constexpr bool operator>=(const DnbrCandidateEntry& other) const noexcept {
-        return distance >= other.distance;
+        return !(*this < other);
     }
 
     __attribute__((always_inline))
     constexpr bool operator==(const DnbrCandidateEntry& other) const noexcept {
-        return distance == other.distance;
+        return distance == other.distance && get_base_id() == other.get_base_id();
     }
 
     __attribute__((always_inline))
     constexpr bool operator!=(const DnbrCandidateEntry& other) const noexcept {
-        return distance != other.distance;
+        return !(*this == other);
     }
 
 };  // struct DnbrCandidateEntry
-
-/** @brief Comparator for DnbrCandidateEntry by distance. */
-template <typename RouterTraitsT>
-struct DnbrCandidateEntryComparator {
-    using entry_t = DnbrCandidateEntry<RouterTraitsT>;
-
-    __attribute__((always_inline))
-    constexpr bool operator()(const entry_t& a, const entry_t& b) const noexcept {
-        return a.get_distance() < b.get_distance();
-    }
-};  // struct DnbrCandidateEntryComparator
 
 }   // namespace cpu
 }   // namespace artea

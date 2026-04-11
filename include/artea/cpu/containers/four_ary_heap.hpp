@@ -95,6 +95,12 @@ public:
         return _data[0];
     }
 
+    /** @brief Iterator access to the first logical element (heap-order, NOT sorted). */
+    auto begin()       { return _data.begin(); }
+    auto end()         { return _data.begin() + _logical_size; }
+    auto begin() const { return _data.begin(); }
+    auto end()   const { return _data.begin() + _logical_size; }
+
     /**
      * @brief Push a new value into the heap.
      */

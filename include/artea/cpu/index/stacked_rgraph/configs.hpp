@@ -37,7 +37,7 @@ struct RGraphConfig {
      * @param select_nbrs_qs   Beam-search queue size for Phase 2 candidate gathering. Must be >= 1.
      * @param max_nbr_size     Per-vertex neighbor capacity for every layer (default: 32).
      * @param layer_cap_decay_ratio  Geometric decay ratio for per-layer initial capacity;
-     *                               capacity(layer_id) = base_n * decay^layer_id.
+     *                               capacity(layer_id) = base_capacity * decay^layer_id.
      *                               Must be in (0, 1]. Default 0.5 (each layer starts
      *                               at half the capacity of the one below).
      * @param min_layer_cap    Floor on per-layer capacity (default: 1024).
@@ -98,16 +98,16 @@ struct RGraphConfig {
 
     /**
      * @brief Initial CSR capacity for the given 0-indexed layer id.
-     *        capacity = base_n * decay_ratio^layer_id, floored at min_layer_cap.
-     *        Returns base_n when decay_ratio == 1 (no decay).
+     *        capacity = base_capacity * decay_ratio^layer_id, floored at min_layer_cap.
+     *        Returns base_capacity when decay_ratio == 1 (no decay).
      */
     __attribute__((always_inline))
     auto capacity_for_layer(const vertex_num_t layer_id,
-                            const vertex_num_t base_n) const -> vertex_num_t {
-        if (_layer_cap_decay_ratio == ratio_t(1)) return base_n;
+                            const vertex_num_t base_capacity) const -> vertex_num_t {
+        if (_layer_cap_decay_ratio == ratio_t(1)) return base_capacity;
         const double factor = std::pow(static_cast<double>(_layer_cap_decay_ratio),
                                        static_cast<double>(layer_id));
-        const double raw = static_cast<double>(base_n) * factor;
+        const double raw = static_cast<double>(base_capacity) * factor;
         const vertex_num_t cap = static_cast<vertex_num_t>(raw);
         return std::max<vertex_num_t>(cap, _min_layer_cap);
     }

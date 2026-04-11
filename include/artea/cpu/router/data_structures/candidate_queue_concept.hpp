@@ -54,6 +54,16 @@ namespace cpu {
  * 4. Result Extraction:
  *    - extract_results(k): Returns top-k result entries (knn_results_t)
  *
+ * 5. Iteration:
+ *    - begin(), end(): Provide mutable iterator access to the result-set
+ *      entries. Traversal order is implementation-defined and NOT guaranteed
+ *      to be sorted. Useful for in-place modification of entries (e.g.,
+ *      updating distances or flags) without extracting and re-inserting.
+ *
+ * 6. Deep Copy:
+ *    - clone(): Returns a fully independent copy of the queue with
+ *      identical logical state. The original queue is not modified.
+ *
  * @tparam CandidateQueueImpl The candidate queue type to check.
  */
 template <typename CandidateQueueImpl>
@@ -96,6 +106,14 @@ std::constructible_from<CandidateQueueImpl, std::size_t> && requires(
         typename CandidateQueueImpl::knn_results_t
     >;
     { queue.should_terminate() } -> std::convertible_to<bool>;
+
+    // Iteration: provides mutable access to result-set entries.
+    // Iteration order is implementation-defined (not necessarily sorted).
+    { queue.begin() };
+    { queue.end() };
+
+    // Deep copy: returns an independent copy of the queue with identical state.
+    { queue.clone() } -> std::same_as<CandidateQueueImpl>;
 };
 
 }   // namespace cpu

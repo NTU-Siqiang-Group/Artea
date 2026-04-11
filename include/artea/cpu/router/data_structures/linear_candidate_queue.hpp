@@ -15,6 +15,7 @@
 #pragma once
 
 #include <vector>
+#include <functional>
 #include <algorithm>
 #include <cstdint>
 #include <cassert>
@@ -59,13 +60,9 @@ public:
     using vertex_id_t = typename RouterTraitsT::vertex_id_t;
     using distance_t = typename RouterTraitsT::distance_t;
     using candidate_entry_t = EntryT;
-    /** @brief Distance-ordered comparator. Both DnbrCandidateEntry and
-     *         LnbrCandidateEntry compare by @c get_distance() via their own
-     *         comparator types; pick based on @c EntryT. */
-    using entry_comp_t = std::conditional_t<
-        std::is_same_v<EntryT, typename RouterTraitsT::dnbr_candidate_entry_t>,
-        typename RouterTraitsT::dnbr_candidate_entry_comp_t,
-        typename RouterTraitsT::lnbr_candidate_entry_comp_t>;
+    /** @brief Distance-ordered comparator. Delegates to EntryT::operator<
+     *         which compares by distance with base_vid tie-break. */
+    using entry_comp_t = std::less<candidate_entry_t>;
     /** @brief knn_results_t is a queue-local type that tracks @c EntryT. */
     using knn_results_t = std::vector<candidate_entry_t>;
     using random_seq_t = typename RouterTraitsT::random_seq_t;
@@ -352,6 +349,27 @@ public:
         }
 
         return false;
+    }
+
+    /**
+     * @brief Mutable iterator to the beginning of the result-set.
+     * @note Entries are in sorted (ascending distance) order.
+     */
+    auto begin()       { return _data.begin(); }
+    auto end()         { return _data.end(); }
+    auto begin() const { return _data.begin(); }
+    auto end()   const { return _data.end(); }
+
+    /**
+     * @brief Create an independent deep copy of this queue.
+     * @return A new LinearCandidateQueue with identical logical state.
+     */
+    auto clone() const -> LinearCandidateQueue {
+        LinearCandidateQueue copy(_capacity);
+        copy._data            = _data;
+        copy._check_cursor    = _check_cursor;
+        copy._thresh_distance = _thresh_distance;
+        return copy;
     }
 
     /**

@@ -246,8 +246,8 @@ public:
 
     __attribute__((always_inline))
     auto capacity_for_layer(const layer_id_t layer_id,
-                            const vertex_num_t base_n) const -> vertex_num_t {
-        return _config.capacity_for_layer(layer_id, base_n);
+                            const vertex_num_t base_capacity) const -> vertex_num_t {
+        return _config.capacity_for_layer(layer_id, base_capacity);
     }
 
 private:

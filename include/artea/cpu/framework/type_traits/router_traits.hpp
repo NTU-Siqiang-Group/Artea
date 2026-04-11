@@ -34,12 +34,11 @@ namespace dynamic { template <typename RouterTraitsT> class DescentGraphRouter; 
 namespace dynamic { template <typename RouterTraitsT> class InternalGraphRouter; }
 namespace dynamic { template <typename RouterTraitsT> class HierarchicalGraphRouter; }
 template <typename RouterTraitsT> struct DnbrCandidateEntry;
-template <typename RouterTraitsT> struct DnbrCandidateEntryComparator;
 template <typename RouterTraitsT> struct LnbrCandidateEntry;
-template <typename RouterTraitsT> struct LnbrCandidateEntryComparator;
 template <typename RouterTraitsT, typename EntryT> class StdCandidateQueue;
 template <typename RouterTraitsT, typename EntryT> class LinearCandidateQueue;
 template <typename RouterTraitsT, typename EntryT> class FHCandidateQueue;
+template <typename RouterTraitsT, typename EntryT> class BoostCandidateQueue;
 template <typename RouterTraitsT, VisitedTable VisitedTableT> class VisitedTablePool;
 
 /** @brief Traits for routing to queried vectors */
@@ -52,12 +51,10 @@ struct RouterTraits : virtual public ComputerTraitsT, virtual public IndexTraits
     // --- Candidate-entry types ---
 
     /** @brief Dnbr-flavored candidate entry (vertex_id + distance, 8 bytes). */
-    using dnbr_candidate_entry_t      = DnbrCandidateEntry<router_traits_t>;
-    using dnbr_candidate_entry_comp_t = DnbrCandidateEntryComparator<router_traits_t>;
+    using dnbr_candidate_entry_t = DnbrCandidateEntry<router_traits_t>;
 
     /** @brief Lnbr-flavored candidate entry (base_vid + layer_vid + distance). */
-    using lnbr_candidate_entry_t      = LnbrCandidateEntry<router_traits_t>;
-    using lnbr_candidate_entry_comp_t = LnbrCandidateEntryComparator<router_traits_t>;
+    using lnbr_candidate_entry_t = LnbrCandidateEntry<router_traits_t>;
 
     /** @brief Default candidate entry alias (dnbr). Kept for backward compat
      *         with every existing router, test, and benchmark. */
@@ -80,9 +77,6 @@ struct RouterTraits : virtual public ComputerTraitsT, virtual public IndexTraits
     static constexpr candidate_entry_t min_candidate_entry =
         candidate_entry_t::make_min_entry();
 
-    /** @brief Type for candidate entry comparator (dnbr). */
-    using entry_comp_t = dnbr_candidate_entry_comp_t;
-
     /** @brief 4-ary heap type for candidate entries, parameterized by comparator. */
     template <typename Compare>
     using four_ary_heap_t = FourAryHeap<candidate_entry_t, cache_aligned_container_t<candidate_entry_t>, Compare>;
@@ -103,6 +97,9 @@ struct RouterTraits : virtual public ComputerTraitsT, virtual public IndexTraits
 
     /** @brief Type for four-ary heap candidate queue (dnbr-backed by default). */
     using fh_candidate_queue_t = FHCandidateQueue<router_traits_t, dnbr_candidate_entry_t>;
+
+    /** @brief Type for boost d-ary heap candidate queue (dnbr-backed by default). */
+    using boost_candidate_queue_t = BoostCandidateQueue<router_traits_t, dnbr_candidate_entry_t>;
 
     /** @brief Type for candidate queue */
     using candidate_queue_t = typename router_traits_t::linear_candidate_queue_t;

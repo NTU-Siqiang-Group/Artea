@@ -120,6 +120,23 @@ static void BM_TryPush_FHQueue(benchmark::State& state) {
     state.SetItemsProcessed(state.iterations() * static_cast<int64_t>(K));
 }
 
+static void BM_TryPush_BoostQueue(benchmark::State& state) {
+    const std::size_t K = static_cast<std::size_t>(state.range(0));
+    const auto& vertex_ids = DataProvider::instance().vertex_ids();
+    const auto& distances = DataProvider::instance().distances();
+
+    for (auto _ : state) {
+        boost_candidate_queue_t q(K);
+        for (std::size_t i = 0; i < K; ++i) {
+            q.try_push(vertex_ids[i], distances[i]);
+        }
+        benchmark::DoNotOptimize(q);
+        benchmark::ClobberMemory();
+    }
+
+    state.SetItemsProcessed(state.iterations() * static_cast<int64_t>(K));
+}
+
 // ============================================================================
 // Benchmark: try_push with eviction (queue full, push 4x entries)
 // ============================================================================
@@ -168,6 +185,24 @@ static void BM_TryPushEvict_FHQueue(benchmark::State& state) {
 
     for (auto _ : state) {
         fh_candidate_queue_t q(K);
+        for (std::size_t i = 0; i < N; ++i) {
+            q.try_push(vertex_ids[i], distances[i]);
+        }
+        benchmark::DoNotOptimize(q);
+        benchmark::ClobberMemory();
+    }
+
+    state.SetItemsProcessed(state.iterations() * static_cast<int64_t>(N));
+}
+
+static void BM_TryPushEvict_BoostQueue(benchmark::State& state) {
+    const std::size_t K = static_cast<std::size_t>(state.range(0));
+    const std::size_t N = K * 4;
+    const auto& vertex_ids = DataProvider::instance().vertex_ids();
+    const auto& distances = DataProvider::instance().distances();
+
+    for (auto _ : state) {
+        boost_candidate_queue_t q(K);
         for (std::size_t i = 0; i < N; ++i) {
             q.try_push(vertex_ids[i], distances[i]);
         }
@@ -247,6 +282,32 @@ static void BM_GetBest_FHQueue(benchmark::State& state) {
 
     for (auto _ : state) {
         fh_candidate_queue_t q(K);
+        q.initialize(init_data);
+
+        for (std::size_t i = 0; i < K; ++i) {
+            auto e = q.pop_best_unexplored();
+            benchmark::DoNotOptimize(e.first);
+            benchmark::DoNotOptimize(e.second);
+        }
+        benchmark::ClobberMemory();
+    }
+
+    state.SetItemsProcessed(state.iterations() * static_cast<int64_t>(K));
+}
+
+static void BM_GetBest_BoostQueue(benchmark::State& state) {
+    const std::size_t K = static_cast<std::size_t>(state.range(0));
+    const auto& vertex_ids = DataProvider::instance().vertex_ids();
+    const auto& distances = DataProvider::instance().distances();
+    // Initialize with candidate entries
+        std::vector<candidate_entry_t> init_data;
+        init_data.reserve(K);
+        for (std::size_t i = 0; i < K; ++i) {
+            init_data.emplace_back(vertex_ids[i], distances[i]);
+        }
+
+    for (auto _ : state) {
+        boost_candidate_queue_t q(K);
         q.initialize(init_data);
 
         for (std::size_t i = 0; i < K; ++i) {
@@ -342,6 +403,33 @@ static void BM_Mixed_FHQueue(benchmark::State& state) {
     }
 }
 
+static void BM_Mixed_BoostQueue(benchmark::State& state) {
+    const std::size_t K = static_cast<std::size_t>(state.range(0));
+    const auto& vertex_ids = DataProvider::instance().vertex_ids();
+    const auto& distances = DataProvider::instance().distances();
+
+    for (auto _ : state) {
+        boost_candidate_queue_t q(K);
+        for (std::size_t i = 0; i < K; ++i) {
+            q.try_push(vertex_ids[i], distances[i]);
+        }
+        std::size_t push_idx = K;
+        while (!q.empty() && push_idx + 1 < vertex_ids.size()) {
+            auto [best_id, best_dist] = q.pop_best_unexplored();
+            benchmark::DoNotOptimize(best_id);
+            benchmark::DoNotOptimize(best_dist);
+            if (best_dist == base_traits_t::max_distance) break;
+            q.try_push(vertex_ids[push_idx], distances[push_idx]);
+            push_idx++;
+            if (push_idx < vertex_ids.size()) {
+                q.try_push(vertex_ids[push_idx], distances[push_idx]);
+                push_idx++;
+            }
+        }
+        benchmark::ClobberMemory();
+    }
+}
+
 // ============================================================================
 // Register benchmarks — done in main() after g_config is populated
 // ============================================================================
@@ -358,21 +446,25 @@ static void RegisterAllBenchmarks() {
     apply(benchmark::RegisterBenchmark("BM_TryPush_StdQueue", BM_TryPush_StdQueue));
     apply(benchmark::RegisterBenchmark("BM_TryPush_LinearQueue", BM_TryPush_LinearQueue));
     apply(benchmark::RegisterBenchmark("BM_TryPush_FHQueue", BM_TryPush_FHQueue));
+    apply(benchmark::RegisterBenchmark("BM_TryPush_BoostQueue", BM_TryPush_BoostQueue));
 
     // try_push with eviction
     apply(benchmark::RegisterBenchmark("BM_TryPushEvict_StdQueue", BM_TryPushEvict_StdQueue));
     apply(benchmark::RegisterBenchmark("BM_TryPushEvict_LinearQueue", BM_TryPushEvict_LinearQueue));
     apply(benchmark::RegisterBenchmark("BM_TryPushEvict_FHQueue", BM_TryPushEvict_FHQueue));
+    apply(benchmark::RegisterBenchmark("BM_TryPushEvict_BoostQueue", BM_TryPushEvict_BoostQueue));
 
     // pop_best_unexplored (drain)
     apply(benchmark::RegisterBenchmark("BM_GetBest_StdQueue", BM_GetBest_StdQueue));
     apply(benchmark::RegisterBenchmark("BM_GetBest_LinearQueue", BM_GetBest_LinearQueue));
     apply(benchmark::RegisterBenchmark("BM_GetBest_FHQueue", BM_GetBest_FHQueue));
+    apply(benchmark::RegisterBenchmark("BM_GetBest_BoostQueue", BM_GetBest_BoostQueue));
 
     // mixed push + explore
     apply(benchmark::RegisterBenchmark("BM_Mixed_StdQueue", BM_Mixed_StdQueue));
     apply(benchmark::RegisterBenchmark("BM_Mixed_LinearQueue", BM_Mixed_LinearQueue));
     apply(benchmark::RegisterBenchmark("BM_Mixed_FHQueue", BM_Mixed_FHQueue));
+    apply(benchmark::RegisterBenchmark("BM_Mixed_BoostQueue", BM_Mixed_BoostQueue));
 }
 
 // ============================================================================

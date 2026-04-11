@@ -20,6 +20,7 @@
 
 #pragma once
 
+#include <functional>
 #include <queue>
 #include <vector>
 #include <limits>
@@ -92,36 +93,35 @@ public:
         candidate_entry_t::make_invalid_entry();
 
     /**
-     * @brief Comparator for Min-Heap (smallest distance at top).
-     * Used for the unexplored set to prioritize closest unexplored candidates.
+     * @brief Thin wrapper around std::priority_queue that exposes the
+     *        underlying std::vector via begin()/end() iterators.
+     *
+     * std::priority_queue keeps its container as a protected member @c c.
+     * This subclass simply surfaces it so callers can iterate over entries
+     * (in heap-order, NOT sorted) without popping them.
      */
-    struct MinHeapComparator {
-        __attribute__((always_inline))
-        constexpr bool operator()(const candidate_entry_t& a, const candidate_entry_t& b) const noexcept {
-            return a.get_distance() > b.get_distance();  // Reverse comparison for min-heap
-        }
+    template <typename Compare>
+    struct InternalQueue : std::priority_queue<candidate_entry_t,
+                                              std::vector<candidate_entry_t>,
+                                              Compare> {
+        using base_t = std::priority_queue<candidate_entry_t,
+                                           std::vector<candidate_entry_t>,
+                                           Compare>;
+        using base_t::base_t;   // inherit constructors
+
+        auto begin()       { return this->c.begin(); }
+        auto end()         { return this->c.end(); }
+        auto begin() const { return this->c.begin(); }
+        auto end()   const { return this->c.end(); }
     };
 
-    /**
-     * @brief Comparator for Max-Heap (largest distance at top).
-     * Used for top candidates to maintain the best L candidates and quickly access the worst.
-     */
-    struct MaxHeapComparator {
-        __attribute__((always_inline))
-        constexpr bool operator()(const candidate_entry_t& a, const candidate_entry_t& b) const noexcept {
-            return a.get_distance() < b.get_distance();  // Standard comparison for max-heap
-        }
-    };
+    /** @brief Min-heap type for unexplored set (closest candidates at top).
+     *  std::greater makes the smallest entry bubble to the top. */
+    using min_heap_t = InternalQueue<std::greater<candidate_entry_t>>;
 
-    /** @brief Min-heap type for unexplored set (closest candidates at top). */
-    using min_heap_t = std::priority_queue<candidate_entry_t,
-                                           std::vector<candidate_entry_t>,
-                                           MinHeapComparator>;
-
-    /** @brief Max-heap type for top candidates (worst of best at top). */
-    using max_heap_t = std::priority_queue<candidate_entry_t,
-                                           std::vector<candidate_entry_t>,
-                                           MaxHeapComparator>;
+    /** @brief Max-heap type for top candidates (worst of best at top).
+     *  std::less (default) makes the largest entry bubble to the top. */
+    using max_heap_t = InternalQueue<std::less<candidate_entry_t>>;
 
     /**
      * @brief Construct a StdCandidateQueue with a fixed capacity.
@@ -408,6 +408,27 @@ public:
         }
         // Check if closest unexplored > worst in top candidates
         return _unexplored_set.top().get_distance() > _lower_bound;
+    }
+
+    /**
+     * @brief Mutable iterator to the beginning of the result-set (top_candidates).
+     * @note Iteration order is heap-order (NOT sorted by distance).
+     */
+    auto begin()       { return _top_candidates.begin(); }
+    auto end()         { return _top_candidates.end(); }
+    auto begin() const { return _top_candidates.begin(); }
+    auto end()   const { return _top_candidates.end(); }
+
+    /**
+     * @brief Create an independent deep copy of this queue.
+     * @return A new StdCandidateQueue with identical logical state.
+     */
+    auto clone() const -> StdCandidateQueue {
+        StdCandidateQueue copy(_capacity);
+        copy._unexplored_set = _unexplored_set;
+        copy._top_candidates = _top_candidates;
+        copy._lower_bound    = _lower_bound;
+        return copy;
     }
 
     /**

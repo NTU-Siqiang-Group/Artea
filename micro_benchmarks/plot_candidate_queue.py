@@ -39,11 +39,13 @@ QUEUE_PALETTE = {
     "StdQueue":    "#4C72B0",   # muted blue
     "LinearQueue": "#DD8452",   # warm orange
     "FHQueue":     "#55A868",   # sage green
+    "BoostQueue":  "#8172B3",   # muted purple
 }
 QUEUE_MARKERS = {
     "StdQueue":    "o",
     "LinearQueue": "s",
     "FHQueue":     "D",
+    "BoostQueue":  "^",
 }
 
 # ── Benchmark groups we care about (removed Mixed) ───────────────────────────
@@ -57,6 +59,7 @@ QUEUE_SUFFIX_MAP = {
     "StdQueue":    "StdQueue",
     "LinearQueue": "LinearQueue",
     "FHQueue":     "FHQueue",
+    "BoostQueue":  "BoostQueue",
 }
 
 
@@ -253,7 +256,7 @@ def plot_results(df: pd.DataFrame, output_dir: str, simd_baseline: float = None)
         ax = axes[col_idx]
 
         # ── Throughput (items/s → M items/s) ────────────────────────────
-        for qname in ["StdQueue", "LinearQueue", "FHQueue"]:
+        for qname in ["StdQueue", "LinearQueue", "FHQueue", "BoostQueue"]:
             qsub = sub[sub["queue"] == qname].sort_values("capacity")
             if qsub.empty:
                 continue

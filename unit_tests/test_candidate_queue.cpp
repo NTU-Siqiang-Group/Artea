@@ -51,6 +51,7 @@ using visited_table_t = typename router_traits_t::visited_table_t;
 using std_queue_t = StdCandidateQueue<router_traits_t>;
 using linear_queue_t = LinearCandidateQueue<router_traits_t>;
 using fh_queue_t = FHCandidateQueue<router_traits_t>;
+using boost_queue_t = BoostCandidateQueue<router_traits_t>;
 
 // --- Global Configuration ---
 struct TestConfig {
@@ -207,6 +208,39 @@ TEST_F(CandidateQueueTest, Initialize_FHQueue) {
     }
 
     ARTEA_SUCCESS(" [FHQueue] Initialize Function passed.");
+}
+
+TEST_F(CandidateQueueTest, Initialize_BoostQueue) {
+    ARTEA_INFO(" -> [BoostQueue] Initialize Function");
+
+    const std::size_t K = 32 * g_config.scale;
+    boost_queue_t q(K);
+
+    std::vector<candidate_entry_t> init_candidates;
+    init_candidates.reserve(K);
+
+    std::vector<distance_t> distances(K);
+    std::iota(distances.begin(), distances.end(), 1.0f);
+    std::mt19937 rng(g_config.seed);
+    std::shuffle(distances.begin(), distances.end(), rng);
+
+    for (std::size_t i = 0; i < K; ++i) {
+        init_candidates.push_back(make_entry(static_cast<vertex_id_t>(i), distances[i]));
+    }
+
+    q.initialize(init_candidates);
+
+    EXPECT_EQ(q.get_result_size(), K);
+    EXPECT_FALSE(q.empty());
+
+    auto out = drain_unexplored(q);
+    ASSERT_EQ(out.size(), K);
+    for (std::size_t i = 1; i < out.size(); ++i) {
+        EXPECT_LE(out[i - 1], out[i])
+            << "BoostQueue initialize: order violated at position " << i;
+    }
+
+    ARTEA_SUCCESS(" [BoostQueue] Initialize Function passed.");
 }
 
 // ============================================================================
@@ -369,6 +403,53 @@ TEST_F(CandidateQueueTest, RandomInitialize_FHQueue) {
     ARTEA_SUCCESS(" [FHQueue] Random Initialize Function passed.");
 }
 
+TEST_F(CandidateQueueTest, RandomInitialize_BoostQueue) {
+    ARTEA_INFO(" -> [BoostQueue] Random Initialize Function");
+
+    const std::size_t K = 32 * g_config.scale;
+    const std::size_t num_vecs = 1000;
+    const std::size_t dim = 128;
+
+    using vector_array_t = typename router_traits_t::vector_array_t;
+    using dist_func_t = typename router_traits_t::dist_func_t;
+    using random_seq_t = typename router_traits_t::random_seq_t;
+
+    vector_array_t base_vecs(num_vecs, dim);
+    std::mt19937 rng(g_config.seed);
+    std::uniform_real_distribution<vec_ele_t> dist(0.0f, 1.0f);
+
+    for (std::size_t i = 0; i < num_vecs; ++i) {
+        vec_ele_t* vec = base_vecs.get(i);
+        for (std::size_t j = 0; j < dim; ++j) {
+            vec[j] = dist(rng);
+        }
+    }
+
+    std::vector<vec_ele_t> query_vec(dim);
+    for (std::size_t j = 0; j < dim; ++j) {
+        query_vec[j] = dist(rng);
+    }
+
+    dist_func_t dist_func(dim);
+    random_seq_t random_seq;
+    visited_table_t visited_table(num_vecs);
+
+    boost_queue_t q(K);
+    q.random_initialize(random_seq, dist_func, query_vec.data(), base_vecs, visited_table);
+
+    EXPECT_EQ(q.get_result_size(), K);
+    EXPECT_FALSE(q.empty());
+
+    auto out = drain_unexplored(q);
+    ASSERT_EQ(out.size(), K);
+    for (std::size_t i = 1; i < out.size(); ++i) {
+        EXPECT_LE(out[i - 1], out[i])
+            << "BoostQueue random_initialize: order violated at position " << i;
+    }
+
+    ARTEA_SUCCESS(" [BoostQueue] Random Initialize Function passed.");
+}
+
 // ============================================================================
 // 3. Basic Sort: unordered in, ordered out
 // ============================================================================
@@ -459,6 +540,34 @@ TEST_F(CandidateQueueTest, BasicSort_FHQueue) {
     ARTEA_SUCCESS(" [FHQueue] Basic Sort passed.");
 }
 
+TEST_F(CandidateQueueTest, BasicSort_BoostQueue) {
+    ARTEA_INFO(" -> [BoostQueue] Basic Sort: unordered in, ordered out");
+
+    const std::size_t N = 64 * g_config.scale;
+    boost_queue_t q(N);
+
+    std::vector<distance_t> distances(N);
+    std::iota(distances.begin(), distances.end(), 1.0f);
+    std::mt19937 rng(g_config.seed);
+    std::shuffle(distances.begin(), distances.end(), rng);
+
+    for (std::size_t i = 0; i < N; ++i) {
+        q.try_push(static_cast<vertex_id_t>(i), distances[i]);
+    }
+
+    auto out = drain_unexplored(q);
+    ASSERT_EQ(out.size(), N);
+    for (std::size_t i = 1; i < out.size(); ++i) {
+        EXPECT_LE(out[i - 1], out[i])
+            << "BoostQueue order violated at position " << i;
+    }
+
+    auto [sentinel_id, sentinel_dist] = q.pop_best_unexplored();
+    EXPECT_FLOAT_EQ(sentinel_dist, router_traits_t::max_distance);
+
+    ARTEA_SUCCESS(" [BoostQueue] Basic Sort passed.");
+}
+
 // ============================================================================
 // 2. Capacity & Eviction
 // ============================================================================
@@ -544,6 +653,30 @@ TEST_F(CandidateQueueTest, CapacityEviction_FHQueue) {
     EXPECT_EQ(q.get_result_size(), K);
 
     ARTEA_SUCCESS(" [FHQueue] Capacity & Eviction passed.");
+}
+
+TEST_F(CandidateQueueTest, CapacityEviction_BoostQueue) {
+    ARTEA_INFO(" -> [BoostQueue] Capacity & Eviction");
+
+    const std::size_t K = 32 * g_config.scale;
+    boost_queue_t q(K);
+
+    for (std::size_t i = 1; i <= K; ++i) {
+        EXPECT_TRUE(q.try_push(static_cast<vertex_id_t>(i),
+                                           static_cast<distance_t>(i * 10)));
+    }
+    EXPECT_EQ(q.get_result_size(), K);
+
+    bool accepted_worse = q.try_push(999, static_cast<distance_t>(K * 10 + 10));
+    EXPECT_FALSE(accepted_worse);
+    EXPECT_EQ(q.get_result_size(), K);
+
+    distance_t better_dist = 15.0f;
+    bool accepted_better = q.try_push(998, better_dist);
+    EXPECT_TRUE(accepted_better);
+    EXPECT_EQ(q.get_result_size(), K);
+
+    ARTEA_SUCCESS(" [BoostQueue] Capacity & Eviction passed.");
 }
 
 // ============================================================================
@@ -637,6 +770,33 @@ TEST_F(CandidateQueueTest, CursorRegression_FHQueue) {
     EXPECT_FLOAT_EQ(third_dist, 20.0f);
 
     ARTEA_SUCCESS(" [FHQueue] Cursor Regression passed.");
+}
+
+TEST_F(CandidateQueueTest, CursorRegression_BoostQueue) {
+    ARTEA_INFO(" -> [BoostQueue] Cursor Regression");
+
+    const std::size_t K = 32 * g_config.scale;
+    boost_queue_t q(K);
+
+    for (std::size_t i = 1; i <= K; ++i) {
+        q.try_push(static_cast<vertex_id_t>(i),
+                               static_cast<distance_t>(i * 10));
+    }
+
+    auto [first_id, first_dist] = q.pop_best_unexplored();
+    EXPECT_FLOAT_EQ(first_dist, 10.0f);
+
+    bool ok = q.try_push(900, 15.0f);
+    EXPECT_TRUE(ok);
+
+    auto [second_id, second_dist] = q.pop_best_unexplored();
+    EXPECT_FLOAT_EQ(second_dist, 15.0f)
+        << "Cursor regression bug: expected 15.0 but got " << second_dist;
+
+    auto [third_id, third_dist] = q.pop_best_unexplored();
+    EXPECT_FLOAT_EQ(third_dist, 20.0f);
+
+    ARTEA_SUCCESS(" [BoostQueue] Cursor Regression passed.");
 }
 
 // Deep cursor regression: explore many entries, then insert something early
@@ -746,6 +906,28 @@ TEST_F(CandidateQueueTest, ThresholdLogic_FHQueue) {
     ARTEA_SUCCESS(" [FHQueue] Threshold Logic passed.");
 }
 
+TEST_F(CandidateQueueTest, ThresholdLogic_BoostQueue) {
+    ARTEA_INFO(" -> [BoostQueue] Threshold Logic");
+
+    const std::size_t K = 32 * g_config.scale;
+    boost_queue_t q(K);
+
+    for (std::size_t i = 1; i <= K; ++i) {
+        q.try_push(static_cast<vertex_id_t>(i),
+                               static_cast<distance_t>(i * 10));
+    }
+
+    distance_t worst = static_cast<distance_t>(K * 10);
+
+    EXPECT_FALSE(q.try_push(800, worst));
+    EXPECT_FALSE(q.try_push(801, worst + 1.0f));
+    EXPECT_FALSE(q.try_push(802, worst + 100.0f));
+
+    EXPECT_EQ(q.get_result_size(), K);
+
+    ARTEA_SUCCESS(" [BoostQueue] Threshold Logic passed.");
+}
+
 // ============================================================================
 // 5. Extract Results/IDs: verify output order and correctness
 // ============================================================================
@@ -847,6 +1029,37 @@ TEST_F(CandidateQueueTest, ExtractResults_FHQueue) {
     ARTEA_SUCCESS(" [FHQueue] Extract Results Order passed.");
 }
 
+TEST_F(CandidateQueueTest, ExtractResults_BoostQueue) {
+    ARTEA_INFO(" -> [BoostQueue] Extract Results Order");
+
+    const std::size_t K = 32 * g_config.scale;
+    boost_queue_t q(K);
+
+    std::vector<distance_t> distances(K);
+    std::iota(distances.begin(), distances.end(), 1.0f);
+    std::mt19937 rng(g_config.seed);
+    std::shuffle(distances.begin(), distances.end(), rng);
+
+    for (std::size_t i = 0; i < K; ++i) {
+        q.try_push(static_cast<vertex_id_t>(i), distances[i]);
+    }
+
+    auto results = q.extract_results(K);
+    ASSERT_EQ(results.size(), K);
+
+    for (std::size_t i = 1; i < results.size(); ++i) {
+        EXPECT_LE(results[i - 1].get_distance(), results[i].get_distance())
+            << "BoostQueue extract_results: order violated at position " << i;
+    }
+
+    for (std::size_t i = 0; i < K; ++i) {
+        EXPECT_FLOAT_EQ(results[i].get_distance(), static_cast<distance_t>(i + 1))
+            << "BoostQueue extract_results: incorrect distance at position " << i;
+    }
+
+    ARTEA_SUCCESS(" [BoostQueue] Extract Results Order passed.");
+}
+
 TEST_F(CandidateQueueTest, ExtractResultIds_StdQueue) {
     ARTEA_INFO(" -> [StdQueue] Extract Result IDs Order");
 
@@ -931,6 +1144,33 @@ TEST_F(CandidateQueueTest, ExtractResultIds_FHQueue) {
     ARTEA_SUCCESS(" [FHQueue] Extract Result IDs Order passed.");
 }
 
+TEST_F(CandidateQueueTest, ExtractResultIds_BoostQueue) {
+    ARTEA_INFO(" -> [BoostQueue] Extract Result IDs Order");
+
+    const std::size_t K = 32 * g_config.scale;
+    boost_queue_t q(K);
+
+    std::vector<distance_t> distances(K);
+    std::iota(distances.begin(), distances.end(), 1.0f);
+    std::mt19937 rng(g_config.seed);
+    std::shuffle(distances.begin(), distances.end(), rng);
+
+    for (std::size_t i = 0; i < K; ++i) {
+        vertex_id_t id = static_cast<vertex_id_t>(distances[i]);
+        q.try_push(id, distances[i]);
+    }
+
+    auto results = q.extract_results(K);
+    ASSERT_EQ(results.size(), K);
+
+    for (std::size_t i = 1; i < results.size(); ++i) {
+        EXPECT_LE(results[i - 1].get_layer_id(), results[i].get_layer_id())
+            << "BoostQueue extract_results: order violated at position " << i;
+    }
+
+    ARTEA_SUCCESS(" [BoostQueue] Extract Result IDs Order passed.");
+}
+
 // ============================================================================
 // 6. Large-scale randomized stress test
 //    Push N random entries into capacity-K queue, then drain and verify order.
@@ -1006,6 +1246,30 @@ TEST_F(CandidateQueueTest, StressTest_FHQueue) {
     }
 
     ARTEA_SUCCESS(" [FHQueue] Stress Test passed.");
+}
+
+TEST_F(CandidateQueueTest, StressTest_BoostQueue) {
+    ARTEA_INFO(fmt::format(" -> [BoostQueue] Stress Test (scale={})", g_config.scale));
+
+    const std::size_t K = 64 * g_config.scale;
+    const std::size_t N = 256 * g_config.scale;
+    boost_queue_t q(K);
+
+    std::mt19937 rng(g_config.seed);
+    std::uniform_real_distribution<distance_t> dist(0.0f, 10000.0f);
+
+    for (std::size_t i = 0; i < N; ++i) {
+        q.try_push(static_cast<vertex_id_t>(i), dist(rng));
+    }
+
+    auto out = drain_unexplored(q);
+    EXPECT_GT(out.size(), 0u);
+    for (std::size_t i = 1; i < out.size(); ++i) {
+        EXPECT_LE(out[i - 1], out[i])
+            << "BoostQueue stress: order violated at " << i;
+    }
+
+    ARTEA_SUCCESS(" [BoostQueue] Stress Test passed.");
 }
 
 // ============================================================================
@@ -1175,6 +1439,57 @@ TEST_F(CandidateQueueTest, SeededInitialize_FHQueue) {
     ARTEA_SUCCESS(" [FHQueue] Seeded Initialize with Vertex IDs passed.");
 }
 
+TEST_F(CandidateQueueTest, SeededInitialize_BoostQueue) {
+    ARTEA_INFO(" -> [BoostQueue] Seeded Initialize with Vertex IDs");
+
+    const std::size_t K = 32 * g_config.scale;
+    const std::size_t num_vecs = 10000;
+    const std::size_t dim = 128;
+
+    using vector_array_t = typename router_traits_t::vector_array_t;
+    using dist_func_t = typename router_traits_t::dist_func_t;
+
+    vector_array_t base_vecs(num_vecs, dim);
+    std::mt19937 rng(g_config.seed);
+    std::uniform_real_distribution<vec_ele_t> dist(0.0f, 1.0f);
+
+    for (std::size_t i = 0; i < num_vecs; ++i) {
+        vec_ele_t* vec = base_vecs.get(i);
+        for (std::size_t j = 0; j < dim; ++j) {
+            vec[j] = dist(rng);
+        }
+    }
+
+    std::vector<vec_ele_t> query_vec(dim);
+    for (std::size_t j = 0; j < dim; ++j) {
+        query_vec[j] = dist(rng);
+    }
+
+    std::vector<vertex_id_t> init_vids;
+    const std::size_t init_size = K / 2;
+    for (std::size_t i = 0; i < init_size; ++i) {
+        init_vids.push_back(static_cast<vertex_id_t>(i));
+    }
+
+    dist_func_t dist_func(dim);
+    visited_table_t visited_table(num_vecs);
+
+    boost_queue_t q(K);
+    q.seeded_initialize(init_vids, dist_func, query_vec.data(), base_vecs, visited_table);
+
+    EXPECT_EQ(q.get_result_size(), init_size);
+    EXPECT_FALSE(q.empty());
+
+    auto out = drain_unexplored(q);
+    ASSERT_EQ(out.size(), init_size);
+    for (std::size_t i = 1; i < out.size(); ++i) {
+        EXPECT_LE(out[i - 1], out[i])
+            << "BoostQueue seeded_initialize: order violated at position " << i;
+    }
+
+    ARTEA_SUCCESS(" [BoostQueue] Seeded Initialize with Vertex IDs passed.");
+}
+
 // ============================================================================
 // Test: seeded_initialize with size > capacity (should keep best capacity)
 // ============================================================================
@@ -1342,6 +1657,58 @@ TEST_F(CandidateQueueTest, SeededInitialize_ExceedsCapacity_FHQueue) {
     }
 
     ARTEA_SUCCESS(" [FHQueue] Seeded Initialize with size > capacity passed.");
+}
+
+TEST_F(CandidateQueueTest, SeededInitialize_ExceedsCapacity_BoostQueue) {
+    ARTEA_INFO(" -> [BoostQueue] Seeded Initialize with size > capacity");
+
+    const std::size_t K = 32;
+    const std::size_t init_size = K * 2;
+    const std::size_t num_vecs = 10000;
+    const std::size_t dim = 128;
+
+    using vector_array_t = typename router_traits_t::vector_array_t;
+    using dist_func_t = typename router_traits_t::dist_func_t;
+
+    vector_array_t base_vecs(num_vecs, dim);
+    std::mt19937 rng(g_config.seed + 3);
+    std::uniform_real_distribution<vec_ele_t> dist(0.0f, 1.0f);
+
+    for (std::size_t i = 0; i < num_vecs; ++i) {
+        vec_ele_t* vec = base_vecs.get(i);
+        for (std::size_t j = 0; j < dim; ++j) {
+            vec[j] = dist(rng);
+        }
+    }
+
+    std::vector<vec_ele_t> query_vec(dim);
+    for (std::size_t j = 0; j < dim; ++j) {
+        query_vec[j] = dist(rng);
+    }
+
+    std::vector<vertex_id_t> init_vids;
+    for (std::size_t i = 0; i < init_size; ++i) {
+        init_vids.push_back(static_cast<vertex_id_t>(i));
+    }
+
+    dist_func_t dist_func(dim);
+    visited_table_t visited_table(num_vecs);
+
+    boost_queue_t q(K);
+    q.seeded_initialize(init_vids, dist_func, query_vec.data(), base_vecs, visited_table);
+
+    EXPECT_EQ(q.get_result_size(), K);
+    EXPECT_FALSE(q.empty());
+
+    auto out = drain_unexplored(q);
+    ASSERT_EQ(out.size(), K);
+
+    for (std::size_t i = 1; i < out.size(); ++i) {
+        EXPECT_LE(out[i - 1], out[i])
+            << "BoostQueue seeded_initialize: order violated at position " << i;
+    }
+
+    ARTEA_SUCCESS(" [BoostQueue] Seeded Initialize with size > capacity passed.");
 }
 
 // ============================================================================

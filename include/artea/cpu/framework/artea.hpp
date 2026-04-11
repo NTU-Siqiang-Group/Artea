@@ -88,6 +88,7 @@
 #include <artea/cpu/router/data_structures/std_candidate_queue.hpp>
 #include <artea/cpu/router/data_structures/fh_candidate_queue.hpp>
 #include <artea/cpu/router/data_structures/linear_candidate_queue.hpp>
+#include <artea/cpu/router/data_structures/boost_candidate_queue.hpp>
 
 #include <artea/cpu/vertex_generator/vertex_generator.hpp>
 #include <artea/cpu/vertex_generator/lsh_table.hpp>
