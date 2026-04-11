@@ -237,12 +237,12 @@ public:
     // --- Neighbor Insertion ---
 
     /** @brief Result of an add_nbr operation. */
-    enum class AddNbrResult : uint8_t {
+    enum class AddNbrEvent : uint8_t {
         APPENDED,   ///< Neighbor was appended to a non-full array.
         PRUNED      ///< Array was full; pruning was performed.
     };
 
-    using add_nbr_result_t = AddNbrResult;
+    using add_nbr_result_t = AddNbrEvent;
 
     /**
      * @brief Thread-safe: execute a functor under exclusive per-vertex spinlock.
@@ -300,31 +300,31 @@ public:
      *   - If count == max_nbr_size: invokes @p prune_fn to select neighbors,
      *     invalidates trailing slots, updates count.
      *
-     * @tparam PruningFnT Callable with signature:
+     * @tparam OverflowFnT Callable with signature:
      *         @code uint64_t(lnbr_t* slots, lnbr_t new_nbr) @endcode
      *         The array has exactly max_nbr_size valid entries when called.
      *         Must return the new count after pruning (neighbors written in-place).
      * @param src       The layer_vid of the source vertex.
      * @param new_nbr   The neighbor to add.
-     * @param prune_fn  Pruning functor invoked when the array is full.
-     * @return AddNbrResult indicating whether the neighbor was appended or pruning occurred.
+     * @param on_nbrs_overflow  Overflow functor invoked when the array is full.
+     * @return AddNbrEvent indicating whether the neighbor was appended or pruning occurred.
      */
-    template <typename PruningFnT>
-    auto add_nbr(const vertex_id_t src, const lnbr_t new_nbr, PruningFnT&& prune_fn) -> AddNbrResult {
-        AddNbrResult result;
+    template <typename OverflowFnT>
+    auto add_nbr(const vertex_id_t src, const lnbr_t new_nbr, OverflowFnT&& on_nbrs_overflow) -> AddNbrEvent {
+        AddNbrEvent result;
 
         with_locked_nbrs(src, [&](lnbr_t* slots, uint64_t count, vertex_num_t max_nbr_size) -> uint64_t {
             if (count < max_nbr_size) {
                 slots[count] = new_nbr;
-                result = AddNbrResult::APPENDED;
+                result = AddNbrEvent::APPENDED;
                 return count + 1;
             }
             ARTEA_ASSERT(count, static_cast<uint64_t>(max_nbr_size));
-            const uint64_t new_count = prune_fn(slots, new_nbr);
+            const uint64_t new_count = on_nbrs_overflow(slots, new_nbr);
             for (uint64_t i = new_count; i < max_nbr_size; ++i) {
                 slots[i] = IndexTraitsT::invalid_lnbr;
             }
-            result = AddNbrResult::PRUNED;
+            result = AddNbrEvent::PRUNED;
             return new_count;
         });
 

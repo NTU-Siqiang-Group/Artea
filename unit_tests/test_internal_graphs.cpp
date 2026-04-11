@@ -553,7 +553,7 @@ TEST_F(InternalGraphTest, AddNbrSerial) {
 
     for (vertex_num_t i = 0; i < max_nbr_size; ++i) {
         auto result = graph_->add_nbr(v, lnbr_t(i, i + 100), simple_prune_fn);
-        EXPECT_EQ(result, dynamic::internal_graph_t::AddNbrResult::APPENDED);
+        EXPECT_EQ(result, dynamic::internal_graph_t::AddNbrEvent::APPENDED);
     }
 
     EXPECT_EQ(graph_->num_valid_nbrs(v), max_nbr_size);
@@ -577,7 +577,7 @@ TEST_F(InternalGraphTest, AddNbrTriggersPruning) {
 
     // Next add triggers pruning (halving_prune_fn keeps half + the new one)
     auto result = graph_->add_nbr(v, lnbr_t(999, 999), halving_prune_fn);
-    EXPECT_EQ(result, dynamic::internal_graph_t::AddNbrResult::PRUNED);
+    EXPECT_EQ(result, dynamic::internal_graph_t::AddNbrEvent::PRUNED);
 
     const uint64_t expected_count = max_nbr_size / 2 + 1;
     EXPECT_EQ(graph_->num_valid_nbrs(v), expected_count);
