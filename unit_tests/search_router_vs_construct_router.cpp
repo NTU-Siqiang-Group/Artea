@@ -115,7 +115,7 @@ public:
         ARTEA_INFO("Converting to flat search graph...");
         auto tc0 = std::chrono::high_resolution_clock::now();
         compact_descent_graph_ = std::make_unique<compact::descent_graph_t>(
-            descent_graph_compactor_t::from_descent_graph(*descent_graph_, g_config.extracted_nbr_size)
+            descent_graph_compactor_t::compact_graph(*descent_graph_, g_config.extracted_nbr_size)
         );
         auto tc1 = std::chrono::high_resolution_clock::now();
         g_results.conversion_time_ms =

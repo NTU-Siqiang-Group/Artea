@@ -68,7 +68,7 @@ protected:
 
 TEST_F(InternalGraphCompactorTest, EmptyGraph) {
     // No vertices added.
-    auto compact = internal_graph_compactor_t::from_internal_graph(*src_graph_, src_max_nbr_size);
+    auto compact = internal_graph_compactor_t::compact_graph(*src_graph_, src_max_nbr_size);
 
     EXPECT_EQ(compact.get_num_vertices(), 0u);
     EXPECT_EQ(compact.max_nbr_size(), src_max_nbr_size);
@@ -78,7 +78,7 @@ TEST_F(InternalGraphCompactorTest, BasicConversionEqualSize) {
     const vertex_num_t num = 1000;
     populate_src_graph(num);
 
-    auto compact = internal_graph_compactor_t::from_internal_graph(*src_graph_, src_max_nbr_size);
+    auto compact = internal_graph_compactor_t::compact_graph(*src_graph_, src_max_nbr_size);
 
     EXPECT_EQ(compact.get_num_vertices(), num);
     EXPECT_EQ(compact.max_nbr_size(), src_max_nbr_size);
@@ -110,7 +110,7 @@ TEST_F(InternalGraphCompactorTest, ExtractedNbrSizeSmaller) {
     populate_src_graph(num);
 
     const vertex_num_t extracted = 16;
-    auto compact = internal_graph_compactor_t::from_internal_graph(*src_graph_, extracted);
+    auto compact = internal_graph_compactor_t::compact_graph(*src_graph_, extracted);
 
     EXPECT_EQ(compact.get_num_vertices(), num);
     EXPECT_EQ(compact.max_nbr_size(), extracted);
@@ -136,7 +136,7 @@ TEST_F(InternalGraphCompactorTest, ExtractedNbrSizeSmaller) {
 TEST_F(InternalGraphCompactorTest, ExtractedNbrSizeLargerThrows) {
     populate_src_graph(10);
     EXPECT_THROW({
-        internal_graph_compactor_t::from_internal_graph(*src_graph_, src_max_nbr_size + 1);
+        internal_graph_compactor_t::compact_graph(*src_graph_, src_max_nbr_size + 1);
     }, std::runtime_error);
 }
 
@@ -153,7 +153,7 @@ TEST_F(InternalGraphCompactorTest, AllVerticesFull) {
         src_graph_->num_valid_nbrs(v, src_max_nbr_size);
     }
 
-    auto compact = internal_graph_compactor_t::from_internal_graph(*src_graph_, src_max_nbr_size);
+    auto compact = internal_graph_compactor_t::compact_graph(*src_graph_, src_max_nbr_size);
     EXPECT_EQ(compact.get_num_vertices(), num);
 
     for (vertex_id_t v = 0; v < num; ++v) {
@@ -172,7 +172,7 @@ TEST_F(InternalGraphCompactorTest, AllVerticesEmpty) {
         src_graph_->add_vertex(i);
     }
 
-    auto compact = internal_graph_compactor_t::from_internal_graph(*src_graph_, src_max_nbr_size);
+    auto compact = internal_graph_compactor_t::compact_graph(*src_graph_, src_max_nbr_size);
     EXPECT_EQ(compact.get_num_vertices(), num);
 
     for (vertex_id_t v = 0; v < num; ++v) {
@@ -188,7 +188,7 @@ TEST_F(InternalGraphCompactorTest, LargeScale) {
     const vertex_num_t num = 100'000;
     populate_src_graph(num);
 
-    auto compact = internal_graph_compactor_t::from_internal_graph(*src_graph_, src_max_nbr_size);
+    auto compact = internal_graph_compactor_t::compact_graph(*src_graph_, src_max_nbr_size);
     EXPECT_EQ(compact.get_num_vertices(), num);
 
     std::atomic<uint32_t> errors{0};
@@ -226,7 +226,7 @@ TEST_F(InternalGraphCompactorTest, SourceUnchangedAfterCompaction) {
     const vertex_num_t num = 200;
     populate_src_graph(num);
 
-    auto compact = internal_graph_compactor_t::from_internal_graph(*src_graph_, src_max_nbr_size);
+    auto compact = internal_graph_compactor_t::compact_graph(*src_graph_, src_max_nbr_size);
 
     EXPECT_EQ(src_graph_->get_num_vertices(), num);
     for (vertex_num_t i = 0; i < num; ++i) {

@@ -111,20 +111,18 @@ using index_size_calculator_t = typename index_traits_t::index_size_calculator_t
 using radius_prober_t = typename index_traits_t::radius_prober_t;
 using internal_graph_compactor_t = typename index_traits_t::internal_graph_compactor_t;
 
-}   // close namespace cpu temporarily
-namespace cpu::compact {
-    using descent_graph_t        = cpu::index_traits_t::compact::descent_graph_t;
-    using internal_graph_t       = cpu::index_traits_t::compact::internal_graph_t;
-    using descent_graph_router_t = cpu::router_traits_t::compact::descent_graph_router_t;
-}   // namespace cpu::compact
-namespace cpu::dynamic {
-    using internal_graph_t            = cpu::index_traits_t::dynamic::internal_graph_t;
-    using hierarchical_graph_t        = cpu::index_traits_t::dynamic::hierarchical_graph_t;
-    using descent_graph_router_t      = cpu::router_traits_t::dynamic::descent_graph_router_t;
-    using internal_graph_router_t     = cpu::router_traits_t::dynamic::internal_graph_router_t;
-    using hierarchical_graph_router_t = cpu::router_traits_t::dynamic::hierarchical_graph_router_t;
-}   // namespace cpu::dynamic
-namespace cpu {   // reopen namespace cpu
+namespace compact {
+    using descent_graph_t        = index_traits_t::compact::descent_graph_t;
+    using internal_graph_t       = index_traits_t::compact::internal_graph_t;
+    using descent_graph_router_t = router_traits_t::compact::descent_graph_router_t;
+}   // namespace compact
+namespace dynamic {
+    using internal_graph_t            = index_traits_t::dynamic::internal_graph_t;
+    using hierarchical_graph_t        = index_traits_t::dynamic::hierarchical_graph_t;
+    using descent_graph_router_t      = router_traits_t::dynamic::descent_graph_router_t;
+    using internal_graph_router_t     = router_traits_t::dynamic::internal_graph_router_t;
+    using hierarchical_graph_router_t = router_traits_t::dynamic::hierarchical_graph_router_t;
+}   // namespace dynamic
 
 // Refiner types from RefinerTraits
 using triangle_updater_t = typename refiner_traits_t::template triangle_updater_t<typename index_traits_t::conv_graph::index_t>;

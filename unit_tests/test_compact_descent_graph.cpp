@@ -123,7 +123,7 @@ TEST_F(CompactDescentGraphTest, BasicConversion) {
     const auto& flat_nbrs_arr = descent_graph_->get_nbrs_arr();
 
     const vertex_num_t extracted_nbr_size = 32;
-    auto compact_descent_graph = descent_graph_compactor_t::from_descent_graph(*descent_graph_, extracted_nbr_size);
+    auto compact_descent_graph = descent_graph_compactor_t::compact_graph(*descent_graph_, extracted_nbr_size);
 
     EXPECT_EQ(compact_descent_graph.get_num_vertices(), num_vertices_);
     EXPECT_EQ(compact_descent_graph.get_extracted_nbr_size(), extracted_nbr_size);
@@ -151,7 +151,7 @@ TEST_F(CompactDescentGraphTest, BasicConversion) {
 
 TEST_F(CompactDescentGraphTest, EmptyDescentGraph) {
     const vertex_num_t extracted_nbr_size = 32;
-    auto compact_descent_graph = descent_graph_compactor_t::from_descent_graph(*descent_graph_, extracted_nbr_size);
+    auto compact_descent_graph = descent_graph_compactor_t::compact_graph(*descent_graph_, extracted_nbr_size);
 
     EXPECT_EQ(compact_descent_graph.get_num_vertices(), num_vertices_);
     EXPECT_EQ(compact_descent_graph.get_extracted_nbr_size(), extracted_nbr_size);
@@ -172,7 +172,7 @@ TEST_F(CompactDescentGraphTest, FixNbrSizeLargerThanFlatNbrs) {
 
     const auto& flat_nbrs_arr = descent_graph_->get_nbrs_arr();
     const vertex_num_t extracted_nbr_size = 64;
-    auto compact_descent_graph = descent_graph_compactor_t::from_descent_graph(*descent_graph_, extracted_nbr_size);
+    auto compact_descent_graph = descent_graph_compactor_t::compact_graph(*descent_graph_, extracted_nbr_size);
 
     for (vertex_id_t u = 0; u < num_vertices_; ++u) {
         const auto& flat_nbrs = flat_nbrs_arr[u];
@@ -196,7 +196,7 @@ TEST_F(CompactDescentGraphTest, FixNbrSizeSmallerThanFlatNbrs) {
 
     const auto& flat_nbrs_arr = descent_graph_->get_nbrs_arr();
     const vertex_num_t extracted_nbr_size = 16;
-    auto compact_descent_graph = descent_graph_compactor_t::from_descent_graph(*descent_graph_, extracted_nbr_size);
+    auto compact_descent_graph = descent_graph_compactor_t::compact_graph(*descent_graph_, extracted_nbr_size);
 
     for (vertex_id_t u = 0; u < num_vertices_; ++u) {
         const auto& flat_nbrs = flat_nbrs_arr[u];
@@ -222,7 +222,7 @@ TEST_F(CompactDescentGraphTest, SingleNeighborPerVertex) {
 
     const auto& flat_nbrs_arr = descent_graph_->get_nbrs_arr();
     const vertex_num_t extracted_nbr_size = 32;
-    auto compact_descent_graph = descent_graph_compactor_t::from_descent_graph(*descent_graph_, extracted_nbr_size);
+    auto compact_descent_graph = descent_graph_compactor_t::compact_graph(*descent_graph_, extracted_nbr_size);
 
     for (vertex_id_t u = 0; u < num_vertices_; ++u) {
         const auto& flat_nbrs = flat_nbrs_arr[u];
@@ -243,7 +243,7 @@ TEST_F(CompactDescentGraphTest, NeighborOrderPreservation) {
 
     const auto& flat_nbrs_arr = descent_graph_->get_nbrs_arr();
     const vertex_num_t extracted_nbr_size = 32;
-    auto compact_descent_graph = descent_graph_compactor_t::from_descent_graph(*descent_graph_, extracted_nbr_size);
+    auto compact_descent_graph = descent_graph_compactor_t::compact_graph(*descent_graph_, extracted_nbr_size);
 
     for (vertex_id_t u = 0; u < num_vertices_; ++u) {
         const auto& flat_nbrs = flat_nbrs_arr[u];
@@ -268,7 +268,7 @@ TEST_F(CompactDescentGraphTest, LargeFixNbrSize) {
 
     // extracted_nbr_size (128) exceeds max_nbr_size (64), should throw an exception
     EXPECT_THROW({
-        auto compact_descent_graph = descent_graph_compactor_t::from_descent_graph(*descent_graph_, extracted_nbr_size);
+        auto compact_descent_graph = descent_graph_compactor_t::compact_graph(*descent_graph_, extracted_nbr_size);
     }, std::runtime_error);
 }
 
@@ -277,7 +277,7 @@ TEST_F(CompactDescentGraphTest, SmallFixNbrSize) {
     populate_random_neighbors(max_neighbors);
 
     const vertex_num_t extracted_nbr_size = 4;
-    auto compact_descent_graph = descent_graph_compactor_t::from_descent_graph(*descent_graph_, extracted_nbr_size);
+    auto compact_descent_graph = descent_graph_compactor_t::compact_graph(*descent_graph_, extracted_nbr_size);
 
     EXPECT_EQ(compact_descent_graph.get_num_vertices(), num_vertices_);
     EXPECT_EQ(compact_descent_graph.get_extracted_nbr_size(), extracted_nbr_size);
@@ -290,7 +290,7 @@ TEST_F(CompactDescentGraphTest, PerformanceTest) {
     const vertex_num_t extracted_nbr_size = 32;
 
     auto start = std::chrono::high_resolution_clock::now();
-    auto compact_descent_graph = descent_graph_compactor_t::from_descent_graph(*descent_graph_, extracted_nbr_size);
+    auto compact_descent_graph = descent_graph_compactor_t::compact_graph(*descent_graph_, extracted_nbr_size);
     auto end = std::chrono::high_resolution_clock::now();
 
     auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(end - start);

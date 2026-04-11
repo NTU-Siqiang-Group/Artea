@@ -15,16 +15,13 @@
 /*
  * @FilePath: /Artea/include/artea/cpu/index/compactor/descent_graph_compactor.hpp
  * @Author: Chandler (Weitang Ye) <weitang.ye@ntu.edu.sg>
- * @Date: 2026-03-13
- * @Description: Unified converter for transforming graphs to search graphs.
+ * @Description: Compactor: dynamic DescentGraph -> compact DescentGraph.
  */
 
 #pragma once
 
 #include <algorithm>
-#include <stdexcept>
 #include <string>
-#include <utility>
 #include <tbb/parallel_for.h>
 #include <tbb/blocked_range.h>
 #include <artea/common/logger.hpp>
@@ -35,29 +32,32 @@ namespace cpu {
 template <typename IndexTraitsT>
 class DescentGraphCompactor {
 
-    using vertex_num_t = typename IndexTraitsT::vertex_num_t;
-    using vertex_id_t = typename IndexTraitsT::vertex_id_t;
-    using layer_id_t = typename IndexTraitsT::layer_id_t;
+    using vertex_num_t   = typename IndexTraitsT::vertex_num_t;
+    using vertex_id_t    = typename IndexTraitsT::vertex_id_t;
     using vector_array_t = typename IndexTraitsT::vector_array_t;
-    using index_t = typename IndexTraitsT::conv_graph::index_t;
-    using compact = typename IndexTraitsT::compact;
+    using compact        = typename IndexTraitsT::compact;
     using nbr_arr_checker_t = typename IndexTraitsT::nbr_arr_checker_t;
 
 public:
     /**
-     * @brief Convert a DescentGraph to CompactDescentGraph in parallel.
-     * @param descent_graph The source descent graph to convert from.
-     * @param extracted_nbr_size Fixed number of neighbors per vertex in the flat search graph.
-     * @return A new CompactDescentGraph instance.
+     * @brief Compact a DescentGraph-like structure into a compact::descent_graph_t.
+     *
+     * Reads neighbor arrays and vector data from @p src, copies up to
+     * @p extracted_nbr_size neighbors per vertex into a flat CSR layout.
+     *
+     * @param src                The source graph (any type exposing
+     *                           get_num_vertices, get_vecs_data, get_nbrs_arr,
+     *                           layer_config).
+     * @param extracted_nbr_size Fixed neighbor count per vertex in the output.
+     * @return A new compact::descent_graph_t.
      */
     template <typename DescentGraphT>
-    static auto from_descent_graph(
-        const DescentGraphT& descent_graph,
+    static auto compact_graph(
+        const DescentGraphT& src,
         const vertex_num_t extracted_nbr_size
     ) -> typename compact::descent_graph_t {
-        const vertex_num_t max_nbr_size = descent_graph.layer_config().max_nbr_size();
+        const vertex_num_t max_nbr_size = src.layer_config().max_nbr_size();
 
-        // Validate extracted_nbr_size does not exceed max_nbr_size
         if (extracted_nbr_size > max_nbr_size) {
             ARTEA_ERROR(fmt::format(
                 "extracted_nbr_size ({}) cannot exceed max_nbr_size ({})",
@@ -65,15 +65,12 @@ public:
             ));
         }
 
-        const vertex_num_t num_vertices = descent_graph.get_num_vertices();
-        const auto& vecs_data = descent_graph.get_vecs_data();
-        const auto& nbrs_arr = descent_graph.get_nbrs_arr();
+        const vertex_num_t num_vertices = src.get_num_vertices();
+        const auto& vecs_data = src.get_vecs_data();
+        const auto& nbrs_arr = src.get_nbrs_arr();
 
-        // Create the flat search graph
-        typename compact::descent_graph_t compact_descent_graph(vecs_data, extracted_nbr_size);
-
-        // Copy neighbors from DescentGraph to CompactDescentGraph in parallel
-        auto& csr_nbrs = compact_descent_graph.get_csr_nbrs();
+        typename compact::descent_graph_t result(vecs_data, extracted_nbr_size);
+        auto& csr_nbrs = result.get_csr_nbrs();
         const vertex_id_t invalid_id = IndexTraitsT::invalid_vertex_id;
 
         tbb::parallel_for(
@@ -81,15 +78,15 @@ public:
             [&](const tbb::blocked_range<vertex_id_t>& r) {
                 for (vertex_id_t vid = r.begin(); vid != r.end(); ++vid) {
                     const auto& nbrs = nbrs_arr[vid];
-                    vertex_id_t* dst_nbrs = &csr_nbrs[static_cast<size_t>(vid) * extracted_nbr_size];
-                    // Copy up to extracted_nbr_size neighbors
-                    const vertex_num_t copy_count = std::min(static_cast<vertex_num_t>(nbrs.size()), extracted_nbr_size);
+                    vertex_id_t* dst = &csr_nbrs[static_cast<size_t>(vid) * extracted_nbr_size];
+                    const vertex_num_t copy_count = std::min(
+                        static_cast<vertex_num_t>(nbrs.size()), extracted_nbr_size);
                     for (vertex_num_t i = 0; i < extracted_nbr_size; ++i) {
-                        dst_nbrs[i] = (i < copy_count) ? nbrs[i].get_id() : invalid_id;
+                        dst[i] = (i < copy_count) ? nbrs[i].get_id() : invalid_id;
                     }
 
                     #ifndef NDEBUG
-                    if (!nbr_arr_checker_t::invalid_id_suffix_check(dst_nbrs, extracted_nbr_size)) {
+                    if (!nbr_arr_checker_t::invalid_id_suffix_check(dst, extracted_nbr_size)) {
                         ARTEA_ERROR("Error: Invalid search graph row suffix layout.");
                     }
                     #endif
@@ -97,26 +94,20 @@ public:
             }
         );
 
-        return compact_descent_graph;
+        return result;
     }
 
     /**
-     * @brief Load DescentGraph from file and convert to CompactDescentGraph.
-     * @param file_path Path to the descent graph index file.
-     * @param extracted_nbr_size Fixed number of neighbors per vertex in the flat search graph.
-     * @param vecs_data Reference to the vector data.
-     * @return A new CompactDescentGraph instance.
+     * @brief Load a conv_graph index from file and compact it.
      */
     static auto from_index_file(
         const std::string& file_path,
         const vertex_num_t extracted_nbr_size,
         const vector_array_t& vecs_data
     ) -> typename compact::descent_graph_t {
-        // Load DescentGraph from file
+        using index_t = typename IndexTraitsT::conv_graph::index_t;
         index_t descent_graph = index_t::restore(file_path, vecs_data);
-
-        // Convert to CompactDescentGraph
-        return from_descent_graph(descent_graph, extracted_nbr_size);
+        return compact_graph(descent_graph, extracted_nbr_size);
     }
 
 };  // class DescentGraphCompactor
