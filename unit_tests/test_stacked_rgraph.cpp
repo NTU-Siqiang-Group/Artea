@@ -222,13 +222,13 @@ protected:
         //      zero-copy fast path.
         const vertex_num_t total_vertices =
             static_cast<vertex_num_t>(base_vecs.get_num_vecs());
+        stacked_rgraph::rgraph_config_t rgraph_config(
+            beta, l1_radius,
+            static_cast<vertex_num_t>(g_config.search_nn_qs),
+            static_cast<vertex_num_t>(g_config.select_nbrs_qs),
+            g_config.max_nbr_size);
         _graph = std::make_unique<stacked_rgraph::index_t>(
-            total_vertices,
-            /*rnet_beta=*/beta,
-            /*L1_rnet_radius=*/l1_radius,
-            /*search_nn_qs=*/static_cast<vertex_num_t>(g_config.search_nn_qs),
-            /*select_nbrs_qs=*/static_cast<vertex_num_t>(g_config.select_nbrs_qs),
-            /*max_nbr_size=*/g_config.max_nbr_size);
+            total_vertices, rgraph_config);
 
         vector_array_t owned_batch = base_vecs.extract_subset(0, total_vertices);
         stacked_rgraph::factory_t::add_vertices(

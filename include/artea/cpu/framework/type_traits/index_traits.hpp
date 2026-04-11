@@ -38,6 +38,7 @@ namespace symmetric_knn_graph {
 namespace compact {
     template <typename IndexTraitsT> class DescentGraph;
     template <typename IndexTraitsT> class InternalGraph;
+    template <typename IndexTraitsT> class HierarchicalGraph;
 }
 namespace dynamic {
     template <typename IndexTraitsT, typename DerivedClassT> class DescentGraph;
@@ -49,6 +50,7 @@ template <typename IndexTraitsT> class FlatGraphFileManager;
 template <typename IndexTraitsT> class IndexSizeCalculator;
 template <typename IndexTraitsT> class RadiusProber;
 template <typename IndexTraitsT> class InternalGraphCompactor;
+template <typename IndexTraitsT> class HierarchicalGraphCompactor;
 namespace stacked_rgraph {
     template <typename IndexTraitsT> class IndexStructure;
 }
@@ -69,8 +71,9 @@ struct IndexTraits : virtual public BaseTraitsT {
     /** @brief Graph structures grouped by mode. */
     struct compact {
         compact() = delete;
-        using descent_graph_t  = cpu::compact::DescentGraph<index_traits_t>;
-        using internal_graph_t = cpu::compact::InternalGraph<index_traits_t>;
+        using descent_graph_t      = cpu::compact::DescentGraph<index_traits_t>;
+        using internal_graph_t     = cpu::compact::InternalGraph<index_traits_t>;
+        using hierarchical_graph_t = cpu::compact::HierarchicalGraph<index_traits_t>;
     };
     struct dynamic {
         dynamic() = delete;
@@ -110,6 +113,9 @@ struct IndexTraits : virtual public BaseTraitsT {
 
     /** @brief Single-layer compactor: dynamic::InternalGraph -> compact::InternalGraph. */
     using internal_graph_compactor_t = InternalGraphCompactor<index_traits_t>;
+
+    /** @brief Multi-layer compactor: dynamic::HierarchicalGraph <-> compact::HierarchicalGraph. */
+    using hierarchical_graph_compactor_t = HierarchicalGraphCompactor<index_traits_t>;
 
     /** @brief Namespace-scoped index types for stacked_rgraph
      *  (dynamic r-net insertion over HierarchicalGraph). */

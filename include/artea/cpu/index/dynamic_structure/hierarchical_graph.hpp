@@ -209,64 +209,21 @@ public:
     }
 
     /**
-     * @brief Atomically extend the hierarchy by constructing every missing
-     *        layer up to @p target_num_layers and running @p seed_fn on the
-     *        FINAL new layer before publishing it.
+     * @brief Trim trailing empty layers (those with 0 vertices).
      *
-     * The final new layer's visible slot (i.e. the bump of @c _num_layers)
-     * is written AFTER @p seed_fn completes, so other threads observing the
-     * new layer count via @c get_num_layers() are guaranteed to also see at
-     * least one vertex populated in the top layer. This prevents other
-     * threads from racing in on an empty top layer.
-     *
-     * Returns @c true if growth occurred (and @p seed_fn ran), or @c false
-     * if another thread had already extended past @p target_num_layers
-     * before we acquired the mutex — in that case @p seed_fn is NOT invoked.
-     *
-     * @tparam LayerFactoryFnT Same signature as @c grow_layers.
-     * @tparam SeedFnT Callable with signature
-     *         @code
-     *         void(layer_id_t top_layer_id, internal_graph_t& top_layer)
-     *         @endcode
-     *         Invoked under the mutex exactly once, on the final new layer.
-     * @param target_num_layers Desired visible layer count after growth.
-     * @param layer_factory     Factory producing a fresh InternalGraph.
-     * @param seed_fn           Callable that inserts the first vertex into
-     *                          the new top layer.
-     * @return @c true if this call grew the hierarchy (and seeded the new
-     *         top); @c false if another thread had already extended.
+     * Walks from the topmost committed layer downward and resets
+     * (deallocates) every layer whose @c get_num_vertices() is 0.
+     * Adjusts @c _num_layers to the new count. NOT thread-safe —
+     * call only after construction is complete and no concurrent
+     * insertions are in progress.
      */
-    template <typename LayerFactoryFnT, typename SeedFnT>
-    auto extend_and_seed(const layer_num_t target_num_layers,
-                         LayerFactoryFnT&& layer_factory,
-                         SeedFnT&& seed_fn) -> bool {
-        std::lock_guard<std::mutex> guard(_extend_mutex);
-
-        const layer_num_t cur = _num_layers.load(std::memory_order_relaxed);
-        if (cur >= target_num_layers) return false;  // lost the race
-
-        if (target_num_layers > max_layers()) {
-            ARTEA_ERROR(fmt::format(
-                "extend_and_seed: target ({}) exceeds max_layers ({})",
-                target_num_layers, max_layers()));
+    auto trim_empty_layers() -> void {
+        layer_num_t n = _num_layers.load(std::memory_order_relaxed);
+        while (n > 0 && _layer_graphs[n - 1]->get_num_vertices() == 0) {
+            _layer_graphs[n - 1].reset();
+            --n;
         }
-
-        // Grow all but the last new layer normally (publish each slot as
-        // soon as it's populated).
-        for (layer_num_t l = cur; l + 1 < target_num_layers; ++l) {
-            _layer_graphs[l] = layer_factory(l);
-            _num_layers.store(l + 1, std::memory_order_release);
-        }
-
-        // Final new layer: construct it, run `seed_fn` to insert at least
-        // one vertex, and THEN publish it. Other threads that only read
-        // `get_num_layers()` never observe this layer as empty.
-        const layer_num_t last = target_num_layers - 1;
-        _layer_graphs[last] = layer_factory(last);
-        seed_fn(static_cast<layer_id_t>(last), *_layer_graphs[last]);
-        _num_layers.store(last + 1, std::memory_order_release);
-
-        return true;
+        _num_layers.store(n, std::memory_order_release);
     }
 
     __attribute__((always_inline))

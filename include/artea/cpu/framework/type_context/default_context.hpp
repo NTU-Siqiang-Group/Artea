@@ -110,10 +110,12 @@ using flat_graph_file_manager_t = typename index_traits_t::flat_graph_file_manag
 using index_size_calculator_t = typename index_traits_t::index_size_calculator_t;
 using radius_prober_t = typename index_traits_t::radius_prober_t;
 using internal_graph_compactor_t = typename index_traits_t::internal_graph_compactor_t;
+using hierarchical_graph_compactor_t = typename index_traits_t::hierarchical_graph_compactor_t;
 
 namespace compact {
     using descent_graph_t        = index_traits_t::compact::descent_graph_t;
     using internal_graph_t       = index_traits_t::compact::internal_graph_t;
+    using hierarchical_graph_t   = index_traits_t::compact::hierarchical_graph_t;
     using descent_graph_router_t = router_traits_t::compact::descent_graph_router_t;
 }   // namespace compact
 namespace dynamic {
@@ -190,8 +192,9 @@ namespace symmetric_knn_graph {
 }
 
 namespace stacked_rgraph {
-    using index_t   = typename graph_factory_traits_t::stacked_rgraph::index_t;
-    using factory_t = typename graph_factory_traits_t::stacked_rgraph::factory_t;
+    using rgraph_config_t = typename graph_factory_traits_t::stacked_rgraph::rgraph_config_t;
+    using index_t         = typename graph_factory_traits_t::stacked_rgraph::index_t;
+    using factory_t       = typename graph_factory_traits_t::stacked_rgraph::factory_t;
 }
 
 }   // namespace cpu

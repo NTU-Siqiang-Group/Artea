@@ -20,11 +20,12 @@
 
 #pragma once
 
+#include <algorithm>
 #include <atomic>
 #include <cstddef>
 #include <cstdint>
+#include <mutex>
 #include <span>
-#include <algorithm>
 #include <immintrin.h>
 #include <tbb/concurrent_vector.h>
 #include <artea/common/logger.hpp>
@@ -173,14 +174,10 @@ public:
             it - _vertex_info.begin()
         );
 
-        // Bounds check: CSR is pre-allocated for exactly _max_num_vertices
-        // slots. Writing past that corrupts heap metadata. Fail loud.
+        // Ensure the CSR array has room for this layer_vid. If the
+        // pre-allocation is exhausted, grow by 2x under a mutex.
         if (layer_vid >= _max_num_vertices) {
-            ARTEA_ERROR(fmt::format(
-                "InternalGraph::add_vertex: layer_vid ({}) exceeds "
-                "max_num_vertices ({}). Increase the pre-allocation.",
-                layer_vid, _max_num_vertices
-            ));
+            _ensure_capacity(layer_vid + 1);
         }
 
         const auto base = static_cast<size_t>(layer_vid) * _stride();
@@ -475,18 +472,38 @@ public:
     }
 
 private:
-    /** @brief Maximum number of vertices (CSR pre-allocation capacity). */
+    /**
+     * @brief Grow the CSR array so that at least @p required_capacity
+     *        vertices can be stored. Doubles the capacity each time
+     *        (amortized O(1) growth). Thread-safe: holds @c _resize_mutex
+     *        for the duration of the resize; concurrent add_nbr / fetch_nbrs
+     *        on already-initialized vertices are NOT blocked (they access
+     *        indices < old capacity whose memory is stable after resize).
+     */
+    auto _ensure_capacity(const vertex_num_t required_capacity) -> void {
+        std::lock_guard<std::mutex> guard(_resize_mutex);
+
+        // Re-check under lock (another thread may have already resized).
+        if (required_capacity <= _max_num_vertices) return;
+
+        const vertex_num_t new_cap =
+            std::max<vertex_num_t>(required_capacity, _max_num_vertices * 2);
+        _csr_nbrs.resize(static_cast<size_t>(new_cap) * _stride());
+        _max_num_vertices = new_cap;
+    }
+
+    /** @brief Current CSR capacity (number of vertex slots). Grows via _ensure_capacity. */
     vertex_num_t _max_num_vertices;
 
     /** @brief Fixed number of neighbor slots per vertex. */
     vertex_num_t _max_nbr_size;
 
     /**
-     * @brief CSR-format neighbor storage, pre-allocated for max_num_vertices.
+     * @brief CSR-format neighbor storage.
      *
      * Each vertex occupies (1 + _max_nbr_size) contiguous lnbr_t slots.
      * The first slot of each block is reinterpreted as std::atomic<uint64_t>
-     * to hold num_valid_nbrs.
+     * to hold num_valid_nbrs. Grown via _ensure_capacity when exhausted.
      */
     csr_lnbrs_t _csr_nbrs;
 
@@ -500,6 +517,9 @@ private:
      * push_back() is used in add_vertex() to atomically claim a new layer_vid.
      */
     tbb::concurrent_vector<lnbr_t> _vertex_info;
+
+    /** @brief Serializes CSR resize operations. */
+    mutable std::mutex _resize_mutex;
 
 };  // class InternalGraph
 

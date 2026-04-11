@@ -26,8 +26,6 @@
 #include <cmath>
 #include <cstdint>
 #include <limits>
-#include <memory>
-#include <optional>
 #include <span>
 #include <utility>
 #include <vector>
@@ -204,6 +202,9 @@ public:
                 }
             }
         );
+
+        // Remove trailing layers that received no vertices.
+        index.trim_empty_layers();
     }
 
 private:
@@ -339,50 +340,13 @@ private:
             }
         }
 
-        // ---------- Phase 1.5: extend hierarchy if uncovered everywhere ----------
+        // ---------- Phase 1.5: cap highest_insert_level ----------
         //
-        // Extension is capped by `max_restrict_level`. If the cap is
-        // reached we simply set highest_insert_level := cur_max_level and
-        // proceed (new_base_vid will still be inserted at every existing layer,
-        // but no new layer is created).
-        //
-        // `extend_and_seed` runs the seed lambda under its internal mutex
-        // and publishes the new layer only AFTER the seed vertex is in
-        // place — so concurrent readers never see an empty new top layer.
-        // It returns `true` if growth actually happened, or `false` if
-        // another thread had already grown past our target.
-        std::optional<std::pair<layer_id_t, vertex_id_t>> ext_slot;
-        if (highest_insert_level == cur_max_level + 1) {
-            const layer_num_t new_num_layers = cur_max_level + 1;
-            if (new_num_layers > max_restrict_level) {
-                highest_insert_level = cur_max_level;
-            } else {
-                const vertex_num_t num_vecs_storage =
-                    static_cast<vertex_num_t>(vecs_storage.get_num_vecs());
-                index.extend_and_seed(
-                    new_num_layers,
-                    [&](const layer_id_t new_layer_id) {
-                        const vertex_num_t new_layer_cap =
-                            index.capacity_for_layer(new_layer_id, num_vecs_storage);
-                        return std::make_unique<internal_graph_t>(
-                            new_layer_cap, max_nbr_size);
-                    },
-                    [&](const layer_id_t new_top_layer_idx,
-                        internal_graph_t& new_top_layer) -> void {
-                        // Placeholder inter_layer_link (= new_base_vid). Patched
-                        // by the Phase-2 epilogue once we know the new
-                        // vertex's layer_vid in the layer directly below.
-                        // If cur_max_level was 0 (first-ever insertion),
-                        // there is nothing to patch and the placeholder
-                        // stays — which is the correct L0 identity
-                        // (base_vid == new_base_vid).
-                        const vertex_id_t new_top_layer_vid =
-                            new_top_layer.add_vertex(new_base_vid);
-                        ext_slot =
-                            std::make_pair(new_top_layer_idx, new_top_layer_vid);
-                    });
-                highest_insert_level = cur_max_level;
-            }
+        // All layers are pre-allocated at construction. If no layer
+        // covers the new vertex, insert it at every layer up to
+        // max_restrict_level.
+        if (highest_insert_level > max_restrict_level) {
+            highest_insert_level = max_restrict_level;
         }
 
         // ---------- Phase 2: insert new_base_vid at layers [1, highest_insert_level] ----------
@@ -478,16 +442,6 @@ private:
             upper_layer_graph.set_inter_layer_link(upper_layer_vid, lower_layer_vid);
         }
 
-        // Patch the Phase-1.5 extension vertex's inter_layer_link to point
-        // at the new vertex's layer_vid in layer cur_max_level.
-        // `per_level_insertions.front()` is the topmost Phase 2 layer
-        // (cur_level = highest_insert_level = cur_max_level), so its
-        // new_layer_vid is the new vertex's identity in that layer.
-        if (ext_slot && !per_level_insertions.empty()) {
-            auto& ext_layer_graph = index.get_layer_graph(ext_slot->first);
-            ext_layer_graph.set_inter_layer_link(
-                ext_slot->second, per_level_insertions.front().second);
-        }
     }
 
 };

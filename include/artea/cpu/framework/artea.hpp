@@ -51,8 +51,10 @@
 #include <artea/cpu/index/dynamic_structure/descent_graph.hpp>
 #include <artea/cpu/index/compact_structure/descent_graph.hpp>
 #include <artea/cpu/index/dynamic_structure/hierarchical_graph.hpp>
+#include <artea/cpu/index/compact_structure/hierarchical_graph.hpp>
 #include <artea/cpu/index/compactor/descent_graph_compactor.hpp>
 #include <artea/cpu/index/compactor/internal_graph_compactor.hpp>
+#include <artea/cpu/index/compactor/hierarchical_graph_compactor.hpp>
 #include <artea/cpu/index/index_size_calculator.hpp>
 #include <artea/cpu/index/persistence/flat_graph_file_manager.hpp>
 
@@ -67,6 +69,7 @@
 #include <artea/cpu/index/symmetric_knn_graph/index_factory.hpp>
 #include <artea/cpu/index/artea_graph/index_structure.hpp>
 #include <artea/cpu/index/artea_graph/index_factory.hpp>
+#include <artea/cpu/index/stacked_rgraph/configs.hpp>
 #include <artea/cpu/index/stacked_rgraph/index_structure.hpp>
 #include <artea/cpu/index/stacked_rgraph/index_factory.hpp>
 

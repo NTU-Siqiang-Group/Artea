@@ -27,8 +27,6 @@
 
 #pragma once
 
-#include <algorithm>
-#include <cmath>
 #include <cstdint>
 #include <memory>
 #include <utility>
@@ -77,6 +75,7 @@ class IndexStructure {
     using internal_graph_t     = typename IndexTraitsT::dynamic::internal_graph_t;
     using vector_array_t       = typename IndexTraitsT::vector_array_t;
     using vecs_storage_t       = typename IndexTraitsT::vecs_storage_t;
+    using rgraph_config_t      = typename IndexTraitsT::stacked_rgraph::rgraph_config_t;
 
     using hierarchical_graph_t = typename IndexTraitsT::dynamic::hierarchical_graph_t;
 
@@ -84,67 +83,32 @@ public:
     /**
      * @brief Construct an empty IndexStructure.
      *
-     * The composed @c HierarchicalGraph is created with capacity
-     * @c _compute_max_restrict_level(total_vertices); the owned vector
-     * storage @c _vecs_storage starts empty and is grown in-place by
-     * @c append_vecs on every incremental build pass.
-     *
-     * @param total_vertices       Expected size of the caller's base dataset
-     *                             (i.e. layer 0). Used to derive the
-     *                             hierarchy's hard layer cap.
-     * @param rnet_beta            Radius growth factor: R_h = L1_rnet_radius * rnet_beta^(h-1).
-     * @param L1_rnet_radius       Covering radius for layer 1 (the lowest upper layer).
-     * @param search_nn_qs         Beam-search queue size used during Phase 1
-     *                             top-down nearest-neighbor descent. Also
-     *                             the number of uniformly-random vertices
-     *                             drawn from the top layer to seed the
-     *                             first beam search (no entry point is
-     *                             maintained).
-     * @param select_nbrs_qs       Beam-search queue size used during Phase 2
-     *                             candidate gathering before neighbor pruning.
-     * @param max_nbr_size         Per-vertex neighbor capacity for every layer.
-     * @param layer_cap_ratio      Geometric decay base for per-layer capacity.
-     *                             A value of @c 1 (the default) means
-     *                             "no decay" — every layer is sized to N.
-     * @param min_layer_cap        Floor on per-layer capacity.
+     * @param total_vertices  Expected size of the caller's base dataset.
+     *                        Used to derive the hierarchy's hard layer cap.
+     * @param config          R-graph configuration (r-net geometry, queue
+     *                        sizes, neighbor capacity, layer policy).
      */
     IndexStructure(
         const vertex_num_t total_vertices,
-        const ratio_t rnet_beta,
-        const distance_t L1_rnet_radius,
-        const vertex_num_t search_nn_qs,
-        const vertex_num_t select_nbrs_qs,
-        const vertex_num_t max_nbr_size = 32,
-        const ratio_t layer_cap_ratio = ratio_t(1),
-        const vertex_num_t min_layer_cap = 1024
+        const rgraph_config_t& config
     ) :
         _hierarchical_graph(std::make_unique<hierarchical_graph_t>(
-            _compute_max_restrict_level(total_vertices))),
-        _rnet_beta(rnet_beta),
-        _L1_rnet_radius(L1_rnet_radius),
-        _max_restrict_level(_compute_max_restrict_level(total_vertices)),
-        _search_nn_qs(search_nn_qs),
-        _select_nbrs_qs(select_nbrs_qs),
-        _max_nbr_size(max_nbr_size),
-        _layer_cap_ratio(layer_cap_ratio),
-        _min_layer_cap(min_layer_cap),
+            rgraph_config_t::compute_max_restrict_level(total_vertices))),
+        _config(config),
+        _max_restrict_level(rgraph_config_t::compute_max_restrict_level(total_vertices)),
         _vecs_storage()
     {
-        if (rnet_beta <= ratio_t(1)) {
-            ARTEA_ERROR(fmt::format("rnet_beta ({}) must be > 1", rnet_beta));
-        }
-        if (L1_rnet_radius <= distance_t(0)) {
-            ARTEA_ERROR(fmt::format("L1_rnet_radius ({}) must be > 0", L1_rnet_radius));
-        }
-        if (search_nn_qs < 1) {
-            ARTEA_ERROR(fmt::format("search_nn_qs ({}) must be >= 1", search_nn_qs));
-        }
-        if (select_nbrs_qs < 1) {
-            ARTEA_ERROR(fmt::format("select_nbrs_qs ({}) must be >= 1", select_nbrs_qs));
-        }
-        if (layer_cap_ratio < ratio_t(1)) {
-            ARTEA_ERROR(fmt::format("layer_cap_ratio ({}) must be >= 1", layer_cap_ratio));
-        }
+        // Pre-allocate all layers up to max_restrict_level (initially empty).
+        // Each layer's InternalGraph starts with capacity derived from
+        // the decay ratio; it will auto-resize (2x) if exceeded.
+        _hierarchical_graph->grow_layers(
+            _max_restrict_level,
+            [&](const layer_id_t layer_id) {
+                const vertex_num_t cap =
+                    _config.capacity_for_layer(layer_id, total_vertices);
+                return std::make_unique<internal_graph_t>(
+                    cap, _config.max_nbr_size());
+            });
     }
 
     // Copy and move both deleted: the composed HierarchicalGraph is
@@ -219,14 +183,8 @@ public:
             std::forward<LayerFactoryFnT>(layer_factory));
     }
 
-    template <typename LayerFactoryFnT, typename SeedFnT>
-    auto extend_and_seed(const layer_num_t target_num_layers,
-                         LayerFactoryFnT&& layer_factory,
-                         SeedFnT&& seed_fn) -> bool {
-        return _hierarchical_graph->extend_and_seed(
-            target_num_layers,
-            std::forward<LayerFactoryFnT>(layer_factory),
-            std::forward<SeedFnT>(seed_fn));
+    auto trim_empty_layers() -> void {
+        _hierarchical_graph->trim_empty_layers();
     }
 
     __attribute__((always_inline))
@@ -240,16 +198,17 @@ public:
         return _hierarchical_graph->get_layer_graphs();
     }
 
-    // --- Config accessors ---
+    // --- Config accessors (delegated to rgraph_config_t) ---
 
-    auto rnet_beta()            const -> ratio_t      { return _rnet_beta; }
-    auto L1_rnet_radius()       const -> distance_t   { return _L1_rnet_radius; }
-    auto max_nbr_size()         const -> vertex_num_t { return _max_nbr_size; }
-    auto max_restrict_level()   const -> layer_num_t  { return _max_restrict_level; }
-    auto search_nn_qs()         const -> vertex_num_t { return _search_nn_qs; }
-    auto select_nbrs_qs()       const -> vertex_num_t { return _select_nbrs_qs; }
-    auto layer_cap_ratio()      const -> ratio_t      { return _layer_cap_ratio; }
-    auto min_layer_cap()        const -> vertex_num_t { return _min_layer_cap; }
+    __attribute__((always_inline)) auto config()             const -> const rgraph_config_t& { return _config; }
+    __attribute__((always_inline)) auto rnet_beta()          const -> ratio_t      { return _config.rnet_beta(); }
+    __attribute__((always_inline)) auto L1_rnet_radius()     const -> distance_t   { return _config.L1_rnet_radius(); }
+    __attribute__((always_inline)) auto max_nbr_size()       const -> vertex_num_t { return _config.max_nbr_size(); }
+    __attribute__((always_inline)) auto max_restrict_level() const -> layer_num_t  { return _max_restrict_level; }
+    __attribute__((always_inline)) auto search_nn_qs()       const -> vertex_num_t { return _config.search_nn_qs(); }
+    __attribute__((always_inline)) auto select_nbrs_qs()     const -> vertex_num_t { return _config.select_nbrs_qs(); }
+    __attribute__((always_inline)) auto layer_cap_decay_ratio()    const -> ratio_t      { return _config.layer_cap_decay_ratio(); }
+    __attribute__((always_inline)) auto min_layer_cap()      const -> vertex_num_t { return _config.min_layer_cap(); }
 
     // --- Owned vector storage ---
 
@@ -259,8 +218,8 @@ public:
      *        calls can append new batches in-place; all @c base_vid values
      *        referenced by the hierarchy index into this array.
      */
-    auto get_vecs_storage()       -> vecs_storage_t&       { return _vecs_storage; }
-    auto get_vecs_storage() const -> const vecs_storage_t& { return _vecs_storage; }
+    __attribute__((always_inline)) auto get_vecs_storage()       -> vecs_storage_t&       { return _vecs_storage; }
+    __attribute__((always_inline)) auto get_vecs_storage() const -> const vecs_storage_t& { return _vecs_storage; }
 
     /**
      * @brief Append a batch of vectors to the owned vector storage.
@@ -271,6 +230,7 @@ public:
      * storage. After this call the new vertices occupy base_vid range
      * @c [old_size, old_size + batch_size).
      */
+    __attribute__((always_inline))
     auto append_vecs(vector_array_t&& batch_vecs) -> void {
         _vecs_storage.append_batch(std::move(batch_vecs));
     }
@@ -279,95 +239,28 @@ public:
      * @brief Covering radius for 1-indexed layer @p h (paper convention).
      *        @p h must be in [1, max_restrict_level].
      */
+    __attribute__((always_inline))
     auto radius_at(const layer_id_t h) const -> distance_t {
-        return static_cast<distance_t>(
-            _L1_rnet_radius * std::pow(static_cast<double>(_rnet_beta),
-                                       static_cast<double>(h - 1))
-        );
+        return _config.radius_at(h);
     }
 
-    /**
-     * @brief Compute the per-layer CSR capacity (number of vertex slots) for
-     *        the given 0-indexed layer id.
-     *
-     * Returns @c base_n when @c layer_cap_ratio == 1 (no decay — every
-     * layer pre-allocates for every base vertex, the safest choice).
-     * Otherwise returns @c max(base_n / ratio^layer_id, min_layer_cap).
-     */
+    __attribute__((always_inline))
     auto capacity_for_layer(const layer_id_t layer_id,
                             const vertex_num_t base_n) const -> vertex_num_t {
-        if (_layer_cap_ratio == ratio_t(1)) {
-            return base_n;
-        }
-        const double divisor = std::pow(static_cast<double>(_layer_cap_ratio),
-                                        static_cast<double>(layer_id));
-        const double raw = static_cast<double>(base_n) / divisor;
-        const vertex_num_t cap = static_cast<vertex_num_t>(raw);
-        return std::max<vertex_num_t>(cap, _min_layer_cap);
+        return _config.capacity_for_layer(layer_id, base_n);
     }
 
 private:
-    /**
-     * @brief Compute the recommended @c max_restrict_level for a dataset of
-     *        @p total_vertices points as @c ceil(log_10(total_vertices / 1000)).
-     *
-     * Clamped to at least 1 so the hierarchy can always host one upper layer
-     * even for very small datasets. Called from the constructor initializer
-     * list; not exposed — callers should not need to know the layer cap.
-     */
-    static auto _compute_max_restrict_level(const vertex_num_t total_vertices)
-        -> layer_num_t
-    {
-        if (total_vertices == 0) return 1;
-        const double ratio = static_cast<double>(total_vertices) / 1000.0;
-        if (ratio <= 1.0) return 1;
-        const double raw = std::log(ratio) / std::log(10.0);
-        const layer_num_t ceiled =
-            static_cast<layer_num_t>(std::ceil(raw));
-        return std::max<layer_num_t>(ceiled, layer_num_t(1));
-    }
-
-    /// @brief Composed @c HierarchicalGraph. Held by @c unique_ptr because
-    ///        @c HierarchicalGraph is move-deleted (contains std::atomic
-    ///        and std::mutex). Allocated once in the constructor and then
-    ///        grown in-place via @c grow_layers / @c extend_and_seed.
+    /// @brief Composed HierarchicalGraph (unique_ptr: non-movable).
     std::unique_ptr<hierarchical_graph_t> _hierarchical_graph;
 
-    /// @brief Radius growth factor between consecutive upper layers:
-    ///        @c R_h = L1_rnet_radius * rnet_beta^(h-1). Must be > 1.
-    ratio_t      _rnet_beta;
+    /// @brief R-graph configuration (r-net geometry, queue sizes, etc.).
+    rgraph_config_t _config;
 
-    /// @brief Covering radius of layer 1 (the lowest upper layer, @c h==1).
-    ///        Anchors the geometric progression of per-layer radii.
-    distance_t   _L1_rnet_radius;
+    /// @brief Hard cap on the number of upper layers, derived from total_vertices.
+    layer_num_t _max_restrict_level;
 
-    /// @brief Hard cap on the number of upper layers in the hierarchy,
-    ///        derived from @c total_vertices via @c _compute_max_restrict_level.
-    layer_num_t  _max_restrict_level;
-
-    /// @brief Beam-search queue size for Phase 1 top-down nearest-neighbor
-    ///        descent. Also the number of uniformly-random seed vertices
-    ///        drawn from the top layer to start the search.
-    vertex_num_t _search_nn_qs;
-
-    /// @brief Beam-search queue size for Phase 2 candidate gathering
-    ///        performed before neighbor pruning.
-    vertex_num_t _select_nbrs_qs;
-
-    /// @brief Per-vertex neighbor capacity applied uniformly to every layer.
-    vertex_num_t _max_nbr_size;
-
-    /// @brief Geometric decay base for per-layer CSR capacity. A value of
-    ///        @c 1 disables decay — every layer is sized to the full base
-    ///        dataset. Must be >= 1.
-    ratio_t      _layer_cap_ratio;
-
-    /// @brief Floor on per-layer CSR capacity; guards against over-shrinking
-    ///        upper layers when @c _layer_cap_ratio > 1.
-    vertex_num_t _min_layer_cap;
-
-    /// @brief Owned vector storage. Grown in-place by @c append_vecs;
-    ///        every @c base_vid in the hierarchy indexes into this array.
+    /// @brief Owned vector storage. Grown in-place by append_vecs.
     vecs_storage_t _vecs_storage;
 };
 

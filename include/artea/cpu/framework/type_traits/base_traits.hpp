@@ -67,6 +67,10 @@ namespace symmetric_knn_graph {
     template <typename BaseTraitsT> using PruningConfig = conv_graph::PruningConfig<BaseTraitsT>;
 }
 
+namespace stacked_rgraph {
+    template <typename BaseTraitsT> struct RGraphConfig;
+}
+
 /* ------ Enumerations ------ */
 enum class PruningConditionT;
 
@@ -237,13 +241,10 @@ public:
         using pruning_config_t = cpu::symmetric_knn_graph::PruningConfig<base_traits_t>;
     };
 
-    /** @brief Namespace-specific type aliases for stacked_rgraph.
-     *  The dynamic r-net index takes all its configuration as runtime
-     *  constructor parameters, so this nested struct is an empty
-     *  placeholder — IndexTraits::stacked_rgraph inherits from it and
-     *  adds index_t / factory_t. */
+    /** @brief Namespace-specific type aliases for stacked_rgraph. */
     struct stacked_rgraph {
         stacked_rgraph() = delete;
+        using rgraph_config_t = cpu::stacked_rgraph::RGraphConfig<base_traits_t>;
     };
 
     #ifdef ARTEA_PROFILING
