@@ -31,12 +31,18 @@
 #include <artea/cpu/containers/version_tag_table.hpp>
 #include <artea/cpu/containers/word_aligned_bitmap.hpp>
 #include <artea/cpu/index/internal_nbr.hpp>
+#include <artea/cpu/index/neighbor.hpp>
 
 namespace artea {
 namespace cpu {
 
 /* ------ Forward Declarations ------ */
 template <typename BaseTraitsT> struct BottomNeighbor;
+template <typename BaseTraitsT> struct Neighbor;
+template <typename BaseTraitsT> struct NbrComparator;
+template <typename BaseTraitsT> struct StrictNbrComparator;
+template <typename BaseTraitsT> struct NbrIdComparator;
+template <typename BaseTraitsT> struct NbrDistanceComparator;
 template <typename BaseTraitsT> class NbrLogTable;
 template <typename BaseTraitsT> class VectorDataset;
 template <typename BaseTraitsT> class VectorSampler;
@@ -145,6 +151,16 @@ public:
 
     /** @brief layer neighbor entries. */
     using inbr_t = InternalNeighbor<base_traits_t>;
+
+    /** @brief Unified neighbor entries used by the new hierarchical-graph
+     *         storage (vid + distance + new/old flag, 8 bytes). */
+    using nbr_t = Neighbor<base_traits_t>;
+
+    /** @brief neighbor comparators for @c nbr_t. */
+    using nbr_comp_t        = NbrComparator<base_traits_t>;
+    using strict_nbr_comp_t = StrictNbrComparator<base_traits_t>;
+    using nbr_id_comp_t     = NbrIdComparator<base_traits_t>;
+    using nbr_dist_comp_t   = NbrDistanceComparator<base_traits_t>;
 
     /** @brief neighbor entries. */
     using bnbr_t = BottomNeighbor<base_traits_t>;

@@ -16,21 +16,20 @@
  * @FilePath: /Artea/include/artea/cpu/index/internal_nbr.hpp
  * @Author: Chandler (Weitang Ye) <weitang.ye@ntu.edu.sg>
  * @Description: Internal (multi-layer) neighbor structure with dual
- *               identifiers, distance, and new/old status.
+ *               identifiers and new/old status.
  */
 
 #pragma once
 
 #include <cstdint>
 #include <type_traits>
-#include <limits>
 
 namespace artea {
 namespace cpu {
 
 /**
- * @brief Internal neighbor structure storing dual vertex identifiers,
- *        distance, and new/old status (12 bytes useful, 16 aligned).
+ * @brief Internal neighbor structure storing dual vertex identifiers and
+ *        new/old status (8 bytes, 8-byte aligned).
  *
  * Each InternalNeighbor records:
  *   - @c level_vid : the neighbor's position in the layer-local CSR storage
@@ -38,23 +37,19 @@ namespace cpu {
  *                    The high bit (31) carries the "new/old" status flag.
  *   - @c base_vid  : the neighbor's position in the global vector table
  *                    (used for coordinate lookup and inter-layer descent).
- *   - @c distance  : distance to the source vertex of the containing
- *                    neighbor list.
  *
  * Bit Layout of @c level_vid_and_status:
  * - Bit 31: New/Old status (1 = new, 0 = old)
  * - Bits 0-30: level_vid (supports up to 2^31 - 1 vertices per layer)
  */
 template <typename BaseTraitsT>
-struct alignas(8) InternalNeighbor {   // 12 bytes useful, 16 aligned
+struct alignas(8) InternalNeighbor {   // 8 bytes, 8-byte aligned
 
     using vertex_num_t = typename BaseTraitsT::vertex_num_t;
     using vertex_id_t  = typename BaseTraitsT::vertex_id_t;
     using vec_ele_t    = typename BaseTraitsT::vec_ele_t;
-    using distance_t   = typename BaseTraitsT::distance_t;
 
     static constexpr vertex_id_t invalid_vertex_id = BaseTraitsT::invalid_vertex_id;
-    static constexpr distance_t  max_distance      = BaseTraitsT::max_distance;
 
     static_assert(sizeof(vertex_num_t) == 4, "vertex_num_t must be 4 bytes.");
     static_assert(std::is_unsigned<vertex_num_t>::value, "vertex_num_t must be unsigned.");
@@ -70,9 +65,6 @@ struct alignas(8) InternalNeighbor {   // 12 bytes useful, 16 aligned
     /** @brief base dataset id for coordinate lookup. */
     vertex_id_t base_vid;               // 4 bytes
 
-    /** @brief Distance to the source vertex of the containing list. */
-    distance_t  distance;               // 4 bytes
-
 private:
     static constexpr auto _compute_lv_and_status(vertex_id_t level_vid, bool is_new) -> vertex_id_t {
         return is_new ? ((level_vid & MASK_ID) | MASK_STATUS_NEW) : (level_vid & MASK_ID);
@@ -81,35 +73,22 @@ private:
 public:
     constexpr InternalNeighbor()
         : level_vid_and_status(invalid_vertex_id),
-          base_vid(invalid_vertex_id),
-          distance(0.0) {}
+          base_vid(invalid_vertex_id) {}
 
-    /** @brief Create an InternalNeighbor with given ids (distance = 0, old). */
+    /** @brief Create an InternalNeighbor with given ids (old by default). */
     constexpr InternalNeighbor(
         const vertex_id_t base_vid_,
         const vertex_id_t level_vid_
     ) : level_vid_and_status(level_vid_ & MASK_ID),
-        base_vid(base_vid_),
-        distance(0.0) {}
+        base_vid(base_vid_) {}
 
-    /** @brief Create an InternalNeighbor with ids and distance (old by default). */
+    /** @brief Create an InternalNeighbor with ids and new/old status. */
     constexpr InternalNeighbor(
         const vertex_id_t base_vid_,
         const vertex_id_t level_vid_,
-        const distance_t  distance_
-    ) : level_vid_and_status(level_vid_ & MASK_ID),
-        base_vid(base_vid_),
-        distance(distance_) {}
-
-    /** @brief Create an InternalNeighbor with ids, distance, and status. */
-    constexpr InternalNeighbor(
-        const vertex_id_t base_vid_,
-        const vertex_id_t level_vid_,
-        const distance_t  distance_,
         const bool is_new
     ) : level_vid_and_status(_compute_lv_and_status(level_vid_, is_new)),
-        base_vid(base_vid_),
-        distance(distance_) {}
+        base_vid(base_vid_) {}
 
     InternalNeighbor(const InternalNeighbor&) = default;
     InternalNeighbor& operator=(const InternalNeighbor&) = default;
@@ -120,25 +99,23 @@ public:
     // ---- Factories ----
 
     static constexpr auto make_invalid_nbr() -> InternalNeighbor {
-        return InternalNeighbor(invalid_vertex_id, invalid_vertex_id, max_distance);
+        return InternalNeighbor(invalid_vertex_id, invalid_vertex_id);
     }
 
     __attribute__((always_inline))
     static auto make_new_nbr(
         const vertex_id_t base_vid_,
-        const vertex_id_t level_vid_,
-        const distance_t  distance_
+        const vertex_id_t level_vid_
     ) -> InternalNeighbor {
-        return InternalNeighbor{base_vid_, level_vid_, distance_, /*is_new=*/true};
+        return InternalNeighbor{base_vid_, level_vid_, /*is_new=*/true};
     }
 
     __attribute__((always_inline))
     static auto make_old_nbr(
         const vertex_id_t base_vid_,
-        const vertex_id_t level_vid_,
-        const distance_t  distance_
+        const vertex_id_t level_vid_
     ) -> InternalNeighbor {
-        return InternalNeighbor{base_vid_, level_vid_, distance_, /*is_new=*/false};
+        return InternalNeighbor{base_vid_, level_vid_, /*is_new=*/false};
     }
 
     // ---- Identity accessors ----
@@ -200,19 +177,7 @@ public:
         return (level_vid_and_status & MASK_ID) == MASK_ID;
     }
 
-    // ---- Distance accessors ----
-
-    __attribute__((always_inline))
-    auto get_distance() const -> distance_t {
-        return distance;
-    }
-
-    __attribute__((always_inline))
-    auto set_distance(const distance_t dist) -> void {
-        distance = dist;
-    }
-
-    // ---- Equality (ignores distance and status — identity-only) ----
+    // ---- Equality (ignores status — identity-only) ----
 
     __attribute__((always_inline))
     constexpr bool operator==(const InternalNeighbor& other) const noexcept {

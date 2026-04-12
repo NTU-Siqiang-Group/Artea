@@ -45,11 +45,13 @@
 
 #include <artea/cpu/index/layer_config.hpp>
 #include <artea/cpu/index/internal_nbr.hpp>
+#include <artea/cpu/index/neighbor.hpp>
 #include <artea/cpu/index/bottom_nbr.hpp>
 #include <artea/cpu/index/compact_structure/internal_graph.hpp>
 #include <artea/cpu/index/dynamic_structure/internal_graph.hpp>
 #include <artea/cpu/index/dynamic_structure/bottom_graph.hpp>
 #include <artea/cpu/index/compact_structure/bottom_graph.hpp>
+#include <artea/cpu/index/dynamic_structure/level_group_arena.hpp>
 #include <artea/cpu/index/dynamic_structure/hierarchical_graph.hpp>
 #include <artea/cpu/index/compact_structure/hierarchical_graph.hpp>
 #include <artea/cpu/index/compactor/bottom_graph_compactor.hpp>

@@ -96,9 +96,8 @@ class InternalGraph {
 
     // The first CSR slot of each vertex is reinterpreted as an atomic
     // header. Requires the slot to be at least as large and as aligned as
-    // @c std::atomic<uint64_t>. inbr_t is 16 bytes / 8-byte aligned, so
-    // the atomic sits in the first 8 bytes of the slot; the remaining
-    // 8 bytes of the header slot are unused padding.
+    // @c std::atomic<uint64_t>. inbr_t is 8 bytes / 8-byte aligned, so
+    // the atomic exactly overlaps the header slot.
     static_assert(sizeof(inbr_t) >= sizeof(std::atomic<uint64_t>),
         "inbr_t must be large enough to alias with atomic<uint64_t> header.");
     static_assert(alignof(inbr_t) >= alignof(std::atomic<uint64_t>),
