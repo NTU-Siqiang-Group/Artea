@@ -1,5 +1,5 @@
 /*
- * @FilePath: /Artea/include/artea/cpu/index/compact_descent_graph.hpp
+ * @FilePath: /Artea/include/artea/cpu/index/compact_bottom_graph.hpp
  * @Author: Chandler (Weitang Ye) <weitang.ye@ntu.edu.sg>
  * @Date: 2026-02-05
  * @Description: Compact descent graph with CSR format for efficient neighbor access.
@@ -20,7 +20,7 @@ namespace compact {
  * @tparam IndexTraitsT The index traits type.
  */
 template <typename IndexTraitsT>
-class DescentGraph {
+class BottomGraph {
 
     using vertex_num_t = typename IndexTraitsT::vertex_num_t;
     using vertex_id_t = typename IndexTraitsT::vertex_id_t;
@@ -34,7 +34,7 @@ public:
      * @param vecs_data Reference to the vector data for this graph.
      * @param extracted_nbr_size Fixed number of neighbors per vertex.
      */
-    DescentGraph(
+    BottomGraph(
         const vector_array_t& vecs_data,
         const vertex_num_t extracted_nbr_size
     ) :
@@ -49,12 +49,12 @@ public:
     }
 
     // Copying is deleted
-    DescentGraph(const DescentGraph&) = delete;
-    DescentGraph& operator=(const DescentGraph&) = delete;
+    BottomGraph(const BottomGraph&) = delete;
+    BottomGraph& operator=(const BottomGraph&) = delete;
 
     // default move constructor and assignment
-    DescentGraph(DescentGraph&&) noexcept = default;
-    DescentGraph& operator=(DescentGraph&&) noexcept = default;
+    BottomGraph(BottomGraph&&) noexcept = default;
+    BottomGraph& operator=(BottomGraph&&) noexcept = default;
 
     // --- Public Interface ---
 
@@ -142,7 +142,7 @@ private:
     /** @brief Const reference to vector data for this graph. */
     const vector_array_t& _vecs_data;
 
-};  // class DescentGraph
+};  // class BottomGraph
 
 }   // namespace compact
 }   // namespace cpu

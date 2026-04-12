@@ -44,15 +44,15 @@
 #include <artea/cpu/containers/four_ary_heap.hpp>
 
 #include <artea/cpu/index/layer_config.hpp>
-#include <artea/cpu/index/layer_nbr.hpp>
-#include <artea/cpu/index/descent_nbr.hpp>
+#include <artea/cpu/index/internal_nbr.hpp>
+#include <artea/cpu/index/bottom_nbr.hpp>
 #include <artea/cpu/index/compact_structure/internal_graph.hpp>
 #include <artea/cpu/index/dynamic_structure/internal_graph.hpp>
-#include <artea/cpu/index/dynamic_structure/descent_graph.hpp>
-#include <artea/cpu/index/compact_structure/descent_graph.hpp>
+#include <artea/cpu/index/dynamic_structure/bottom_graph.hpp>
+#include <artea/cpu/index/compact_structure/bottom_graph.hpp>
 #include <artea/cpu/index/dynamic_structure/hierarchical_graph.hpp>
 #include <artea/cpu/index/compact_structure/hierarchical_graph.hpp>
-#include <artea/cpu/index/compactor/descent_graph_compactor.hpp>
+#include <artea/cpu/index/compactor/bottom_graph_compactor.hpp>
 #include <artea/cpu/index/compactor/internal_graph_compactor.hpp>
 #include <artea/cpu/index/compactor/hierarchical_graph_compactor.hpp>
 #include <artea/cpu/index/index_size_calculator.hpp>
@@ -75,13 +75,11 @@
 
 #include <artea/cpu/router/vector_router.hpp>
 #include <artea/cpu/router/bruteforce_router.hpp>
-#include <artea/cpu/router/compact/descent_graph_router.hpp>
-#include <artea/cpu/router/dynamic/descent_graph_router.hpp>
+#include <artea/cpu/router/compact/bottom_graph_router.hpp>
+#include <artea/cpu/router/dynamic/bottom_graph_router.hpp>
 #include <artea/cpu/router/dynamic/internal_graph_router.hpp>
 #include <artea/cpu/router/dynamic/hierarchical_graph_router.hpp>
-#include <artea/cpu/router/data_structures/candidate_entry_concept.hpp>
-#include <artea/cpu/router/data_structures/dnbr_candidate_entry.hpp>
-#include <artea/cpu/router/data_structures/lnbr_candidate_entry.hpp>
+#include <artea/cpu/router/data_structures/candidate_entry.hpp>
 #include <artea/cpu/router/data_structures/candidate_queue_concept.hpp>
 #include <artea/cpu/router/visited_table_concept.hpp>
 #include <artea/cpu/router/data_structures/visited_table_pool.hpp>

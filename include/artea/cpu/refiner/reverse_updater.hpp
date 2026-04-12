@@ -26,9 +26,9 @@
 namespace artea {
 namespace cpu {
 
-template <typename RefinerTraitsT, typename DescentGraphT>
+template <typename RefinerTraitsT, typename BottomGraphT>
 class ReverseUpdater :
-    public RefinerTraitsT::template neighbor_updater_t<DescentGraphT, ReverseUpdater<RefinerTraitsT, DescentGraphT>> {
+    public RefinerTraitsT::template neighbor_updater_t<BottomGraphT, ReverseUpdater<RefinerTraitsT, BottomGraphT>> {
 
     using vertex_id_t = typename RefinerTraitsT::vertex_id_t;
     using vertex_num_t = typename RefinerTraitsT::vertex_num_t;
@@ -36,11 +36,11 @@ class ReverseUpdater :
     using distance_t = typename RefinerTraitsT::distance_t;
     using ratio_t = typename RefinerTraitsT::ratio_t;
     using vector_array_t = typename RefinerTraitsT::vector_array_t;
-    using dnbr_t = typename RefinerTraitsT::dnbr_t;
-    using dnbr_arr_t = typename RefinerTraitsT::dnbr_arr_t;
+    using bnbr_t = typename RefinerTraitsT::bnbr_t;
+    using bnbr_arr_t = typename RefinerTraitsT::bnbr_arr_t;
     using log_table_t = typename RefinerTraitsT::log_table_t;
     using dist_func_t = typename RefinerTraitsT::dist_func_t;
-    using base_class_t = typename RefinerTraitsT::template neighbor_updater_t<DescentGraphT, ReverseUpdater<RefinerTraitsT, DescentGraphT>>;
+    using base_class_t = typename RefinerTraitsT::template neighbor_updater_t<BottomGraphT, ReverseUpdater<RefinerTraitsT, BottomGraphT>>;
 
 public:
     static constexpr const char* updater_name = "reverse_updater";
@@ -55,8 +55,8 @@ public:
         const dist_func_t& dist_func,
         const vector_array_t& vecs_data,
         log_table_t& log_table,
-        const DescentGraphT& descent_graph
-    ) : base_class_t(dist_func, vecs_data, log_table, descent_graph) {}
+        const BottomGraphT& bottom_graph
+    ) : base_class_t(dist_func, vecs_data, log_table, bottom_graph) {}
 
     /**
      * @brief Add reverse edges for all neighbors in origin_nbrs.
@@ -70,17 +70,17 @@ public:
      */
     auto update_impl(
         const vertex_id_t pivot_vid,
-        dnbr_arr_t& origin_nbrs
+        bnbr_arr_t& origin_nbrs
     ) -> void {
         // For each neighbor in origin_nbrs, add a reverse edge from that neighbor to pivot_vid
-        const vertex_num_t max_sz = this->_descent_graph.layer_config().max_nbr_size();
+        const vertex_num_t max_sz = this->_bottom_graph.layer_config().max_nbr_size();
         for (vertex_num_t i = 0; i < origin_nbrs.size(); ++i) {
-            const dnbr_t& nbr = origin_nbrs[i];
-            vertex_id_t nbr_id = nbr.get_id();
+            const bnbr_t& nbr = origin_nbrs[i];
+            vertex_id_t nbr_id = nbr.get_level_vid();
             distance_t dist = nbr.get_distance();
 
             // Check if nbr_id's neighbor array is already full with closer neighbors
-            const dnbr_arr_t& nbr_vertex_nbrs = this->_descent_graph.fetch_nbrs(nbr_id);
+            const bnbr_arr_t& nbr_vertex_nbrs = this->_bottom_graph.fetch_nbrs(nbr_id);
             // if (nbr_vertex_nbrs.size() >= max_sz &&
             //     nbr_vertex_nbrs[max_sz - 1].get_distance() <= dist) {
             //     continue;

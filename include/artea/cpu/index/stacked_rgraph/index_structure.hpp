@@ -54,7 +54,7 @@ namespace stacked_rgraph {
  * also forwarded below so direct call sites like
  * @c index.get_num_layers() keep compiling unchanged.
  *
- * Each upper-layer vertex stores its dual identity via @c lnbr_t
+ * Each upper-layer vertex stores its dual identity via @c inbr_t
  * (@c base_vid is the position in the owned @c _vecs_storage; @c layer_vid
  * is the position in the layer's @c InternalGraph).
  *

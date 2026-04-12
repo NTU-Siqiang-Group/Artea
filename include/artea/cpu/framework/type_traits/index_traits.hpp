@@ -24,7 +24,7 @@ namespace artea {
 namespace cpu {
 
 /** ------ Forward Declaration  ------ **/
-template <typename IndexTraitsT, typename DerivedClassT> class DescentGraph;
+template <typename IndexTraitsT, typename DerivedClassT> class BottomGraph;
 namespace conv_graph {
     template <typename IndexTraitsT> class IndexStructure;
 }
@@ -36,16 +36,16 @@ namespace symmetric_knn_graph {
     using IndexStructure = knn_graph::IndexStructure<IndexTraitsT>;
 }
 namespace compact {
-    template <typename IndexTraitsT> class DescentGraph;
+    template <typename IndexTraitsT> class BottomGraph;
     template <typename IndexTraitsT> class InternalGraph;
     template <typename IndexTraitsT> class HierarchicalGraph;
 }
 namespace dynamic {
-    template <typename IndexTraitsT, typename DerivedClassT> class DescentGraph;
+    template <typename IndexTraitsT, typename DerivedClassT> class BottomGraph;
     template <typename IndexTraitsT> class InternalGraph;
     template <typename IndexTraitsT> class HierarchicalGraph;
 }
-template <typename IndexTraitsT> class DescentGraphCompactor;
+template <typename IndexTraitsT> class BottomGraphCompactor;
 template <typename IndexTraitsT> class FlatGraphFileManager;
 template <typename IndexTraitsT> class IndexSizeCalculator;
 template <typename IndexTraitsT> class RadiusProber;
@@ -66,12 +66,12 @@ struct IndexTraits : virtual public BaseTraitsT {
 
     /** @brief CRTP base descent graph type (template on DerivedClassT). */
     template <typename DerivedClassT>
-    using descent_graph_t = dynamic::DescentGraph<index_traits_t, DerivedClassT>;
+    using bottom_graph_t = dynamic::BottomGraph<index_traits_t, DerivedClassT>;
 
     /** @brief Graph structures grouped by mode. */
     struct compact {
         compact() = delete;
-        using descent_graph_t      = cpu::compact::DescentGraph<index_traits_t>;
+        using bottom_graph_t      = cpu::compact::BottomGraph<index_traits_t>;
         using internal_graph_t     = cpu::compact::InternalGraph<index_traits_t>;
         using hierarchical_graph_t = cpu::compact::HierarchicalGraph<index_traits_t>;
     };
@@ -100,7 +100,7 @@ struct IndexTraits : virtual public BaseTraitsT {
     };
 
     /** @brief Descent graph compactor type. */
-    using descent_graph_compactor_t = DescentGraphCompactor<index_traits_t>;
+    using bottom_graph_compactor_t = BottomGraphCompactor<index_traits_t>;
 
     /** @brief Flat graph file manager type. */
     using flat_graph_file_manager_t = FlatGraphFileManager<index_traits_t>;

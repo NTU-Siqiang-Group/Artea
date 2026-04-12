@@ -13,7 +13,7 @@
 // limitations under the License.
 
 /*
- * @FilePath: /Artea/include/artea/cpu/index/descent_nbr.hpp
+ * @FilePath: /Artea/include/artea/cpu/index/bottom_nbr.hpp
  * @Author: Chandler (Weitang Ye) <weitang.ye@ntu.edu.sg>
  * @Description: Descent Graph Neighbor structure definition.
  */
@@ -29,7 +29,7 @@ namespace cpu {
 
 /** @brief Descent Graph Neighbor structure for storing vertex ID and distance. */
 template <typename BaseTraitsT>
-struct alignas(8) DescentNeighbor {   // 8 bytes
+struct alignas(8) Neighbor {   // 8 bytes
 
     using vertex_num_t = typename BaseTraitsT::vertex_num_t;
     using vertex_id_t = typename BaseTraitsT::vertex_id_t;
@@ -66,26 +66,26 @@ private:
     }
 
 public:
-    constexpr DescentNeighbor() : nbr_id_and_status(invalid_vertex_id), distance(0.0) {}
+    constexpr Neighbor() : nbr_id_and_status(invalid_vertex_id), distance(0.0) {}
 
-    static constexpr auto make_invalid_nbr() -> DescentNeighbor {
-        return DescentNeighbor{ invalid_vertex_id, max_distance };
+    static constexpr auto make_invalid_nbr() -> Neighbor {
+        return Neighbor{ invalid_vertex_id, max_distance };
     }
 
-    DescentNeighbor(const DescentNeighbor&) = default;
-    DescentNeighbor& operator=(const DescentNeighbor&) = default;
-    DescentNeighbor(DescentNeighbor&&) = default;
-    DescentNeighbor& operator=(DescentNeighbor&&) = default;
-    ~DescentNeighbor() = default;
+    Neighbor(const Neighbor&) = default;
+    Neighbor& operator=(const Neighbor&) = default;
+    Neighbor(Neighbor&&) = default;
+    Neighbor& operator=(Neighbor&&) = default;
+    ~Neighbor() = default;
 
     /** @brief Create a Neighbor with given ID and distance (2-parameter constructor for constexpr). */
-    constexpr DescentNeighbor(
+    constexpr Neighbor(
         const vertex_id_t nbr_id,
         const distance_t distance
     ) : nbr_id_and_status(nbr_id & MASK_ID), distance(distance) {}
 
     /** @brief Create a Neighbor with given ID, distance, and flags. */
-    constexpr DescentNeighbor(
+    constexpr Neighbor(
         const vertex_id_t nbr_id,
         const distance_t distance,
         const bool is_new
@@ -98,8 +98,8 @@ public:
     static auto make_new_nbr(
         const vertex_id_t nbr_id,
         const distance_t distance
-    ) -> DescentNeighbor {
-        return DescentNeighbor{
+    ) -> Neighbor {
+        return Neighbor{
             nbr_id,
             distance,
             true  // is_new
@@ -111,17 +111,17 @@ public:
     static auto make_old_nbr(
         const vertex_id_t nbr_id,
         const distance_t distance
-    ) -> DescentNeighbor {
-        return DescentNeighbor{
+    ) -> Neighbor {
+        return Neighbor{
             nbr_id,
             distance,
             false // is_new
         };
     }
 
-    /** @brief Get the neighbor ID masking out status bit (Bit 31). */
+    /** @brief Get the level-local vertex ID (masking out status bit). */
     __attribute__((always_inline))
-    auto get_id() const -> vertex_id_t {
+    auto get_vid() const -> vertex_id_t {
         return static_cast<vertex_id_t>(nbr_id_and_status & MASK_ID);
     }
 
@@ -170,79 +170,79 @@ public:
 
     /** @brief Equality operator for testing. */
     __attribute__((always_inline))
-    constexpr bool operator==(const DescentNeighbor& other) const noexcept {
-        return get_id() == other.get_id() && distance == other.distance;
+    constexpr bool operator==(const Neighbor& other) const noexcept {
+        return get_level_vid() == other.get_level_vid() && distance == other.distance;
     }
 
     /** @brief Inequality operator for testing. */
     __attribute__((always_inline))
-    constexpr bool operator!=(const DescentNeighbor& other) const noexcept {
+    constexpr bool operator!=(const Neighbor& other) const noexcept {
         return !(*this == other);
     }
 
-};  // struct DescentNeighbor
+};  // struct Neighbor
 
 // TO enable optimizations for POD types
 template <typename BaseTraitsT>
 inline constexpr bool __descent_neighbor_is_trivially_copyable =
-    std::is_trivially_copyable<DescentNeighbor<BaseTraitsT>>::value;
+    std::is_trivially_copyable<Neighbor<BaseTraitsT>>::value;
 
 template <typename BaseTraitsT>
 inline constexpr bool __descent_neighbor_is_trivially_destructible =
-    std::is_trivially_destructible<DescentNeighbor<BaseTraitsT>>::value;
+    std::is_trivially_destructible<Neighbor<BaseTraitsT>>::value;
 
-static_assert(std::is_trivially_copyable<DescentNeighbor<BaseTraits<uint32_t, float>>>::value,
+static_assert(std::is_trivially_copyable<Neighbor<BaseTraits<uint32_t, float>>>::value,
             "Neighbor must be trivially copyable to enable vector memcpy optimizations!");
-static_assert(std::is_trivially_destructible<DescentNeighbor<BaseTraits<uint32_t, float>>>::value,
+static_assert(std::is_trivially_destructible<Neighbor<BaseTraits<uint32_t, float>>>::value,
             "Neighbor must be trivially destructible!");
 
 /** @brief Comparator for Neighbor (Distance primary, ID secondary). */
 template <typename BaseTraitsT>
-struct DNbrComparator {
-    using dnbr_t = DescentNeighbor<BaseTraitsT>;
+struct NbrComparator {
+    using nbr_t = Neighbor<BaseTraitsT>;
 
     __attribute__((always_inline))
-    constexpr bool operator()(const dnbr_t& a, const dnbr_t& b) const noexcept {
+    constexpr bool operator()(const nbr_t& a, const nbr_t& b) const noexcept {
         return (a.get_distance() < b.get_distance()) ||
-               (a.get_distance() == b.get_distance() && a.get_id() < b.get_id());
+               (a.get_distance() == b.get_distance() && a.get_level_vid() < b.get_level_vid());
     }
-};  // struct DNbrComparator
+};  // struct NbrComparator
 
 /** @brief Strict Comparator for Neighbor. */
 template <typename BaseTraitsT>
-struct StrictDNbrComparator {
-    using dnbr_t = DescentNeighbor<BaseTraitsT>;
+struct StrictNbrComparator {
+    using nbr_t = Neighbor<BaseTraitsT>;
 
     __attribute__((always_inline))
-    constexpr bool operator()(const dnbr_t& a, const dnbr_t& b) const noexcept {
+    constexpr bool operator()(const nbr_t& a, const nbr_t& b) const noexcept {
         if (a.get_distance() != b.get_distance()) {
             return a.get_distance() < b.get_distance();
         }
-        return a.get_id() < b.get_id();
+        return a.get_level_vid() < b.get_level_vid();
     }
-};  // struct StrictDNbrComparator
+};  // struct StrictNbrComparator
 
 /** @brief Comparator for Neighbor by ID only. */
 template <typename BaseTraitsT>
-struct DNbrIdComparator {
-    using dnbr_t = DescentNeighbor<BaseTraitsT>;
+struct NbrIdComparator {
+    using nbr_t = Neighbor<BaseTraitsT>;
 
     __attribute__((always_inline))
-    constexpr bool operator()(const dnbr_t& a, const dnbr_t& b) const noexcept {
-        return a.get_id() < b.get_id();
+    constexpr bool operator()(const nbr_t& a, const nbr_t& b) const noexcept {
+        return a.get_level_vid() < b.get_level_vid();
     }
-};  // struct DNbrIdComparator
+};  // struct NbrIdComparator
 
 /** @brief Comparator for Neighbor by Distance only. */
 template <typename BaseTraitsT>
-struct DNbrDistanceComparator {
-    using dnbr_t = DescentNeighbor<BaseTraitsT>;
+struct NbrDistanceComparator {
+    using nbr_t = Neighbor<BaseTraitsT>;
 
     __attribute__((always_inline))
-    constexpr bool operator()(const dnbr_t& a, const dnbr_t& b) const noexcept {
+    constexpr bool operator()(const nbr_t& a, const nbr_t& b) const noexcept {
         return a.get_distance() < b.get_distance();
     }
-};  // struct DNbrDistanceComparator
+};  // struct NbrDistanceComparator
 
 }   // namespace cpu
 }   // namespace artea

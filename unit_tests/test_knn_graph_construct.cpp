@@ -92,7 +92,7 @@ public:
         ARTEA_INFO("Building KNN graph...");
         auto start_time = std::chrono::high_resolution_clock::now();
 
-        descent_graph_ = std::make_unique<knn_graph::index_t>(knn_graph::factory_t::construct_graph(
+        bottom_graph_ = std::make_unique<knn_graph::index_t>(knn_graph::factory_t::construct_graph(
             base_vecs,
             g_config.layer_config,
             g_config.propagate_config
@@ -101,7 +101,7 @@ public:
         auto end_time = std::chrono::high_resolution_clock::now();
         auto duration = std::chrono::duration_cast<std::chrono::microseconds>(end_time - start_time);
         g_test_results.build_time_s = duration.count() / 1000000.0;
-        g_test_results.num_vertices = descent_graph_->get_num_vertices();
+        g_test_results.num_vertices = bottom_graph_->get_num_vertices();
 
         ARTEA_INFO(fmt::format("Graph built with {} vertices", g_test_results.num_vertices));
         ARTEA_INFO(fmt::format("Build time: {:.2f} s", g_test_results.build_time_s));
@@ -113,7 +113,7 @@ public:
             std::cout << "\n--- Sample Neighbor Counts (20 random vertices) ---" << std::endl;
             for (int i = 0; i < 20; ++i) {
                 uint32_t vid = dist(rng);
-                const auto& nbrs = descent_graph_->fetch_nbrs(vid);
+                const auto& nbrs = bottom_graph_->fetch_nbrs(vid);
                 std::cout << fmt::format("  vertex {:>8}: {} neighbors", vid, nbrs.size()) << std::endl;
             }
             std::cout << std::endl;
@@ -123,8 +123,8 @@ public:
         ARTEA_INFO("Converting to flat search graph...");
         start_time = std::chrono::high_resolution_clock::now();
 
-        compact_descent_graph_ = std::make_unique<compact::descent_graph_t>(
-            descent_graph_compactor_t::compact_graph(*descent_graph_, g_config.extracted_nbr_size)
+        compact_bottom_graph_ = std::make_unique<compact::bottom_graph_t>(
+            bottom_graph_compactor_t::compact_graph(*bottom_graph_, g_config.extracted_nbr_size)
         );
 
         end_time = std::chrono::high_resolution_clock::now();
@@ -142,15 +142,15 @@ public:
 
     vector_dataset_t& get_dataset() { return *dataset_; }
     dist_func_t& get_dist_func() { return *dist_func_; }
-    compact::descent_graph_t& get_compact_descent_graph() { return *compact_descent_graph_; }
+    compact::bottom_graph_t& get_compact_bottom_graph() { return *compact_bottom_graph_; }
     const idlist_array_t& get_groundtruth() { return dataset_->get_gt_vecs(); }
 
 private:
     DataProvider() = default;
     std::unique_ptr<vector_dataset_t> dataset_;
     std::unique_ptr<dist_func_t> dist_func_;
-    std::unique_ptr<knn_graph::index_t> descent_graph_;
-    std::unique_ptr<compact::descent_graph_t> compact_descent_graph_;
+    std::unique_ptr<knn_graph::index_t> bottom_graph_;
+    std::unique_ptr<compact::bottom_graph_t> compact_bottom_graph_;
 };
 
 class KnnGraphTest : public ::testing::Test {};
@@ -159,7 +159,7 @@ TEST_F(KnnGraphTest, QueryRecall) {
     auto& provider = DataProvider::instance();
     auto& dataset = provider.get_dataset();
     auto& dist_func = provider.get_dist_func();
-    auto& compact_descent_graph = provider.get_compact_descent_graph();
+    auto& compact_bottom_graph = provider.get_compact_bottom_graph();
     const auto& groundtruth = provider.get_groundtruth();
 
     const auto& base_vecs = dataset.get_base_vecs();
@@ -176,10 +176,10 @@ TEST_F(KnnGraphTest, QueryRecall) {
 
     for (uint32_t queue_size = g_config.queue_start; queue_size <= g_config.queue_end; queue_size += g_config.queue_step) {
         // Create descent graph router with current queue size
-        compact::descent_graph_router_t router(
+        compact::bottom_graph_router_t router(
             base_vecs,
             dist_func,
-            compact_descent_graph,
+            compact_bottom_graph,
             g_config.topk,
             queue_size
         );

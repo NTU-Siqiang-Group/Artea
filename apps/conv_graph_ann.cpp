@@ -66,7 +66,7 @@ auto find_latest_index(const std::string& base_dir, const std::string& dataset_n
 }
 
 auto run_benchmark(
-    compact::descent_graph_router_t& router,
+    compact::bottom_graph_router_t& router,
     const vector_array_t& query_vecs,
     const idlist_array_t& groundtruth,
     const vector_array_t& base_vecs,
@@ -166,16 +166,16 @@ int main(int argc, char** argv) {
 
     // Load flat graph
     ARTEA_INFO(fmt::format("Loading descent graph from {}...", index_path));
-    conv_graph::index_t descent_graph = flat_graph_file_manager_t::restore<conv_graph::index_t>(index_path, base_vecs);
+    conv_graph::index_t bottom_graph = flat_graph_file_manager_t::restore<conv_graph::index_t>(index_path, base_vecs);
 
     // Calculate and output index size
     index_size_calculator_t index_size_calc;
-    auto index_size_info = index_size_calc.calculate_descent_graph_size(descent_graph);
+    auto index_size_info = index_size_calc.calculate_bottom_graph_size(bottom_graph);
 
     // Determine extracted neighbor size
     vertex_num_t extracted_nbr_size = program.is_used("--extracted-nbr-size")
         ? program.get<uint32_t>("--extracted-nbr-size")
-        : descent_graph.layer_config().max_nbr_size();
+        : bottom_graph.layer_config().max_nbr_size();
 
     // Print graph construction configuration
     std::cout << "\n" << std::string(80, '=') << std::endl;
@@ -188,12 +188,12 @@ int main(int argc, char** argv) {
     std::cout << fmt::format("  Vector dimension:       {}", base_vecs.get_vec_dim()) << std::endl;
     std::cout << "\n--- Graph Construction Config ---" << std::endl;
     std::cout << fmt::format("  Index size:             {:.2f} MB ({} bytes)", index_size_info.total_mb, index_size_info.total_bytes) << std::endl;
-    std::cout << fmt::format("  Max nbr size:           {}", descent_graph.layer_config().max_nbr_size()) << std::endl;
-    std::cout << fmt::format("  Reserved nbr size:      {}", descent_graph.layer_config().reserved_nbr_size()) << std::endl;
-    std::cout << fmt::format("  Scale coeffs:           {}", descent_graph.pruning_config().scale_coeffs()) << std::endl;
-    std::cout << fmt::format("  Shifted coeffs:         {}", descent_graph.pruning_config().shifted_coeffs()) << std::endl;
-    std::cout << fmt::format("  Build loops:            {}", descent_graph.propagate_config().num_build_loops()) << std::endl;
-    std::cout << fmt::format("  Triangle updater iters: {}", descent_graph.propagate_config().num_triu_iters()) << std::endl;
+    std::cout << fmt::format("  Max nbr size:           {}", bottom_graph.layer_config().max_nbr_size()) << std::endl;
+    std::cout << fmt::format("  Reserved nbr size:      {}", bottom_graph.layer_config().reserved_nbr_size()) << std::endl;
+    std::cout << fmt::format("  Scale coeffs:           {}", bottom_graph.pruning_config().scale_coeffs()) << std::endl;
+    std::cout << fmt::format("  Shifted coeffs:         {}", bottom_graph.pruning_config().shifted_coeffs()) << std::endl;
+    std::cout << fmt::format("  Build loops:            {}", bottom_graph.propagate_config().num_build_loops()) << std::endl;
+    std::cout << fmt::format("  Triangle updater iters: {}", bottom_graph.propagate_config().num_triu_iters()) << std::endl;
     std::cout << "\n--- Query Config ---" << std::endl;
     std::cout << fmt::format("  Top-k:                  {}", topk) << std::endl;
     std::cout << fmt::format("  Candidate queue size:   {}", candidate_queue_size) << std::endl;
@@ -204,16 +204,16 @@ int main(int argc, char** argv) {
 
     // Convert to flat search graph
     ARTEA_INFO("Converting to flat search graph...");
-    compact::descent_graph_t compact_descent_graph = descent_graph_compactor_t::compact_graph(
-        descent_graph,
+    compact::bottom_graph_t compact_bottom_graph = bottom_graph_compactor_t::compact_graph(
+        bottom_graph,
         extracted_nbr_size
     );
 
     // Create router
-    compact::descent_graph_router_t router(
+    compact::bottom_graph_router_t router(
         base_vecs,
         dist_func,
-        compact_descent_graph,
+        compact_bottom_graph,
         topk,
         candidate_queue_size
     );

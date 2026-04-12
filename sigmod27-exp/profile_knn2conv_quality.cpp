@@ -104,14 +104,14 @@ public:
 
         // Convert to flat search graph
         ARTEA_INFO("Converting to flat search graph...");
-        compact_descent_graph_ = std::make_unique<compact::descent_graph_t>(
-            descent_graph_compactor_t::compact_graph(*conv_graph_, g_config.extracted_nbr_size)
+        compact_bottom_graph_ = std::make_unique<compact::bottom_graph_t>(
+            bottom_graph_compactor_t::compact_graph(*conv_graph_, g_config.extracted_nbr_size)
         );
     }
 
     vector_dataset_t& get_dataset() { return *dataset_; }
     dist_func_t& get_dist_func() { return *dist_func_; }
-    compact::descent_graph_t& get_compact_descent_graph() { return *compact_descent_graph_; }
+    compact::bottom_graph_t& get_compact_bottom_graph() { return *compact_bottom_graph_; }
     const idlist_array_t& get_groundtruth() { return dataset_->get_gt_vecs(); }
 
 private:
@@ -119,7 +119,7 @@ private:
     std::unique_ptr<vector_dataset_t> dataset_;
     std::unique_ptr<dist_func_t> dist_func_;
     std::unique_ptr<conv_graph::index_t> conv_graph_;
-    std::unique_ptr<compact::descent_graph_t> compact_descent_graph_;
+    std::unique_ptr<compact::bottom_graph_t> compact_bottom_graph_;
 };
 
 class Knn2ConvQualityTest : public ::testing::Test {};
@@ -128,7 +128,7 @@ TEST_F(Knn2ConvQualityTest, QueryRecall) {
     auto& provider = DataProvider::instance();
     auto& dataset = provider.get_dataset();
     auto& dist_func = provider.get_dist_func();
-    auto& compact_descent_graph = provider.get_compact_descent_graph();
+    auto& compact_bottom_graph = provider.get_compact_bottom_graph();
     const auto& groundtruth = provider.get_groundtruth();
 
     const auto& base_vecs = dataset.get_base_vecs();
@@ -140,7 +140,7 @@ TEST_F(Knn2ConvQualityTest, QueryRecall) {
         g_config.queue_start, g_config.queue_end, g_config.queue_step));
 
     for (uint32_t queue_size = g_config.queue_start; queue_size <= g_config.queue_end; queue_size += g_config.queue_step) {
-        compact::descent_graph_router_t router(base_vecs, dist_func, compact_descent_graph, g_config.topk, queue_size);
+        compact::bottom_graph_router_t router(base_vecs, dist_func, compact_bottom_graph, g_config.topk, queue_size);
         router.initialize();
 
         // Warmup runs

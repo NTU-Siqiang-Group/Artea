@@ -16,7 +16,7 @@
  * @FilePath: /Artea/include/artea/cpu/index/hierarchical_graph.hpp
  * @Author: Chandler (Weitang Ye) <weitang.ye@ntu.edu.sg>
  * @Description: Hierarchical container of InternalGraph layers with atomic
- *               lnbr_t entry point for concurrent construction.
+ *               inbr_t entry point for concurrent construction.
  */
 
 #pragma once
@@ -34,7 +34,7 @@ namespace dynamic {
 
 /**
  * @brief Hierarchical graph that holds @c InternalGraph layers and tracks
- *        an atomic @c lnbr_t entry point.
+ *        an atomic @c inbr_t entry point.
  *
  * Each layer is stored as a @c std::unique_ptr<internal_graph_t>; this is
  * required because @c InternalGraph deletes both copy and move (its CSR
@@ -62,7 +62,7 @@ class HierarchicalGraph {
     using vertex_id_t      = typename IndexTraitsT::vertex_id_t;
     using layer_num_t      = typename IndexTraitsT::layer_num_t;
     using layer_id_t       = typename IndexTraitsT::layer_id_t;
-    using lnbr_t           = typename IndexTraitsT::lnbr_t;
+    using inbr_t           = typename IndexTraitsT::inbr_t;
     using internal_graph_t = typename IndexTraitsT::dynamic::internal_graph_t;
 
 public:

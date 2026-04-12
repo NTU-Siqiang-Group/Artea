@@ -29,9 +29,9 @@
 namespace artea {
 namespace cpu {
 
-template <typename RefinerTraitsT, typename DescentGraphT>
+template <typename RefinerTraitsT, typename BottomGraphT>
 class RandomUpdater :
-    public RefinerTraitsT::template neighbor_updater_t<DescentGraphT, RandomUpdater<RefinerTraitsT, DescentGraphT>>
+    public RefinerTraitsT::template neighbor_updater_t<BottomGraphT, RandomUpdater<RefinerTraitsT, BottomGraphT>>
 {
 
     using vertex_id_t = typename RefinerTraitsT::vertex_id_t;
@@ -40,11 +40,11 @@ class RandomUpdater :
     using distance_t = typename RefinerTraitsT::distance_t;
     using ratio_t = typename RefinerTraitsT::ratio_t;
     using vector_array_t = typename RefinerTraitsT::vector_array_t;
-    using dnbr_t = typename RefinerTraitsT::dnbr_t;
-    using dnbr_arr_t = typename RefinerTraitsT::dnbr_arr_t;
+    using bnbr_t = typename RefinerTraitsT::bnbr_t;
+    using bnbr_arr_t = typename RefinerTraitsT::bnbr_arr_t;
     using log_table_t = typename RefinerTraitsT::log_table_t;
     using dist_func_t = typename RefinerTraitsT::dist_func_t;
-    using base_class_t = typename RefinerTraitsT::template neighbor_updater_t<DescentGraphT, RandomUpdater<RefinerTraitsT, DescentGraphT>>;
+    using base_class_t = typename RefinerTraitsT::template neighbor_updater_t<BottomGraphT, RandomUpdater<RefinerTraitsT, BottomGraphT>>;
     using random_seq_t = typename RefinerTraitsT::random_seq_t;
 
 public:
@@ -62,10 +62,10 @@ public:
         const dist_func_t& dist_func,
         const vector_array_t& vecs_data,
         log_table_t& log_table,
-        const DescentGraphT& descent_graph,
+        const BottomGraphT& bottom_graph,
         const vertex_num_t num_vertices,
         const vertex_num_t rand_gen_size
-    ) : base_class_t(dist_func, vecs_data, log_table, descent_graph),
+    ) : base_class_t(dist_func, vecs_data, log_table, bottom_graph),
         _num_vertices(num_vertices),
         _rand_gen_size(rand_gen_size),
         _random_seq() {}
@@ -86,13 +86,13 @@ public:
      */
     auto update_impl(
         const vertex_id_t pivot_vid,
-        dnbr_arr_t& origin_nbrs
+        bnbr_arr_t& origin_nbrs
     ) -> void {
         std::vector<vertex_id_t> rand_ids_buffer(_rand_gen_size);
         _random_seq.generate(rand_ids_buffer, _num_vertices, _rand_gen_size);
 
         const vec_ele_t* pivot_vec = this->_vecs_data.get(pivot_vid);
-        const vertex_num_t max_sz = this->_descent_graph.layer_config().max_nbr_size();
+        const vertex_num_t max_sz = this->_bottom_graph.layer_config().max_nbr_size();
 
         std::vector<vertex_id_t> nbr_ids;
         std::vector<distance_t> nbr_dists;
@@ -104,7 +104,7 @@ public:
             if (rand_nbr_id == pivot_vid) { continue; }
             const distance_t dist = this->_dist_func(pivot_vec, this->_vecs_data.get(rand_nbr_id));
 
-            const dnbr_arr_t& pivot_nbrs = this->_descent_graph.fetch_nbrs(pivot_vid);
+            const bnbr_arr_t& pivot_nbrs = this->_bottom_graph.fetch_nbrs(pivot_vid);
             if (pivot_nbrs.size() >= max_sz &&
                 pivot_nbrs[max_sz - 1].get_distance() <= dist) {
                 continue;

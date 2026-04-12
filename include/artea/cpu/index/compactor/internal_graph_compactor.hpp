@@ -40,7 +40,7 @@ class InternalGraphCompactor {
 
     using vertex_num_t = typename IndexTraitsT::vertex_num_t;
     using vertex_id_t  = typename IndexTraitsT::vertex_id_t;
-    using lnbr_t       = typename IndexTraitsT::lnbr_t;
+    using inbr_t       = typename IndexTraitsT::inbr_t;
     using compact      = typename IndexTraitsT::compact;
     using dynamic      = typename IndexTraitsT::dynamic;
 
@@ -74,7 +74,7 @@ public:
                 for (vertex_id_t vid = r.begin(); vid != r.end(); ++vid) {
                     auto src_block = src.fetch_nbrs(vid);
                     const uint64_t valid_count = src.num_valid_nbrs(vid);
-                    const lnbr_t* src_nbrs = src_block.data() + 1;  // skip header
+                    const inbr_t* src_nbrs = src_block.data() + 1;  // skip header
 
                     auto dst_nbrs = result.fetch_nbrs(vid);
 
@@ -86,7 +86,7 @@ public:
                         dst_nbrs[i] = src_nbrs[i];
                     }
                     for (vertex_num_t i = copy_count; i < extracted_nbr_size; ++i) {
-                        dst_nbrs[i] = IndexTraitsT::invalid_lnbr;
+                        dst_nbrs[i] = IndexTraitsT::invalid_inbr;
                     }
 
                     result.set_inter_layer_link(

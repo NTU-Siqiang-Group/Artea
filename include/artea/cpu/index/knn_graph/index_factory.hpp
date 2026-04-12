@@ -63,7 +63,7 @@ class IndexFactory {
     using query_vecs_t = typename GraphFactoryTraitsT::query_vecs_t;
     using ground_truth_t = typename GraphFactoryTraitsT::ground_truth_t;
     using recall_estimator_t = typename GraphFactoryTraitsT::recall_estimator_t;
-    using descent_graph_router_t = typename GraphFactoryTraitsT::dynamic::descent_graph_router_t;
+    using bottom_graph_router_t = typename GraphFactoryTraitsT::dynamic::bottom_graph_router_t;
 
 public:
     /** @brief construct a new KNN graph from vector array */
@@ -72,10 +72,10 @@ public:
         const layer_config_t layer_config,
         const propagate_config_t propagate_config
     ) -> this_index_t {
-        this_index_t descent_graph(base_vecs, layer_config, propagate_config);
+        this_index_t bottom_graph(base_vecs, layer_config, propagate_config);
         dist_func_t dist_func(base_vecs.get_vec_dim());
-        _build_loop(descent_graph, dist_func, propagate_config);
-        return descent_graph;
+        _build_loop(bottom_graph, dist_func, propagate_config);
+        return bottom_graph;
     }
 
     /** @brief construct a new KNN graph from dataset, with per-build-loop recall/throughput profiling */
@@ -88,19 +88,19 @@ public:
         const query_vecs_t& query_vecs = dataset.get_query_vecs();
         const ground_truth_t& groundtruth = dataset.get_gt_vecs();
 
-        this_index_t descent_graph(base_vecs, layer_config, propagate_config);
+        this_index_t bottom_graph(base_vecs, layer_config, propagate_config);
         dist_func_t dist_func(base_vecs.get_vec_dim());
 
         recall_estimator_t recall_estimator;
         const vertex_num_t topk = 20;
         const vertex_num_t candidate_queue_size = 40;
-        descent_graph_router_t router(base_vecs, dist_func, topk, candidate_queue_size);
+        bottom_graph_router_t router(base_vecs, dist_func, topk, candidate_queue_size);
         router.initialize();
 
-        _build_loop(descent_graph, dist_func, propagate_config,
+        _build_loop(bottom_graph, dist_func, propagate_config,
             [&](iter_t build_loop) {
                 auto t0 = std::chrono::high_resolution_clock::now();
-                auto results = router.batch_query(query_vecs, descent_graph);
+                auto results = router.batch_query(query_vecs, bottom_graph);
                 auto t1 = std::chrono::high_resolution_clock::now();
                 double qps = query_vecs.get_num_vecs() * 1e6 /
                     std::chrono::duration_cast<std::chrono::microseconds>(t1 - t0).count();
@@ -123,7 +123,7 @@ private:
      * schedule. An optional per-iter callback is invoked at the end of each
      * build loop (e.g. for recall/QPS profiling in the dataset overload).
      *
-     * @param descent_graph       The graph being constructed (modified in-place).
+     * @param bottom_graph       The graph being constructed (modified in-place).
      * @param dist_func        Distance function for this graph.
      * @param pruning_config   Pruning configuration (scale_coeffs, shifted_coeffs).
      * @param propagate_config Propagation configuration (num_build_loops, num_triangle_updater_iters, prefill_ratio).
@@ -131,27 +131,27 @@ private:
      *                         the current build loop index. Pass nullptr to skip.
      */
     static auto _build_loop(
-        this_index_t& descent_graph,
+        this_index_t& bottom_graph,
         const dist_func_t& dist_func,
         const propagate_config_t& propagate_config,
         std::function<void(iter_t)> on_iter_end = nullptr
     ) -> void {
-        const vertex_num_t num_vertices = descent_graph.get_num_vertices();
-        const vertex_num_t max_nbr_size = descent_graph.layer_config().max_nbr_size();
+        const vertex_num_t num_vertices = bottom_graph.get_num_vertices();
+        const vertex_num_t max_nbr_size = bottom_graph.layer_config().max_nbr_size();
         const vertex_num_t init_nbr_size = static_cast<vertex_num_t>(max_nbr_size * propagate_config.prefill_ratio());
 
         /** -------------------- Optimazation ------------------------------------- ***/
         /** @brief A sparse graph is effecient enough to search nearest neighbors     */
-        descent_graph.layer_config().max_nbr_size(max_nbr_size / 3);
+        bottom_graph.layer_config().max_nbr_size(max_nbr_size / 3);
         /** ----------------------------------------------------------------------- ***/
 
         random_eg_t random_eg(dist_func);
-        random_eg.generate(descent_graph, init_nbr_size);
+        random_eg.generate(bottom_graph, init_nbr_size);
 
         propagate_engine_t propagate_engine(num_vertices, dist_func);
-        propagate_engine.set_graph(descent_graph);
+        propagate_engine.set_graph(bottom_graph);
 
-        const auto& pruning_config = descent_graph.pruning_config();
+        const auto& pruning_config = bottom_graph.pruning_config();
         auto triangle_updater  = propagate_engine.template make_updater<triangle_updater_t>(
             pruning_config.scale_coeffs(), pruning_config.shifted_coeffs());
         auto reverse_updater   = propagate_engine.template make_updater<reverse_updater_t>();
@@ -168,7 +168,7 @@ private:
 
         /** -------------------- Optimazation --------------------------------------- ***/
         /** @brief Reconstructed as dense graph with original edge number requirements  */
-        descent_graph.layer_config().max_nbr_size(max_nbr_size);
+        bottom_graph.layer_config().max_nbr_size(max_nbr_size);
         /** ------------------------------------------------------------------------- ***/
 
         for (iter_t routing_loop = 0; routing_loop < propagate_config.num_routing_loops(); ++routing_loop) {

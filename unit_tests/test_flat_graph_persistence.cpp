@@ -89,7 +89,7 @@ protected:
     dist_func_t* dist_func_;
 };
 
-TEST_F(FlatGraphPersistenceTest, DescentGraphSnapshotRestore) {
+TEST_F(FlatGraphPersistenceTest, BottomGraphSnapshotRestore) {
     const auto& base_vecs = dataset_->get_base_vecs();
 
     ARTEA_INFO("Building descent graph for persistence test...");
@@ -107,7 +107,7 @@ TEST_F(FlatGraphPersistenceTest, DescentGraphSnapshotRestore) {
     // Snapshot the graph
     std::string snapshot_dir = g_config.temp_dir + "/flat_graph_snapshot";
     nlohmann::json metadata;
-    metadata["test_name"] = "DescentGraphSnapshotRestore";
+    metadata["test_name"] = "BottomGraphSnapshotRestore";
     metadata["dataset"] = g_config.dataset_name;
 
     ARTEA_INFO(fmt::format("Snapshotting graph to {}", snapshot_dir));
@@ -160,7 +160,7 @@ TEST_F(FlatGraphPersistenceTest, DescentGraphSnapshotRestore) {
         } else {
             // Check neighbor content
             for (uint32_t j = 0; j < original_nbrs[i].size(); ++j) {
-                EXPECT_EQ(original_nbrs[i][j].get_id(), restored_nbrs[i][j].get_id())
+                EXPECT_EQ(original_nbrs[i][j].get_level_vid(), restored_nbrs[i][j].get_level_vid())
                     << fmt::format("Vertex {} neighbor {} ID mismatch", i, j);
                 EXPECT_FLOAT_EQ(original_nbrs[i][j].get_distance(), restored_nbrs[i][j].get_distance())
                     << fmt::format("Vertex {} neighbor {} distance mismatch", i, j);

@@ -37,7 +37,7 @@ namespace dynamic {
 /**
  * @brief Internal graph supporting concurrent vertex insertion.
  *
- * Per-vertex CSR layout (stride = 1 + max_nbr_size lnbr_t slots):
+ * Per-vertex CSR layout (stride = 1 + max_nbr_size inbr_t slots):
  * @code
  *   [ header | nbr_0 | nbr_1 | ... | nbr_{max_nbr_size-1} ]
  * @endcode
@@ -46,7 +46,7 @@ namespace dynamic {
  * whose MSB (bit 63) serves as a per-vertex spinlock for @c add_nbr().
  *
  * Per-vertex metadata (parallel to the CSR, indexed by layer_vid) lives in
- * the concurrent vector @c _vertex_info, which stores one @c lnbr_t slot
+ * the concurrent vector @c _vertex_info, which stores one @c inbr_t slot
  * per vertex carrying both:
  *   - @c .base_vid — the vertex's id in the base dataset (write-once at
  *     @c add_vertex time).
@@ -68,9 +68,9 @@ class InternalGraph {
 
     using vertex_num_t = typename IndexTraitsT::vertex_num_t;
     using vertex_id_t = typename IndexTraitsT::vertex_id_t;
-    using lnbr_t = typename IndexTraitsT::lnbr_t;
+    using inbr_t = typename IndexTraitsT::inbr_t;
 
-    using csr_lnbrs_t = cache_aligned_container_t<lnbr_t>;
+    using csr_inbrs_t = cache_aligned_container_t<inbr_t>;
 
     static constexpr vertex_id_t invalid_vertex_id = IndexTraitsT::invalid_vertex_id;
     static constexpr vertex_num_t default_max_nbr_size = 63;
@@ -94,8 +94,15 @@ class InternalGraph {
         return count | (locked ? LOCK_BIT : 0);
     }
 
-    static_assert(sizeof(lnbr_t) == sizeof(uint64_t),
-        "lnbr_t must be 8 bytes to alias with atomic<uint64_t> header.");
+    // The first CSR slot of each vertex is reinterpreted as an atomic
+    // header. Requires the slot to be at least as large and as aligned as
+    // @c std::atomic<uint64_t>. inbr_t is 16 bytes / 8-byte aligned, so
+    // the atomic sits in the first 8 bytes of the slot; the remaining
+    // 8 bytes of the header slot are unused padding.
+    static_assert(sizeof(inbr_t) >= sizeof(std::atomic<uint64_t>),
+        "inbr_t must be large enough to alias with atomic<uint64_t> header.");
+    static_assert(alignof(inbr_t) >= alignof(std::atomic<uint64_t>),
+        "inbr_t must be aligned for atomic<uint64_t> header.");
 
     /** @brief Per-vertex stride: 1 header slot + max_nbr_size neighbor slots. */
     __attribute__((always_inline))
@@ -131,7 +138,7 @@ public:
         _max_num_vertices(max_num_vertices),
         _max_nbr_size(max_nbr_size)
     {
-        // Pre-allocate the full CSR array; each vertex takes (1 + max_nbr_size) lnbr_t slots.
+        // Pre-allocate the full CSR array; each vertex takes (1 + max_nbr_size) inbr_t slots.
         _csr_nbrs.resize(static_cast<size_t>(_max_num_vertices) * _stride());
     }
 
@@ -150,7 +157,7 @@ public:
     /**
      * @brief Concurrently add a new vertex to this layer.
      *
-     * 1. Atomically claims a layer_vid by pushing @c lnbr_t(base_vid, base_vid)
+     * 1. Atomically claims a layer_vid by pushing @c inbr_t(base_vid, base_vid)
      *    into the concurrent @c _vertex_info vector. The second field of
      *    the slot is a placeholder for the lower-layer link; callers that
      *    know the actual lower_layer_vid should overwrite it via
@@ -159,7 +166,7 @@ public:
      * 2. Uses the claimed layer_vid to deterministically locate the
      *    pre-allocated block in @c _csr_nbrs (offset = layer_vid * stride).
      * 3. Initializes the header (num_valid_nbrs = 0) and fills all
-     *    neighbor slots with @c IndexTraitsT::invalid_lnbr.
+     *    neighbor slots with @c IndexTraitsT::invalid_inbr.
      *
      * @param base_vid This vertex's id in the base dataset. Stored in
      *                 @c _vertex_info[layer_vid].base_vid (write-once);
@@ -169,7 +176,7 @@ public:
      * @return The newly assigned layer_vid in this layer.
      */
     auto add_vertex(const vertex_id_t base_vid) -> vertex_id_t {
-        auto it = _vertex_info.push_back(lnbr_t(base_vid, base_vid));
+        auto it = _vertex_info.push_back(inbr_t(base_vid, base_vid));
         const vertex_id_t layer_vid = static_cast<vertex_id_t>(
             it - _vertex_info.begin()
         );
@@ -187,7 +194,7 @@ public:
         std::fill(
             &_csr_nbrs[base + 1],
             &_csr_nbrs[base + 1] + _max_nbr_size,
-            IndexTraitsT::invalid_lnbr
+            IndexTraitsT::invalid_inbr
         );
 
         return layer_vid;
@@ -213,7 +220,7 @@ public:
      *          calls) must happen **after** this function returns.
      *
      * @tparam NbrPrefillingFnT Callable with signature:
-     *         @code uint64_t(lnbr_t* slots, vertex_num_t max_nbr_size) @endcode
+     *         @code uint64_t(inbr_t* slots, vertex_num_t max_nbr_size) @endcode
      *         Writes initial neighbors into @p slots and returns the number
      *         of valid neighbors written.
      * @param base_vid          This vertex's id in the base dataset
@@ -225,7 +232,7 @@ public:
     auto add_vertex(const vertex_id_t base_vid, NbrPrefillingFnT&& nbr_prefilling_fn) -> vertex_id_t {
         const vertex_id_t layer_vid = add_vertex(base_vid);
 
-        lnbr_t* nbr_slots = &_csr_nbrs[static_cast<size_t>(layer_vid) * _stride() + 1];
+        inbr_t* nbr_slots = &_csr_nbrs[static_cast<size_t>(layer_vid) * _stride() + 1];
         const uint64_t prefilled_count = nbr_prefilling_fn(nbr_slots, _max_nbr_size);
         _header_ref(layer_vid).store(
             _make_header(prefilled_count, false), std::memory_order_release
@@ -253,7 +260,7 @@ public:
      * count returned by @p fn.
      *
      * @tparam FnT Callable with signature:
-     *         @code uint64_t(lnbr_t* slots, uint64_t count, vertex_num_t max_nbr_size) @endcode
+     *         @code uint64_t(inbr_t* slots, uint64_t count, vertex_num_t max_nbr_size) @endcode
      *         Must return the new valid neighbor count (written slots must be in-place).
      * @param src The layer_vid of the source vertex.
      * @param fn  The functor to execute under lock.
@@ -262,7 +269,7 @@ public:
     template <typename FnT>
     auto with_locked_nbrs(const vertex_id_t src, FnT&& fn) -> uint64_t {
         auto& header = _header_ref(src);
-        lnbr_t* nbr_slots = &_csr_nbrs[static_cast<size_t>(src) * _stride() + 1];
+        inbr_t* nbr_slots = &_csr_nbrs[static_cast<size_t>(src) * _stride() + 1];
 
         // Acquire: CAS to set the lock bit
         uint64_t cur = header.load(std::memory_order_relaxed);
@@ -301,7 +308,7 @@ public:
      *     invalidates trailing slots, updates count.
      *
      * @tparam OverflowFnT Callable with signature:
-     *         @code uint64_t(lnbr_t* slots, lnbr_t new_nbr) @endcode
+     *         @code uint64_t(inbr_t* slots, inbr_t new_nbr) @endcode
      *         The array has exactly max_nbr_size valid entries when called.
      *         Must return the new count after pruning (neighbors written in-place).
      * @param src       The layer_vid of the source vertex.
@@ -310,10 +317,10 @@ public:
      * @return AddNbrEvent indicating whether the neighbor was appended or pruning occurred.
      */
     template <typename OverflowFnT>
-    auto add_nbr(const vertex_id_t src, const lnbr_t new_nbr, OverflowFnT&& on_nbrs_overflow) -> AddNbrEvent {
+    auto add_nbr(const vertex_id_t src, const inbr_t new_nbr, OverflowFnT&& on_nbrs_overflow) -> AddNbrEvent {
         AddNbrEvent result;
 
-        with_locked_nbrs(src, [&](lnbr_t* slots, uint64_t count, vertex_num_t max_nbr_size) -> uint64_t {
+        with_locked_nbrs(src, [&](inbr_t* slots, uint64_t count, vertex_num_t max_nbr_size) -> uint64_t {
             if (count < max_nbr_size) {
                 slots[count] = new_nbr;
                 result = AddNbrEvent::APPENDED;
@@ -322,7 +329,7 @@ public:
             ARTEA_ASSERT(count, static_cast<uint64_t>(max_nbr_size));
             const uint64_t new_count = on_nbrs_overflow(slots, new_nbr);
             for (uint64_t i = new_count; i < max_nbr_size; ++i) {
-                slots[i] = IndexTraitsT::invalid_lnbr;
+                slots[i] = IndexTraitsT::invalid_inbr;
             }
             result = AddNbrEvent::PRUNED;
             return new_count;
@@ -357,16 +364,16 @@ public:
     /**
      * @brief Fetch the full per-vertex block including header and neighbor slots (const).
      * @param src The layer_vid of the source vertex.
-     * @return A const span of (1 + max_nbr_size) lnbr_t entries.
+     * @return A const span of (1 + max_nbr_size) inbr_t entries.
      *
      * The returned span has the following layout:
      *   - span[0] (header): reinterpreted as @c std::atomic<uint64_t> holding
-     *     the valid neighbor count. Do NOT access it as a regular lnbr_t.
+     *     the valid neighbor count. Do NOT access it as a regular inbr_t.
      *   - span[1 .. max_nbr_size]: the neighbor slots.
      */
     __attribute__((always_inline))
-    auto fetch_nbrs(const vertex_id_t src) const -> std::span<const lnbr_t> {
-        return std::span<const lnbr_t>(
+    auto fetch_nbrs(const vertex_id_t src) const -> std::span<const inbr_t> {
+        return std::span<const inbr_t>(
             &_csr_nbrs[static_cast<size_t>(src) * _stride()],
             _stride()
         );
@@ -375,13 +382,13 @@ public:
     /**
      * @brief Fetch the full per-vertex block including header and neighbor slots (mutable).
      * @param src The layer_vid of the source vertex.
-     * @return A mutable span of (1 + max_nbr_size) lnbr_t entries.
+     * @return A mutable span of (1 + max_nbr_size) inbr_t entries.
      *
      * @see fetch_nbrs(vertex_id_t) const for the span layout description.
      */
     __attribute__((always_inline))
-    auto fetch_nbrs(const vertex_id_t src) -> std::span<lnbr_t> {
-        return std::span<lnbr_t>(
+    auto fetch_nbrs(const vertex_id_t src) -> std::span<inbr_t> {
+        return std::span<inbr_t>(
             &_csr_nbrs[static_cast<size_t>(src) * _stride()],
             _stride()
         );
@@ -397,7 +404,7 @@ public:
      */
     __attribute__((always_inline))
     auto get_base_vid(const vertex_id_t layer_vid) const -> vertex_id_t {
-        return _vertex_info[layer_vid].base_vid;
+        return _vertex_info[layer_vid].get_base_vid();
     }
 
     /**
@@ -409,7 +416,7 @@ public:
      */
     __attribute__((always_inline))
     auto get_inter_layer_link(const vertex_id_t layer_vid) const -> vertex_id_t {
-        return _vertex_info[layer_vid].layer_vid;
+        return _vertex_info[layer_vid].get_level_vid();
     }
 
     /**
@@ -419,14 +426,14 @@ public:
      */
     __attribute__((always_inline))
     auto set_inter_layer_link(const vertex_id_t layer_vid, const vertex_id_t next_layer_vid) -> void {
-        _vertex_info[layer_vid].layer_vid = next_layer_vid;
+        _vertex_info[layer_vid].set_level_vid(next_layer_vid);
     }
 
     /**
      * @brief Get the per-vertex metadata concurrent vector (const).
      */
     __attribute__((always_inline))
-    auto get_vertex_info() const -> const tbb::concurrent_vector<lnbr_t>& {
+    auto get_vertex_info() const -> const tbb::concurrent_vector<inbr_t>& {
         return _vertex_info;
     }
 
@@ -434,7 +441,7 @@ public:
      * @brief Get the per-vertex metadata concurrent vector (mutable).
      */
     __attribute__((always_inline))
-    auto get_vertex_info() -> tbb::concurrent_vector<lnbr_t>& {
+    auto get_vertex_info() -> tbb::concurrent_vector<inbr_t>& {
         return _vertex_info;
     }
 
@@ -462,12 +469,12 @@ public:
     }
 
     __attribute__((always_inline))
-    auto get_csr_nbrs() const -> const csr_lnbrs_t& {
+    auto get_csr_nbrs() const -> const csr_inbrs_t& {
         return _csr_nbrs;
     }
 
     __attribute__((always_inline))
-    auto get_csr_nbrs() -> csr_lnbrs_t& {
+    auto get_csr_nbrs() -> csr_inbrs_t& {
         return _csr_nbrs;
     }
 
@@ -501,22 +508,22 @@ private:
     /**
      * @brief CSR-format neighbor storage.
      *
-     * Each vertex occupies (1 + _max_nbr_size) contiguous lnbr_t slots.
+     * Each vertex occupies (1 + _max_nbr_size) contiguous inbr_t slots.
      * The first slot of each block is reinterpreted as std::atomic<uint64_t>
      * to hold num_valid_nbrs. Grown via _ensure_capacity when exhausted.
      */
-    csr_lnbrs_t _csr_nbrs;
+    csr_inbrs_t _csr_nbrs;
 
     /**
      * @brief Concurrent per-vertex metadata: _vertex_info[layer_vid] stores
-     *        an @c lnbr_t whose @c .base_vid is this vertex's id in the
+     *        an @c inbr_t whose @c .base_vid is this vertex's id in the
      *        base dataset (write-once) and whose @c .layer_vid is the
      *        layer_vid in the next (lower) layer (initially a placeholder
      *        equal to base_vid, overwritten via @c set_inter_layer_link).
      *
      * push_back() is used in add_vertex() to atomically claim a new layer_vid.
      */
-    tbb::concurrent_vector<lnbr_t> _vertex_info;
+    tbb::concurrent_vector<inbr_t> _vertex_info;
 
     /** @brief Serializes CSR resize operations. */
     mutable std::mutex _resize_mutex;

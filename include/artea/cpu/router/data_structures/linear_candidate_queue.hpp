@@ -49,10 +49,10 @@ namespace cpu {
  *
  * @tparam RouterTraitsT Traits defining vertex types, distance types, and candidate entry types.
  * @tparam EntryT Candidate-entry type carried by the queue. Defaults to the
- *         router traits' dnbr candidate entry, preserving existing behavior.
+ *         router traits' candidate entry, preserving existing behavior.
  */
 template <typename RouterTraitsT,
-          typename EntryT = typename RouterTraitsT::dnbr_candidate_entry_t>
+          typename EntryT = typename RouterTraitsT::candidate_entry_t>
 class LinearCandidateQueue {
 
 public:
@@ -162,8 +162,8 @@ public:
         const vector_array_t& base_vecs,
         visited_table_t& visited_table
     ) {
-        // This overload assumes a dnbr-style 2-arg entry constructor
-        // (vertex_id, distance). Lnbr callers should seed manually via
+        // This overload assumes a 2-arg entry constructor
+        // (vertex_id, distance). Multi-layer callers should seed manually via
         // try_push(...) instead.
         static_assert(
             std::is_constructible_v<candidate_entry_t, vertex_id_t, distance_t>,
@@ -243,7 +243,7 @@ public:
      * Variadic-perfect-forwarding API: the arguments are forwarded directly
      * into @c candidate_entry_t's constructor (with a trailing @c false for
      * the explored flag). This lets one queue implementation carry either
-     * dnbr or lnbr entries.
+     * bnbr or multi-layer entries.
      *
      * Uses fast rejection (O(1)) for entries that are too far, then performs
      * binary search insertion to maintain sorted order. Updates cursor and
@@ -288,7 +288,7 @@ public:
      * @brief Retrieve and return the FULL best-unexplored entry.
      *
      * Returns a copy of the complete @c candidate_entry_t so callers working
-     * with lnbr-style entries can recover both @c base_vid and @c layer_vid.
+     * with multi-layer entries can recover both @c base_vid and @c layer_vid.
      * The entry inside @c _data is marked as explored and the cursor is
      * advanced.
      */

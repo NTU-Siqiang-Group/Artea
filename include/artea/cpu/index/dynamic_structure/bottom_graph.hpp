@@ -1,5 +1,5 @@
 /*
- * @FilePath: /Artea/include/artea/cpu/index/descent_graph.hpp
+ * @FilePath: /Artea/include/artea/cpu/index/bottom_graph.hpp
  * @Author: Chandler (Weitang Ye) <weitang.ye@ntu.edu.sg>
  * @Description: CRTP base descent graph structure for graph-based index.
  */
@@ -22,14 +22,14 @@ namespace dynamic {
  * @tparam DerivedClassT The concrete derived graph type (CRTP).
  */
 template <typename IndexTraitsT, typename DerivedClassT>
-class DescentGraph {
+class BottomGraph {
 
 protected:
     using vertex_num_t = typename IndexTraitsT::vertex_num_t;
     using vertex_id_t = typename IndexTraitsT::vertex_id_t;
     using distance_t = typename IndexTraitsT::distance_t;
-    using dnbr_t = typename IndexTraitsT::dnbr_t;
-    using dnbr_arr_t = typename IndexTraitsT::dnbr_arr_t;
+    using bnbr_t = typename IndexTraitsT::bnbr_t;
+    using bnbr_arr_t = typename IndexTraitsT::bnbr_arr_t;
     using vector_array_t = typename IndexTraitsT::vector_array_t;
     using layer_config_t = typename IndexTraitsT::layer_config_t;
 
@@ -39,7 +39,7 @@ public:
      * @param vecs_data Reference to the vector data for this layer.
      * @param layer_config Layer configuration (max_nbr_size and reserved_nbr_size).
      */
-    DescentGraph(
+    BottomGraph(
         const vector_array_t& vecs_data,
         const layer_config_t layer_config
     ) :
@@ -53,17 +53,17 @@ public:
         }
     }
 
-    DescentGraph(const DescentGraph&) = delete;
-    DescentGraph& operator=(const DescentGraph&) = delete;
+    BottomGraph(const BottomGraph&) = delete;
+    BottomGraph& operator=(const BottomGraph&) = delete;
 
-    DescentGraph(DescentGraph&& other) noexcept
+    BottomGraph(BottomGraph&& other) noexcept
         : _num_vertices(other._num_vertices),
           _layer_config(other._layer_config),
           _nbrs_arr(std::move(other._nbrs_arr)),
           _vecs_data(other._vecs_data)
     {}
 
-    DescentGraph& operator=(DescentGraph&& other) noexcept {
+    BottomGraph& operator=(BottomGraph&& other) noexcept {
         _num_vertices = other._num_vertices;
         _layer_config = other._layer_config;
         _nbrs_arr = std::move(other._nbrs_arr);
@@ -83,23 +83,23 @@ public:
     auto layer_config() -> layer_config_t& { return _layer_config; }
 
     __attribute__((always_inline))
-    auto get_nbrs_arr() -> std::vector<dnbr_arr_t>& { return _nbrs_arr; }
+    auto get_nbrs_arr() -> std::vector<bnbr_arr_t>& { return _nbrs_arr; }
 
     __attribute__((always_inline))
-    auto get_nbrs_arr() const -> const std::vector<dnbr_arr_t>& { return _nbrs_arr; }
+    auto get_nbrs_arr() const -> const std::vector<bnbr_arr_t>& { return _nbrs_arr; }
 
     __attribute__((always_inline))
-    auto fetch_nbrs(const vertex_id_t src) const -> const dnbr_arr_t& { return _nbrs_arr[src]; }
+    auto fetch_nbrs(const vertex_id_t src) const -> const bnbr_arr_t& { return _nbrs_arr[src]; }
 
     __attribute__((always_inline))
-    auto fetch_nbrs(const vertex_id_t src) -> dnbr_arr_t& { return _nbrs_arr[src]; }
+    auto fetch_nbrs(const vertex_id_t src) -> bnbr_arr_t& { return _nbrs_arr[src]; }
 
     __attribute__((always_inline))
     auto get_vecs_data() const -> const vector_array_t& { return _vecs_data; }
 
     auto get_base_metadata() const -> nlohmann::json {
         nlohmann::json meta;
-        meta["graph_type"] = "descent_graph";
+        meta["graph_type"] = "bottom_graph";
         meta["version"] = "1.0";
         meta["num_vertices"] = _num_vertices;
         meta["layer_config"] = {
@@ -117,12 +117,12 @@ protected:
     layer_config_t _layer_config;
 
     /** @brief Array of neighbors for each vertex. */
-    std::vector<dnbr_arr_t> _nbrs_arr;
+    std::vector<bnbr_arr_t> _nbrs_arr;
 
     /** @brief Const reference to vector data for this layer. */
     const vector_array_t& _vecs_data;
 
-};  // class DescentGraph
+};  // class BottomGraph
 
 }   // namespace dynamic
 }   // namespace cpu

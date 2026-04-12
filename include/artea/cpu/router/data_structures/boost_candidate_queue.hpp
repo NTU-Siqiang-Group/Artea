@@ -56,10 +56,10 @@ namespace cpu {
  *
  * @tparam RouterTraitsT Traits defining vertex types, distance types, and candidate entry types.
  * @tparam EntryT Candidate-entry type carried by the queue. Defaults to the
- *         router traits' dnbr candidate entry, preserving existing behavior.
+ *         router traits' candidate entry, preserving existing behavior.
  */
 template <typename RouterTraitsT,
-          typename EntryT = typename RouterTraitsT::dnbr_candidate_entry_t>
+          typename EntryT = typename RouterTraitsT::candidate_entry_t>
 class BoostCandidateQueue {
 
 public:
@@ -261,7 +261,7 @@ public:
      *
      * Variadic-perfect-forwarding API: the arguments are forwarded directly
      * into @c candidate_entry_t's constructor (with a trailing @c false for
-     * the explored flag). Works for both dnbr- and lnbr-flavored entries.
+     * the explored flag). Works for both entries.
      *
      * @return true if the entry was inserted, false if rejected.
      * @complexity O(log_4 L) for heap operations, but O(1) for rejected entries.

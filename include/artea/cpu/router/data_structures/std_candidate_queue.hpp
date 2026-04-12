@@ -63,10 +63,10 @@ namespace cpu {
  *
  * @tparam RouterTraitsT Traits defining vertex types, distance types, and candidate entry types.
  * @tparam EntryT Candidate-entry type carried by the queue. Defaults to the
- *         router traits' dnbr candidate entry, preserving existing behavior.
+ *         router traits' candidate entry, preserving existing behavior.
  */
 template <typename RouterTraitsT,
-          typename EntryT = typename RouterTraitsT::dnbr_candidate_entry_t>
+          typename EntryT = typename RouterTraitsT::candidate_entry_t>
 class StdCandidateQueue {
 
 public:
@@ -206,9 +206,9 @@ public:
         const vector_array_t& base_vecs,
         visited_table_t& visited_table
     ) {
-        // This overload assumes a dnbr-style 2-arg entry constructor
-        // (vertex_id, distance). It is NOT meaningful for lnbr entries,
-        // which carry a second identifier; lnbr callers should seed
+        // This overload assumes a 2-arg entry constructor
+        // (vertex_id, distance). It is NOT meaningful for multi-layer entries,
+        // which carry a second identifier; inbr callers should seed
         // manually via try_push(...) instead.
         static_assert(
             std::is_constructible_v<candidate_entry_t, vertex_id_t, distance_t>,
@@ -303,7 +303,7 @@ public:
      * Variadic-perfect-forwarding API: the arguments are forwarded directly
      * into the entry type's constructor (plus a trailing @c false for the
      * explored flag). This lets one queue implementation carry either
-     * @c DnbrCandidateEntry ("try_push(vid, dist)") or @c LnbrCandidateEntry
+     * @c CandidateEntry ("try_push(vid, dist)") or @c CandidateEntry
      * ("try_push(base_vid, layer_vid, dist)") without any source-level
      * divergence.
      *
@@ -354,7 +354,7 @@ public:
      * @brief Retrieve and return the FULL best-unexplored entry.
      *
      * Returns the complete @c candidate_entry_t so callers working with
-     * lnbr-style entries can recover both @c base_vid and @c layer_vid.
+     * multi-layer entries can recover both @c base_vid and @c layer_vid.
      *
      * @return The entry with smallest distance in the unexplored set, or an
      *         invalid sentinel entry if the unexplored set is empty.

@@ -15,7 +15,7 @@
 /*
  * @FilePath: /Artea/unit_tests/search_router_vs_construct_router.cpp
  * @Author: Chandler (Weitang Ye) <weitang.ye@ntu.edu.sg>
- * @Description: Compares dynamic_mode vs compact_mode DescentGraphRouter on a
+ * @Description: Compares dynamic_mode vs compact_mode BottomGraphRouter on a
  *               ConvGraph. Measures construct-mode query time, search-graph conversion
  *               time, and search-mode query time.
  */
@@ -102,20 +102,20 @@ public:
 
         ARTEA_INFO("Building convergent graph...");
         auto t0 = std::chrono::high_resolution_clock::now();
-        descent_graph_ = std::make_unique<conv_graph::index_t>(
+        bottom_graph_ = std::make_unique<conv_graph::index_t>(
             conv_graph::factory_t::construct_graph(base_vecs, layer_cfg, pruning_cfg, propagate_cfg)
         );
         auto t1 = std::chrono::high_resolution_clock::now();
         g_results.build_time_s =
             std::chrono::duration_cast<std::chrono::microseconds>(t1 - t0).count() / 1e6;
         ARTEA_INFO(fmt::format("Graph built: {} vertices in {:.2f} s",
-            descent_graph_->get_num_vertices(), g_results.build_time_s));
+            bottom_graph_->get_num_vertices(), g_results.build_time_s));
 
         // Convert to flat search graph
         ARTEA_INFO("Converting to flat search graph...");
         auto tc0 = std::chrono::high_resolution_clock::now();
-        compact_descent_graph_ = std::make_unique<compact::descent_graph_t>(
-            descent_graph_compactor_t::compact_graph(*descent_graph_, g_config.extracted_nbr_size)
+        compact_bottom_graph_ = std::make_unique<compact::bottom_graph_t>(
+            bottom_graph_compactor_t::compact_graph(*bottom_graph_, g_config.extracted_nbr_size)
         );
         auto tc1 = std::chrono::high_resolution_clock::now();
         g_results.conversion_time_ms =
@@ -127,16 +127,16 @@ public:
 
     vector_dataset_t&    get_dataset()           { return *dataset_; }
     dist_func_t&         get_dist_func()          { return *dist_func_; }
-    conv_graph::index_t&        get_descent_graph()          { return *descent_graph_; }
-    compact::descent_graph_t& get_compact_descent_graph()  { return *compact_descent_graph_; }
+    conv_graph::index_t&        get_bottom_graph()          { return *bottom_graph_; }
+    compact::bottom_graph_t& get_compact_bottom_graph()  { return *compact_bottom_graph_; }
     const idlist_array_t& get_gt()               { return dataset_->get_gt_vecs(); }
 
 private:
     DataProvider() = default;
     std::unique_ptr<vector_dataset_t>    dataset_;
     std::unique_ptr<dist_func_t>         dist_func_;
-    std::unique_ptr<conv_graph::index_t>        descent_graph_;
-    std::unique_ptr<compact::descent_graph_t> compact_descent_graph_;
+    std::unique_ptr<conv_graph::index_t>        bottom_graph_;
+    std::unique_ptr<compact::bottom_graph_t> compact_bottom_graph_;
 };
 
 // ============================================================
@@ -154,14 +154,14 @@ TEST_F(RouterComparisonTest, ConstructModeRouter) {
     const auto& base_vecs  = p.get_dataset().get_base_vecs();
     const auto& query_vecs = p.get_dataset().get_query_vecs();
 
-    dynamic::descent_graph_router_t router(
+    dynamic::bottom_graph_router_t router(
         base_vecs, p.get_dist_func(),
         g_config.topk, g_config.queue_size
     );
     router.initialize();
 
     auto t0 = std::chrono::high_resolution_clock::now();
-    knn_results_t results = router.batch_query(query_vecs, p.get_descent_graph());
+    knn_results_t results = router.batch_query(query_vecs, p.get_bottom_graph());
     auto t1 = std::chrono::high_resolution_clock::now();
     double us = std::chrono::duration_cast<std::chrono::microseconds>(t1 - t0).count();
 
@@ -184,8 +184,8 @@ TEST_F(RouterComparisonTest, SearchModeRouter) {
     const auto& base_vecs  = p.get_dataset().get_base_vecs();
     const auto& query_vecs = p.get_dataset().get_query_vecs();
 
-    compact::descent_graph_router_t router(
-        base_vecs, p.get_dist_func(), p.get_compact_descent_graph(),
+    compact::bottom_graph_router_t router(
+        base_vecs, p.get_dist_func(), p.get_compact_bottom_graph(),
         g_config.topk, g_config.queue_size
     );
     router.initialize();
@@ -281,10 +281,10 @@ int main(int argc, char** argv) {
     std::cout << fmt::format("  {:45s}  {:>10s}  {:>12s}\n", "Mode", "Recall@k", "QPS");
     std::cout << std::string(70, '-') << "\n";
     std::cout << fmt::format("  {:45s}  {:>10.4f}  {:>12.1f}\n",
-        "dynamic_mode (DescentGraph, no conversion)",
+        "dynamic_mode (BottomGraph, no conversion)",
         g_results.construct_recall, g_results.construct_qps);
     std::cout << fmt::format("  {:45s}  {:>10.4f}  {:>12.1f}\n",
-        "compact_mode (CompactDescentGraph, +conv time)",
+        "compact_mode (CompactBottomGraph, +conv time)",
         g_results.search_recall, g_results.search_qps);
     std::cout << std::string(70, '=') << "\n";
 

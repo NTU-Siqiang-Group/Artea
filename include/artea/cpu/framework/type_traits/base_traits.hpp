@@ -30,13 +30,13 @@
 #include <artea/cpu/containers/thread_local_bitmap.hpp>
 #include <artea/cpu/containers/version_tag_table.hpp>
 #include <artea/cpu/containers/word_aligned_bitmap.hpp>
-#include <artea/cpu/index/layer_nbr.hpp>
+#include <artea/cpu/index/internal_nbr.hpp>
 
 namespace artea {
 namespace cpu {
 
 /* ------ Forward Declarations ------ */
-template <typename BaseTraitsT> struct DescentNeighbor;
+template <typename BaseTraitsT> struct BottomNeighbor;
 template <typename BaseTraitsT> class NbrLogTable;
 template <typename BaseTraitsT> class VectorDataset;
 template <typename BaseTraitsT> class VectorSampler;
@@ -44,10 +44,10 @@ template <typename BaseTraitsT> class NbrArrChecker;
 template <typename BaseTraitsT> class RandomSeq;
 template <typename BaseTraitsT> class RandomSeqNR;
 template <typename BaseTraitsT> class CentroidComputer;
-template <typename BaseTraitsT> struct DNbrComparator;
-template <typename BaseTraitsT> struct StrictDNbrComparator;
-template <typename BaseTraitsT> struct DNbrIdComparator;
-template <typename BaseTraitsT> struct DNbrDistanceComparator;
+template <typename BaseTraitsT> struct BNbrComparator;
+template <typename BaseTraitsT> struct StrictBNbrComparator;
+template <typename BaseTraitsT> struct BNbrIdComparator;
+template <typename BaseTraitsT> struct BNbrDistanceComparator;
 template <typename BaseTraitsT> struct VertexSubset;
 template <typename T, typename ContainerT, typename Compare> class FourAryHeap;
 template <typename BaseTraitsT> struct LayerConfig;
@@ -144,25 +144,25 @@ public:
     using version_tag_table_t = VersionTagTable;
 
     /** @brief layer neighbor entries. */
-    using lnbr_t = LayerNeighbor<base_traits_t>;
+    using inbr_t = InternalNeighbor<base_traits_t>;
 
     /** @brief neighbor entries. */
-    using dnbr_t = DescentNeighbor<base_traits_t>;
+    using bnbr_t = BottomNeighbor<base_traits_t>;
 
     /** @brief neighbor comparator. */
-    using dnbr_comp_t = DNbrComparator<base_traits_t>;
+    using bnbr_comp_t = BNbrComparator<base_traits_t>;
 
     /** @brief strict neighbor comparator. */
-    using strict_dnbr_comp_t = StrictDNbrComparator<base_traits_t>;
+    using strict_bnbr_comp_t = StrictBNbrComparator<base_traits_t>;
 
     /** @brief ID-only comparator. */
-    using dnbr_id_comp_t = DNbrIdComparator<base_traits_t>;
+    using bnbr_id_comp_t = BNbrIdComparator<base_traits_t>;
 
     /** @brief distance-only comparator. */
-    using dnbr_dist_comp_t = DNbrDistanceComparator<base_traits_t>;
+    using bnbr_dist_comp_t = BNbrDistanceComparator<base_traits_t>;
 
     /** @brief neighbor arrays. */
-    using dnbr_arr_t = std::vector<dnbr_t>;
+    using bnbr_arr_t = std::vector<bnbr_t>;
 
     /** @brief CSR graph format. */
     using csr_vids_t = cache_aligned_container_t<vertex_id_t>;
@@ -260,7 +260,7 @@ public:
     static constexpr vertex_id_t invalid_vertex_id = invalid_vertex_id_generator();
 
     /** @brief Sentinel layer neighbor: both base_vid and layer_vid set to invalid_vertex_id. */
-    static constexpr lnbr_t invalid_lnbr = lnbr_t(invalid_vertex_id, invalid_vertex_id);
+    static constexpr inbr_t invalid_inbr = inbr_t(invalid_vertex_id, invalid_vertex_id);
 
     __attribute__((always_inline))
     static constexpr auto nan_distance_generator() -> distance_t {

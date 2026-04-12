@@ -28,7 +28,7 @@
 namespace artea {
 namespace cpu {
 
-template <typename RefinerTraitsT, typename DescentGraphT, typename DerivedClassT>
+template <typename RefinerTraitsT, typename BottomGraphT, typename DerivedClassT>
 class NeighborUpdater {
 
     using vertex_id_t = typename RefinerTraitsT::vertex_id_t;
@@ -36,8 +36,8 @@ class NeighborUpdater {
     using vec_ele_t = typename RefinerTraitsT::vec_ele_t;
     using distance_t = typename RefinerTraitsT::distance_t;
     using vector_array_t = typename RefinerTraitsT::vector_array_t;
-    using dnbr_t = typename RefinerTraitsT::dnbr_t;
-    using dnbr_arr_t = typename RefinerTraitsT::dnbr_arr_t;
+    using bnbr_t = typename RefinerTraitsT::bnbr_t;
+    using bnbr_arr_t = typename RefinerTraitsT::bnbr_arr_t;
     using log_table_t = typename RefinerTraitsT::log_table_t;
     using dist_func_t = typename RefinerTraitsT::dist_func_t;
     using nbr_arr_checker_t = typename RefinerTraitsT::nbr_arr_checker_t;
@@ -48,8 +48,8 @@ public:
         const dist_func_t& dist_func,
         const vector_array_t& vecs_data,
         log_table_t& log_table,
-        const DescentGraphT& descent_graph
-    ) : _dist_func(dist_func), _vecs_data(vecs_data), _log_table(log_table), _descent_graph(descent_graph) {}
+        const BottomGraphT& bottom_graph
+    ) : _dist_func(dist_func), _vecs_data(vecs_data), _log_table(log_table), _bottom_graph(bottom_graph) {}
 
     /**
      * @brief Operator that delegates to the derived class's update_impl.
@@ -60,7 +60,7 @@ public:
     __attribute__((always_inline))
     auto operator()(
         const vertex_id_t pivot_vid,
-        dnbr_arr_t& origin_nbrs
+        bnbr_arr_t& origin_nbrs
     ) -> void {
         static_cast<DerivedClassT*>(this)->update_impl(pivot_vid, origin_nbrs);
 
@@ -87,7 +87,7 @@ protected:
     log_table_t& _log_table;
 
     /** @brief Reference to the descent graph for neighbor overflow check. */
-    const DescentGraphT& _descent_graph;
+    const BottomGraphT& _bottom_graph;
 
 };  //  class NeighborUpdater
 

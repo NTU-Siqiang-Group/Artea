@@ -40,13 +40,13 @@ class RandomEG {
     using distance_t = typename RefinerTraitsT::distance_t;
     using vec_dim_t = typename RefinerTraitsT::vec_dim_t;
     using vector_array_t = typename RefinerTraitsT::vector_array_t;
-    using dnbr_t = typename RefinerTraitsT::dnbr_t;
-    using dnbr_arr_t = typename RefinerTraitsT::dnbr_arr_t;
-    using dnbr_comp_t = typename RefinerTraitsT::dnbr_comp_t;
+    using bnbr_t = typename RefinerTraitsT::bnbr_t;
+    using bnbr_arr_t = typename RefinerTraitsT::bnbr_arr_t;
+    using bnbr_comp_t = typename RefinerTraitsT::bnbr_comp_t;
     using dist_func_t = typename RefinerTraitsT::dist_func_t;
     using random_seq_t = typename RefinerTraitsT::random_seq_t;
 
-    static constexpr dnbr_comp_t nbr_comp {};
+    static constexpr bnbr_comp_t nbr_comp {};
 
 public:
     /**
@@ -58,16 +58,16 @@ public:
 
     /**
      * @brief Generate random edges for a descent graph.
-     * @param descent_graph The graph to initialize with random edges.
+     * @param bottom_graph The graph to initialize with random edges.
      * @param init_nbr_size Number of random neighbors to generate for each vertex.
      */
-    template <typename DescentGraphT>
+    template <typename BottomGraphT>
     auto generate(
-        DescentGraphT& descent_graph,
+        BottomGraphT& bottom_graph,
         const vertex_num_t init_nbr_size
     ) -> void {
-        const vertex_num_t num_vertices = descent_graph.get_num_vertices();
-        const vector_array_t& vecs_data = descent_graph.get_vecs_data();
+        const vertex_num_t num_vertices = bottom_graph.get_num_vertices();
+        const vector_array_t& vecs_data = bottom_graph.get_vecs_data();
 
         // RandomSeq uses thread-local storage internally, so it's safe to share across threads
         random_seq_t random_seq;
@@ -79,7 +79,7 @@ public:
                 std::vector<vertex_id_t> random_nbr_ids(init_nbr_size);
 
                 for (vertex_id_t vid = r.begin(); vid != r.end(); ++vid) {
-                    dnbr_arr_t& nbrs = descent_graph.fetch_nbrs(vid);
+                    bnbr_arr_t& nbrs = bottom_graph.fetch_nbrs(vid);
                     const vec_ele_t* query_vec = vecs_data.get(vid);
 
                     // Generate random neighbor IDs
@@ -87,7 +87,7 @@ public:
 
                     // Create neighbors with distances
                     nbrs.clear();
-                    // Note: nbrs already has reserved capacity from DescentGraph constructor
+                    // Note: nbrs already has reserved capacity from BottomGraph constructor
 
                     for (vertex_num_t i = 0; i < init_nbr_size; ++i) {
                         const vertex_id_t nbr_id = random_nbr_ids[i];
@@ -111,8 +111,8 @@ public:
                     auto last = std::unique(
                         nbrs.begin(),
                         nbrs.end(),
-                        [](const dnbr_t& a, const dnbr_t& b) {
-                            return a.get_id() == b.get_id();
+                        [](const bnbr_t& a, const bnbr_t& b) {
+                            return a.get_level_vid() == b.get_level_vid();
                         }
                     );
                     nbrs.erase(last, nbrs.end());

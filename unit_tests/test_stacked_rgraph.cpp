@@ -170,7 +170,7 @@ namespace {
  */
 struct fifo_pruning_fn_t {
     vertex_num_t max_nbr_size;
-    auto operator()(lnbr_t* slots, const lnbr_t new_nbr) const -> uint64_t {
+    auto operator()(inbr_t* slots, const inbr_t new_nbr) const -> uint64_t {
         for (vertex_num_t i = 1; i < max_nbr_size; ++i) slots[i - 1] = slots[i];
         slots[max_nbr_size - 1] = new_nbr;
         return max_nbr_size;
@@ -343,14 +343,14 @@ TEST_F(StackedRGraphTest, NeighborListsAreValid) {
                 << " has count " << count
                 << " > max_nbr_size " << layer.max_nbr_size();
             for (uint64_t i = 0; i < count; ++i) {
-                const lnbr_t& nbr = block[1 + i];
-                if (nbr == base_traits_t::invalid_lnbr) continue;
-                ASSERT_LT(nbr.base_vid, n)
+                const inbr_t& nbr = block[1 + i];
+                if (nbr == base_traits_t::invalid_inbr) continue;
+                ASSERT_LT(nbr.get_base_vid(), n)
                     << "Layer " << l << " vertex " << v
-                    << " slot " << i << " has OOB base_vid " << nbr.base_vid;
-                ASSERT_LT(nbr.layer_vid, n_l)
+                    << " slot " << i << " has OOB base_vid " << nbr.get_base_vid();
+                ASSERT_LT(nbr.get_level_vid(), n_l)
                     << "Layer " << l << " vertex " << v
-                    << " slot " << i << " has OOB layer_vid " << nbr.layer_vid;
+                    << " slot " << i << " has OOB layer_vid " << nbr.get_level_vid();
             }
         }
     }

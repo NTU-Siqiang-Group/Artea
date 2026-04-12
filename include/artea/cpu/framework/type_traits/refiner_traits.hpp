@@ -32,15 +32,15 @@ enum class IVFConstructPolicyT {
 };
 
 // ----- Forward Declaration  ------ //
-template <typename RefinerTraitsT, typename DescentGraphT, typename DerivedClassT> class NeighborUpdater;
-template <typename RefinerTraitsT, typename DescentGraphT> class TriangleUpdater;
-template <typename RefinerTraitsT, typename DescentGraphT> class PruningUpdater;
-template <typename RefinerTraitsT, typename DescentGraphT> class ReverseUpdater;
-template <typename RefinerTraitsT, typename DescentGraphT> class RandomUpdater;
-template <typename RefinerTraitsT, typename DescentGraphT> class RoutingUpdater;
-template <typename RefinerTraitsT, typename DescentGraphT> class TruncateUpdater;
+template <typename RefinerTraitsT, typename BottomGraphT, typename DerivedClassT> class NeighborUpdater;
+template <typename RefinerTraitsT, typename BottomGraphT> class TriangleUpdater;
+template <typename RefinerTraitsT, typename BottomGraphT> class PruningUpdater;
+template <typename RefinerTraitsT, typename BottomGraphT> class ReverseUpdater;
+template <typename RefinerTraitsT, typename BottomGraphT> class RandomUpdater;
+template <typename RefinerTraitsT, typename BottomGraphT> class RoutingUpdater;
+template <typename RefinerTraitsT, typename BottomGraphT> class TruncateUpdater;
 template <typename RefinerTraitsT> class RandomEG;
-template <typename RefinerTraitsT, typename DescentGraphT, bool SelectiveSchedule> class PropagateEngine;
+template <typename RefinerTraitsT, typename BottomGraphT, bool SelectiveSchedule> class PropagateEngine;
 template <typename RefinerTraitsT> class IVFPartitions;
 
 template <typename ComputerTraitsT, typename BufferTraitsT, typename IndexTraitsT, typename RouterTraitsT>
@@ -57,39 +57,39 @@ struct RefinerTraits :
     /** @brief IVF construction policy type. */
     using ivf_construct_policy_t = IVFConstructPolicyT;
 
-    template <typename DescentGraphT, typename DerivedClassT>
-    using neighbor_updater_t = NeighborUpdater<refiner_traits_t, DescentGraphT, DerivedClassT>;
+    template <typename BottomGraphT, typename DerivedClassT>
+    using neighbor_updater_t = NeighborUpdater<refiner_traits_t, BottomGraphT, DerivedClassT>;
 
     /** @brief Triangle updater. */
-    template <typename DescentGraphT>
-    using triangle_updater_t = TriangleUpdater<refiner_traits_t, DescentGraphT>;
+    template <typename BottomGraphT>
+    using triangle_updater_t = TriangleUpdater<refiner_traits_t, BottomGraphT>;
 
     /** @brief Pruning updater (no log writes). */
-    template <typename DescentGraphT>
-    using pruning_updater_t = PruningUpdater<refiner_traits_t, DescentGraphT>;
+    template <typename BottomGraphT>
+    using pruning_updater_t = PruningUpdater<refiner_traits_t, BottomGraphT>;
 
     /** @brief Reverse edge updater. */
-    template <typename DescentGraphT>
-    using reverse_updater_t = ReverseUpdater<refiner_traits_t, DescentGraphT>;
+    template <typename BottomGraphT>
+    using reverse_updater_t = ReverseUpdater<refiner_traits_t, BottomGraphT>;
 
     /** @brief Random neighbor updater. */
-    template <typename DescentGraphT>
-    using random_updater_t = RandomUpdater<refiner_traits_t, DescentGraphT>;
+    template <typename BottomGraphT>
+    using random_updater_t = RandomUpdater<refiner_traits_t, BottomGraphT>;
 
     /** @brief Routing-based neighbor updater (uses construct-mode router). */
-    template <typename DescentGraphT>
-    using routing_updater_t = RoutingUpdater<refiner_traits_t, DescentGraphT>;
+    template <typename BottomGraphT>
+    using routing_updater_t = RoutingUpdater<refiner_traits_t, BottomGraphT>;
 
     /** @brief Truncate updater: trims neighbor arrays to max_nbr_size. */
-    template <typename DescentGraphT>
-    using truncate_updater_t = TruncateUpdater<refiner_traits_t, DescentGraphT>;
+    template <typename BottomGraphT>
+    using truncate_updater_t = TruncateUpdater<refiner_traits_t, BottomGraphT>;
 
     /** @brief Random edge generator. */
     using random_eg_t = RandomEG<refiner_traits_t>;
 
     /** @brief Type for propagation engine. */
-    template <typename DescentGraphT, bool SelectiveSchedule>
-    using propagate_engine_t = PropagateEngine<refiner_traits_t, DescentGraphT, SelectiveSchedule>;
+    template <typename BottomGraphT, bool SelectiveSchedule>
+    using propagate_engine_t = PropagateEngine<refiner_traits_t, BottomGraphT, SelectiveSchedule>;
 
     /** @brief Neighbor array checker. */
     using nbr_arr_checker_t = typename IndexTraitsT::nbr_arr_checker_t;

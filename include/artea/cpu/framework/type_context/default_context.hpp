@@ -51,13 +51,13 @@ using layer_num_t = typename base_traits_t::layer_num_t;
 using layer_id_t = typename base_traits_t::layer_id_t;
 using hash_num_t = typename base_traits_t::hash_num_t;
 using iter_t = typename base_traits_t::iter_t;
-using lnbr_t = typename base_traits_t::lnbr_t;
-using dnbr_t = typename base_traits_t::dnbr_t;
-using dnbr_arr_t = typename base_traits_t::dnbr_arr_t;
-using dnbr_comp_t = typename base_traits_t::dnbr_comp_t;
-using strict_dnbr_comp_t = typename base_traits_t::strict_dnbr_comp_t;
-using dnbr_id_comp_t = typename base_traits_t::dnbr_id_comp_t;
-using dnbr_dist_comp_t = typename base_traits_t::dnbr_dist_comp_t;
+using inbr_t = typename base_traits_t::inbr_t;
+using bnbr_t = typename base_traits_t::bnbr_t;
+using bnbr_arr_t = typename base_traits_t::bnbr_arr_t;
+using bnbr_comp_t = typename base_traits_t::bnbr_comp_t;
+using strict_bnbr_comp_t = typename base_traits_t::strict_bnbr_comp_t;
+using bnbr_id_comp_t = typename base_traits_t::bnbr_id_comp_t;
+using bnbr_dist_comp_t = typename base_traits_t::bnbr_dist_comp_t;
 using word_aligned_bitmap_t = typename base_traits_t::word_aligned_bitmap_t;
 using thread_local_bitmap_t = typename base_traits_t::thread_local_bitmap_t;
 using version_tag_table_t = typename base_traits_t::version_tag_table_t;
@@ -105,7 +105,7 @@ using log_table_t = typename buffer_traits_t::log_table_t;
 using layer_config_t = typename base_traits_t::layer_config_t;
 
 // Index types from IndexTraits
-using descent_graph_compactor_t = typename index_traits_t::descent_graph_compactor_t;
+using bottom_graph_compactor_t = typename index_traits_t::bottom_graph_compactor_t;
 using flat_graph_file_manager_t = typename index_traits_t::flat_graph_file_manager_t;
 using index_size_calculator_t = typename index_traits_t::index_size_calculator_t;
 using radius_prober_t = typename index_traits_t::radius_prober_t;
@@ -113,15 +113,15 @@ using internal_graph_compactor_t = typename index_traits_t::internal_graph_compa
 using hierarchical_graph_compactor_t = typename index_traits_t::hierarchical_graph_compactor_t;
 
 namespace compact {
-    using descent_graph_t        = index_traits_t::compact::descent_graph_t;
+    using bottom_graph_t        = index_traits_t::compact::bottom_graph_t;
     using internal_graph_t       = index_traits_t::compact::internal_graph_t;
     using hierarchical_graph_t   = index_traits_t::compact::hierarchical_graph_t;
-    using descent_graph_router_t = router_traits_t::compact::descent_graph_router_t;
+    using bottom_graph_router_t = router_traits_t::compact::bottom_graph_router_t;
 }   // namespace compact
 namespace dynamic {
     using internal_graph_t            = index_traits_t::dynamic::internal_graph_t;
     using hierarchical_graph_t        = index_traits_t::dynamic::hierarchical_graph_t;
-    using descent_graph_router_t      = router_traits_t::dynamic::descent_graph_router_t;
+    using bottom_graph_router_t      = router_traits_t::dynamic::bottom_graph_router_t;
     using internal_graph_router_t     = router_traits_t::dynamic::internal_graph_router_t;
     using hierarchical_graph_router_t = router_traits_t::dynamic::hierarchical_graph_router_t;
 }   // namespace dynamic
@@ -147,13 +147,10 @@ using random_vg_t = typename vertex_generator_traits_t::random_vg_t;
 using graph_mis_vg_t = typename vertex_generator_traits_t::graph_mis_vg_t;
 
 // Router types from RouterTraits
-using dnbr_candidate_entry_t = typename router_traits_t::dnbr_candidate_entry_t;
-using lnbr_candidate_entry_t = typename router_traits_t::lnbr_candidate_entry_t;
 using candidate_entry_t = typename router_traits_t::candidate_entry_t;
 using result_entry_t = typename router_traits_t::result_entry_t;
 using knn_results_t = typename router_traits_t::knn_results_t;
 using std_candidate_queue_t = typename router_traits_t::std_candidate_queue_t;
-using std_lnbr_candidate_queue_t = typename router_traits_t::std_lnbr_candidate_queue_t;
 using linear_candidate_queue_t = typename router_traits_t::linear_candidate_queue_t;
 using fh_candidate_queue_t = typename router_traits_t::fh_candidate_queue_t;
 using boost_candidate_queue_t = typename router_traits_t::boost_candidate_queue_t;

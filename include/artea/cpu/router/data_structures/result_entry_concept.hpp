@@ -35,7 +35,7 @@ namespace cpu {
  *   - @c get_base_id()  — the base-dataset vertex identity.
  *   - @c get_distance() — the distance to the query.
  *
- * Both @c DnbrCandidateEntry and @c LnbrCandidateEntry satisfy this concept.
+ * @c CandidateEntry satisfies this concept.
  */
 template <typename EntryT>
 concept ResultEntry = requires(const EntryT ce) {

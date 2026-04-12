@@ -13,9 +13,9 @@
 // limitations under the License.
 
 /*
- * @FilePath: /Artea/include/artea/cpu/index/compactor/descent_graph_compactor.hpp
+ * @FilePath: /Artea/include/artea/cpu/index/compactor/bottom_graph_compactor.hpp
  * @Author: Chandler (Weitang Ye) <weitang.ye@ntu.edu.sg>
- * @Description: Compactor: dynamic DescentGraph -> compact DescentGraph.
+ * @Description: Compactor: dynamic BottomGraph -> compact BottomGraph.
  */
 
 #pragma once
@@ -30,7 +30,7 @@ namespace artea {
 namespace cpu {
 
 template <typename IndexTraitsT>
-class DescentGraphCompactor {
+class BottomGraphCompactor {
 
     using vertex_num_t   = typename IndexTraitsT::vertex_num_t;
     using vertex_id_t    = typename IndexTraitsT::vertex_id_t;
@@ -40,7 +40,7 @@ class DescentGraphCompactor {
 
 public:
     /**
-     * @brief Compact a DescentGraph-like structure into a compact::descent_graph_t.
+     * @brief Compact a BottomGraph-like structure into a compact::bottom_graph_t.
      *
      * Reads neighbor arrays and vector data from @p src, copies up to
      * @p extracted_nbr_size neighbors per vertex into a flat CSR layout.
@@ -49,13 +49,13 @@ public:
      *                           get_num_vertices, get_vecs_data, get_nbrs_arr,
      *                           layer_config).
      * @param extracted_nbr_size Fixed neighbor count per vertex in the output.
-     * @return A new compact::descent_graph_t.
+     * @return A new compact::bottom_graph_t.
      */
-    template <typename DescentGraphT>
+    template <typename BottomGraphT>
     static auto compact_graph(
-        const DescentGraphT& src,
+        const BottomGraphT& src,
         const vertex_num_t extracted_nbr_size
-    ) -> typename compact::descent_graph_t {
+    ) -> typename compact::bottom_graph_t {
         const vertex_num_t max_nbr_size = src.layer_config().max_nbr_size();
 
         if (extracted_nbr_size > max_nbr_size) {
@@ -69,7 +69,7 @@ public:
         const auto& vecs_data = src.get_vecs_data();
         const auto& nbrs_arr = src.get_nbrs_arr();
 
-        typename compact::descent_graph_t result(vecs_data, extracted_nbr_size);
+        typename compact::bottom_graph_t result(vecs_data, extracted_nbr_size);
         auto& csr_nbrs = result.get_csr_nbrs();
         const vertex_id_t invalid_id = IndexTraitsT::invalid_vertex_id;
 
@@ -82,7 +82,7 @@ public:
                     const vertex_num_t copy_count = std::min(
                         static_cast<vertex_num_t>(nbrs.size()), extracted_nbr_size);
                     for (vertex_num_t i = 0; i < extracted_nbr_size; ++i) {
-                        dst[i] = (i < copy_count) ? nbrs[i].get_id() : invalid_id;
+                        dst[i] = (i < copy_count) ? nbrs[i].get_level_vid() : invalid_id;
                     }
 
                     #ifndef NDEBUG
@@ -104,13 +104,13 @@ public:
         const std::string& file_path,
         const vertex_num_t extracted_nbr_size,
         const vector_array_t& vecs_data
-    ) -> typename compact::descent_graph_t {
+    ) -> typename compact::bottom_graph_t {
         using index_t = typename IndexTraitsT::conv_graph::index_t;
-        index_t descent_graph = index_t::restore(file_path, vecs_data);
-        return compact_graph(descent_graph, extracted_nbr_size);
+        index_t bottom_graph = index_t::restore(file_path, vecs_data);
+        return compact_graph(bottom_graph, extracted_nbr_size);
     }
 
-};  // class DescentGraphCompactor
+};  // class BottomGraphCompactor
 
 }   // namespace cpu
 }   // namespace artea

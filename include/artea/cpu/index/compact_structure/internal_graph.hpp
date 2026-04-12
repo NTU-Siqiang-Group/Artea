@@ -15,7 +15,7 @@
 /*
  * @FilePath: /Artea/include/artea/cpu/index/compact_internal_graph.hpp
  * @Author: Chandler (Weitang Ye) <weitang.ye@ntu.edu.sg>
- * @Description: Compact internal graph with CSR-format LayerNeighbor storage and inter-layer links.
+ * @Description: Compact internal graph with CSR-format InternalNeighbor storage and inter-layer links.
  */
 
 #pragma once
@@ -33,7 +33,7 @@ namespace compact {
  *        and inter-layer links for hierarchical navigation.
  *
  * Each vertex is assigned a fixed-size neighbor slot of @p max_nbr_size
- * LayerNeighbor entries in the flat @p _csr_nbrs array.
+ * InternalNeighbor entries in the flat @p _csr_nbrs array.
  * The @p _inter_layer_links array maps a vertex's layer_vid to
  * its layer_vid in the next (lower) layer.
  *
@@ -41,7 +41,7 @@ namespace compact {
  * neighbors per vertex. Instead, it uses a **sentinel-based traversal**
  * pattern: iterate over a vertex's neighbor array from the beginning and
  * stop when encountering a sentinel entry whose @c base_vid equals
- * @c invalid_vertex_id (i.e., @c IndexTraitsT::invalid_lnbr).
+ * @c invalid_vertex_id (i.e., @c IndexTraitsT::invalid_inbr).
  *
  * @tparam IndexTraitsT The index traits type.
  */
@@ -50,9 +50,9 @@ class InternalGraph {
 
     using vertex_num_t = typename IndexTraitsT::vertex_num_t;
     using vertex_id_t = typename IndexTraitsT::vertex_id_t;
-    using lnbr_t = typename IndexTraitsT::lnbr_t;
+    using inbr_t = typename IndexTraitsT::inbr_t;
 
-    using csr_lnbrs_t = cache_aligned_container_t<lnbr_t>;
+    using csr_inbrs_t = cache_aligned_container_t<inbr_t>;
     using inter_layer_links_arr_t = cache_aligned_container_t<vertex_id_t>;
 
     static constexpr vertex_id_t invalid_vertex_id = IndexTraitsT::invalid_vertex_id;
@@ -71,7 +71,7 @@ public:
         _max_nbr_size(max_nbr_size)
     {
         _csr_nbrs.resize(static_cast<size_t>(_num_vertices) * _max_nbr_size);
-        std::fill(_csr_nbrs.begin(), _csr_nbrs.end(), IndexTraitsT::invalid_lnbr);
+        std::fill(_csr_nbrs.begin(), _csr_nbrs.end(), IndexTraitsT::invalid_inbr);
 
         _inter_layer_links.resize(_num_vertices, invalid_vertex_id);
     }
@@ -94,8 +94,8 @@ public:
      * @return A const span over the fixed-size neighbor slots.
      */
     __attribute__((always_inline))
-    auto fetch_nbrs(const vertex_id_t src) const -> std::span<const lnbr_t> {
-        return std::span<const lnbr_t>(
+    auto fetch_nbrs(const vertex_id_t src) const -> std::span<const inbr_t> {
+        return std::span<const inbr_t>(
             &_csr_nbrs[static_cast<size_t>(src) * _max_nbr_size],
             _max_nbr_size
         );
@@ -107,8 +107,8 @@ public:
      * @return A mutable span over the fixed-size neighbor slots.
      */
     __attribute__((always_inline))
-    auto fetch_nbrs(const vertex_id_t src) -> std::span<lnbr_t> {
-        return std::span<lnbr_t>(
+    auto fetch_nbrs(const vertex_id_t src) -> std::span<inbr_t> {
+        return std::span<inbr_t>(
             &_csr_nbrs[static_cast<size_t>(src) * _max_nbr_size],
             _max_nbr_size
         );
@@ -170,12 +170,12 @@ public:
     }
 
     __attribute__((always_inline))
-    auto get_csr_nbrs() const -> const csr_lnbrs_t& {
+    auto get_csr_nbrs() const -> const csr_inbrs_t& {
         return _csr_nbrs;
     }
 
     __attribute__((always_inline))
-    auto get_csr_nbrs() -> csr_lnbrs_t& {
+    auto get_csr_nbrs() -> csr_inbrs_t& {
         return _csr_nbrs;
     }
 
@@ -187,7 +187,7 @@ private:
     vertex_num_t _max_nbr_size;
 
     /** @brief CSR-format neighbor storage: each vertex occupies _max_nbr_size contiguous slots. */
-    csr_lnbrs_t _csr_nbrs;
+    csr_inbrs_t _csr_nbrs;
 
     /**
      * @brief Inter-layer links: _inter_layer_links[layer_vid] stores

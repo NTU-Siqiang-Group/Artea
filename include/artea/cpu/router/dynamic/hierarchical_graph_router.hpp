@@ -27,6 +27,7 @@
 #include <algorithm>
 #include <cstddef>
 #include <cstdint>
+#include <random>
 #include <span>
 #include <unordered_set>
 #include <utility>
@@ -52,7 +53,7 @@ namespace dynamic {
  *     that seeds the top layer with uniformly random vertices, propagates
  *     the FULL per-layer candidate set down via @c get_inter_layer_link,
  *     and returns a @c knn_results_t from the bottom layer.
- *   - **Build path**: a public @c beam_search_layer primitive that
+ *   - **Build path**: a public @c beam_search primitive that
  *     @c stacked_rgraph::IndexFactory calls from its insertion hot path to
  *     replace its hand-rolled per-layer beam search.
  *
@@ -76,13 +77,12 @@ class HierarchicalGraphRouter :
     using dist_func_t             = typename RouterTraitsT::dist_func_t;
     using vector_array_t          = typename RouterTraitsT::vector_array_t;
     using query_vecs_t            = typename RouterTraitsT::query_vecs_t;
-    using lnbr_t                  = typename RouterTraitsT::lnbr_t;
-    using lnbr_candidate_entry_t  = typename RouterTraitsT::lnbr_candidate_entry_t;
-    using dnbr_candidate_entry_t  = typename RouterTraitsT::dnbr_candidate_entry_t;
+    using inbr_t                  = typename RouterTraitsT::inbr_t;
+    using candidate_entry_t       = typename RouterTraitsT::candidate_entry_t;
+    using std_candidate_queue_t   = typename RouterTraitsT::std_candidate_queue_t;
     using visited_table_t         = typename RouterTraitsT::visited_table_t;
     using visited_table_pool_t    = typename RouterTraitsT::visited_table_pool_t;
     using knn_results_t           = typename RouterTraitsT::knn_results_t;
-    using random_seq_t            = typename RouterTraitsT::random_seq_t;
     using base_class_t            = typename RouterTraitsT::template vector_router_t<HierarchicalGraphRouter<RouterTraitsT>>;
 
     using inner_router_t          = InternalGraphRouter<RouterTraitsT>;
@@ -113,8 +113,7 @@ public:
         _per_layer_router(base_vecs, dist_func, topk,
                    std::max(search_nn_qs, candidate_queue_size)),
         _search_nn_qs(search_nn_qs),
-        _visited_table_pool(base_vecs.get_num_vecs()),
-        _random_seq()
+        _visited_table_pool(base_vecs.get_num_vecs())
     {
         if (search_nn_qs == 0) {
             ARTEA_ERROR("search_nn_qs must be >= 1");
@@ -133,7 +132,6 @@ public:
      */
     auto initialize() -> void {
         _visited_table_pool.warmup();
-        _warmup_random_seq();
         _per_layer_router.initialize();
     }
 
@@ -145,22 +143,20 @@ public:
      * @brief Single-layer beam-search primitive. Trivially delegates to the
      *        composed @c InternalGraphRouter.
      *
-     * See @c InternalGraphRouter::beam_search_layer for semantics and
+     * See @c InternalGraphRouter::beam_search for semantics and
      * torn-read guards. This overload exists so the IndexFactory can hold
      * a single @c hierarchical_graph_router_t and call into the per-layer
      * atom without plumbing two router instances.
      */
     template <typename InternalGraphT>
     __attribute__((always_inline))
-    auto beam_search_layer(
+    auto beam_search(
         const vec_ele_t* query_vec,
         const InternalGraphT& layer,
-        std::span<const lnbr_t> entries,
-        const vertex_num_t queue_width,
+        std_candidate_queue_t& candidate_queue,
         visited_table_t& visited
-    ) const -> std::vector<lnbr_candidate_entry_t> {
-        return _per_layer_router.beam_search_layer(
-            query_vec, layer, entries, queue_width, visited);
+    ) const -> void {
+        _per_layer_router.beam_search(query_vec, layer, candidate_queue, visited);
     }
 
     // ================================================================
@@ -173,10 +169,9 @@ public:
      * 1. Randomly sample @c _search_nn_qs seed entries from the top layer.
      * 2. For h = h_max .. 1:
      *    - Run the per-layer atom with beam width @c _search_nn_qs. The
-     *      atom loops until @c should_terminate() — "能充分探索一层的内容，
-     *      直到无法改进 candidate queue 才进入下一层".
+     *      atom loops until @c should_terminate().
      *    - If h > 1, translate EVERY candidate's layer_vid via
-     *      @c get_inter_layer_link() into a fresh lnbr_t for the next
+     *      @c get_inter_layer_link() into a fresh inbr_t for the next
      *      layer. Pass the entire result set down (no top-k slicing).
      * 3. At h == 1, trim the final sorted result set to @c this->_topk.
      */
@@ -189,46 +184,46 @@ public:
         if (h_max == 0) return _empty_results();
 
         auto& visited = _visited_table_pool.acquire();
+        const std::size_t L = static_cast<std::size_t>(_search_nn_qs);
 
         // --- Top-layer random seeding ---
-        std::vector<lnbr_t> current_entries;
+        std_candidate_queue_t candidate_queue(L);
         {
             const auto& top_layer = hg.get_layer_graph(h_max - 1);
-            _per_layer_router.sample_random_entries(
-                top_layer, _search_nn_qs, current_entries);
+            _per_layer_router.sample_entries(top_layer, query_vec, candidate_queue);
         }
 
-        if (current_entries.empty()) {
+        if (candidate_queue.empty()) {
             visited.clear();
             return _empty_results();
         }
 
         // --- Top-down descent ---
-        std::vector<lnbr_candidate_entry_t> cands;
         for (layer_num_t h = h_max; h >= 1; --h) {
             const layer_id_t layer_idx = h - 1;
             const auto& layer = hg.get_layer_graph(layer_idx);
 
-            cands = _per_layer_router.beam_search_layer(
-                query_vec, layer,
-                std::span<const lnbr_t>(current_entries),
-                _search_nn_qs, visited);
+            _per_layer_router.beam_search(query_vec, layer, candidate_queue, visited);
 
-            if (cands.empty()) break;
+            if (candidate_queue.get_result_size() == 0) break;
 
             if (h > 1) {
-                current_entries.clear();
-                current_entries.reserve(cands.size());
-                for (const auto& c : cands) {
+                // Build next-layer queue via inter-layer link remapping.
+                std_candidate_queue_t next_candidate_queue(L);
+                for (const auto& c : candidate_queue) {
                     const vertex_id_t lower_lv =
                         layer.get_inter_layer_link(c.get_layer_vid());
-                    current_entries.emplace_back(c.get_base_vid(), lower_lv);
+                    next_candidate_queue.try_push(c.get_base_vid(), lower_lv, c.get_distance());
                 }
+                candidate_queue = std::move(next_candidate_queue);
             }
         }
 
         visited.clear();
-        return _to_knn_results(cands);
+        const std::size_t topk = std::min(
+            static_cast<std::size_t>(this->_topk), candidate_queue.get_result_size());
+        if (topk == 0) return _empty_results();
+        return candidate_queue.extract_results(topk);
     }
 
     /**
@@ -253,7 +248,7 @@ public:
         auto& visited = _visited_table_pool.acquire();
 
         // --- Top-layer single random entry ---
-        lnbr_candidate_entry_t current;
+        candidate_entry_t current;
         {
             const auto& top_layer = hg.get_layer_graph(h_max - 1);
             const vertex_num_t top_size = top_layer.get_num_vertices();
@@ -262,13 +257,11 @@ public:
                 return _empty_results();
             }
 
-            std::vector<vertex_id_t> scratch(1);
-            _random_seq.generate(scratch, /*upper_bound=*/top_size, /*num=*/1);
-            const vertex_id_t lv = scratch[0];
+            const vertex_id_t lv = _draw_random_vid(top_size);
             const vertex_id_t bv = top_layer.get_base_vid(lv);
-            const distance_t  d  =
+            const distance_t dist =
                 this->_dist_func(query_vec, this->_vecs_data.get(bv));
-            current = lnbr_candidate_entry_t(bv, lv, d);
+            current = candidate_entry_t(bv, lv, dist);
         }
 
         // --- Top-down greedy descent ---
@@ -276,28 +269,29 @@ public:
             const layer_id_t layer_idx = h - 1;
             const auto& layer = hg.get_layer_graph(layer_idx);
 
-            current = _per_layer_router.greedy_from_entry(query_vec, layer, current);
+            current = _per_layer_router.greedy_search(
+                query_vec, layer, current, visited);
 
             if (h > 1) {
                 const vertex_id_t lower_lv =
                     layer.get_inter_layer_link(current.get_layer_vid());
-                // distance in the next layer is the same vertex (base_vid
-                // is unchanged), but the dedup key (layer_vid) changes.
-                current = lnbr_candidate_entry_t(
+                current = candidate_entry_t(
                     current.get_base_vid(), lower_lv, current.get_distance());
             }
         }
 
         // --- Final beam search around the greedy endpoint on the bottom layer ---
         const auto& bottom = hg.get_layer_graph(0);
-        std::vector<lnbr_t> seed{ lnbr_t(current.get_base_vid(), current.get_layer_vid()) };
-        auto cands = _per_layer_router.beam_search_layer(
-            query_vec, bottom,
-            std::span<const lnbr_t>(seed),
-            _search_nn_qs, visited);
+        std_candidate_queue_t candidate_queue(static_cast<std::size_t>(_search_nn_qs));
+        candidate_queue.try_push(current.get_base_vid(), current.get_layer_vid(),
+                     current.get_distance());
+        _per_layer_router.beam_search(query_vec, bottom, candidate_queue, visited);
 
         visited.clear();
-        return _to_knn_results(cands);
+        const std::size_t topk = std::min(
+            static_cast<std::size_t>(this->_topk), candidate_queue.get_result_size());
+        if (topk == 0) return _empty_results();
+        return candidate_queue.extract_results(topk);
     }
 
     /**
@@ -346,52 +340,37 @@ public:
      *        @c stacked_rgraph::IndexFactory) can sample random entries
      *        from a layer through the hierarchical router without
      *        plumbing two router instances. Forwards to the composed
-     *        @c InternalGraphRouter::sample_random_entries.
+     *        @c InternalGraphRouter::sample_entries.
      */
     template <typename InternalGraphT>
     __attribute__((always_inline))
-    auto sample_random_entries(
+    auto sample_entries(
         const InternalGraphT& layer,
-        const vertex_num_t k,
-        std::vector<lnbr_t>& out
+        const vec_ele_t* query_vec,
+        std_candidate_queue_t& candidate_queue
     ) const -> void {
-        _per_layer_router.sample_random_entries(layer, k, out);
+        _per_layer_router.sample_entries(layer, query_vec, candidate_queue);
     }
 
 private:
     // ---- Helpers ----
 
-    auto _to_knn_results(const std::vector<lnbr_candidate_entry_t>& src) const
-        -> knn_results_t
-    {
-        const std::size_t K = static_cast<std::size_t>(this->_topk);
-        knn_results_t out;
-        out.reserve(K);
-        for (std::size_t i = 0; i < src.size() && out.size() < K; ++i) {
-            out.emplace_back(src[i].get_base_vid(), src[i].get_distance());
-        }
-        while (out.size() < K) {
-            out.push_back(dnbr_candidate_entry_t::make_invalid_entry());
-        }
-        return out;
-    }
-
     auto _empty_results() const -> knn_results_t {
         const std::size_t K = static_cast<std::size_t>(this->_topk);
-        knn_results_t out(K, dnbr_candidate_entry_t::make_invalid_entry());
-        return out;
+        return knn_results_t(K, candidate_entry_t::make_invalid_entry());
     }
 
+    /**
+     * @brief Draw a single uniformly random vertex_id in [0, upper_bound).
+     *        Uses a thread-local @c std::mt19937 so concurrent callers do
+     *        not contend on shared state.
+     */
     __attribute__((always_inline))
-    auto _warmup_random_seq() const -> void {
-        const int num_threads = tbb_max_num_threads();
-        tbb::parallel_for(
-            tbb::blocked_range<int>(0, num_threads, 1),
-            [&](const tbb::blocked_range<int>&) {
-                std::vector<vertex_id_t> dummy(1);
-                _random_seq.generate(dummy, /*upper_bound=*/1, /*num=*/1);
-            }
-        );
+    static auto _draw_random_vid(const vertex_num_t upper_bound) -> vertex_id_t {
+        thread_local std::mt19937 rng(std::random_device{}());
+        std::uniform_int_distribution<vertex_id_t> dist(
+            0, static_cast<vertex_id_t>(upper_bound) - 1);
+        return dist(rng);
     }
 
     // ---- Members ----
@@ -404,9 +383,6 @@ private:
 
     /** @brief Pool of thread-local visited bitmaps for parallel queries. */
     mutable visited_table_pool_t _visited_table_pool;
-
-    /** @brief Thread-safe random sequence generator (MKL-backed). */
-    mutable random_seq_t _random_seq;
 
 };  // class HierarchicalGraphRouter
 

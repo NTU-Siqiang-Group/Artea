@@ -26,6 +26,7 @@
 #include <cmath>
 #include <cstdint>
 #include <limits>
+#include <memory>
 #include <span>
 #include <utility>
 #include <vector>
@@ -76,7 +77,7 @@ class IndexFactory {
     using distance_t       = typename GraphFactoryTraitsT::distance_t;
     using ratio_t          = typename GraphFactoryTraitsT::ratio_t;
     using vec_ele_t        = typename GraphFactoryTraitsT::vec_ele_t;
-    using lnbr_t           = typename GraphFactoryTraitsT::lnbr_t;
+    using inbr_t           = typename GraphFactoryTraitsT::inbr_t;
     using vector_array_t   = typename GraphFactoryTraitsT::vector_array_t;
     using internal_graph_t = typename GraphFactoryTraitsT::dynamic::internal_graph_t;
 
@@ -85,13 +86,12 @@ class IndexFactory {
 
     // Router-side types (inherited via RefinerTraits → RouterTraits).
     using visited_table_t         = typename GraphFactoryTraitsT::visited_table_t;
-    using lnbr_candidate_entry_t  = typename GraphFactoryTraitsT::lnbr_candidate_entry_t;
+    using candidate_entry_t       = typename GraphFactoryTraitsT::candidate_entry_t;
+    using std_candidate_queue_t   = typename GraphFactoryTraitsT::std_candidate_queue_t;
+    using knn_results_t           = typename GraphFactoryTraitsT::knn_results_t;
     using hg_router_t             = typename GraphFactoryTraitsT::dynamic::hierarchical_graph_router_t;
 
     static constexpr vertex_id_t invalid_vertex_id = GraphFactoryTraitsT::invalid_vertex_id;
-
-    /** @brief Internal sorted-candidate list type returned by beam search. */
-    using candidate_t = lnbr_candidate_entry_t;
 
 public:
     /**
@@ -101,7 +101,7 @@ public:
      *        to grow the same layer), so we serialize the first
      *        @c startup_points per_level_insertions before switching to TBB parallel.
      */
-    static constexpr vertex_num_t startup_points = 500;
+    static constexpr vertex_num_t startup_points = 100;
 
     /**
      * @brief Append @p batch_vecs to @p index's owned vector storage and
@@ -155,7 +155,7 @@ public:
 
         // Router is constructed internally, over the up-to-date vector
         // storage. It is used only via its build-time primitive
-        // (beam_search_layer); no query-path warmup is needed because
+        // (beam_search); no query-path warmup is needed because
         // we pass the factory's own visited table on the build path.
         // The router's `topk` is irrelevant for the atom;
         // select_nbrs_qs is passed as a harmless placeholder.
@@ -222,7 +222,7 @@ private:
      * @c IndexStructure::append_vecs before invoking this method.
      *
      * Top-layer random seeding is delegated to
-     * @c router.sample_random_entries, which owns its own thread-safe
+     * @c router.sample_entries, which owns its own thread-safe
      * MKL-backed RNG (TBB enumerable_thread_specific) — no separate
      * RNG needs to be threaded through.
      *
@@ -263,61 +263,52 @@ private:
         //        search_nn_qs entries, ascending by distance).
         std::vector<distance_t> min_distance_per_layer(
             cur_max_level, std::numeric_limits<distance_t>::max());
-        std::vector<std::vector<candidate_t>> candidates_per_layer(cur_max_level);
+        std::vector<std::unique_ptr<std_candidate_queue_t>> candidates_per_layer(cur_max_level);
 
-        // Reusable buffer: the entry set for the NEXT beam search. At most
-        // `search_nn_qs` entries ever carried (one per Phase-1 candidate).
-        std::vector<lnbr_t> next_layer_seeds;
-        next_layer_seeds.reserve(static_cast<std::size_t>(search_nn_qs));
+        const std::size_t L1 = static_cast<std::size_t>(search_nn_qs);
 
         // Seed the top layer's beam search with random top-layer vertices.
-        // Delegated to the router so that the factory, the query-path
-        // beam_search, and the per-layer router all share a single
-        // implementation. Empty hierarchy is handled by Phase 1.5 below
-        // (which will extend to layer 1).
+        std_candidate_queue_t candidate_queue(L1);
         if (cur_max_level > 0) {
             const auto& top_layer = index.get_layer_graph(cur_max_level - 1);
-            router.sample_random_entries(top_layer, search_nn_qs, next_layer_seeds);
+            router.sample_entries(top_layer, new_vec, candidate_queue);
         }
 
         for (layer_num_t cur_level = cur_max_level; cur_level >= 1; --cur_level) {
             const layer_id_t cur_layer_idx = cur_level - 1;
 
-            auto cur_layer_cands = router.beam_search_layer(
-                new_vec,
-                index.get_layer_graph(cur_layer_idx),
-                std::span<const lnbr_t>(next_layer_seeds),
-                search_nn_qs, visited);
+            router.beam_search(
+                new_vec, index.get_layer_graph(cur_layer_idx), candidate_queue, visited);
 
-            if (cur_layer_cands.empty()) {
-                // Layer transiently empty (race) or all entries got clamped
-                // out. min_distance_per_layer[cur_level-1] stays at +∞
-                // (uncovered); candidates_per_layer[cur_level-1] stays
-                // empty. Clear next_layer_seeds — the next layer's beam
-                // search will return empty too, and the layer is treated as
-                // uncovered.
-                if (cur_level > 1) next_layer_seeds.clear();
+            if (candidate_queue.get_result_size() == 0) {
+                // Empty queue — create a fresh empty one for next layer.
+                if (cur_level > 1) candidate_queue = std_candidate_queue_t(L1);
                 continue;
             }
 
-            min_distance_per_layer[cur_level - 1] = cur_layer_cands.front().get_distance();
+            // Find min distance by iterating the queue (heap order is fine).
+            distance_t min_d = std::numeric_limits<distance_t>::max();
+            for (const auto& c : candidate_queue) {
+                if (c.get_distance() < min_d) min_d = c.get_distance();
+            }
+            min_distance_per_layer[cur_level - 1] = min_d;
 
-            // Translate the ENTIRE candidate set `cur_layer_cands` to layer
-            // (cur_level - 1) entries via inter_layer_link BEFORE moving it
-            // into the cache. The next layer's beam search inherits the
-            // full queue from this layer — no top-K slicing.
+            // Cache via clone() for Phase 2 reuse.
+            candidates_per_layer[cur_level - 1] =
+                std::make_unique<std_candidate_queue_t>(candidate_queue.clone());
+
+            // Translate to next layer via inter_layer_link.
             if (cur_level > 1) {
                 auto& cur_layer_graph = index.get_layer_graph(cur_layer_idx);
-                next_layer_seeds.clear();
-                for (const auto& cand : cur_layer_cands) {
+                std_candidate_queue_t next_candidate_queue(L1);
+                for (const auto& cand : candidate_queue) {
                     const vertex_id_t lower_layer_vid =
                         cur_layer_graph.get_inter_layer_link(cand.get_layer_vid());
-                    next_layer_seeds.emplace_back(cand.get_base_vid(), lower_layer_vid);
+                    next_candidate_queue.try_push(cand.get_base_vid(), lower_layer_vid,
+                                     cand.get_distance());
                 }
+                candidate_queue = std::move(next_candidate_queue);
             }
-
-            // Cache the full Phase 1 candidate set for Phase 2 reuse.
-            candidates_per_layer[cur_level - 1] = std::move(cur_layer_cands);
         }
 
         // ---------- Compute highest_insert_level ----------
@@ -356,18 +347,14 @@ private:
             return;
         }
 
-        // Reusable scratch buffer for converting a cached Phase-1
-        // candidate list into lnbr_t entries passed to
-        // router.beam_search_layer.
-        std::vector<lnbr_t> cand_pool_seeds;
-        cand_pool_seeds.reserve(static_cast<std::size_t>(search_nn_qs) + 1);
+        const std::size_t L2 = static_cast<std::size_t>(select_nbrs_qs);
 
         std::vector<std::pair<layer_id_t, vertex_id_t>> per_level_insertions;
         per_level_insertions.reserve(highest_insert_level);
 
         // Scratch buffer for the pruned initial neighbor set. Sized once
         // at the upper bound (max_nbr_size); reused across Phase 2 layers.
-        std::vector<lnbr_t> selected_nbrs;
+        std::vector<inbr_t> selected_nbrs;
         selected_nbrs.reserve(static_cast<std::size_t>(max_nbr_size));
 
         for (layer_num_t cur_level = highest_insert_level; cur_level >= 1; --cur_level) {
@@ -375,39 +362,31 @@ private:
             auto& cur_layer_graph = index.get_layer_graph(cur_layer_idx);
 
             // Seed Phase 2's beam search from the cached Phase 1 candidate
-            // set at the SAME layer. We do not propagate cand_pool_seeds down
-            // via inter_layer_link between Phase 2 iterations; every layer
-            // starts fresh from its own in-layer Phase 1 output. If Phase
-            // 1's candidates_per_layer[cur_level - 1] was empty (transient
-            // race), we leave cand_pool_seeds empty — the beam search will
-            // return no candidates and we'll skip neighbor selection for
-            // that layer.
-            cand_pool_seeds.clear();
-            if (cur_level - 1 < cur_max_level && !candidates_per_layer[cur_level - 1].empty()) {
-                for (const auto& cand : candidates_per_layer[cur_level - 1]) {
-                    cand_pool_seeds.emplace_back(cand.get_base_vid(), cand.get_layer_vid());
+            // set at the SAME layer (wider capacity L2 for richer search).
+            std_candidate_queue_t phase2_candidate_queue(L2);
+            if (cur_level - 1 < cur_max_level && candidates_per_layer[cur_level - 1]) {
+                for (const auto& cand : *candidates_per_layer[cur_level - 1]) {
+                    phase2_candidate_queue.try_push(cand.get_base_vid(),
+                                       cand.get_layer_vid(),
+                                       cand.get_distance());
                 }
             }
 
-            // Rich beam search with select_nbrs_qs (= L_2) to build a
-            // larger-than-max_nbr_size candidate pool.
-            auto cur_layer_cands = router.beam_search_layer(
-                new_vec, cur_layer_graph,
-                std::span<const lnbr_t>(cand_pool_seeds),
-                select_nbrs_qs, visited);
+            // Rich beam search with select_nbrs_qs (= L_2).
+            router.beam_search(new_vec, cur_layer_graph, phase2_candidate_queue, visited);
 
-            // Insert the new vertex at this layer. Placeholder lower-layer
-            // vid is new_base_vid (the base_vid); upper layers will be patched
-            // in the epilogue.
+            // Insert the new vertex at this layer.
             const vertex_id_t new_layer_vid = cur_layer_graph.add_vertex(new_base_vid);
             per_level_insertions.emplace_back(cur_layer_idx, new_layer_vid);
-            const lnbr_t new_vertex_lnbr(new_base_vid, new_layer_vid);
+            const inbr_t new_vertex_inbr(new_base_vid, new_layer_vid);
 
-            // Neighbor selection (pruning): the beam-search output is
-            // already sorted ascending by distance. Simply truncate to at
-            // most max_nbr_size entries. No covering-radius filter, no
-            // dominance pruning — the construction parameters (select_nbrs_qs,
-            // max_nbr_size) already encode the desired trade-off.
+            // Neighbor selection: extract sorted results, truncate to max_nbr_size.
+            const std::size_t result_k = std::min(
+                L2, phase2_candidate_queue.get_result_size());
+            auto cur_layer_cands = (result_k > 0)
+                ? phase2_candidate_queue.extract_results(result_k)
+                : knn_results_t{};
+
             selected_nbrs.clear();
             const std::size_t num_to_take = std::min<std::size_t>(
                 cur_layer_cands.size(), static_cast<std::size_t>(max_nbr_size));
@@ -418,12 +397,12 @@ private:
             }
 
             // Forward edges.
-            for (const lnbr_t& nbr : selected_nbrs) {
+            for (const inbr_t& nbr : selected_nbrs) {
                 cur_layer_graph.add_nbr(new_layer_vid, nbr, pruning_fn);
             }
             // Reverse edges.
-            for (const lnbr_t& nbr : selected_nbrs) {
-                cur_layer_graph.add_nbr(nbr.layer_vid, new_vertex_lnbr, pruning_fn);
+            for (const inbr_t& nbr : selected_nbrs) {
+                cur_layer_graph.add_nbr(nbr.get_level_vid(), new_vertex_inbr, pruning_fn);
             }
         }
 

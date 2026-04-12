@@ -219,7 +219,7 @@ TEST_F(DynamicHierarchicalGraphTest, AddNbrUnderConcurrentInsertion) {
 
     // Pick a hot vertex and have 8 threads contend on it.
     const vertex_id_t hot = 0;
-    auto prune_fn = [](lnbr_t* slots, lnbr_t new_nbr) -> uint64_t {
+    auto prune_fn = [](inbr_t* slots, inbr_t new_nbr) -> uint64_t {
         slots[7] = new_nbr;
         return 8;
     };
@@ -229,7 +229,7 @@ TEST_F(DynamicHierarchicalGraphTest, AddNbrUnderConcurrentInsertion) {
         [&](const tbb::blocked_range<vertex_num_t>& r) {
             for (vertex_num_t i = r.begin(); i < r.end(); ++i) {
                 const vertex_id_t nbr_bv = (i % (num_verts - 1)) + 1;
-                layer.add_nbr(hot, lnbr_t(nbr_bv, nbr_bv), prune_fn);
+                layer.add_nbr(hot, inbr_t(nbr_bv, nbr_bv), prune_fn);
             }
         }
     );
@@ -299,12 +299,12 @@ TEST_F(CompactHierarchicalGraphTest, NeighborReadWrite) {
 
     auto& layer = hg.get_layer_graph(0);
     auto nbrs = layer.fetch_nbrs(0);
-    nbrs[0] = lnbr_t(100, 200);
-    nbrs[1] = lnbr_t(101, 201);
+    nbrs[0] = inbr_t(100, 200);
+    nbrs[1] = inbr_t(101, 201);
 
     auto nbrs_read = layer.fetch_nbrs(0);
-    EXPECT_EQ(nbrs_read[0].base_vid, 100u);
-    EXPECT_EQ(nbrs_read[1].base_vid, 101u);
+    EXPECT_EQ(nbrs_read[0].get_base_vid(), 100u);
+    EXPECT_EQ(nbrs_read[1].get_base_vid(), 101u);
 }
 
 // ============================================================
@@ -333,7 +333,7 @@ protected:
                 const vertex_num_t nbr_count = std::min<vertex_num_t>(i % (max_nbr_size + 1), max_nbr_size);
                 auto block = layer.fetch_nbrs(v);
                 for (vertex_num_t j = 0; j < nbr_count; ++j) {
-                    block[1 + j] = lnbr_t(
+                    block[1 + j] = inbr_t(
                         l * 10000 + static_cast<vertex_id_t>(j),
                         static_cast<vertex_id_t>(j));
                 }
@@ -379,11 +379,11 @@ TEST_F(HierarchicalGraphCompactorTest, NeighborValuesPreserved) {
             auto compact_nbrs = compact_layer.fetch_nbrs(v);
 
             for (uint64_t j = 0; j < expected_copied; ++j) {
-                EXPECT_EQ(compact_nbrs[j].base_vid, src_block[1 + j].base_vid);
-                EXPECT_EQ(compact_nbrs[j].layer_vid, src_block[1 + j].layer_vid);
+                EXPECT_EQ(compact_nbrs[j].get_base_vid(), src_block[1 + j].get_base_vid());
+                EXPECT_EQ(compact_nbrs[j].get_level_vid(), src_block[1 + j].get_level_vid());
             }
             for (uint64_t j = expected_copied; j < extracted_size; ++j) {
-                EXPECT_EQ(compact_nbrs[j], base_traits_t::invalid_lnbr);
+                EXPECT_EQ(compact_nbrs[j], base_traits_t::invalid_inbr);
             }
         }
     }

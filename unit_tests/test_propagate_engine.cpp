@@ -64,7 +64,7 @@ protected:
         dist_func_ = std::make_unique<dist_func_t>(vec_dim_);
 
         // Initialize descent graph
-        descent_graph_ = std::make_unique<conv_graph::index_t>(
+        bottom_graph_ = std::make_unique<conv_graph::index_t>(
             *vecs_,
             layer_config_,
             pruning_config_,
@@ -80,9 +80,9 @@ protected:
     }
 
     // Helper to check if edge (u, v) exists in neighbor array
-    bool has_edge(const dnbr_arr_t& nbrs, vertex_id_t target_id, distance_t* out_dist = nullptr) {
+    bool has_edge(const bnbr_arr_t& nbrs, vertex_id_t target_id, distance_t* out_dist = nullptr) {
         for (const auto& nbr : nbrs) {
-            if (nbr.get_id() == target_id) {
+            if (nbr.get_level_vid() == target_id) {
                 if (out_dist) *out_dist = nbr.get_distance();
                 return true;
             }
@@ -92,7 +92,7 @@ protected:
 
     // Verify RNG property manually
     bool verify_rng_property(
-        const std::vector<dnbr_arr_t>& nbrs_arr,
+        const std::vector<bnbr_arr_t>& nbrs_arr,
         ratio_t scale_coeffs = 1.0,
         ratio_t shifted_coeffs = 0.0
     ) {
@@ -100,7 +100,7 @@ protected:
             const auto& nbrs = nbrs_arr[u];
 
             for (size_t i = 0; i < nbrs.size(); ++i) {
-                vertex_id_t v = nbrs[i].get_id();
+                vertex_id_t v = nbrs[i].get_level_vid();
                 distance_t d_uv = nbrs[i].get_distance();
                 distance_t threshold = (d_uv / scale_coeffs) - shifted_coeffs;
 
@@ -132,24 +132,24 @@ protected:
     conv_graph::propagate_config_t propagate_config_{4, 14, 0.6};
     std::unique_ptr<vector_array_t> vecs_;
     std::unique_ptr<dist_func_t> dist_func_;
-    std::unique_ptr<conv_graph::index_t> descent_graph_;
+    std::unique_ptr<conv_graph::index_t> bottom_graph_;
 };
 
 TEST_F(PropagateEngineCorrectnessTest, TrianglePruningWithPropagateEngine) {
     // Create initial complete graph
-    auto& nbrs_arr = descent_graph_->get_nbrs_arr();
+    auto& nbrs_arr = bottom_graph_->get_nbrs_arr();
 
     for (vertex_id_t u = 0; u < num_vertices_; ++u) {
-        dnbr_arr_t& nbrs = nbrs_arr[u];
+        bnbr_arr_t& nbrs = nbrs_arr[u];
         for (vertex_id_t v = 0; v < num_vertices_; ++v) {
             if (v != u) {
                 distance_t dist = compute_distance(u, v);
-                nbrs.push_back(dnbr_t(v, dist, true));
+                nbrs.push_back(bnbr_t(v, dist, true));
             }
         }
         // Sort by distance
         std::sort(nbrs.begin(), nbrs.end(),
-            [](const dnbr_t& a, const dnbr_t& b) {
+            [](const bnbr_t& a, const bnbr_t& b) {
                 return a.get_distance() < b.get_distance();
             });
     }
@@ -159,7 +159,7 @@ TEST_F(PropagateEngineCorrectnessTest, TrianglePruningWithPropagateEngine) {
         const auto& nbrs = nbrs_arr[u];
         std::string nbr_list;
         for (size_t i = 0; i < std::min(nbrs.size(), static_cast<size_t>(8)); ++i) {
-            nbr_list += fmt::format("({}, {:.3f})", nbrs[i].get_id(), nbrs[i].get_distance());
+            nbr_list += fmt::format("({}, {:.3f})", nbrs[i].get_level_vid(), nbrs[i].get_distance());
             if (i < std::min(nbrs.size(), static_cast<size_t>(8)) - 1) nbr_list += ", ";
         }
         if (nbrs.size() > 8) nbr_list += "...";
@@ -176,10 +176,10 @@ TEST_F(PropagateEngineCorrectnessTest, TrianglePruningWithPropagateEngine) {
     const ratio_t shifted_coeffs = 0.0;
     const vec_num_t max_nbr_size = 6;
 
-    descent_graph_->layer_config().max_nbr_size(max_nbr_size);
+    bottom_graph_->layer_config().max_nbr_size(max_nbr_size);
 
     propagate_engine_ss_t propagate_engine(num_vertices_, *dist_func_);
-    propagate_engine.set_graph(*descent_graph_);
+    propagate_engine.set_graph(*bottom_graph_);
 
     auto triangle_updater = propagate_engine.make_updater<triangle_updater_t>(scale_coeffs, shifted_coeffs);
 
@@ -191,7 +191,7 @@ TEST_F(PropagateEngineCorrectnessTest, TrianglePruningWithPropagateEngine) {
         const auto& nbrs = nbrs_arr[u];
         std::string nbr_list;
         for (size_t i = 0; i < nbrs.size(); ++i) {
-            nbr_list += fmt::format("({}, {:.3f})", nbrs[i].get_id(), nbrs[i].get_distance());
+            nbr_list += fmt::format("({}, {:.3f})", nbrs[i].get_level_vid(), nbrs[i].get_distance());
             if (i < nbrs.size() - 1) nbr_list += ", ";
         }
         ARTEA_INFO(fmt::format("  v{} -> [{}]", u, nbr_list));
@@ -232,7 +232,7 @@ TEST_F(PropagateEngineCorrectnessTest, IntegratedRandomAndReverseUpdater) {
     // Step 3: Apply ReverseUpdater to make it bidirectional
     // Step 4: Verify bidirectionality
 
-    auto& nbrs_arr = descent_graph_->get_nbrs_arr();
+    auto& nbrs_arr = bottom_graph_->get_nbrs_arr();
 
     // Step 1: Start with empty neighbor arrays
     for (vertex_id_t u = 0; u < num_vertices_; ++u) {
@@ -242,7 +242,7 @@ TEST_F(PropagateEngineCorrectnessTest, IntegratedRandomAndReverseUpdater) {
     ARTEA_INFO("Step 1: Starting with empty graph");
 
     propagate_engine_ss_t propagate_engine(num_vertices_, *dist_func_);
-    propagate_engine.set_graph(*descent_graph_);
+    propagate_engine.set_graph(*bottom_graph_);
 
     // Step 2: Apply RandomUpdater to generate asymmetric edges
     const vec_num_t rand_gen_size = 5;
@@ -261,7 +261,7 @@ TEST_F(PropagateEngineCorrectnessTest, IntegratedRandomAndReverseUpdater) {
     int missing_reverse_before = 0;
     for (vertex_id_t u = 0; u < num_vertices_; ++u) {
         for (const auto& nbr : nbrs_arr[u]) {
-            vertex_id_t v = nbr.get_id();
+            vertex_id_t v = nbr.get_level_vid();
             if (!has_edge(nbrs_arr[v], u)) {
                 missing_reverse_before++;
             }
@@ -297,7 +297,7 @@ TEST_F(PropagateEngineCorrectnessTest, IntegratedRandomAndReverseUpdater) {
 
     for (vertex_id_t u = 0; u < num_vertices_; ++u) {
         for (const auto& nbr : nbrs_arr[u]) {
-            vertex_id_t v = nbr.get_id();
+            vertex_id_t v = nbr.get_level_vid();
             distance_t forward_dist = nbr.get_distance();
 
             distance_t reverse_dist;
@@ -322,18 +322,18 @@ TEST_F(PropagateEngineCorrectnessTest, IntegratedRandomAndReverseUpdater) {
 
 TEST_F(PropagateEngineCorrectnessTest, ScaledTrianglePruning) {
     // Test with scale_coeffs > 1.0 for more conservative pruning (keeping more edges)
-    auto& nbrs_arr = descent_graph_->get_nbrs_arr();
+    auto& nbrs_arr = bottom_graph_->get_nbrs_arr();
 
     for (vertex_id_t u = 0; u < num_vertices_; ++u) {
-        dnbr_arr_t& nbrs = nbrs_arr[u];
+        bnbr_arr_t& nbrs = nbrs_arr[u];
         for (vertex_id_t v = 0; v < num_vertices_; ++v) {
             if (v != u) {
                 distance_t dist = compute_distance(u, v);
-                nbrs.push_back(dnbr_t(v, dist, true));
+                nbrs.push_back(bnbr_t(v, dist, true));
             }
         }
         std::sort(nbrs.begin(), nbrs.end(),
-            [](const dnbr_t& a, const dnbr_t& b) {
+            [](const bnbr_t& a, const bnbr_t& b) {
                 return a.get_distance() < b.get_distance();
             });
     }
@@ -343,10 +343,10 @@ TEST_F(PropagateEngineCorrectnessTest, ScaledTrianglePruning) {
     const ratio_t shifted_coeffs = 0.0;
     const vec_num_t max_nbr_size = 6;
 
-    descent_graph_->layer_config().max_nbr_size(max_nbr_size);
+    bottom_graph_->layer_config().max_nbr_size(max_nbr_size);
 
     propagate_engine_ss_t propagate_engine(num_vertices_, *dist_func_);
-    propagate_engine.set_graph(*descent_graph_);
+    propagate_engine.set_graph(*bottom_graph_);
 
     auto triangle_updater = propagate_engine.make_updater<triangle_updater_t>(scale_coeffs, shifted_coeffs);
 
@@ -357,7 +357,7 @@ TEST_F(PropagateEngineCorrectnessTest, ScaledTrianglePruning) {
         const auto& nbrs = nbrs_arr[u];
         std::string nbr_list;
         for (size_t i = 0; i < nbrs.size(); ++i) {
-            nbr_list += fmt::format("({}, {:.3f})", nbrs[i].get_id(), nbrs[i].get_distance());
+            nbr_list += fmt::format("({}, {:.3f})", nbrs[i].get_level_vid(), nbrs[i].get_distance());
             if (i < nbrs.size() - 1) nbr_list += ", ";
         }
         ARTEA_INFO(fmt::format("  v{} -> [{}]", u, nbr_list));
@@ -384,27 +384,27 @@ TEST_F(PropagateEngineCorrectnessTest, ScaledTrianglePruning) {
 
 TEST_F(PropagateEngineCorrectnessTest, NeighborsSortedAfterPruning) {
     // Verify neighbors remain sorted by distance after pruning
-    auto& nbrs_arr = descent_graph_->get_nbrs_arr();
+    auto& nbrs_arr = bottom_graph_->get_nbrs_arr();
 
     for (vertex_id_t u = 0; u < num_vertices_; ++u) {
-        dnbr_arr_t& nbrs = nbrs_arr[u];
+        bnbr_arr_t& nbrs = nbrs_arr[u];
         for (vertex_id_t v = 0; v < num_vertices_; ++v) {
             if (v != u) {
                 distance_t dist = compute_distance(u, v);
-                nbrs.push_back(dnbr_t(v, dist, true));
+                nbrs.push_back(bnbr_t(v, dist, true));
             }
         }
         std::sort(nbrs.begin(), nbrs.end(),
-            [](const dnbr_t& a, const dnbr_t& b) {
+            [](const bnbr_t& a, const bnbr_t& b) {
                 return a.get_distance() < b.get_distance();
             });
     }
 
     const vec_num_t max_nbr_size = 6;
-    descent_graph_->layer_config().max_nbr_size(max_nbr_size);
+    bottom_graph_->layer_config().max_nbr_size(max_nbr_size);
 
     propagate_engine_ss_t propagate_engine(num_vertices_, *dist_func_);
-    propagate_engine.set_graph(*descent_graph_);
+    propagate_engine.set_graph(*bottom_graph_);
 
     auto triangle_updater = propagate_engine.make_updater<triangle_updater_t>(1.0, 0.0);
 
@@ -424,7 +424,7 @@ TEST_F(PropagateEngineCorrectnessTest, NeighborsSortedAfterPruning) {
 
 TEST_F(PropagateEngineCorrectnessTest, RandomUpdaterGeneratesEdges) {
     // Test that RandomUpdater generates random edges and writes them to the log table
-    auto& nbrs_arr = descent_graph_->get_nbrs_arr();
+    auto& nbrs_arr = bottom_graph_->get_nbrs_arr();
 
     // Start with empty neighbor arrays
     for (vertex_id_t u = 0; u < num_vertices_; ++u) {
@@ -434,7 +434,7 @@ TEST_F(PropagateEngineCorrectnessTest, RandomUpdaterGeneratesEdges) {
     ARTEA_INFO("Testing RandomUpdater with empty initial graph:");
 
     propagate_engine_ss_t propagate_engine(num_vertices_, *dist_func_);
-    propagate_engine.set_graph(*descent_graph_);
+    propagate_engine.set_graph(*bottom_graph_);
 
     const vec_num_t rand_gen_size = 5;  // Generate 5 random neighbors per vertex
 
@@ -457,7 +457,7 @@ TEST_F(PropagateEngineCorrectnessTest, RandomUpdaterGeneratesEdges) {
     // Verify that all edges have valid vertex IDs and distances
     for (vertex_id_t u = 0; u < num_vertices_; ++u) {
         for (const auto& nbr : nbrs_arr[u]) {
-            vertex_id_t v = nbr.get_id();
+            vertex_id_t v = nbr.get_level_vid();
             distance_t dist = nbr.get_distance();
 
             EXPECT_LT(v, num_vertices_) << fmt::format("Invalid neighbor ID {} for vertex {}", v, u);
@@ -477,7 +477,7 @@ TEST_F(PropagateEngineCorrectnessTest, RandomUpdaterGeneratesEdges) {
         const auto& nbrs = nbrs_arr[u];
         std::string nbr_list;
         for (size_t i = 0; i < nbrs.size(); ++i) {
-            nbr_list += fmt::format("({}, {:.3f})", nbrs[i].get_id(), nbrs[i].get_distance());
+            nbr_list += fmt::format("({}, {:.3f})", nbrs[i].get_level_vid(), nbrs[i].get_distance());
             if (i < nbrs.size() - 1) nbr_list += ", ";
         }
         ARTEA_INFO(fmt::format("  v{} -> [{}]", u, nbr_list));
@@ -486,7 +486,7 @@ TEST_F(PropagateEngineCorrectnessTest, RandomUpdaterGeneratesEdges) {
 
 TEST_F(PropagateEngineCorrectnessTest, RandomUpdaterThreadSafety) {
     // Test that RandomUpdater works correctly in parallel execution
-    auto& nbrs_arr = descent_graph_->get_nbrs_arr();
+    auto& nbrs_arr = bottom_graph_->get_nbrs_arr();
 
     // Start with empty neighbor arrays
     for (vertex_id_t u = 0; u < num_vertices_; ++u) {
@@ -494,7 +494,7 @@ TEST_F(PropagateEngineCorrectnessTest, RandomUpdaterThreadSafety) {
     }
 
     propagate_engine_ss_t propagate_engine(num_vertices_, *dist_func_);
-    propagate_engine.set_graph(*descent_graph_);
+    propagate_engine.set_graph(*bottom_graph_);
 
     const vec_num_t rand_gen_size = 10;
 
@@ -506,7 +506,7 @@ TEST_F(PropagateEngineCorrectnessTest, RandomUpdaterThreadSafety) {
     // Verify no corruption occurred
     for (vertex_id_t u = 0; u < num_vertices_; ++u) {
         for (const auto& nbr : nbrs_arr[u]) {
-            vertex_id_t v = nbr.get_id();
+            vertex_id_t v = nbr.get_level_vid();
             EXPECT_LT(v, num_vertices_) << "Invalid neighbor ID after parallel execution";
             EXPECT_NE(v, u) << "Self-loop after parallel execution";
         }
@@ -524,18 +524,18 @@ TEST_F(PropagateEngineCorrectnessTest, RandomUpdaterThreadSafety) {
 // Test with selective scheduling disabled (propagate_engine_noss_t)
 TEST_F(PropagateEngineCorrectnessTest, TrianglePruningWithoutSelectiveScheduling) {
     // Create initial complete graph
-    auto& nbrs_arr = descent_graph_->get_nbrs_arr();
+    auto& nbrs_arr = bottom_graph_->get_nbrs_arr();
 
     for (vertex_id_t u = 0; u < num_vertices_; ++u) {
-        dnbr_arr_t& nbrs = nbrs_arr[u];
+        bnbr_arr_t& nbrs = nbrs_arr[u];
         for (vertex_id_t v = 0; v < num_vertices_; ++v) {
             if (v != u) {
                 distance_t dist = compute_distance(u, v);
-                nbrs.push_back(dnbr_t(v, dist, true));
+                nbrs.push_back(bnbr_t(v, dist, true));
             }
         }
         std::sort(nbrs.begin(), nbrs.end(),
-            [](const dnbr_t& a, const dnbr_t& b) {
+            [](const bnbr_t& a, const bnbr_t& b) {
                 return a.get_distance() < b.get_distance();
             });
     }
@@ -544,10 +544,10 @@ TEST_F(PropagateEngineCorrectnessTest, TrianglePruningWithoutSelectiveScheduling
     const ratio_t shifted_coeffs = 0.0;
     const vec_num_t max_nbr_size = 6;
 
-    descent_graph_->layer_config().max_nbr_size(max_nbr_size);
+    bottom_graph_->layer_config().max_nbr_size(max_nbr_size);
 
     propagate_engine_noss_t propagate_engine(num_vertices_, *dist_func_);
-    propagate_engine.set_graph(*descent_graph_);
+    propagate_engine.set_graph(*bottom_graph_);
 
     auto triangle_updater = propagate_engine.make_updater<triangle_updater_t>(scale_coeffs, shifted_coeffs);
 
@@ -558,7 +558,7 @@ TEST_F(PropagateEngineCorrectnessTest, TrianglePruningWithoutSelectiveScheduling
         const auto& nbrs = nbrs_arr[u];
         std::string nbr_list;
         for (size_t i = 0; i < nbrs.size(); ++i) {
-            nbr_list += fmt::format("({}, {:.3f})", nbrs[i].get_id(), nbrs[i].get_distance());
+            nbr_list += fmt::format("({}, {:.3f})", nbrs[i].get_level_vid(), nbrs[i].get_distance());
             if (i < nbrs.size() - 1) nbr_list += ", ";
         }
         ARTEA_INFO(fmt::format("  v{} -> [{}]", u, nbr_list));

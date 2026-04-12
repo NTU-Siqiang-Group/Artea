@@ -25,17 +25,17 @@
 namespace artea {
 namespace cpu {
 
-template <typename RefinerTraitsT, typename DescentGraphT>
+template <typename RefinerTraitsT, typename BottomGraphT>
 class TruncateUpdater :
-    public RefinerTraitsT::template neighbor_updater_t<DescentGraphT, TruncateUpdater<RefinerTraitsT, DescentGraphT>> {
+    public RefinerTraitsT::template neighbor_updater_t<BottomGraphT, TruncateUpdater<RefinerTraitsT, BottomGraphT>> {
 
     using vertex_id_t    = typename RefinerTraitsT::vertex_id_t;
     using vertex_num_t   = typename RefinerTraitsT::vertex_num_t;
-    using dnbr_arr_t      = typename RefinerTraitsT::dnbr_arr_t;
+    using bnbr_arr_t      = typename RefinerTraitsT::bnbr_arr_t;
     using log_table_t    = typename RefinerTraitsT::log_table_t;
     using dist_func_t    = typename RefinerTraitsT::dist_func_t;
     using vector_array_t = typename RefinerTraitsT::vector_array_t;
-    using base_class_t   = typename RefinerTraitsT::template neighbor_updater_t<DescentGraphT, TruncateUpdater<RefinerTraitsT, DescentGraphT>>;
+    using base_class_t   = typename RefinerTraitsT::template neighbor_updater_t<BottomGraphT, TruncateUpdater<RefinerTraitsT, BottomGraphT>>;
 
 public:
     static constexpr const char* updater_name = "truncate_updater";
@@ -44,19 +44,19 @@ public:
         const dist_func_t& dist_func,
         const vector_array_t& vecs_data,
         log_table_t& log_table,
-        const DescentGraphT& descent_graph,
+        const BottomGraphT& bottom_graph,
         vertex_num_t truncate_size = 0
-    ) : base_class_t(dist_func, vecs_data, log_table, descent_graph),
+    ) : base_class_t(dist_func, vecs_data, log_table, bottom_graph),
         _truncate_size(truncate_size) {}
 
     __attribute__((always_inline))
     auto update_impl(
         const vertex_id_t /* pivot_vid */,
-        dnbr_arr_t& origin_nbrs
+        bnbr_arr_t& origin_nbrs
     ) -> void {
         const vertex_num_t max_sz = (_truncate_size > 0)
             ? _truncate_size
-            : this->_descent_graph.layer_config().max_nbr_size();
+            : this->_bottom_graph.layer_config().max_nbr_size();
         if (origin_nbrs.size() > max_sz) {
             origin_nbrs.resize(max_sz);
         }

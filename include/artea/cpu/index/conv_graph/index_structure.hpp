@@ -1,10 +1,10 @@
 /*
  * @FilePath: /Artea/include/artea/cpu/index/conv_graph/index_structure.hpp
  * @Author: Chandler (Weitang Ye) <weitang.ye@ntu.edu.sg>
- * @Description: Convergent graph index structure holding a DescentGraph by
+ * @Description: Convergent graph index structure holding a BottomGraph by
  *               composition via @c std::unique_ptr. Exposes the inner graph
- *               via @c get_descent_graph so callers can transfer or reuse
- *               it, and forwards the common @c DescentGraph public methods
+ *               via @c get_bottom_graph so callers can transfer or reuse
+ *               it, and forwards the common @c BottomGraph public methods
  *               so existing template call sites (propagate engine, updaters,
  *               routers, file manager, compactor) keep working unchanged.
  */
@@ -22,12 +22,12 @@ namespace cpu {
 namespace conv_graph {
 
 /**
- * @brief Convergent graph index. Composes a @c DescentGraph plus the
+ * @brief Convergent graph index. Composes a @c BottomGraph plus the
  *        algorithm-specific pruning and propagation configs.
  *
- * This class used to inherit from @c DescentGraph via CRTP. It now holds
+ * This class used to inherit from @c BottomGraph via CRTP. It now holds
  * the graph through a @c std::unique_ptr, which:
- *   - makes move-assigning @c IndexStructure safe (the legacy @c DescentGraph
+ *   - makes move-assigning @c IndexStructure safe (the legacy @c BottomGraph
  *     move-assign operator leaves its @c _vecs_data reference stale because
  *     a reference cannot be reseated — going through @c unique_ptr
  *     sidesteps that by swapping the whole object);
@@ -46,10 +46,10 @@ namespace conv_graph {
 template <typename IndexTraitsT>
 class IndexStructure {
 
-    using descent_graph_t    = typename IndexTraitsT::template descent_graph_t<IndexStructure<IndexTraitsT>>;
+    using bottom_graph_t    = typename IndexTraitsT::template bottom_graph_t<IndexStructure<IndexTraitsT>>;
     using vertex_num_t       = typename IndexTraitsT::vertex_num_t;
     using vertex_id_t        = typename IndexTraitsT::vertex_id_t;
-    using dnbr_arr_t         = typename IndexTraitsT::dnbr_arr_t;
+    using bnbr_arr_t         = typename IndexTraitsT::bnbr_arr_t;
     using vector_array_t     = typename IndexTraitsT::vector_array_t;
     using layer_config_t     = typename IndexTraitsT::layer_config_t;
     using propagate_config_t = typename IndexTraitsT::conv_graph::propagate_config_t;
@@ -68,7 +68,7 @@ public:
         const layer_config_t layer_config,
         const pruning_config_t pruning_config,
         const propagate_config_t propagate_config
-    ) : _descent_graph(std::make_unique<descent_graph_t>(vecs_data, layer_config)),
+    ) : _bottom_graph(std::make_unique<bottom_graph_t>(vecs_data, layer_config)),
         _pruning_config(pruning_config),
         _propagate_config(propagate_config)
     {}
@@ -77,7 +77,7 @@ public:
     IndexStructure& operator=(const IndexStructure&) = delete;
 
     // Move is O(1): the @c unique_ptr swap avoids touching any of
-    // @c DescentGraph's internal fields (including the @c _vecs_data
+    // @c BottomGraph's internal fields (including the @c _vecs_data
     // reference, which the legacy move-assign had to leave stale).
     IndexStructure(IndexStructure&&) noexcept = default;
     IndexStructure& operator=(IndexStructure&&) noexcept = default;
@@ -85,7 +85,7 @@ public:
     // --- Composed graph accessor ---
 
     /**
-     * @brief Access the underlying @c DescentGraph instance. Use this to
+     * @brief Access the underlying @c BottomGraph instance. Use this to
      *        pass the graph directly to utilities that only need the
      *        graph core, or to read it for inspection.
      *
@@ -93,59 +93,59 @@ public:
      * holds the graph — i.e. until the next move-assign or destruction.
      */
     __attribute__((always_inline))
-    auto get_descent_graph() -> descent_graph_t& { return *_descent_graph; }
+    auto get_bottom_graph() -> bottom_graph_t& { return *_bottom_graph; }
 
     __attribute__((always_inline))
-    auto get_descent_graph() const -> const descent_graph_t& { return *_descent_graph; }
+    auto get_bottom_graph() const -> const bottom_graph_t& { return *_bottom_graph; }
 
-    // --- DescentGraph public API forwarders ---
+    // --- BottomGraph public API forwarders ---
     //
     // These keep call sites that previously relied on inheritance working
     // unchanged. Every forwarder is a thin inline call to the matching
-    // method on @c *_descent_graph.
+    // method on @c *_bottom_graph.
 
     __attribute__((always_inline))
     auto get_num_vertices() const -> vertex_num_t {
-        return _descent_graph->get_num_vertices();
+        return _bottom_graph->get_num_vertices();
     }
 
     __attribute__((always_inline))
     auto layer_config() const -> const layer_config_t& {
-        return _descent_graph->layer_config();
+        return _bottom_graph->layer_config();
     }
 
     __attribute__((always_inline))
     auto layer_config() -> layer_config_t& {
-        return _descent_graph->layer_config();
+        return _bottom_graph->layer_config();
     }
 
     __attribute__((always_inline))
-    auto get_nbrs_arr() -> std::vector<dnbr_arr_t>& {
-        return _descent_graph->get_nbrs_arr();
+    auto get_nbrs_arr() -> std::vector<bnbr_arr_t>& {
+        return _bottom_graph->get_nbrs_arr();
     }
 
     __attribute__((always_inline))
-    auto get_nbrs_arr() const -> const std::vector<dnbr_arr_t>& {
-        return _descent_graph->get_nbrs_arr();
+    auto get_nbrs_arr() const -> const std::vector<bnbr_arr_t>& {
+        return _bottom_graph->get_nbrs_arr();
     }
 
     __attribute__((always_inline))
-    auto fetch_nbrs(const vertex_id_t src) const -> const dnbr_arr_t& {
-        return _descent_graph->fetch_nbrs(src);
+    auto fetch_nbrs(const vertex_id_t src) const -> const bnbr_arr_t& {
+        return _bottom_graph->fetch_nbrs(src);
     }
 
     __attribute__((always_inline))
-    auto fetch_nbrs(const vertex_id_t src) -> dnbr_arr_t& {
-        return _descent_graph->fetch_nbrs(src);
+    auto fetch_nbrs(const vertex_id_t src) -> bnbr_arr_t& {
+        return _bottom_graph->fetch_nbrs(src);
     }
 
     __attribute__((always_inline))
     auto get_vecs_data() const -> const vector_array_t& {
-        return _descent_graph->get_vecs_data();
+        return _bottom_graph->get_vecs_data();
     }
 
     auto get_base_metadata() const -> nlohmann::json {
-        return _descent_graph->get_base_metadata();
+        return _bottom_graph->get_base_metadata();
     }
 
     // --- Config accessors ---
@@ -203,13 +203,13 @@ public:
 
 private:
     /**
-     * @brief Composed @c DescentGraph — owns the graph topology and
+     * @brief Composed @c BottomGraph — owns the graph topology and
      *        layer config. Held through @c unique_ptr so @c IndexStructure
      *        move operations are O(1) pointer swaps and the legacy
-     *        @c DescentGraph move-assign (which cannot reseat its
+     *        @c BottomGraph move-assign (which cannot reseat its
      *        @c _vecs_data reference) is never invoked.
      */
-    std::unique_ptr<descent_graph_t> _descent_graph;
+    std::unique_ptr<bottom_graph_t> _bottom_graph;
 
     /** @brief Pruning configuration. */
     pruning_config_t _pruning_config;

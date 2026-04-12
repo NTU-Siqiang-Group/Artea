@@ -13,10 +13,10 @@
 // limitations under the License.
 
 /*
- * @FilePath: /Artea/unit_tests/test_descent_graphs.cpp
+ * @FilePath: /Artea/unit_tests/test_bottom_graphs.cpp
  * @Author: Chandler (Weitang Ye) <weitang.ye@ntu.edu.sg>
- * @Description: Tests for dynamic::DescentGraph, compact::DescentGraph,
- *               and DescentGraphCompactor.
+ * @Description: Tests for dynamic::BottomGraph, compact::BottomGraph,
+ *               and BottomGraphCompactor.
  */
 
 #include <algorithm>
@@ -38,7 +38,7 @@ using namespace artea::cpu;
 //  and populates its neighbor arrays with random neighbors.
 // ============================================================
 
-class DescentGraphTest : public ::testing::Test {
+class BottomGraphTest : public ::testing::Test {
 protected:
     static constexpr vertex_num_t num_vertices = 10'000;
     static constexpr vec_dim_t    vec_dim      = 128;
@@ -58,7 +58,7 @@ protected:
         dist_func_ = std::make_unique<dist_func_t>(vec_dim);
 
         layer_config_ = layer_config_t(64, 128);
-        descent_graph_ = std::make_unique<conv_graph::index_t>(
+        bottom_graph_ = std::make_unique<conv_graph::index_t>(
             *vecs_, layer_config_,
             conv_graph::pruning_config_t(1.0, 0.0),
             conv_graph::propagate_config_t(4, 14));
@@ -67,7 +67,7 @@ protected:
     void populate_random_neighbors(const vertex_num_t max_nbrs_per_vertex) {
         std::mt19937 rng(42);
         std::uniform_int_distribution<vertex_id_t> id_dist(0, num_vertices - 1);
-        auto& nbrs_arr = descent_graph_->get_nbrs_arr();
+        auto& nbrs_arr = bottom_graph_->get_nbrs_arr();
 
         for (vertex_id_t u = 0; u < num_vertices; ++u) {
             auto& nbrs = nbrs_arr[u];
@@ -77,10 +77,10 @@ protected:
                 vertex_id_t v = id_dist(rng);
                 if (v == u) v = (v + 1) % num_vertices;
                 const distance_t d = (*dist_func_)(vecs_->get(u), vecs_->get(v));
-                nbrs.push_back(dnbr_t(v, d, true));
+                nbrs.push_back(bnbr_t(v, d, true));
             }
             std::sort(nbrs.begin(), nbrs.end(),
-                [](const dnbr_t& a, const dnbr_t& b) {
+                [](const bnbr_t& a, const bnbr_t& b) {
                     return a.get_distance() < b.get_distance();
                 });
         }
@@ -89,28 +89,28 @@ protected:
     layer_config_t layer_config_{64, 128};
     std::unique_ptr<vector_array_t> vecs_;
     std::unique_ptr<dist_func_t>    dist_func_;
-    std::unique_ptr<conv_graph::index_t> descent_graph_;
+    std::unique_ptr<conv_graph::index_t> bottom_graph_;
 };
 
 // ============================================================
-//  dynamic::DescentGraph (via conv_graph::index_t wrapper)
+//  dynamic::BottomGraph (via conv_graph::index_t wrapper)
 // ============================================================
 
-TEST_F(DescentGraphTest, Construction) {
-    EXPECT_EQ(descent_graph_->get_num_vertices(), num_vertices);
-    EXPECT_EQ(descent_graph_->layer_config().max_nbr_size(), 64u);
+TEST_F(BottomGraphTest, Construction) {
+    EXPECT_EQ(bottom_graph_->get_num_vertices(), num_vertices);
+    EXPECT_EQ(bottom_graph_->layer_config().max_nbr_size(), 64u);
 }
 
-TEST_F(DescentGraphTest, InitialNeighborsEmpty) {
-    const auto& nbrs_arr = descent_graph_->get_nbrs_arr();
+TEST_F(BottomGraphTest, InitialNeighborsEmpty) {
+    const auto& nbrs_arr = bottom_graph_->get_nbrs_arr();
     for (vertex_id_t v = 0; v < num_vertices; ++v) {
         EXPECT_TRUE(nbrs_arr[v].empty());
     }
 }
 
-TEST_F(DescentGraphTest, PopulateAndReadNeighbors) {
+TEST_F(BottomGraphTest, PopulateAndReadNeighbors) {
     populate_random_neighbors(50);
-    const auto& nbrs_arr = descent_graph_->get_nbrs_arr();
+    const auto& nbrs_arr = bottom_graph_->get_nbrs_arr();
 
     uint64_t total_edges = 0;
     for (vertex_id_t v = 0; v < num_vertices; ++v) {
@@ -121,9 +121,9 @@ TEST_F(DescentGraphTest, PopulateAndReadNeighbors) {
     EXPECT_GT(total_edges, 0u);
 }
 
-TEST_F(DescentGraphTest, NeighborsSortedByDistance) {
+TEST_F(BottomGraphTest, NeighborsSortedByDistance) {
     populate_random_neighbors(50);
-    const auto& nbrs_arr = descent_graph_->get_nbrs_arr();
+    const auto& nbrs_arr = bottom_graph_->get_nbrs_arr();
 
     for (vertex_id_t v = 0; v < num_vertices; ++v) {
         const auto& nbrs = nbrs_arr[v];
@@ -133,34 +133,34 @@ TEST_F(DescentGraphTest, NeighborsSortedByDistance) {
     }
 }
 
-TEST_F(DescentGraphTest, VecsDataAccessor) {
-    EXPECT_EQ(descent_graph_->get_vecs_data().get_num_vecs(), num_vertices);
-    EXPECT_EQ(descent_graph_->get_vecs_data().get_vec_dim(), vec_dim);
+TEST_F(BottomGraphTest, VecsDataAccessor) {
+    EXPECT_EQ(bottom_graph_->get_vecs_data().get_num_vecs(), num_vertices);
+    EXPECT_EQ(bottom_graph_->get_vecs_data().get_vec_dim(), vec_dim);
 }
 
-TEST_F(DescentGraphTest, MoveSemantics) {
+TEST_F(BottomGraphTest, MoveSemantics) {
     populate_random_neighbors(30);
-    const auto& nbrs_before = descent_graph_->get_nbrs_arr();
+    const auto& nbrs_before = bottom_graph_->get_nbrs_arr();
     const size_t edges_v0 = nbrs_before[0].size();
 
-    conv_graph::index_t moved = std::move(*descent_graph_);
+    conv_graph::index_t moved = std::move(*bottom_graph_);
     EXPECT_EQ(moved.get_num_vertices(), num_vertices);
     EXPECT_EQ(moved.get_nbrs_arr()[0].size(), edges_v0);
 }
 
 // ============================================================
-//  compact::DescentGraph (via DescentGraphCompactor)
+//  compact::BottomGraph (via BottomGraphCompactor)
 // ============================================================
 
-TEST_F(DescentGraphTest, CompactorBasicConversion) {
+TEST_F(BottomGraphTest, CompactorBasicConversion) {
     populate_random_neighbors(50);
     const vertex_num_t extracted = 32;
 
-    auto compact = descent_graph_compactor_t::compact_graph(*descent_graph_, extracted);
+    auto compact = bottom_graph_compactor_t::compact_graph(*bottom_graph_, extracted);
     EXPECT_EQ(compact.get_num_vertices(), num_vertices);
     EXPECT_EQ(compact.get_extracted_nbr_size(), extracted);
 
-    const auto& src_nbrs_arr = descent_graph_->get_nbrs_arr();
+    const auto& src_nbrs_arr = bottom_graph_->get_nbrs_arr();
     for (vertex_id_t v = 0; v < num_vertices; ++v) {
         const auto& src_nbrs = src_nbrs_arr[v];
         auto compact_nbrs = compact.fetch_nbrs(v);
@@ -168,7 +168,7 @@ TEST_F(DescentGraphTest, CompactorBasicConversion) {
             std::min(static_cast<vertex_num_t>(src_nbrs.size()), extracted);
 
         for (vertex_num_t i = 0; i < expected_count; ++i) {
-            EXPECT_EQ(compact_nbrs[i], src_nbrs[i].get_id());
+            EXPECT_EQ(compact_nbrs[i], src_nbrs[i].get_level_vid());
         }
         for (vertex_num_t i = expected_count; i < extracted; ++i) {
             EXPECT_EQ(compact_nbrs[i], base_traits_t::invalid_vertex_id);
@@ -176,10 +176,10 @@ TEST_F(DescentGraphTest, CompactorBasicConversion) {
     }
 }
 
-TEST_F(DescentGraphTest, CompactorEmptyGraph) {
+TEST_F(BottomGraphTest, CompactorEmptyGraph) {
     // Neighbors are empty (default after construction).
     const vertex_num_t extracted = 16;
-    auto compact = descent_graph_compactor_t::compact_graph(*descent_graph_, extracted);
+    auto compact = bottom_graph_compactor_t::compact_graph(*bottom_graph_, extracted);
     EXPECT_EQ(compact.get_num_vertices(), num_vertices);
 
     for (vertex_id_t v = 0; v < num_vertices; ++v) {
@@ -190,12 +190,12 @@ TEST_F(DescentGraphTest, CompactorEmptyGraph) {
     }
 }
 
-TEST_F(DescentGraphTest, CompactorExtractedSmallerThanActual) {
+TEST_F(BottomGraphTest, CompactorExtractedSmallerThanActual) {
     populate_random_neighbors(50);
     const vertex_num_t extracted = 8;
 
-    auto compact = descent_graph_compactor_t::compact_graph(*descent_graph_, extracted);
-    const auto& src_nbrs_arr = descent_graph_->get_nbrs_arr();
+    auto compact = bottom_graph_compactor_t::compact_graph(*bottom_graph_, extracted);
+    const auto& src_nbrs_arr = bottom_graph_->get_nbrs_arr();
 
     for (vertex_id_t v = 0; v < num_vertices; ++v) {
         auto compact_nbrs = compact.fetch_nbrs(v);
@@ -203,16 +203,16 @@ TEST_F(DescentGraphTest, CompactorExtractedSmallerThanActual) {
         const vertex_num_t copy_count =
             std::min(static_cast<vertex_num_t>(src_nbrs.size()), extracted);
         for (vertex_num_t i = 0; i < copy_count; ++i) {
-            EXPECT_EQ(compact_nbrs[i], src_nbrs[i].get_id());
+            EXPECT_EQ(compact_nbrs[i], src_nbrs[i].get_level_vid());
         }
     }
 }
 
-TEST_F(DescentGraphTest, CompactorNeighborOrderPreserved) {
+TEST_F(BottomGraphTest, CompactorNeighborOrderPreserved) {
     populate_random_neighbors(50);
     const vertex_num_t extracted = 32;
 
-    auto compact = descent_graph_compactor_t::compact_graph(*descent_graph_, extracted);
+    auto compact = bottom_graph_compactor_t::compact_graph(*bottom_graph_, extracted);
 
     for (vertex_id_t v = 0; v < std::min<vertex_id_t>(100, num_vertices); ++v) {
         auto nbrs = compact.fetch_nbrs(v);
@@ -226,20 +226,20 @@ TEST_F(DescentGraphTest, CompactorNeighborOrderPreserved) {
     }
 }
 
-TEST_F(DescentGraphTest, CompactorExtractedLargerThanMaxThrows) {
+TEST_F(BottomGraphTest, CompactorExtractedLargerThanMaxThrows) {
     populate_random_neighbors(10);
     EXPECT_THROW({
-        descent_graph_compactor_t::compact_graph(
-            *descent_graph_,
-            descent_graph_->layer_config().max_nbr_size() + 1);
+        bottom_graph_compactor_t::compact_graph(
+            *bottom_graph_,
+            bottom_graph_->layer_config().max_nbr_size() + 1);
     }, std::runtime_error);
 }
 
-TEST_F(DescentGraphTest, CompactReadWriteRoundTrip) {
+TEST_F(BottomGraphTest, CompactReadWriteRoundTrip) {
     populate_random_neighbors(50);
     const vertex_num_t extracted = 32;
 
-    auto compact = descent_graph_compactor_t::compact_graph(*descent_graph_, extracted);
+    auto compact = bottom_graph_compactor_t::compact_graph(*bottom_graph_, extracted);
 
     // Verify get_neighbors (raw pointer) matches fetch_nbrs (span)
     for (vertex_id_t v = 0; v < std::min<vertex_id_t>(100, num_vertices); ++v) {
@@ -251,9 +251,9 @@ TEST_F(DescentGraphTest, CompactReadWriteRoundTrip) {
     }
 }
 
-TEST_F(DescentGraphTest, CompactVecsDataAccessor) {
+TEST_F(BottomGraphTest, CompactVecsDataAccessor) {
     const vertex_num_t extracted = 16;
-    auto compact = descent_graph_compactor_t::compact_graph(*descent_graph_, extracted);
+    auto compact = bottom_graph_compactor_t::compact_graph(*bottom_graph_, extracted);
     EXPECT_EQ(compact.get_vecs_data().get_num_vecs(), num_vertices);
 }
 

@@ -27,7 +27,7 @@ namespace cpu {
  *
  * All candidate queue implementations (LinearCandidateQueue, StdCandidateQueue,
  * FHCandidateQueue) must satisfy this concept to be used as a template parameter
- * in DescentGraphRouter.
+ * in BottomGraphRouter.
  *
  * Design Philosophy:
  * The queue is parameterized on an entry type (@c candidate_entry_t) that
@@ -48,7 +48,7 @@ namespace cpu {
  * 3. Mutating Operations:
  *    - clear(): Removes all candidates and resets internal state
  *    - pop_best_unexplored(): legacy (vid, dist) pair overload
- *    - pop_best_unexplored_entry(): returns the full entry (for lnbr callers)
+ *    - pop_best_unexplored_entry(): returns the full entry (for inbr callers)
  *    - should_terminate(): early-termination check
  *
  * 4. Result Extraction:

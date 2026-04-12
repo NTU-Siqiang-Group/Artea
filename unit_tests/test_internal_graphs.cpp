@@ -65,8 +65,7 @@ TEST_F(CompactInternalGraphTest, InitializedToInvalid) {
                     continue;
                 }
                 for (vertex_num_t i = 0; i < max_nbr_size; ++i) {
-                    if (nbrs[i].base_vid != base_traits_t::invalid_vertex_id ||
-                        nbrs[i].layer_vid != base_traits_t::invalid_vertex_id) {
+                    if (!nbrs[i].is_invalid()) {
                         errors.fetch_add(1, std::memory_order_relaxed);
                         break;
                     }
@@ -82,22 +81,22 @@ TEST_F(CompactInternalGraphTest, WriteAndReadNeighbors) {
     auto nbrs = graph_->fetch_nbrs(src);
 
     // Write some neighbors
-    nbrs[0] = lnbr_t(100, 200);
-    nbrs[1] = lnbr_t(101, 201);
-    nbrs[2] = lnbr_t(102, 202);
+    nbrs[0] = inbr_t(100, 200);
+    nbrs[1] = inbr_t(101, 201);
+    nbrs[2] = inbr_t(102, 202);
 
     // Read back
     auto nbrs_read = graph_->fetch_nbrs(src);
-    EXPECT_EQ(nbrs_read[0].base_vid, 100u);
-    EXPECT_EQ(nbrs_read[0].layer_vid, 200u);
-    EXPECT_EQ(nbrs_read[1].base_vid, 101u);
-    EXPECT_EQ(nbrs_read[1].layer_vid, 201u);
-    EXPECT_EQ(nbrs_read[2].base_vid, 102u);
-    EXPECT_EQ(nbrs_read[2].layer_vid, 202u);
+    EXPECT_EQ(nbrs_read[0].get_base_vid(), 100u);
+    EXPECT_EQ(nbrs_read[0].get_level_vid(), 200u);
+    EXPECT_EQ(nbrs_read[1].get_base_vid(), 101u);
+    EXPECT_EQ(nbrs_read[1].get_level_vid(), 201u);
+    EXPECT_EQ(nbrs_read[2].get_base_vid(), 102u);
+    EXPECT_EQ(nbrs_read[2].get_level_vid(), 202u);
 
     // Remaining should still be invalid
     for (vertex_num_t i = 3; i < max_nbr_size; ++i) {
-        EXPECT_EQ(nbrs_read[i], base_traits_t::invalid_lnbr);
+        EXPECT_EQ(nbrs_read[i], base_traits_t::invalid_inbr);
     }
 }
 
@@ -154,12 +153,12 @@ TEST_F(CompactInternalGraphTest, VertexIsolation) {
     const vertex_id_t target = num_vertices / 2;
     auto nbrs_target = graph_->fetch_nbrs(target);
     for (vertex_num_t i = 0; i < max_nbr_size; ++i) {
-        nbrs_target[i] = lnbr_t(i, i + 1000);
+        nbrs_target[i] = inbr_t(i, i + 1000);
     }
 
     auto nbrs_next = graph_->fetch_nbrs(target + 1);
     for (vertex_num_t i = 0; i < max_nbr_size; ++i) {
-        EXPECT_EQ(nbrs_next[i], base_traits_t::invalid_lnbr);
+        EXPECT_EQ(nbrs_next[i], base_traits_t::invalid_inbr);
     }
 }
 
@@ -170,7 +169,7 @@ TEST_F(CompactInternalGraphTest, SentinelBasedTraversal) {
     // Write 5 valid neighbors
     const vertex_num_t valid_count = 5;
     for (vertex_num_t i = 0; i < valid_count; ++i) {
-        nbrs[i] = lnbr_t(i * 10, i);
+        nbrs[i] = inbr_t(i * 10, i);
     }
     // The rest remain as invalid sentinels
 
@@ -178,7 +177,7 @@ TEST_F(CompactInternalGraphTest, SentinelBasedTraversal) {
     vertex_num_t count = 0;
     auto nbrs_read = graph_->fetch_nbrs(src);
     for (vertex_num_t i = 0; i < max_nbr_size; ++i) {
-        if (nbrs_read[i].base_vid == base_traits_t::invalid_vertex_id) break;
+        if (nbrs_read[i].get_base_vid() == base_traits_t::invalid_vertex_id) break;
         ++count;
     }
     EXPECT_EQ(count, valid_count);
@@ -189,7 +188,7 @@ TEST_F(CompactInternalGraphTest, ParallelRead) {
     for (vertex_id_t v = 0; v < num_vertices; ++v) {
         auto nbrs = graph_->fetch_nbrs(v);
         for (vertex_num_t i = 0; i < max_nbr_size; ++i) {
-            nbrs[i] = lnbr_t(v + i, v * 2 + i);
+            nbrs[i] = inbr_t(v + i, v * 2 + i);
         }
         graph_->set_inter_layer_link(v, v + 1);
     }
@@ -203,8 +202,8 @@ TEST_F(CompactInternalGraphTest, ParallelRead) {
             for (vertex_id_t v = range.begin(); v < range.end(); ++v) {
                 auto nbrs = graph_->fetch_nbrs(v);
                 for (vertex_num_t i = 0; i < max_nbr_size; ++i) {
-                    if (nbrs[i].base_vid != v + i ||
-                        nbrs[i].layer_vid != v * 2 + i) {
+                    if (nbrs[i].get_base_vid() != v + i ||
+                        nbrs[i].get_level_vid() != v * 2 + i) {
                         errors.fetch_add(1, std::memory_order_relaxed);
                     }
                 }
@@ -253,7 +252,7 @@ TEST_F(InternalGraphTest, AddVertexInitializesNeighbors) {
     auto nbrs = graph_->fetch_nbrs(layer_vid);
     // nbrs[0] is the atomic header, skip it
     for (vertex_num_t i = 1; i <= max_nbr_size; ++i) {
-        EXPECT_EQ(nbrs[i], base_traits_t::invalid_lnbr);
+        EXPECT_EQ(nbrs[i], base_traits_t::invalid_inbr);
     }
 }
 
@@ -274,19 +273,19 @@ TEST_F(InternalGraphTest, WriteAndReadNeighbors) {
 
     auto nbrs = graph_->fetch_nbrs(v);
     // Write neighbors starting at index 1 (index 0 is header)
-    nbrs[1] = lnbr_t(100, 200);
-    nbrs[2] = lnbr_t(101, 201);
-    nbrs[3] = lnbr_t(102, 202);
+    nbrs[1] = inbr_t(100, 200);
+    nbrs[2] = inbr_t(101, 201);
+    nbrs[3] = inbr_t(102, 202);
     graph_->num_valid_nbrs(v, 3);
 
     // Read back
     auto nbrs_read = graph_->fetch_nbrs(v);
-    EXPECT_EQ(nbrs_read[1].base_vid, 100u);
-    EXPECT_EQ(nbrs_read[1].layer_vid, 200u);
-    EXPECT_EQ(nbrs_read[2].base_vid, 101u);
-    EXPECT_EQ(nbrs_read[2].layer_vid, 201u);
-    EXPECT_EQ(nbrs_read[3].base_vid, 102u);
-    EXPECT_EQ(nbrs_read[3].layer_vid, 202u);
+    EXPECT_EQ(nbrs_read[1].get_base_vid(), 100u);
+    EXPECT_EQ(nbrs_read[1].get_level_vid(), 200u);
+    EXPECT_EQ(nbrs_read[2].get_base_vid(), 101u);
+    EXPECT_EQ(nbrs_read[2].get_level_vid(), 201u);
+    EXPECT_EQ(nbrs_read[3].get_base_vid(), 102u);
+    EXPECT_EQ(nbrs_read[3].get_level_vid(), 202u);
     EXPECT_EQ(graph_->num_valid_nbrs(v), 3u);
 }
 
@@ -341,14 +340,14 @@ TEST_F(InternalGraphTest, VertexIsolation) {
     // Write to v0
     auto nbrs_0 = graph_->fetch_nbrs(v0);
     for (vertex_num_t i = 1; i <= max_nbr_size; ++i) {
-        nbrs_0[i] = lnbr_t(i, i + 100);
+        nbrs_0[i] = inbr_t(i, i + 100);
     }
     graph_->num_valid_nbrs(v0, max_nbr_size);
 
     // v1 should still be all invalid
     auto nbrs_1 = graph_->fetch_nbrs(v1);
     for (vertex_num_t i = 1; i <= max_nbr_size; ++i) {
-        EXPECT_EQ(nbrs_1[i], base_traits_t::invalid_lnbr);
+        EXPECT_EQ(nbrs_1[i], base_traits_t::invalid_inbr);
     }
     EXPECT_EQ(graph_->num_valid_nbrs(v1), 0u);
 }
@@ -382,7 +381,7 @@ TEST_F(InternalGraphTest, ParallelAddVertex) {
                 // Each thread writes its own neighbors
                 auto nbrs = graph_->fetch_nbrs(v);
                 for (vertex_num_t j = 1; j <= 5; ++j) {
-                    nbrs[j] = lnbr_t(v + j, j);
+                    nbrs[j] = inbr_t(v + j, j);
                 }
                 graph_->num_valid_nbrs(v, 5);
             }
@@ -447,7 +446,7 @@ TEST_F(InternalGraphTest, ParallelWriteThenParallelRead) {
 
                 auto nbrs = graph_->fetch_nbrs(v);
                 for (vertex_num_t j = 1; j <= nbrs_per_vertex; ++j) {
-                    nbrs[j] = lnbr_t(i + j * 100, j);
+                    nbrs[j] = inbr_t(i + j * 100, j);
                 }
                 graph_->num_valid_nbrs(v, nbrs_per_vertex);
             }
@@ -476,8 +475,8 @@ TEST_F(InternalGraphTest, ParallelWriteThenParallelRead) {
 
                 auto nbrs = graph_->fetch_nbrs(v);
                 for (vertex_num_t j = 1; j <= nbrs_per_vertex; ++j) {
-                    if (nbrs[j].base_vid != i + j * 100 ||
-                        nbrs[j].layer_vid != j) {
+                    if (nbrs[j].get_base_vid() != i + j * 100 ||
+                        nbrs[j].get_level_vid() != j) {
                         errors.fetch_add(1, std::memory_order_relaxed);
                     }
                 }
@@ -485,7 +484,7 @@ TEST_F(InternalGraphTest, ParallelWriteThenParallelRead) {
                 // Remaining slots should be invalid
                 for (vertex_num_t j = nbrs_per_vertex + 1;
                      j <= max_nbr_size; ++j) {
-                    if (nbrs[j] != base_traits_t::invalid_lnbr) {
+                    if (nbrs[j] != base_traits_t::invalid_inbr) {
                         errors.fetch_add(1, std::memory_order_relaxed);
                     }
                 }
@@ -505,7 +504,7 @@ TEST_F(InternalGraphTest, ParallelAddVertexFullCapacityThenParallelRead) {
                 vertex_id_t v = graph_->add_vertex(i);
                 auto nbrs = graph_->fetch_nbrs(v);
                 for (vertex_num_t j = 1; j <= max_nbr_size; ++j) {
-                    nbrs[j] = lnbr_t(i + j, j);
+                    nbrs[j] = inbr_t(i + j, j);
                 }
                 graph_->num_valid_nbrs(v, max_nbr_size);
             }
@@ -532,7 +531,7 @@ TEST_F(InternalGraphTest, ParallelAddVertexFullCapacityThenParallelRead) {
 // --- add_nbr Tests ---
 
 // Simple pruning functor: drops the last neighbor, replaces with new_nbr.
-auto simple_prune_fn = [](lnbr_t* slots, lnbr_t new_nbr) -> uint64_t {
+auto simple_prune_fn = [](inbr_t* slots, inbr_t new_nbr) -> uint64_t {
     // Replace the last slot with new_nbr (count stays at max_nbr_size)
     // We don't know max_nbr_size here, but we can scan backward for simplicity.
     // In tests, the array is always full (63 entries), so slot[62] = new_nbr.
@@ -541,7 +540,7 @@ auto simple_prune_fn = [](lnbr_t* slots, lnbr_t new_nbr) -> uint64_t {
 };
 
 // Pruning functor that halves the array and appends the new neighbor.
-auto halving_prune_fn = [](lnbr_t* slots, lnbr_t new_nbr) -> uint64_t {
+auto halving_prune_fn = [](inbr_t* slots, inbr_t new_nbr) -> uint64_t {
     constexpr uint64_t max_nbr = 63;
     const uint64_t keep = max_nbr / 2;
     slots[keep] = new_nbr;
@@ -552,7 +551,7 @@ TEST_F(InternalGraphTest, AddNbrSerial) {
     vertex_id_t v = graph_->add_vertex(0);
 
     for (vertex_num_t i = 0; i < max_nbr_size; ++i) {
-        auto result = graph_->add_nbr(v, lnbr_t(i, i + 100), simple_prune_fn);
+        auto result = graph_->add_nbr(v, inbr_t(i, i + 100), simple_prune_fn);
         EXPECT_EQ(result, dynamic::internal_graph_t::AddNbrEvent::APPENDED);
     }
 
@@ -561,8 +560,8 @@ TEST_F(InternalGraphTest, AddNbrSerial) {
     // Verify neighbors
     auto nbrs = graph_->fetch_nbrs(v);
     for (vertex_num_t i = 0; i < max_nbr_size; ++i) {
-        EXPECT_EQ(nbrs[i + 1].base_vid, i);
-        EXPECT_EQ(nbrs[i + 1].layer_vid, i + 100);
+        EXPECT_EQ(nbrs[i + 1].get_base_vid(), i);
+        EXPECT_EQ(nbrs[i + 1].get_level_vid(), i + 100);
     }
 }
 
@@ -571,12 +570,12 @@ TEST_F(InternalGraphTest, AddNbrTriggersPruning) {
 
     // Fill the array
     for (vertex_num_t i = 0; i < max_nbr_size; ++i) {
-        graph_->add_nbr(v, lnbr_t(i, i), simple_prune_fn);
+        graph_->add_nbr(v, inbr_t(i, i), simple_prune_fn);
     }
     EXPECT_EQ(graph_->num_valid_nbrs(v), max_nbr_size);
 
     // Next add triggers pruning (halving_prune_fn keeps half + the new one)
-    auto result = graph_->add_nbr(v, lnbr_t(999, 999), halving_prune_fn);
+    auto result = graph_->add_nbr(v, inbr_t(999, 999), halving_prune_fn);
     EXPECT_EQ(result, dynamic::internal_graph_t::AddNbrEvent::PRUNED);
 
     const uint64_t expected_count = max_nbr_size / 2 + 1;
@@ -584,12 +583,12 @@ TEST_F(InternalGraphTest, AddNbrTriggersPruning) {
 
     // Verify the new neighbor is present
     auto nbrs = graph_->fetch_nbrs(v);
-    EXPECT_EQ(nbrs[expected_count].base_vid, 999u);
-    EXPECT_EQ(nbrs[expected_count].layer_vid, 999u);
+    EXPECT_EQ(nbrs[expected_count].get_base_vid(), 999u);
+    EXPECT_EQ(nbrs[expected_count].get_level_vid(), 999u);
 
     // Trailing slots should be invalid
     for (uint64_t i = expected_count + 1; i <= max_nbr_size; ++i) {
-        EXPECT_EQ(nbrs[i], base_traits_t::invalid_lnbr);
+        EXPECT_EQ(nbrs[i], base_traits_t::invalid_inbr);
     }
 }
 
@@ -598,7 +597,7 @@ TEST_F(InternalGraphTest, ParallelAddNbrSameVertex) {
     const vertex_num_t total_adds = 1'000'000;
 
     std::atomic<uint32_t> prune_count{0};
-    auto counting_prune_fn = [&](lnbr_t* slots, lnbr_t new_nbr) -> uint64_t {
+    auto counting_prune_fn = [&](inbr_t* slots, inbr_t new_nbr) -> uint64_t {
         prune_count.fetch_add(1, std::memory_order_relaxed);
         constexpr uint64_t max_nbr = 63;
         const uint64_t keep = max_nbr / 2;
@@ -610,7 +609,7 @@ TEST_F(InternalGraphTest, ParallelAddNbrSameVertex) {
         tbb::blocked_range<vertex_num_t>(0, total_adds),
         [&](const tbb::blocked_range<vertex_num_t>& range) {
             for (vertex_num_t i = range.begin(); i < range.end(); ++i) {
-                graph_->add_nbr(v, lnbr_t(i, i), counting_prune_fn);
+                graph_->add_nbr(v, inbr_t(i, i), counting_prune_fn);
             }
         }
     );
@@ -639,7 +638,7 @@ TEST_F(InternalGraphTest, ParallelAddNbrMultipleVertices) {
         [&](const tbb::blocked_range<vertex_num_t>& range) {
             for (vertex_num_t i = range.begin(); i < range.end(); ++i) {
                 for (vertex_num_t j = 0; j < adds_per_vertex; ++j) {
-                    graph_->add_nbr(vids[i], lnbr_t(j, j), halving_prune_fn);
+                    graph_->add_nbr(vids[i], inbr_t(j, j), halving_prune_fn);
                 }
             }
         }
@@ -670,7 +669,7 @@ TEST_F(InternalGraphTest, ParallelAddNbrSameVertexHighContention) {
         tbb::blocked_range<vertex_num_t>(0, total_adds),
         [&](const tbb::blocked_range<vertex_num_t>& range) {
             for (vertex_num_t i = range.begin(); i < range.end(); ++i) {
-                graph_->add_nbr(v, lnbr_t(i % 10000, i % 10000), halving_prune_fn);
+                graph_->add_nbr(v, inbr_t(i % 10000, i % 10000), halving_prune_fn);
             }
         }
     );
@@ -682,7 +681,7 @@ TEST_F(InternalGraphTest, ParallelAddNbrSameVertexHighContention) {
     // All non-trailing slots should have valid (non-sentinel) data
     auto nbrs = graph_->fetch_nbrs(v);
     for (uint64_t i = 1; i <= final_count; ++i) {
-        EXPECT_NE(nbrs[i].base_vid, base_traits_t::invalid_vertex_id);
+        EXPECT_NE(nbrs[i].get_base_vid(), base_traits_t::invalid_vertex_id);
     }
 }
 
@@ -706,7 +705,7 @@ protected:
             const uint64_t valid_count = i % (src_max_nbr_size + 1);
             auto block = src_graph_->fetch_nbrs(v);
             for (uint64_t j = 0; j < valid_count; ++j) {
-                block[1 + j] = lnbr_t(i * 1000 + static_cast<vertex_id_t>(j),
+                block[1 + j] = inbr_t(i * 1000 + static_cast<vertex_id_t>(j),
                                       static_cast<vertex_id_t>(j));
             }
             src_graph_->num_valid_nbrs(v, valid_count);
@@ -735,10 +734,10 @@ TEST_F(InternalGraphCompactorTest, BasicConversionEqualSize) {
 
         auto compact_nbrs = compact.fetch_nbrs(v);
         for (uint64_t j = 0; j < valid_count; ++j) {
-            EXPECT_EQ(compact_nbrs[j].base_vid, i * 1000 + static_cast<vertex_id_t>(j));
+            EXPECT_EQ(compact_nbrs[j].get_base_vid(), i * 1000 + static_cast<vertex_id_t>(j));
         }
         for (uint64_t j = valid_count; j < src_max_nbr_size; ++j) {
-            EXPECT_EQ(compact_nbrs[j], base_traits_t::invalid_lnbr);
+            EXPECT_EQ(compact_nbrs[j], base_traits_t::invalid_inbr);
         }
         EXPECT_EQ(compact.get_inter_layer_link(v), i + 7);
     }
@@ -757,10 +756,10 @@ TEST_F(InternalGraphCompactorTest, ExtractedNbrSizeSmaller) {
         const uint64_t expected_copied = std::min(valid_count, static_cast<uint64_t>(extracted));
         auto compact_nbrs = compact.fetch_nbrs(static_cast<vertex_id_t>(i));
         for (uint64_t j = 0; j < expected_copied; ++j) {
-            EXPECT_EQ(compact_nbrs[j].base_vid, i * 1000 + static_cast<vertex_id_t>(j));
+            EXPECT_EQ(compact_nbrs[j].get_base_vid(), i * 1000 + static_cast<vertex_id_t>(j));
         }
         for (uint64_t j = expected_copied; j < extracted; ++j) {
-            EXPECT_EQ(compact_nbrs[j], base_traits_t::invalid_lnbr);
+            EXPECT_EQ(compact_nbrs[j], base_traits_t::invalid_inbr);
         }
     }
 }
@@ -778,7 +777,7 @@ TEST_F(InternalGraphCompactorTest, AllVerticesFull) {
         const vertex_id_t v = src_graph_->add_vertex(i);
         auto block = src_graph_->fetch_nbrs(v);
         for (uint64_t j = 0; j < src_max_nbr_size; ++j) {
-            block[1 + j] = lnbr_t(i + static_cast<vertex_id_t>(j),
+            block[1 + j] = inbr_t(i + static_cast<vertex_id_t>(j),
                                   static_cast<vertex_id_t>(j));
         }
         src_graph_->num_valid_nbrs(v, src_max_nbr_size);
@@ -788,7 +787,7 @@ TEST_F(InternalGraphCompactorTest, AllVerticesFull) {
     for (vertex_id_t v = 0; v < num; ++v) {
         auto compact_nbrs = compact.fetch_nbrs(v);
         for (uint64_t j = 0; j < src_max_nbr_size; ++j) {
-            EXPECT_EQ(compact_nbrs[j].base_vid, v + static_cast<vertex_id_t>(j));
+            EXPECT_EQ(compact_nbrs[j].get_base_vid(), v + static_cast<vertex_id_t>(j));
         }
     }
 }
@@ -803,7 +802,7 @@ TEST_F(InternalGraphCompactorTest, AllVerticesEmpty) {
     for (vertex_id_t v = 0; v < num; ++v) {
         auto compact_nbrs = compact.fetch_nbrs(v);
         for (uint64_t j = 0; j < src_max_nbr_size; ++j) {
-            EXPECT_EQ(compact_nbrs[j], base_traits_t::invalid_lnbr);
+            EXPECT_EQ(compact_nbrs[j], base_traits_t::invalid_inbr);
         }
     }
 }
@@ -823,7 +822,7 @@ TEST_F(InternalGraphCompactorTest, LargeScaleParallel) {
                 const uint64_t valid_count = i % (src_max_nbr_size + 1);
                 auto compact_nbrs = compact.fetch_nbrs(static_cast<vertex_id_t>(i));
                 for (uint64_t j = 0; j < valid_count; ++j) {
-                    if (compact_nbrs[j].base_vid != i * 1000 + static_cast<vertex_id_t>(j)) {
+                    if (compact_nbrs[j].get_base_vid() != i * 1000 + static_cast<vertex_id_t>(j)) {
                         errors.fetch_add(1, std::memory_order_relaxed);
                     }
                 }
