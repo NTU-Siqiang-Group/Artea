@@ -15,9 +15,32 @@
 /*
  * @FilePath: /Artea/include/artea/cpu/index/stacked_rgraph/index_factory.hpp
  * @Author: Chandler (Weitang Ye) <weitang.ye@ntu.edu.sg>
- * @Description: Build algorithm for the dynamic Stacked R-Net index.
- *               Operates on a stacked_rgraph::IndexStructure via static
- *               methods — all state lives in the IndexStructure.
+ * @Description: Insertion engine for stacked_rgraph::IndexStructure.
+ *
+ * Algorithm outline (per-vertex):
+ *   Step A — Descent: beam_search from the current top occupied level
+ *            down to level 1 (never level 0). Each level's queue is
+ *            cloned so later select-neighbor searches can resume from
+ *            it with a larger capacity.
+ *   Step B — Compute highest_insert_level_id via the r-net covering
+ *            rule.
+ *   Step C — Claim a slot in the hierarchical graph via assign_layer.
+ *   Step D — Edge insertion:
+ *            - Run one select-neighbors search at level 1 to build
+ *              pruned_l1_nbrs (used for every vertex).
+ *            - Level 0 forward: write pruned_l1_nbrs into vid's L0 slot
+ *              (first max_nbr_size positions; L0 has 2 * max_nbr_size
+ *              capacity, rear half reserved for future refiner passes).
+ *            - Level 0 reverse: add vid to each pruned neighbor's L0
+ *              slot.
+ *            - Level 1 forward + reverse (only if highest_insert_level
+ *              >= 1).
+ *            - For cur_level in [2, highest_insert_level]: normal
+ *              select + forward + reverse.
+ *
+ * We **never** run beam_search at level 0 (level 0 is the full
+ * N-vertex base, searching it during every insertion would be far too
+ * expensive).
  */
 
 #pragma once
@@ -27,7 +50,6 @@
 #include <cstdint>
 #include <limits>
 #include <memory>
-#include <span>
 #include <utility>
 #include <vector>
 
@@ -42,28 +64,15 @@ namespace cpu {
 namespace stacked_rgraph {
 
 /**
- * @brief Build/insertion algorithm for stacked_rgraph::IndexStructure.
+ * @brief Insertion algorithm for stacked_rgraph::IndexStructure.
  *
- * Implements the paper's "Approximate r-Net Dynamic Insertion" pseudocode:
- *   Phase 1: Descend through EVERY layer from cur_max_level down to 1,
- *            running a beam search (width @c _search_nn_qs = L_1) at each
- *            and caching the per-layer candidate set. Multi-entry descent
- *            carries the top-K candidates down via @c inter_layer_link.
- *   Phase 1.5: Compute @c highest_insert_level as the SMALLEST level such that
- *            the layer directly above already absorbs the new vertex. If
- *            no layer covers the new vertex, extend the hierarchy by one
- *            layer (capped by @c max_restrict_level).
- *   Phase 2: For every level in [1, highest_insert_level], insert the new
- *            vertex unconditionally. Each layer's beam search is seeded
- *            from the cached Phase 1 candidate set at the same layer and
- *            run with the wider @c _select_nbrs_qs (= L_2) queue to build
- *            the candidate pool for neighbor pruning. Reverse edges are
- *            added for each chosen neighbor.
- *   Epilogue: Patch every new vertex's inter_layer_link to point at its
- *            layer_vid in the layer directly below, including the
- *            Phase-1.5 extension vertex.
+ * Static entry point:
+ * @code
+ *   IndexFactory::add_vertices(index, std::move(batch_vecs),
+ *                              dist_func, pruning_updater);
+ * @endcode
  *
- * @tparam GraphFactoryTraitsT The graph factory traits type.
+ * @tparam GraphFactoryTraitsT The graph-factory traits type.
  */
 template <typename GraphFactoryTraitsT>
 class IndexFactory {
@@ -75,355 +84,326 @@ class IndexFactory {
     using layer_num_t      = typename GraphFactoryTraitsT::layer_num_t;
     using layer_id_t       = typename GraphFactoryTraitsT::layer_id_t;
     using distance_t       = typename GraphFactoryTraitsT::distance_t;
-    using ratio_t          = typename GraphFactoryTraitsT::ratio_t;
     using vec_ele_t        = typename GraphFactoryTraitsT::vec_ele_t;
-    using inbr_t           = typename GraphFactoryTraitsT::inbr_t;
+    using nbr_t            = typename GraphFactoryTraitsT::nbr_t;
     using vector_array_t   = typename GraphFactoryTraitsT::vector_array_t;
-    using internal_graph_t = typename GraphFactoryTraitsT::dynamic::internal_graph_t;
+    using dist_func_t      = typename GraphFactoryTraitsT::dist_func_t;
 
-    // Distance function (inherited via RefinerTraits → ComputerTraits).
-    using dist_func_t = typename GraphFactoryTraitsT::dist_func_t;
+    using hierarchical_graph_t =
+        typename GraphFactoryTraitsT::dynamic::hierarchical_graph_t;
 
-    // Router-side types (inherited via RefinerTraits → RouterTraits).
     using visited_table_t         = typename GraphFactoryTraitsT::visited_table_t;
     using candidate_entry_t       = typename GraphFactoryTraitsT::candidate_entry_t;
     using std_candidate_queue_t   = typename GraphFactoryTraitsT::std_candidate_queue_t;
     using knn_results_t           = typename GraphFactoryTraitsT::knn_results_t;
-    using hg_router_t             = typename GraphFactoryTraitsT::dynamic::hierarchical_graph_router_t;
+    using hg_router_t             =
+        typename GraphFactoryTraitsT::dynamic::hierarchical_graph_router_t;
 
     static constexpr vertex_id_t invalid_vertex_id = GraphFactoryTraitsT::invalid_vertex_id;
+    static constexpr distance_t  max_distance      = GraphFactoryTraitsT::max_distance;
+
+    static constexpr layer_id_t  unassigned_highest_level_id =
+        hierarchical_graph_t::unassigned_highest_level_id;
 
 public:
-    /**
-     * @brief Number of initial vertices inserted serially during bootstrap.
-     *        While the hierarchy is still forming, concurrent per_level_insertions
-     *        tend to create structural conflicts (too many threads trying
-     *        to grow the same layer), so we serialize the first
-     *        @c startup_points per_level_insertions before switching to TBB parallel.
-     */
-    static constexpr vertex_num_t startup_points = 100;
+    /** @brief Number of vertices inserted serially during bootstrap
+     *         before switching to @c tbb::parallel_for. */
+    static constexpr vertex_num_t startup_points = 500;
 
     /**
-     * @brief Append @p batch_vecs to @p index's owned vector storage and
-     *        insert every newly-appended vector as a new vertex of the
-     *        hierarchy.
+     * @brief Append @p batch_vecs to @p index's owned storage, then
+     *        insert every newly-appended vector as a new vertex.
      *
-     * This is the primary incremental entry point. On every call:
-     *   1. @p batch_vecs is appended to @c index.get_vecs_storage() via
-     *      @c IndexStructure::append_vecs. If the index's owned storage
-     *      was empty this is a move; otherwise it is a parallel copy.
-     *      After this step @p batch_vecs is left in whatever state
-     *      @c append_batch leaves it.
-     *   2. A @c hg_router_t is constructed locally over the freshly-grown
-     *      vector storage — the router's @c _visited_table_pool is
-     *      sized to the CURRENT total, so incremental calls always see
-     *      a correctly-sized router.
-     *   3. The newly-inserted vertices, occupying @c base_vid range
-     *      @c [base_vid_offset, base_vid_offset + batch_size), are fed
-     *      through @c _insert_one. The first @c startup_points vertices
-     *      are inserted serially; the remainder run under
-     *      @c tbb::parallel_for.
-     *
-     * Note that @c base_vid values passed to @c _insert_one are indices
-     * into @c index.get_vecs_storage() — NOT into @p batch_vecs. This
-     * is why the inner loop variable is called @c base_vid (not @c bvid):
-     * every call site refers to the owned storage.
+     * @param index            The index whose hierarchy is being grown.
+     * @param batch_vecs       Batch to insert. Moved into @p index.
+     * @param dist_func        Distance functor (must outlive this call).
+     * @param pruning_updater  Neighbor-pruning object implementing
+     *        @c update_impl(pivot_vid, std::vector<nbr_t>&, max_nbr_size).
+     *        Used for both forward-edge pruning and reverse-edge
+     *        overflow handling.
      */
-    template <typename PruningFnT>
+    template <typename PruningUpdaterT>
     static auto add_vertices(
-        this_index_t& index,
-        vector_array_t&& batch_vecs,
-        const dist_func_t& dist_func,
-        PruningFnT&& pruning_fn
+        this_index_t&        index,
+        vector_array_t&&     batch_vecs,
+        const dist_func_t&   dist_func,
+        PruningUpdaterT&     pruning_updater
     ) -> void {
         const vertex_num_t batch_size =
             static_cast<vertex_num_t>(batch_vecs.get_num_vecs());
         if (batch_size == 0) return;
 
-        // Append the batch into the index's owned vector storage. The
-        // new vertices occupy base_vid range
-        // [base_vid_offset, base_vid_offset + batch_size).
-        const vertex_num_t base_vid_offset =
-            static_cast<vertex_num_t>(index.get_vecs_storage().get_num_vecs());
         index.append_vecs(std::move(batch_vecs));
+        const vertex_id_t first_new_vid = index.add_vertices(batch_size);
 
-        // From here on, all base_vid values reference the OWNED storage.
         const auto& vecs_storage = index.get_vecs_storage();
-        const vertex_num_t total_vecs_storage =
+        const vertex_num_t total_vecs =
             static_cast<vertex_num_t>(vecs_storage.get_num_vecs());
-        const vertex_num_t base_vid_end = base_vid_offset + batch_size;
 
-        // Router is constructed internally, over the up-to-date vector
-        // storage. It is used only via its build-time primitive
-        // (beam_search); no query-path warmup is needed because
-        // we pass the factory's own visited table on the build path.
-        // The router's `topk` is irrelevant for the atom;
-        // select_nbrs_qs is passed as a harmless placeholder.
         hg_router_t router(
             vecs_storage, dist_func,
             /*topk=*/std::max(index.search_nn_qs(), index.select_nbrs_qs()),
             /*search_nn_qs=*/index.search_nn_qs(),
             /*candidate_queue_size=*/index.select_nbrs_qs());
 
-        // Per-thread reusable visited bitmap: sized to total_vecs_storage
-        // (the worst-case layer size equals the whole base dataset).
-        // Each beam search call clears and reuses it, avoiding per-call
-        // allocation.
         tbb::enumerable_thread_specific<visited_table_t> visited_pool(
-            [total_vecs_storage]() {
-                return visited_table_t(
-                    static_cast<std::size_t>(total_vecs_storage));
+            [total_vecs]() {
+                return visited_table_t(static_cast<std::size_t>(total_vecs));
             });
 
-        const vertex_num_t serial_cutoff =
-            base_vid_offset +
+        const vertex_id_t serial_cutoff =
+            first_new_vid +
             std::min<vertex_num_t>(startup_points, batch_size);
 
-        // Serial startup.
         {
             auto& visited = visited_pool.local();
-            for (vertex_num_t base_vid = base_vid_offset;
-                 base_vid < serial_cutoff; ++base_vid) {
-                _insert_one(index, router, base_vid, dist_func,
-                            pruning_fn, visited);
+            for (vertex_id_t vid = first_new_vid; vid < serial_cutoff; ++vid) {
+                _insert_one(index, router, vid, dist_func,
+                            pruning_updater, visited);
             }
         }
-        if (serial_cutoff == base_vid_end) return;
+        if (serial_cutoff == first_new_vid + batch_size) return;
 
-        // Parallel phase.
         tbb::parallel_for(
-            tbb::blocked_range<vertex_num_t>(serial_cutoff, base_vid_end),
-            [&](const tbb::blocked_range<vertex_num_t>& r) {
+            tbb::blocked_range<vertex_id_t>(
+                serial_cutoff, first_new_vid + batch_size),
+            [&](const tbb::blocked_range<vertex_id_t>& r) {
                 auto& visited = visited_pool.local();
-                for (vertex_num_t base_vid = r.begin();
-                     base_vid != r.end(); ++base_vid) {
-                    _insert_one(index, router, base_vid, dist_func,
-                                pruning_fn, visited);
+                for (vertex_id_t vid = r.begin(); vid != r.end(); ++vid) {
+                    _insert_one(index, router, vid, dist_func,
+                                pruning_updater, visited);
                 }
             }
         );
-
-        // Remove trailing layers that received no vertices.
-        index.trim_empty_layers();
     }
 
 private:
-    // ============================================================
-    //  Single-vertex insertion primitive (the heart of the class)
-    // ============================================================
+    // -----------------------------------------------------------------
+    //   Per-vertex insertion
+    // -----------------------------------------------------------------
 
-    /**
-     * @brief Insert a single base vertex. Thread-safe; this is the only
-     *        insertion path used by both serial and parallel phases.
-     *
-     * @c new_base_vid indexes into @c index.get_vecs_storage() — the
-     * owned vector storage, NOT any external batch. Callers must have
-     * already appended the batch into @p index via
-     * @c IndexStructure::append_vecs before invoking this method.
-     *
-     * Top-layer random seeding is delegated to
-     * @c router.sample_entries, which owns its own thread-safe
-     * MKL-backed RNG (TBB enumerable_thread_specific) — no separate
-     * RNG needs to be threaded through.
-     *
-     * @param visited Caller-owned bitmap; reused across insertions.
-     */
-    template <typename PruningFnT>
+    template <typename PruningUpdaterT>
     static auto _insert_one(
-        this_index_t& index,
-        const hg_router_t& router,
-        const vertex_id_t new_base_vid,
-        const dist_func_t& dist_func,
-        PruningFnT& pruning_fn,
-        visited_table_t& visited
+        this_index_t&       index,
+        const hg_router_t&  router,
+        const vertex_id_t   new_vid,
+        const dist_func_t&  /*dist_func*/,
+        PruningUpdaterT&    pruning_updater,
+        visited_table_t&    visited
     ) -> void {
-        const auto& vecs_storage = index.get_vecs_storage();
-        const vec_ele_t* new_vec = vecs_storage.get(new_base_vid);
+        const vec_ele_t* new_vec        = index.get_vecs_storage().get(new_vid);
+        const vertex_num_t search_nn_qs   = index.search_nn_qs();
+        const vertex_num_t select_nbrs_qs = index.select_nbrs_qs();
+        const layer_num_t  max_restrict_level = index.max_restrict_level();
+        const layer_id_t   top_level_id = index.top_occupied_highest_level_id();
 
-        const vertex_num_t search_nn_qs         = index.search_nn_qs();
-        const vertex_num_t select_nbrs_qs       = index.select_nbrs_qs();
-        const vertex_num_t max_nbr_size         = index.max_nbr_size();
-        const layer_num_t  max_restrict_level   = index.max_restrict_level();
+        // ==============================================================
+        //   Step A — Descent: top_level_id → level 1 (never level 0)
+        // ==============================================================
+        std::vector<distance_t> min_dist_per_level;
+        std::vector<std::unique_ptr<std_candidate_queue_t>> queue_snapshot_per_level;
 
-        const layer_num_t cur_max_level = index.get_num_layers();
+        if (top_level_id != unassigned_highest_level_id && top_level_id >= 1) {
+            min_dist_per_level.assign(static_cast<std::size_t>(top_level_id) + 1, max_distance);
+            queue_snapshot_per_level.resize(static_cast<std::size_t>(top_level_id) + 1);
+            std_candidate_queue_t descent_queue(search_nn_qs);
+            router.sample_entries(index, top_level_id, new_vec, descent_queue);
 
-        // ---------- Phase 1: beam-search descent at EVERY layer ----------
-        //
-        // No entry point is maintained by the hierarchy. The top layer's
-        // beam search is seeded directly by drawing up to `search_nn_qs`
-        // uniformly random vertices from the top layer itself. Each
-        // subsequent layer inherits the previous layer's full candidate
-        // set (translated via inter_layer_link) as its entry set.
-        //
-        //   min_distance_per_layer[cur_level - 1] = smallest candidate
-        //        distance seen at cur_level, or +∞ if the layer's beam
-        //        search returned empty.
-        //   candidates_per_layer[cur_level - 1]   = the full sorted
-        //        candidate set from the layer's beam search (up to
-        //        search_nn_qs entries, ascending by distance).
-        std::vector<distance_t> min_distance_per_layer(
-            cur_max_level, std::numeric_limits<distance_t>::max());
-        std::vector<std::unique_ptr<std_candidate_queue_t>> candidates_per_layer(cur_max_level);
-
-        const std::size_t L1 = static_cast<std::size_t>(search_nn_qs);
-
-        // Seed the top layer's beam search with random top-layer vertices.
-        std_candidate_queue_t candidate_queue(L1);
-        if (cur_max_level > 0) {
-            const auto& top_layer = index.get_layer_graph(cur_max_level - 1);
-            router.sample_entries(top_layer, new_vec, candidate_queue);
-        }
-
-        for (layer_num_t cur_level = cur_max_level; cur_level >= 1; --cur_level) {
-            const layer_id_t cur_layer_idx = cur_level - 1;
-
-            router.beam_search(
-                new_vec, index.get_layer_graph(cur_layer_idx), candidate_queue, visited);
-
-            if (candidate_queue.get_result_size() == 0) {
-                // Empty queue — create a fresh empty one for next layer.
-                if (cur_level > 1) candidate_queue = std_candidate_queue_t(L1);
-                continue;
-            }
-
-            // Find min distance by iterating the queue (heap order is fine).
-            distance_t min_d = std::numeric_limits<distance_t>::max();
-            for (const auto& c : candidate_queue) {
-                if (c.get_distance() < min_d) min_d = c.get_distance();
-            }
-            min_distance_per_layer[cur_level - 1] = min_d;
-
-            // Cache via clone() for Phase 2 reuse.
-            candidates_per_layer[cur_level - 1] =
-                std::make_unique<std_candidate_queue_t>(candidate_queue.clone());
-
-            // Translate to next layer via inter_layer_link.
-            if (cur_level > 1) {
-                auto& cur_layer_graph = index.get_layer_graph(cur_layer_idx);
-                std_candidate_queue_t next_candidate_queue(L1);
-                for (const auto& cand : candidate_queue) {
-                    const vertex_id_t lower_layer_vid =
-                        cur_layer_graph.get_inter_layer_link(cand.get_layer_vid());
-                    next_candidate_queue.try_push(cand.get_base_vid(), lower_layer_vid,
-                                     cand.get_distance());
+            for (layer_id_t cur_level_id = top_level_id; cur_level_id >= 1; --cur_level_id) {
+                router.beam_search(new_vec, index, cur_level_id, descent_queue, visited);
+                if (descent_queue.get_result_size() > 0) {
+                    min_dist_per_level[cur_level_id] = descent_queue.best_result_distance();
+                    queue_snapshot_per_level[cur_level_id] = std::make_unique<std_candidate_queue_t>(descent_queue.clone());
                 }
-                candidate_queue = std::move(next_candidate_queue);
+                if (cur_level_id == 1) break;   // avoid layer_id_t underflow
             }
         }
 
-        // ---------- Compute highest_insert_level ----------
+        // ==============================================================
+        //   Step B — Compute highest_insert_level_id
+        // ==============================================================
         //
-        //   highest_insert_level = the SMALLEST level in [0, cur_max_level - 1]
-        //       such that layer (level + 1) already absorbs the new vertex
-        //       (i.e. the best distance at that layer is within the layer's
-        //       covering radius). Sentinel value: cur_max_level + 1.
+        // r-net rule: at each layer h in [1, max_restrict_level],
+        // measure q's nearest neighbor distance WITHIN L_h. If that
+        // distance < R_h, q is "absorbed" at L_h and we move up to
+        // check the next coarser layer. If distance >= R_h, q cannot
+        // be absorbed at L_h. q's insertion level is the smallest
+        // (bottom-most) layer where q is not absorbed. If every layer
+        // up to max_restrict_level absorbs q, it stays at the base only
+        // (highest_insert_level_id = 0).
         //
-        // Layers [highest_insert_level + 1 .. cur_max_level] are deemed covered
-        // (even if a later layer was uncovered — we stop at the first found
-        // cover). Layers [1 .. highest_insert_level] are deemed uncovered and
-        // get an insertion in Phase 2. If no layer covers new_base_vid,
-        // highest_insert_level = cur_max_level + 1 and we extend the hierarchy.
-        layer_num_t highest_insert_level = cur_max_level + 1;
-        for (layer_num_t cur_level = 0; cur_level < cur_max_level; ++cur_level) {
-            if (min_distance_per_layer[cur_level] <= index.radius_at(cur_level + 1)) {
-                highest_insert_level = cur_level;
+        // min_dist_per_level[h] approximates NN_dist_in_L_h: the
+        // descent queue at cur=h contains only L_h participants
+        // (neighbors reached via fetch_layer_nbrs(_, h) all have
+        // highest_level_id >= h), so min over the queue is bounded
+        // above by the true NN in L_h. When h > top_level_id, L_h has
+        // no participants yet and q is trivially not absorbed.
+        layer_id_t highest_insert_level_id = 0;
+        for (layer_id_t h = 1; h <= static_cast<layer_id_t>(max_restrict_level); ++h) {
+            const distance_t nn_at_h = (static_cast<std::size_t>(h) < min_dist_per_level.size())
+                ? min_dist_per_level[h] : max_distance;
+            if (nn_at_h >= index.radius_at(h)) {
+                highest_insert_level_id = h;
                 break;
             }
         }
 
-        // ---------- Phase 1.5: cap highest_insert_level ----------
+        // ==============================================================
+        //   Step C — Assign slot
+        // ==============================================================
+        index.assign_layer(new_vid, highest_insert_level_id);
+
+        // ==============================================================
+        //   Step D — Edge insertion
+        // ==============================================================
         //
-        // All layers are pre-allocated at construction. If no layer
-        // covers the new vertex, insert it at every layer up to
-        // max_restrict_level.
-        if (highest_insert_level > max_restrict_level) {
-            highest_insert_level = max_restrict_level;
+        // Always run select-neighbors search at level 1 (never at 0).
+        // Its pruned result is used twice:
+        //   - As the L0 forward + reverse edges (no L0 beam_search).
+        //   - As the L1 forward + reverse edges (if vid participates
+        //     at L1, i.e. highest_insert_level_id >= 1).
+        // For cur_level >= 2, run the normal per-level loop.
+
+        auto run_select_at_level = [&](const layer_id_t target_level_id)
+            -> std::vector<nbr_t>
+        {
+            std_candidate_queue_t* select_queue_ptr = nullptr;
+            std::unique_ptr<std_candidate_queue_t> select_queue_owner;
+
+            if (target_level_id < queue_snapshot_per_level.size() && queue_snapshot_per_level[target_level_id]) {
+                // Reuse the descent snapshot; bump its capacity from
+                // search_nn_qs (L1) to select_nbrs_qs (L2), then
+                // continue the beam search for the extra width.
+                select_queue_owner = std::move(queue_snapshot_per_level[target_level_id]);
+                select_queue_owner->set_capacity(select_nbrs_qs);
+                select_queue_ptr = select_queue_owner.get();
+            } else {
+                // No snapshot (e.g. first-ever insertion, or target
+                // level exceeds top_level_id) — fresh random seeds.
+                select_queue_owner = std::make_unique<std_candidate_queue_t>(select_nbrs_qs);
+                router.sample_entries(index, target_level_id, new_vec, *select_queue_owner);
+                select_queue_ptr = select_queue_owner.get();
+            }
+            router.beam_search(new_vec, index, target_level_id, *select_queue_ptr, visited);
+
+            std::vector<nbr_t> pruned_results;
+            const std::size_t result_size = select_queue_ptr->get_result_size();
+            if (result_size == 0) return pruned_results;
+
+            auto sorted = select_queue_ptr->extract_results(result_size);
+            pruned_results.reserve(sorted.size());
+            for (const auto& cand : sorted) {
+                pruned_results.emplace_back(cand.get_base_vid(), cand.get_distance(), /*is_new=*/true);
+            }
+            pruning_updater.update_impl(new_vid, pruned_results, index.max_nbr_size(target_level_id));
+            return pruned_results;
+        };
+
+        auto write_forward_edges = [&](const layer_id_t target_level_id,
+                                       const std::vector<nbr_t>& pruned_results,
+                                       const std::size_t max_write_count)
+        {
+            index.with_locked_nbrs(new_vid, target_level_id,
+                [&](std::span<nbr_t> slot, vertex_num_t /*cnt == 0*/) {
+                    const std::size_t write_count = std::min(
+                        std::min(pruned_results.size(), slot.size()),
+                        max_write_count);
+                    for (std::size_t i = 0; i < write_count; ++i) {
+                        slot[i] = pruned_results[i];
+                    }
+                    if (write_count < slot.size()) {
+                        slot[write_count] = nbr_t::make_invalid_nbr();
+                    }
+                });
+        };
+
+        auto write_reverse_edges = [&](const layer_id_t target_level_id,
+                                       const std::vector<nbr_t>& pruned_results)
+        {
+            for (std::size_t i = 0; i < pruned_results.size(); ++i) {
+                const vertex_id_t nbr_vid  = pruned_results[i].get_vid();
+                const distance_t  nbr_dist = pruned_results[i].get_distance();
+                const nbr_t new_reverse_nbr =
+                    nbr_t::make_new_nbr(new_vid, nbr_dist);
+
+                index.with_locked_nbrs(nbr_vid, target_level_id,
+                    [&](std::span<nbr_t> slot, vertex_num_t cnt) {
+                        const vertex_num_t slot_cap =
+                            static_cast<vertex_num_t>(slot.size());
+                        if (cnt < slot_cap) {
+                            slot[cnt] = new_reverse_nbr;
+                            if (cnt + 1 < slot_cap) {
+                                slot[cnt + 1] = nbr_t::make_invalid_nbr();
+                            }
+                            return;
+                        }
+                        // Slot is full — re-run RNG pruning on
+                        // existing slot ∪ {new_reverse_nbr}.
+                        std::vector<nbr_t> merged;
+                        merged.reserve(slot_cap + 1);
+                        for (vertex_num_t k = 0; k < slot_cap; ++k) {
+                            merged.push_back(slot[k]);
+                        }
+                        merged.push_back(new_reverse_nbr);
+                        std::sort(merged.begin(), merged.end(),
+                            [](const nbr_t& a, const nbr_t& b) {
+                                return a.get_distance() < b.get_distance();
+                            });
+                        pruning_updater.update_impl(
+                            nbr_vid, merged, slot_cap);
+                        for (std::size_t k = 0;
+                             k < merged.size() && k < slot_cap; ++k)
+                        {
+                            slot[k] = merged[k];
+                        }
+                        if (merged.size() < slot_cap) {
+                            slot[merged.size()] = nbr_t::make_invalid_nbr();
+                        }
+                    });
+            }
+        };
+
+        // ---- cur_level_id == 1: always run select (drives L0 + L1) ----
+        const std::vector<nbr_t> pruned_l1_nbrs = run_select_at_level(1);
+
+        if (!pruned_l1_nbrs.empty()) {
+            // L0 forward: write the pruned L1 neighbors into the first
+            // max_nbr_size positions of vid's L0 slot (capacity is
+            // 2 * max_nbr_size; the back half stays as invalid sentinel
+            // for future refiner passes).
+            write_forward_edges(
+                /*target_level_id=*/0,
+                pruned_l1_nbrs,
+                /*max_write_count=*/index.max_nbr_size());
+
+            // L0 reverse: add vid to each pruned neighbor's L0 slot.
+            write_reverse_edges(/*target_level_id=*/0, pruned_l1_nbrs);
+
+            if (highest_insert_level_id >= 1) {
+                // L1 forward + reverse using the same pruned set.
+                write_forward_edges(
+                    1, pruned_l1_nbrs,
+                    /*max_write_count=*/index.max_nbr_size(1));
+                write_reverse_edges(1, pruned_l1_nbrs);
+            }
         }
 
-        // ---------- Phase 2: insert new_base_vid at layers [1, highest_insert_level] ----------
-        if (highest_insert_level == 0) {
-            // new_base_vid is already covered at layer 1 → no insertion in
-            // upper hierarchy.
-            return;
+        // ---- cur_level_id >= 2: normal forward + reverse ----
+        for (layer_id_t cur_level_id = 2;
+             cur_level_id <= highest_insert_level_id;
+             ++cur_level_id)
+        {
+            const std::vector<nbr_t> pruned_results =
+                run_select_at_level(cur_level_id);
+            if (pruned_results.empty()) continue;
+            write_forward_edges(
+                cur_level_id, pruned_results,
+                /*max_write_count=*/index.max_nbr_size(cur_level_id));
+            write_reverse_edges(cur_level_id, pruned_results);
         }
-
-        const std::size_t L2 = static_cast<std::size_t>(select_nbrs_qs);
-
-        std::vector<std::pair<layer_id_t, vertex_id_t>> per_level_insertions;
-        per_level_insertions.reserve(highest_insert_level);
-
-        // Scratch buffer for the pruned initial neighbor set. Sized once
-        // at the upper bound (max_nbr_size); reused across Phase 2 layers.
-        std::vector<inbr_t> selected_nbrs;
-        selected_nbrs.reserve(static_cast<std::size_t>(max_nbr_size));
-
-        for (layer_num_t cur_level = highest_insert_level; cur_level >= 1; --cur_level) {
-            const layer_id_t cur_layer_idx = cur_level - 1;
-            auto& cur_layer_graph = index.get_layer_graph(cur_layer_idx);
-
-            // Seed Phase 2's beam search from the cached Phase 1 candidate
-            // set at the SAME layer (wider capacity L2 for richer search).
-            std_candidate_queue_t phase2_candidate_queue(L2);
-            if (cur_level - 1 < cur_max_level && candidates_per_layer[cur_level - 1]) {
-                for (const auto& cand : *candidates_per_layer[cur_level - 1]) {
-                    phase2_candidate_queue.try_push(cand.get_base_vid(),
-                                       cand.get_layer_vid(),
-                                       cand.get_distance());
-                }
-            }
-
-            // Rich beam search with select_nbrs_qs (= L_2).
-            router.beam_search(new_vec, cur_layer_graph, phase2_candidate_queue, visited);
-
-            // Insert the new vertex at this layer.
-            const vertex_id_t new_layer_vid = cur_layer_graph.add_vertex(new_base_vid);
-            per_level_insertions.emplace_back(cur_layer_idx, new_layer_vid);
-            const inbr_t new_vertex_inbr(new_base_vid, new_layer_vid);
-
-            // Neighbor selection: extract sorted results, truncate to max_nbr_size.
-            const std::size_t result_k = std::min(
-                L2, phase2_candidate_queue.get_result_size());
-            auto cur_layer_cands = (result_k > 0)
-                ? phase2_candidate_queue.extract_results(result_k)
-                : knn_results_t{};
-
-            selected_nbrs.clear();
-            const std::size_t num_to_take = std::min<std::size_t>(
-                cur_layer_cands.size(), static_cast<std::size_t>(max_nbr_size));
-            for (std::size_t i = 0; i < num_to_take; ++i) {
-                selected_nbrs.emplace_back(
-                    cur_layer_cands[i].get_base_vid(),
-                    cur_layer_cands[i].get_layer_vid());
-            }
-
-            // Forward edges.
-            for (const inbr_t& nbr : selected_nbrs) {
-                cur_layer_graph.add_nbr(new_layer_vid, nbr, pruning_fn);
-            }
-            // Reverse edges.
-            for (const inbr_t& nbr : selected_nbrs) {
-                cur_layer_graph.add_nbr(nbr.get_level_vid(), new_vertex_inbr, pruning_fn);
-            }
-        }
-
-        // ---------- Phase 2 epilogue: patch inter-layer links ----------
-        // per_level_insertions[0] is the topmost (cur_level = highest_insert_level);
-        // per_level_insertions.back() is cur_level = 1. For every upper
-        // layer (cur_level ≥ 2), set the new vertex's inter_layer_link to
-        // its new layer_vid in the layer directly below. Layer 1's
-        // placeholder link is new_base_vid (= base_vid), which is already the
-        // correct L0 identity.
-        for (std::size_t i = 0; i + 1 < per_level_insertions.size(); ++i) {
-            const auto [upper_layer_idx, upper_layer_vid] = per_level_insertions[i];
-            const auto [lower_layer_idx, lower_layer_vid] = per_level_insertions[i + 1];
-            (void)lower_layer_idx;
-            auto& upper_layer_graph = index.get_layer_graph(upper_layer_idx);
-            upper_layer_graph.set_inter_layer_link(upper_layer_vid, lower_layer_vid);
-        }
-
     }
 
-};
+};  // class IndexFactory
 
 }   // namespace stacked_rgraph
 }   // namespace cpu

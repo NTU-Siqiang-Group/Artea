@@ -64,6 +64,14 @@ namespace cpu {
  *    - clone(): Returns a fully independent copy of the queue with
  *      identical logical state. The original queue is not modified.
  *
+ * 7. Capacity Adjustment:
+ *    - set_capacity(new_capacity): Adjust the queue's result-set capacity.
+ *      Upward resize leaves existing contents untouched; downward resize
+ *      pops worst-distance entries from the result-set until size <= new
+ *      capacity. The unexplored-set is not affected. Used by
+ *      IndexFactory to reuse descent-phase queue snapshots with a larger
+ *      capacity during select-neighbors search.
+ *
  * @tparam CandidateQueueImpl The candidate queue type to check.
  */
 template <typename CandidateQueueImpl>
@@ -114,6 +122,10 @@ std::constructible_from<CandidateQueueImpl, std::size_t> && requires(
 
     // Deep copy: returns an independent copy of the queue with identical state.
     { queue.clone() } -> std::same_as<CandidateQueueImpl>;
+
+    // Capacity adjustment: resize the result-set capacity; upward resize
+    // preserves contents; downward resize drops worst-distance entries.
+    { queue.set_capacity(std::declval<std::size_t>()) } -> std::same_as<void>;
 };
 
 }   // namespace cpu

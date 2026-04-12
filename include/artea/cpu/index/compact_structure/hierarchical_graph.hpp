@@ -15,97 +15,273 @@
 /*
  * @FilePath: /Artea/include/artea/cpu/index/compact_structure/hierarchical_graph.hpp
  * @Author: Chandler (Weitang Ye) <weitang.ye@ntu.edu.sg>
- * @Description: Compact hierarchical graph: read-only multi-layer structure
- *               where each layer is a compact::InternalGraph (fixed-stride
- *               CSR with sentinel-terminated neighbors and inter-layer links).
+ * @Description: Read-only topology-only snapshot of a
+ *               dynamic::HierarchicalGraph. Mirrors the dynamic storage
+ *               layout byte-for-byte except that:
+ *                 - neighbor entries are raw vertex_id_t (no distance),
+ *                 - per-vertex spinlock is removed,
+ *                 - arenas are sized exactly and never grow.
+ *               Slot offsets are preserved from the source, so the
+ *               compactor can copy VertexInfo verbatim without
+ *               recomputing layout.
  */
 
 #pragma once
 
+#include <algorithm>
 #include <cstddef>
-#include <memory>
+#include <limits>
+#include <span>
 #include <vector>
+
+#include <artea/cpu/containers/allocator.hpp>
 
 namespace artea {
 namespace cpu {
 namespace compact {
 
 /**
- * @brief Read-only hierarchical graph composed of compact::InternalGraph layers.
+ * @brief Read-only hierarchical graph storing topology only.
  *
- * Mirrors the API of dynamic::HierarchicalGraph but stores each layer as an
- * owned compact::InternalGraph (movable, no atomics/mutexes). Intended as the
- * query-time representation produced by HierarchicalGraphCompactor.
+ * Arenas are per-@c highest_level_id @c cache_aligned_container_t buffers
+ * sized once at construction. Each vertex's @c VertexInfo holds its
+ * @c highest_level_id plus a @c slot_offset (in @c vertex_id_t units)
+ * into its group's arena, preserved verbatim from the dynamic source.
  *
- * Layers are stored as @c std::unique_ptr<internal_graph_t> in a dense vector
- * sized at construction. All layers must be installed via @c set_layer_graph
- * before the graph is used for queries.
+ * Level layout inside a slot (high → low, L0 doubled):
+ *
+ *   [ level H vids | level H-1 vids | ... | level 1 vids | level 0 vids ]
+ *     max_nbr_size   max_nbr_size           max_nbr_size   2*max_nbr_size
+ *
+ * Neighbor arrays are sentinel-terminated with @c invalid_vertex_id.
  *
  * @tparam IndexTraitsT The index traits type.
  */
 template <typename IndexTraitsT>
 class HierarchicalGraph {
 
-    using vertex_num_t     = typename IndexTraitsT::vertex_num_t;
-    using vertex_id_t      = typename IndexTraitsT::vertex_id_t;
-    using layer_num_t      = typename IndexTraitsT::layer_num_t;
-    using layer_id_t       = typename IndexTraitsT::layer_id_t;
-    using internal_graph_t = typename IndexTraitsT::compact::internal_graph_t;
+    using vertex_num_t = typename IndexTraitsT::vertex_num_t;
+    using vertex_id_t  = typename IndexTraitsT::vertex_id_t;
+    using layer_num_t  = typename IndexTraitsT::layer_num_t;
+    using layer_id_t   = typename IndexTraitsT::layer_id_t;
+
+    using vid_arena_container_t = cache_aligned_container_t<vertex_id_t>;
 
 public:
+    static constexpr vertex_id_t invalid_vertex_id = IndexTraitsT::invalid_vertex_id;
+
+    /** @brief Sentinel for vertices that have not been assigned to any
+     *         level. Matches the dynamic graph's convention so the
+     *         compactor can copy @c highest_level_id verbatim. */
+    static constexpr layer_id_t unassigned_highest_level_id =
+        std::numeric_limits<layer_id_t>::max();
+
     /**
-     * @brief Construct a compact HierarchicalGraph with @p num_layers slots.
-     * @param num_layers Number of layers (all initially null).
+     * @brief Per-vertex row. Strict subset of
+     *        @c dynamic::HierarchicalGraph::VertexInfo (drops the spinlock);
+     *        the semantics and units of @c slot_offset exactly match
+     *        the dynamic version.
      */
-    explicit HierarchicalGraph(const layer_num_t num_layers)
-        : _layer_graphs(num_layers), _num_layers(num_layers) {}
+    struct VertexInfo {
+        layer_id_t  highest_level_id = unassigned_highest_level_id;
+        std::size_t slot_offset      = 0;   // in vertex_id_t units
+    };
 
-    HierarchicalGraph(const HierarchicalGraph&) = delete;
+    /**
+     * @brief Construct a compact graph sized to hold every vid's slot
+     *        from a source dynamic graph.
+     *
+     * @param max_highest_level_id          Inclusive upper bound of
+     *                                      per-vertex @c highest_level_id.
+     * @param max_nbr_size                  Per-vertex capacity at upper
+     *                                      levels; level 0 uses 2x this.
+     * @param num_vertices                  Total vertex count
+     *                                      (sizes @c _vertex_info_table).
+     * @param arena_vid_capacity_per_group  Per-arena size in
+     *                                      @c vertex_id_t elements. Must
+     *                                      be >= the maximum @c slot_offset
+     *                                      that the compactor will write
+     *                                      into that arena.
+     */
+    HierarchicalGraph(
+        const layer_num_t              max_highest_level_id,
+        const vertex_num_t             max_nbr_size,
+        const vertex_num_t             num_vertices,
+        std::vector<std::size_t>       arena_vid_capacity_per_group
+    ) :
+        _max_highest_level_id(max_highest_level_id),
+        _max_nbr_size(max_nbr_size),
+        _num_vertices(num_vertices),
+        _arenas(static_cast<std::size_t>(max_highest_level_id) + 1),
+        _vids_by_highest_level(
+            static_cast<std::size_t>(max_highest_level_id) + 1),
+        _vertex_info_table(num_vertices)
+    {
+        for (std::size_t h = 0; h < _arenas.size(); ++h) {
+            _arenas[h].resize(arena_vid_capacity_per_group[h]);
+            std::fill(_arenas[h].begin(), _arenas[h].end(),
+                      invalid_vertex_id);
+        }
+    }
+
+    HierarchicalGraph(const HierarchicalGraph&)            = delete;
     HierarchicalGraph& operator=(const HierarchicalGraph&) = delete;
-
-    HierarchicalGraph(HierarchicalGraph&&) noexcept = default;
-    HierarchicalGraph& operator=(HierarchicalGraph&&) noexcept = default;
+    HierarchicalGraph(HierarchicalGraph&&)                 = default;
+    HierarchicalGraph& operator=(HierarchicalGraph&&)      = default;
 
     ~HierarchicalGraph() = default;
 
-    // --- Layer Access ---
+    // =================================================================
+    //   Read-only query API (mirrors dynamic::HierarchicalGraph)
+    // =================================================================
 
     __attribute__((always_inline))
-    auto get_num_layers() const -> layer_num_t { return _num_layers; }
-
-    __attribute__((always_inline))
-    auto get_layer_graph(const layer_id_t layer_id) -> internal_graph_t& {
-        return *_layer_graphs[layer_id];
+    auto get_num_vertices() const -> vertex_num_t {
+        return _num_vertices;
     }
 
     __attribute__((always_inline))
-    auto get_layer_graph(const layer_id_t layer_id) const -> const internal_graph_t& {
-        return *_layer_graphs[layer_id];
+    auto max_highest_level_id() const -> layer_id_t {
+        return _max_highest_level_id;
+    }
+
+    __attribute__((always_inline))
+    auto max_nbr_size() const -> vertex_num_t {
+        return _max_nbr_size;
+    }
+
+    /** @brief Per-vertex capacity at @p l (level 0 is doubled). */
+    __attribute__((always_inline))
+    auto max_nbr_size(const layer_id_t l) const -> vertex_num_t {
+        return _max_nbr_size +
+               _max_nbr_size * static_cast<vertex_num_t>(l == 0);
+    }
+
+    __attribute__((always_inline))
+    auto get_highest_level_id(const vertex_id_t vid) const -> layer_id_t {
+        return _vertex_info_table[vid].highest_level_id;
     }
 
     /**
-     * @brief Install a layer graph at the given slot (transfers ownership).
+     * @brief Return a const span over the neighbor array of @p vid at
+     *        level @p level_id. Offset and length are computed
+     *        branch-free, matching the dynamic graph's formula.
+     *
+     * Precondition: @c level_id <= get_highest_level_id(vid).
      */
     __attribute__((always_inline))
-    auto set_layer_graph(const layer_id_t layer_id,
-                         std::unique_ptr<internal_graph_t> graph) -> void {
-        _layer_graphs[layer_id] = std::move(graph);
+    auto fetch_layer_nbrs(
+        const vertex_id_t vid,
+        const layer_id_t  level_id
+    ) const -> std::span<const vertex_id_t> {
+        const auto& vinfo = _vertex_info_table[vid];
+        const layer_id_t H = vinfo.highest_level_id;
+        const vertex_id_t* slot_base =
+            _arenas[H].data() + vinfo.slot_offset;
+
+        const std::size_t level_offset =
+            static_cast<std::size_t>(H - level_id) * _max_nbr_size;
+        const std::size_t level_nbrs_count =
+            static_cast<std::size_t>(_max_nbr_size) +
+            static_cast<std::size_t>(_max_nbr_size) *
+                static_cast<std::size_t>(level_id == 0);
+
+        return std::span<const vertex_id_t>(
+            slot_base + level_offset, level_nbrs_count);
     }
 
+    /**
+     * @brief Scan forward until the first @c invalid_vertex_id sentinel
+     *        in the level-@p level_id slot of @p vid.
+     *        O(max_nbr_size(level_id)).
+     */
     __attribute__((always_inline))
-    auto get_layer_graphs() -> std::vector<std::unique_ptr<internal_graph_t>>& {
-        return _layer_graphs;
+    auto num_valid_nbrs(
+        const vertex_id_t vid,
+        const layer_id_t  level_id
+    ) const -> vertex_num_t {
+        const auto nbrs = fetch_layer_nbrs(vid, level_id);
+        vertex_num_t count = 0;
+        for (const vertex_id_t nvid : nbrs) {
+            if (nvid == invalid_vertex_id) break;
+            ++count;
+        }
+        return count;
     }
 
+    /**
+     * @brief Vids whose @c highest_level_id == @p h.
+     */
     __attribute__((always_inline))
-    auto get_layer_graphs() const
-        -> const std::vector<std::unique_ptr<internal_graph_t>>& {
-        return _layer_graphs;
+    auto get_vids_with_highest_level(const layer_id_t h) const
+        -> std::span<const vertex_id_t>
+    {
+        return std::span<const vertex_id_t>(
+            _vids_by_highest_level[h].data(),
+            _vids_by_highest_level[h].size());
+    }
+
+    /**
+     * @brief Largest @c h with a non-empty bucket, or
+     *        @c unassigned_highest_level_id if every bucket is empty.
+     */
+    auto top_occupied_highest_level_id() const -> layer_id_t {
+        for (std::size_t h = _vids_by_highest_level.size(); h-- > 0; ) {
+            if (!_vids_by_highest_level[h].empty()) {
+                return static_cast<layer_id_t>(h);
+            }
+        }
+        return unassigned_highest_level_id;
+    }
+
+    // =================================================================
+    //   Compactor-facing mutators
+    // =================================================================
+
+    /**
+     * @brief Mutable access to the vertex-info table. Used by
+     *        HierarchicalGraphCompactor to stream in per-vertex
+     *        (highest_level_id, slot_offset) copied from the source.
+     */
+    __attribute__((always_inline))
+    auto get_vertex_info_table_mut() -> std::vector<VertexInfo>& {
+        return _vertex_info_table;
+    }
+
+    /**
+     * @brief Mutable access to the per-group vid buckets. Used by
+     *        HierarchicalGraphCompactor to populate the groups by
+     *        bulk-copying the dynamic source's concurrent buckets.
+     */
+    __attribute__((always_inline))
+    auto get_vids_by_highest_level_mut()
+        -> std::vector<std::vector<vertex_id_t>>&
+    {
+        return _vids_by_highest_level;
+    }
+
+    /** @brief Raw base pointer of arena @p h (for compactor writes). */
+    __attribute__((always_inline))
+    auto arena_base(const layer_id_t h) -> vertex_id_t* {
+        return _arenas[h].data();
     }
 
 private:
-    std::vector<std::unique_ptr<internal_graph_t>> _layer_graphs;
-    layer_num_t _num_layers;
+    layer_num_t  _max_highest_level_id;
+    vertex_num_t _max_nbr_size;
+    vertex_num_t _num_vertices;
+
+    /** @brief One arena per highest_level_id in
+     *         @c [0, _max_highest_level_id]. */
+    std::vector<vid_arena_container_t>    _arenas;
+
+    /** @brief _vids_by_highest_level[h] lists every vid with
+     *         highest_level_id == h. Copied from the source at compact
+     *         time; not mutated thereafter. */
+    std::vector<std::vector<vertex_id_t>> _vids_by_highest_level;
+
+    /** @brief Per-vertex row, indexed by vid. */
+    std::vector<VertexInfo>               _vertex_info_table;
 
 };  // class HierarchicalGraph
 

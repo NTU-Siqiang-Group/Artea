@@ -31,7 +31,7 @@ template <typename RouterTraitsT, typename DerivedClassT> class VectorRouter;
 template <typename RouterTraitsT> class BruteforceRouter;
 namespace compact { template <typename RouterTraitsT> class BottomGraphRouter; }
 namespace dynamic { template <typename RouterTraitsT> class BottomGraphRouter; }
-namespace dynamic { template <typename RouterTraitsT> class InternalGraphRouter; }
+namespace dynamic { template <typename RouterTraitsT> class SingleLayerRouter; }
 namespace dynamic { template <typename RouterTraitsT> class HierarchicalGraphRouter; }
 template <typename RouterTraitsT> struct CandidateEntry;
 template <typename RouterTraitsT, typename EntryT> class StdCandidateQueue;
@@ -107,8 +107,8 @@ struct RouterTraits : virtual public ComputerTraitsT, virtual public IndexTraits
         using bottom_graph_router_t = cpu::compact::BottomGraphRouter<router_traits_t>;
     };
     struct dynamic : IndexTraitsT::dynamic {
-        using bottom_graph_router_t      = cpu::dynamic::BottomGraphRouter<router_traits_t>;
-        using internal_graph_router_t     = cpu::dynamic::InternalGraphRouter<router_traits_t>;
+        using bottom_graph_router_t       = cpu::dynamic::BottomGraphRouter<router_traits_t>;
+        using single_layer_router_t       = cpu::dynamic::SingleLayerRouter<router_traits_t>;
         using hierarchical_graph_router_t = cpu::dynamic::HierarchicalGraphRouter<router_traits_t>;
     };
 

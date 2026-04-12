@@ -229,6 +229,31 @@ public:
     __attribute__((always_inline))
     auto capacity() const -> std::size_t { return _capacity; }
 
+    /**
+     * @brief Adjust the result-set capacity.
+     *
+     *   - Upward resize (@p new_capacity >= current capacity): existing
+     *     contents are preserved.
+     *   - Downward resize (@p new_capacity < current capacity): drop the
+     *     tail entries (largest distances) until @c _data.size() <=
+     *     @p new_capacity. _data is already sorted ascending, so trimming
+     *     is just a pop_back loop.
+     *
+     * Updates @c _thresh_distance afterwards. @c _check_cursor is clamped
+     * to stay within _data.size().
+     */
+    __attribute__((always_inline))
+    auto set_capacity(std::size_t new_capacity) -> void {
+        _capacity = new_capacity;
+        while (_data.size() > _capacity) {
+            _data.pop_back();
+        }
+        if (_check_cursor > _data.size()) {
+            _check_cursor = _data.size();
+        }
+        _update_thresh_distance();
+    }
+
     /** @brief Clear all candidates and reset internal state. */
     __attribute__((always_inline))
     auto clear() -> void {

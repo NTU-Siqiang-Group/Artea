@@ -102,11 +102,9 @@ struct RGraphConfig {
      *        Returns base_capacity when decay_ratio == 1 (no decay).
      */
     __attribute__((always_inline))
-    auto capacity_for_layer(const vertex_num_t layer_id,
-                            const vertex_num_t base_capacity) const -> vertex_num_t {
+    auto capacity_for_layer(const vertex_num_t layer_id, const vertex_num_t base_capacity) const -> vertex_num_t {
         if (_layer_cap_decay_ratio == ratio_t(1)) return base_capacity;
-        const double factor = std::pow(static_cast<double>(_layer_cap_decay_ratio),
-                                       static_cast<double>(layer_id));
+        const double factor = std::pow(static_cast<double>(_layer_cap_decay_ratio), static_cast<double>(layer_id));
         const double raw = static_cast<double>(base_capacity) * factor;
         const vertex_num_t cap = static_cast<vertex_num_t>(raw);
         return std::max<vertex_num_t>(cap, _min_layer_cap);
@@ -115,8 +113,7 @@ struct RGraphConfig {
     /**
      * @brief Compute the max restrict level for a dataset of @p total_vertices.
      */
-    static auto compute_max_restrict_level(const vertex_num_t total_vertices)
-        -> layer_num_t
+    static auto compute_max_restrict_level(const vertex_num_t total_vertices) -> layer_num_t
     {
         if (total_vertices == 0) return 1;
         const double ratio = static_cast<double>(total_vertices) / 1000.0;

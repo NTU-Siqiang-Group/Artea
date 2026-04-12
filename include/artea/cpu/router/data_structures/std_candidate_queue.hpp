@@ -280,10 +280,52 @@ public:
         return _capacity;
     }
 
+    /**
+     * @brief Adjust the result-set capacity.
+     *
+     *   - Upward resize (@p new_capacity >= current capacity): existing
+     *     contents are preserved; the fast-rejection threshold relaxes
+     *     to allow more entries before trimming.
+     *   - Downward resize (@p new_capacity < current capacity): the
+     *     worst-distance entries are popped from the top-candidates
+     *     max-heap until its size is <= @p new_capacity. The
+     *     unexplored-set is not touched (still-to-explore seeds stay in
+     *     place even if their distance now exceeds the result-set
+     *     threshold).
+     *
+     * Used by the stacked_rgraph::IndexFactory to reuse descent-phase
+     * queue snapshots with a larger capacity during select-neighbors
+     * search.
+     */
+    __attribute__((always_inline))
+    auto set_capacity(std::size_t new_capacity) -> void {
+        _capacity = new_capacity;
+        while (_top_candidates.size() > _capacity) {
+            _top_candidates.pop();
+        }
+        _update_lower_bound();
+    }
+
     /** @brief Get the current lower bound (worst distance in top candidates). */
     __attribute__((always_inline))
     auto lower_bound() const -> distance_t {
         return _lower_bound;
+    }
+
+    /**
+     * @brief Smallest distance currently in the result set.
+     *        Returns @c max_distance when the result set is empty.
+     *
+     * @c _top_candidates is a max-heap (top = worst), so the best entry
+     * lives somewhere in the underlying vector. The scan is O(L) with
+     * L == capacity; for beam-search capacities this is tens of entries.
+     */
+    auto best_result_distance() const -> distance_t {
+        distance_t best = max_distance;
+        for (const auto& cand : _top_candidates) {
+            if (cand.get_distance() < best) best = cand.get_distance();
+        }
+        return best;
     }
 
     /**

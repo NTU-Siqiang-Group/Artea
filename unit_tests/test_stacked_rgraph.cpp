@@ -15,9 +15,11 @@
 /*
  * @FilePath: /Artea/unit_tests/test_stacked_rgraph.cpp
  * @Author: Chandler (Weitang Ye) <weitang.ye@ntu.edu.sg>
- * @Description: Tests for StackedRGraph (dynamic Stacked R-Nets) driven by a
- *               real dataset (e.g. SIFT). L1 radius can be provided via CLI
- *               or probed via DatasetProber (90% quantile of 1-NN distance).
+ * @Description: Tests for the reworked Stacked R-Nets index. All vertices
+ *               live in a unified HierarchicalGraph (no per-layer
+ *               InternalGraph), every vertex has one global vid that is
+ *               valid at every level it participates in, and edges are
+ *               built per-level via HierarchicalPruningUpdater.
  */
 
 #include <algorithm>
@@ -25,9 +27,7 @@
 #include <chrono>
 #include <cstdint>
 #include <filesystem>
-#include <fstream>
 #include <iostream>
-#include <unordered_map>
 #include <limits>
 #include <memory>
 #include <stdexcept>
@@ -54,29 +54,30 @@ struct TestConfig {
     std::string dataset_name;
 
     // StackedRGraph parameters
-    float rnet_beta;                  // layer radius growth factor
-    bool  l1_radius_provided;         // if false, auto-probe
-    float l1_rnet_radius;             // only used if l1_radius_provided
+    float rnet_beta;
+    bool  l1_radius_provided;
+    float l1_rnet_radius;
     uint32_t max_nbr_size;
 
     // DatasetProber parameters (when L1 radius is auto-probed)
     uint32_t probe_num_samples;
-    float    probe_quantile;          // which quantile of 1-NN distance to use
+    float    probe_quantile;
 
-    // Beam-search queue sizes (Phase 1 descent / Phase 2 candidate gathering)
+    // Beam-search queue sizes
     uint32_t search_nn_qs;
     uint32_t select_nbrs_qs;
 
-    // Coverage/separation sampling parameters
-    uint32_t coverage_num_samples;    // # base points sampled per layer
-    uint32_t separation_num_samples;  // # layer-h vertices sampled per layer
+    // RNG pruning scale (passed to HierarchicalPruningUpdater).
+    float pruning_scale;
+
+    // Coverage sampling parameters
+    uint32_t coverage_num_samples;
 
     bool verbose;
 } g_config;
 
 // ============================================================
-//  DataProvider singleton: loads dataset and (optionally) probes
-//  the L1 radius exactly once for the whole test binary.
+//  DataProvider singleton
 // ============================================================
 
 class DataProvider {
@@ -88,7 +89,8 @@ public:
 
     void init() {
         if (!std::filesystem::exists(g_config.config_path)) {
-            throw std::runtime_error("Config file not found: " + g_config.config_path);
+            throw std::runtime_error(
+                "Config file not found: " + g_config.config_path);
         }
         ARTEA_INFO(fmt::format("Loading dataset: {} from {}",
             g_config.dataset_name, g_config.config_path));
@@ -101,7 +103,6 @@ public:
 
         _dist_func = std::make_unique<dist_func_t>(base_vecs.get_vec_dim());
 
-        // Resolve the L1 radius: user-provided overrides auto-probe.
         if (g_config.l1_radius_provided) {
             _l1_radius = g_config.l1_rnet_radius;
             ARTEA_INFO(fmt::format(
@@ -117,18 +118,13 @@ public:
         }
     }
 
-    auto get_dataset() -> vector_dataset_t& { return *_dataset; }
-    auto get_dist_func() -> dist_func_t& { return *_dist_func; }
-    auto get_l1_radius() const -> float { return _l1_radius; }
+    auto get_dataset()  -> vector_dataset_t& { return *_dataset; }
+    auto get_dist_func()-> dist_func_t&      { return *_dist_func; }
+    auto get_l1_radius() const -> float      { return _l1_radius; }
 
 private:
     DataProvider() = default;
 
-    /**
-     * @brief Probe the dataset for its @c g_config.probe_quantile -th
-     *        percentile of 1-NN distances. Uses @c num_samples samples.
-     *        Returns that distance as the L1 rnet_radius.
-     */
     auto _probe_l1_radius(const vector_array_t& base_vecs,
                           const dist_func_t& dist_func) -> float {
         dataset_prober_t prober(base_vecs, dist_func);
@@ -138,16 +134,7 @@ private:
             "Probing dataset for 1-NN {}th-percentile (num_samples={}) ...",
             static_cast<int>(g_config.probe_quantile * 100.0f),
             g_config.probe_num_samples));
-
-        auto t0 = std::chrono::high_resolution_clock::now();
         auto result = prober.probe(quantiles, g_config.probe_num_samples);
-        auto t1 = std::chrono::high_resolution_clock::now();
-        const double elapsed_s =
-            std::chrono::duration_cast<std::chrono::microseconds>(t1 - t0).count() / 1e6;
-        ARTEA_INFO(fmt::format("Dataset probe completed in {:.2f} s", elapsed_s));
-
-        // table[nn_rank_idx][quantile_idx]. nn_rank 1 lives at index 0.
-        // quantile 0 (the only one we asked for) is the radius we want.
         const distance_t r = result.table[0][0];
         return static_cast<float>(r);
     }
@@ -158,30 +145,15 @@ private:
 };
 
 // ============================================================
-//  Prune / evict functors used by all test cases
+//  Helpers
 // ============================================================
 
 namespace {
 
-/**
- * @brief Simple FIFO pruning functor: shift-left and drop the oldest
- *        neighbor, insert @p new_nbr at the tail. Matches the pattern used
- *        in the existing InternalGraph tests.
- */
-struct fifo_pruning_fn_t {
-    vertex_num_t max_nbr_size;
-    auto operator()(inbr_t* slots, const inbr_t new_nbr) const -> uint64_t {
-        for (vertex_num_t i = 1; i < max_nbr_size; ++i) slots[i - 1] = slots[i];
-        slots[max_nbr_size - 1] = new_nbr;
-        return max_nbr_size;
-    }
-};
-
-/**
- * @brief Compute R_h = L1_radius * beta^(h-1) (h is 1-indexed per paper).
- */
-inline auto radius_at_layer(const float l1_radius, const float beta,
-                            const layer_num_t h) -> distance_t {
+/** @brief R_h = L1_radius * beta^(h-1) (h is 1-indexed per paper). */
+inline auto radius_at_paper_layer(
+    const float l1_radius, const float beta, const layer_num_t h
+) -> distance_t {
     float r = l1_radius;
     for (layer_num_t i = 1; i < h; ++i) r *= beta;
     return static_cast<distance_t>(r);
@@ -190,8 +162,7 @@ inline auto radius_at_layer(const float l1_radius, const float beta,
 }  // anonymous namespace
 
 // ============================================================
-//  Test fixture: all tests share the single constructed graph
-//  built in SetUp, so that we do the (expensive) build only once.
+//  Fixture: build the index once for the whole suite.
 // ============================================================
 
 class StackedRGraphTest : public ::testing::Test {
@@ -205,21 +176,15 @@ protected:
         const float beta = g_config.rnet_beta;
 
         ARTEA_INFO(fmt::format(
-            "Building StackedRGraph: beta={:.3f}, L1_radius={:.6f}, max_nbr={}, "
-            "search_nn_qs={}, select_nbrs_qs={}",
+            "Building StackedRGraph: beta={:.3f}, L1_radius={:.6f}, "
+            "max_nbr={}, search_nn_qs={}, select_nbrs_qs={}, "
+            "pruning_scale={:.3f}",
             beta, l1_radius, g_config.max_nbr_size,
-            g_config.search_nn_qs, g_config.select_nbrs_qs));
+            g_config.search_nn_qs, g_config.select_nbrs_qs,
+            g_config.pruning_scale));
 
         auto t0 = std::chrono::high_resolution_clock::now();
 
-        // Build via the incremental interface only:
-        //   1. Construct an empty IndexStructure with the chosen knobs.
-        //   2. Produce an owned clone of the caller's base_vecs (we hold
-        //      it by const& from the DataProvider, so we cannot move it).
-        //   3. Hand the clone to add_vertices by move; inside
-        //      add_vertices the clone is moved into the index's
-        //      (currently empty) owned base storage via append_batch's
-        //      zero-copy fast path.
         const vertex_num_t total_vertices =
             static_cast<vertex_num_t>(base_vecs.get_num_vecs());
         stacked_rgraph::rgraph_config_t rgraph_config(
@@ -230,42 +195,66 @@ protected:
         _graph = std::make_unique<stacked_rgraph::index_t>(
             total_vertices, rgraph_config);
 
-        vector_array_t owned_batch = base_vecs.extract_subset(0, total_vertices);
+        // Build the updater fresh for this suite. It only needs the
+        // distance functor, the vector storage (for RNG triangle
+        // checks), and a scale coefficient.
+        _pruning_updater = std::make_unique<hierarchical_pruning_updater_t>(
+            dist_func,
+            _graph->get_vecs_storage(),
+            static_cast<ratio_t>(g_config.pruning_scale));
+
+        vector_array_t owned_batch =
+            base_vecs.extract_subset(0, total_vertices);
         stacked_rgraph::factory_t::add_vertices(
             *_graph,
             std::move(owned_batch),
             dist_func,
-            fifo_pruning_fn_t{static_cast<vertex_num_t>(g_config.max_nbr_size)});
+            *_pruning_updater);
 
         auto t1 = std::chrono::high_resolution_clock::now();
-        _build_ms = std::chrono::duration_cast<std::chrono::milliseconds>(t1 - t0).count();
+        _build_ms = std::chrono::duration_cast<std::chrono::milliseconds>(
+            t1 - t0).count();
 
+        const layer_id_t top_level_id =
+            _graph->top_occupied_highest_level_id();
         ARTEA_INFO(fmt::format(
-            "StackedRGraph built in {} ms: {} layers (max_restrict_level={})",
-            _build_ms, _graph->get_num_layers(), _graph->max_restrict_level()));
+            "StackedRGraph built in {} ms: top_occupied_level={}, "
+            "max_highest_level_id={}, max_restrict_level={}",
+            _build_ms,
+            (top_level_id == dynamic::hierarchical_graph_t
+                ::unassigned_highest_level_id)
+                ? -1 : static_cast<int>(top_level_id),
+            _graph->max_highest_level_id(),
+            _graph->max_restrict_level()));
 
-        // Per-layer summary.
-        for (layer_id_t l = 0; l < _graph->get_num_layers(); ++l) {
-            const auto& layer = _graph->get_layer_graph(l);
-            const float ratio = 100.0f * layer.get_num_vertices() / base_vecs.get_num_vecs();
+        for (layer_id_t h = 0; h <= _graph->max_highest_level_id(); ++h) {
+            const auto& bucket = _graph->get_vids_with_highest_level(h);
+            const float ratio = 100.0f * bucket.size() /
+                base_vecs.get_num_vecs();
             ARTEA_INFO(fmt::format(
-                "  Layer {}: {} vertices ({:.2f}% of base), R_{} = {:.6f}",
-                l + 1, layer.get_num_vertices(), ratio, l + 1,
-                radius_at_layer(l1_radius, g_config.rnet_beta,
-                                static_cast<layer_num_t>(l + 1))));
+                "  highest_level_id={}: {} vertices ({:.2f}% of base), "
+                "R_{} = {:.6f}",
+                h, bucket.size(), ratio, h + 1,
+                radius_at_paper_layer(l1_radius, beta,
+                    static_cast<layer_num_t>(h + 1))));
         }
     }
 
     static void TearDownTestSuite() {
         _graph.reset();
+        _pruning_updater.reset();
     }
 
-    static std::unique_ptr<stacked_rgraph::index_t> _graph;
-    static int64_t                                  _build_ms;
+    static std::unique_ptr<stacked_rgraph::index_t>         _graph;
+    static std::unique_ptr<hierarchical_pruning_updater_t>  _pruning_updater;
+    static int64_t                                          _build_ms;
 };
 
-std::unique_ptr<stacked_rgraph::index_t> StackedRGraphTest::_graph = nullptr;
-int64_t                                  StackedRGraphTest::_build_ms = 0;
+std::unique_ptr<stacked_rgraph::index_t>
+    StackedRGraphTest::_graph = nullptr;
+std::unique_ptr<hierarchical_pruning_updater_t>
+    StackedRGraphTest::_pruning_updater = nullptr;
+int64_t StackedRGraphTest::_build_ms = 0;
 
 // ============================================================
 //  Test cases
@@ -273,390 +262,251 @@ int64_t                                  StackedRGraphTest::_build_ms = 0;
 
 TEST_F(StackedRGraphTest, HierarchyNonEmpty) {
     ASSERT_NE(_graph, nullptr);
-    EXPECT_GE(_graph->get_num_layers(), 1u);
+    using HG = dynamic::hierarchical_graph_t;
+    EXPECT_NE(_graph->top_occupied_highest_level_id(),
+              HG::unassigned_highest_level_id);
 
-    const auto& base_vecs = DataProvider::instance().get_dataset().get_base_vecs();
-    const auto& layer0 = _graph->get_layer_graph(0);
-    EXPECT_GT(layer0.get_num_vertices(), 0u);
-    EXPECT_LE(layer0.get_num_vertices(), base_vecs.get_num_vecs());
+    // Level 0 must hold every vertex — it's the base layer.
+    const auto& base_vecs =
+        DataProvider::instance().get_dataset().get_base_vecs();
+    EXPECT_EQ(_graph->get_num_vertices(),
+              static_cast<vertex_num_t>(base_vecs.get_num_vecs()));
 }
 
-TEST_F(StackedRGraphTest, LayerSizesShrinkUpward) {
-    // Upper layers should be strictly smaller (or at worst equal) to lower
-    // ones. Strict inequality is expected once we move past layer 0.
-    const auto num_layers = _graph->get_num_layers();
-    for (layer_id_t l = 1; l < num_layers; ++l) {
-        const auto& lower = _graph->get_layer_graph(l - 1);
-        const auto& upper = _graph->get_layer_graph(l);
-        EXPECT_LE(upper.get_num_vertices(), lower.get_num_vertices())
-            << "Layer " << l << " (" << upper.get_num_vertices()
-            << ") should be <= layer " << (l - 1)
-            << " (" << lower.get_num_vertices() << ")";
-    }
-}
-
-TEST_F(StackedRGraphTest, InterLayerLinksAreValid) {
-    const auto& base_vecs = DataProvider::instance().get_dataset().get_base_vecs();
-    const auto n = base_vecs.get_num_vecs();
-    const auto num_layers = _graph->get_num_layers();
-
-    // Layer 0 (L1 in paper terms): inter_layer_link[layer_vid] is a base_vid.
-    const auto& layer0 = _graph->get_layer_graph(0);
-    for (vertex_num_t v = 0; v < layer0.get_num_vertices(); ++v) {
-        const vertex_id_t link = layer0.get_inter_layer_link(v);
-        ASSERT_LT(link, n) << "Layer 0 vertex " << v
-                           << " has OOB link " << link;
-    }
-
-    // Upper layers: inter_layer_link[layer_vid] is a layer_vid in the layer below.
-    for (layer_id_t l = 1; l < num_layers; ++l) {
-        const auto& upper = _graph->get_layer_graph(l);
-        const auto& lower = _graph->get_layer_graph(l - 1);
-        for (vertex_num_t v = 0; v < upper.get_num_vertices(); ++v) {
-            const vertex_id_t link = upper.get_inter_layer_link(v);
-            ASSERT_LT(link, lower.get_num_vertices())
-                << "Layer " << l << " vertex " << v
-                << " has OOB link " << link;
-        }
+TEST_F(StackedRGraphTest, GroupSizesShrinkUpward) {
+    // Each highest_level_id group should be no larger than the group
+    // one below it — vertices "drop out" of higher levels.
+    const layer_id_t max_h = _graph->max_highest_level_id();
+    for (layer_id_t h = 1; h <= max_h; ++h) {
+        const std::size_t lower =
+            _graph->get_vids_with_highest_level(h - 1).size();
+        const std::size_t upper =
+            _graph->get_vids_with_highest_level(h).size();
+        EXPECT_LE(upper, lower)
+            << "Group highest_level_id=" << static_cast<int>(h)
+            << " (" << upper << ") should be <= group "
+            << static_cast<int>(h - 1) << " (" << lower << ")";
     }
 }
 
 TEST_F(StackedRGraphTest, NeighborListsAreValid) {
-    const auto& base_vecs = DataProvider::instance().get_dataset().get_base_vecs();
-    const auto n = base_vecs.get_num_vecs();
-    const auto num_layers = _graph->get_num_layers();
+    const auto& base_vecs =
+        DataProvider::instance().get_dataset().get_base_vecs();
+    const vertex_num_t n = static_cast<vertex_num_t>(base_vecs.get_num_vecs());
+    const layer_id_t max_h = _graph->max_highest_level_id();
 
-    // Sample-based verification: for large datasets, verifying every vertex's
-    // neighbor list is too slow. Check a uniform sample per layer.
-    constexpr vertex_num_t max_per_layer = 5000;
+    // Sample-based verification across per-highest-level groups.
+    constexpr vertex_num_t max_per_group = 5000;
 
-    for (layer_id_t l = 0; l < num_layers; ++l) {
-        const auto& layer = _graph->get_layer_graph(l);
-        const vertex_num_t n_l = layer.get_num_vertices();
-        const vertex_num_t step = std::max<vertex_num_t>(1, n_l / max_per_layer);
+    for (layer_id_t h = 0; h <= max_h; ++h) {
+        const auto& bucket = _graph->get_vids_with_highest_level(h);
+        const vertex_num_t n_h = static_cast<vertex_num_t>(bucket.size());
+        if (n_h == 0) continue;
 
-        for (vertex_num_t v = 0; v < n_l; v += step) {
-            const auto block = layer.fetch_nbrs(v);
-            const uint64_t count = layer.num_valid_nbrs(v);
-            ASSERT_LE(count, layer.max_nbr_size())
-                << "Layer " << l << " vertex " << v
-                << " has count " << count
-                << " > max_nbr_size " << layer.max_nbr_size();
-            for (uint64_t i = 0; i < count; ++i) {
-                const inbr_t& nbr = block[1 + i];
-                if (nbr == base_traits_t::invalid_inbr) continue;
-                ASSERT_LT(nbr.get_base_vid(), n)
-                    << "Layer " << l << " vertex " << v
-                    << " slot " << i << " has OOB base_vid " << nbr.get_base_vid();
-                ASSERT_LT(nbr.get_level_vid(), n_l)
-                    << "Layer " << l << " vertex " << v
-                    << " slot " << i << " has OOB layer_vid " << nbr.get_level_vid();
+        const vertex_num_t step =
+            std::max<vertex_num_t>(1, n_h / max_per_group);
+
+        for (vertex_num_t i = 0; i < n_h; i += step) {
+            const vertex_id_t vid = bucket[i];
+
+            // Check every level this vertex participates in.
+            for (layer_id_t cur_level = 0; cur_level <= h; ++cur_level) {
+                const auto slot = _graph->fetch_layer_nbrs(vid, cur_level);
+                const vertex_num_t count =
+                    _graph->num_valid_nbrs(vid, cur_level);
+                const vertex_num_t cap = _graph->max_nbr_size(cur_level);
+                ASSERT_LE(count, cap)
+                    << "vid=" << vid << " cur_level=" << cur_level
+                    << " count=" << count << " > cap=" << cap;
+                for (vertex_num_t j = 0; j < count; ++j) {
+                    const auto& nbr = slot[j];
+                    ASSERT_LT(nbr.get_vid(), n)
+                        << "vid=" << vid << " cur_level=" << cur_level
+                        << " slot[" << j << "] OOB vid=" << nbr.get_vid();
+                }
             }
         }
     }
 }
 
+TEST_F(StackedRGraphTest, Level0IsHalfFilled) {
+    // IndexFactory writes only the first max_nbr_size positions of each
+    // vertex's L0 slot (L0 capacity is 2 * max_nbr_size; the back half
+    // stays invalid for a future refiner pass).
+    const auto& base_vecs =
+        DataProvider::instance().get_dataset().get_base_vecs();
+    (void)base_vecs;
+
+    const vertex_num_t cap_l0  = _graph->max_nbr_size(0);
+    const vertex_num_t cap_soft = _graph->max_nbr_size();
+    EXPECT_EQ(cap_l0, cap_soft * 2);
+
+    const auto& bucket_l0 = _graph->get_vids_with_highest_level(0);
+    if (bucket_l0.empty()) return;
+
+    constexpr vertex_num_t max_sample = 2000;
+    const vertex_num_t step = std::max<vertex_num_t>(
+        1, static_cast<vertex_num_t>(bucket_l0.size()) / max_sample);
+
+    for (vertex_num_t i = 0;
+         i < static_cast<vertex_num_t>(bucket_l0.size());
+         i += step)
+    {
+        const vertex_id_t vid = bucket_l0[i];
+        const vertex_num_t cnt = _graph->num_valid_nbrs(vid, 0);
+        EXPECT_LE(cnt, cap_soft)
+            << "vid=" << vid << " L0 count=" << cnt
+            << " exceeds soft cap=" << cap_soft
+            << " — factory is supposed to leave the rear half as sentinel";
+    }
+}
+
 // ============================================================
-//  Coverage rate: does layer h+1 cover layer h?
+//  Coverage rate: r-net covering property at each level.
 //
-//  R-net coverage property: every point in a lower layer must
-//  have at least one point in the layer directly above within
-//  covering radius R_{h+1}.
-//
-//  Specifically:
-//    - Layer 1 covers the base dataset: for sampled base points,
-//      is there a layer-1 vertex within R_1?
-//    - Layer h+1 covers layer h: for sampled layer-h vertices,
-//      is there a layer-(h+1) vertex within R_{h+1}?
-//    - The topmost layer has no layer above it → not tested.
+//  For each cur_level >= 1, every vertex that participates at
+//  cur_level - 1 (the level directly below) should have at least one
+//  cur_level participant within radius R_{cur_level + 1}
+//  (paper 1-indexed). A vertex participates at level L iff its
+//  highest_level_id >= L.
 // ============================================================
 
 TEST_F(StackedRGraphTest, CoverageRate) {
-    const auto& base_vecs = DataProvider::instance().get_dataset().get_base_vecs();
+    const auto& base_vecs =
+        DataProvider::instance().get_dataset().get_base_vecs();
     auto& dist_func = DataProvider::instance().get_dist_func();
-    const auto num_layers = _graph->get_num_layers();
-    const auto n = static_cast<vertex_num_t>(base_vecs.get_num_vecs());
+    const layer_id_t max_h = _graph->max_highest_level_id();
 
-    ARTEA_INFO(fmt::format("--- Coverage rate (num_samples={}) ---",
+    ARTEA_INFO(fmt::format(
+        "--- Coverage rate (num_samples={}) ---",
         g_config.coverage_num_samples));
 
-    // For each layer h (1-indexed), check that layer h covers the
-    // level below it. Layer 1 covers base; layer h+1 covers layer h.
-    // We iterate h = 1 .. num_layers, checking that layer h covers
-    // the level below.
-    for (layer_id_t h = 0; h < num_layers; ++h) {
-        const auto& covering_layer = _graph->get_layer_graph(h);
-        const vertex_num_t n_cover = covering_layer.get_num_vertices();
+    for (layer_id_t cur_level = 1; cur_level <= max_h; ++cur_level) {
+        // Covering population: every vid whose highest_level_id >= cur_level.
+        std::vector<vertex_id_t> cover_vids;
+        for (layer_id_t h = cur_level; h <= max_h; ++h) {
+            const auto& bucket = _graph->get_vids_with_highest_level(h);
+            cover_vids.insert(cover_vids.end(),
+                              bucket.begin(), bucket.end());
+        }
+        const vertex_num_t n_cover =
+            static_cast<vertex_num_t>(cover_vids.size());
         if (n_cover == 0) continue;
 
-        const distance_t R_h = static_cast<distance_t>(
-            radius_at_layer(DataProvider::instance().get_l1_radius(),
-                            g_config.rnet_beta,
-                            static_cast<layer_num_t>(h + 1)));
+        // Queried population: vertices at level cur_level - 1 (and below
+        // it) that should be covered. Sample from the full base if
+        // cur_level == 1.
+        const distance_t R_cov = radius_at_paper_layer(
+            DataProvider::instance().get_l1_radius(),
+            g_config.rnet_beta,
+            static_cast<layer_num_t>(cur_level));
 
-        // Collect base_vids of the covering layer (layer h).
-        std::vector<vertex_id_t> cover_base_vids(n_cover);
-        for (vertex_num_t v = 0; v < n_cover; ++v) {
-            cover_base_vids[v] = covering_layer.get_base_vid(v);
-        }
-
-        // Determine the query set: the level being covered.
-        // h == 0 (layer 1) covers the base dataset.
-        // h >= 1 (layer h+1) covers layer h (= layer_id h-1).
-        std::vector<vertex_id_t> query_base_vids;
-        if (h == 0) {
-            // Sample from the base dataset.
-            const vertex_num_t num_samples = std::min<vertex_num_t>(
-                g_config.coverage_num_samples, n);
-            const vertex_num_t step = std::max<vertex_num_t>(1, n / num_samples);
-            query_base_vids.reserve(num_samples);
+        std::vector<vertex_id_t> query_vids;
+        if (cur_level == 1) {
+            const vertex_num_t n = static_cast<vertex_num_t>(base_vecs.get_num_vecs());
+            const vertex_num_t num_samples = std::min<vertex_num_t>(g_config.coverage_num_samples, n);
+            const vertex_num_t step =
+                std::max<vertex_num_t>(1, n / num_samples);
+            query_vids.reserve(num_samples);
             for (vertex_num_t i = 0; i < num_samples; ++i) {
-                const vertex_id_t q = i * step;
-                if (q >= n) break;
-                query_base_vids.push_back(q);
+                const vertex_id_t v = i * step;
+                if (v >= n) break;
+                query_vids.push_back(v);
             }
         } else {
-            // Sample from layer h-1.
-            const auto& lower_layer = _graph->get_layer_graph(h - 1);
-            const vertex_num_t n_lower = lower_layer.get_num_vertices();
+            // Queried population: vids whose highest_level_id >= cur_level-1.
+            std::vector<vertex_id_t> below;
+            for (layer_id_t h = cur_level - 1; h <= max_h; ++h) {
+                const auto& bucket = _graph->get_vids_with_highest_level(h);
+                below.insert(below.end(), bucket.begin(), bucket.end());
+            }
+            const vertex_num_t n_below =
+                static_cast<vertex_num_t>(below.size());
+            if (n_below == 0) continue;
             const vertex_num_t num_samples = std::min<vertex_num_t>(
-                g_config.coverage_num_samples, n_lower);
-            const vertex_num_t step = std::max<vertex_num_t>(1, n_lower / num_samples);
-            query_base_vids.reserve(num_samples);
+                g_config.coverage_num_samples, n_below);
+            const vertex_num_t step =
+                std::max<vertex_num_t>(1, n_below / num_samples);
+            query_vids.reserve(num_samples);
             for (vertex_num_t i = 0; i < num_samples; ++i) {
-                const vertex_num_t v = i * step;
-                if (v >= n_lower) break;
-                query_base_vids.push_back(lower_layer.get_base_vid(v));
+                const vertex_num_t idx = i * step;
+                if (idx >= n_below) break;
+                query_vids.push_back(below[idx]);
             }
         }
 
         const vertex_num_t num_queries =
-            static_cast<vertex_num_t>(query_base_vids.size());
+            static_cast<vertex_num_t>(query_vids.size());
 
-        // Parallel coverage check.
         std::atomic<uint32_t> covered{0};
         std::atomic<uint32_t> tested{0};
         tbb::parallel_for(
             tbb::blocked_range<vertex_num_t>(0, num_queries),
             [&](const tbb::blocked_range<vertex_num_t>& r) {
                 uint32_t local_covered = 0;
-                uint32_t local_tested = 0;
+                uint32_t local_tested  = 0;
                 for (vertex_num_t i = r.begin(); i < r.end(); ++i) {
-                    const vec_ele_t* q_vec = base_vecs.get(query_base_vids[i]);
-
-                    distance_t best = std::numeric_limits<distance_t>::max();
-                    for (const vertex_id_t bv : cover_base_vids) {
-                        const distance_t d = dist_func(q_vec, base_vecs.get(bv));
+                    const vec_ele_t* q_vec =
+                        base_vecs.get(query_vids[i]);
+                    distance_t best =
+                        std::numeric_limits<distance_t>::max();
+                    for (const vertex_id_t cv : cover_vids) {
+                        const distance_t d =
+                            dist_func(q_vec, base_vecs.get(cv));
                         if (d < best) best = d;
-                        if (best <= R_h) break;
+                        if (best <= R_cov) break;
                     }
                     ++local_tested;
-                    if (best <= R_h) ++local_covered;
+                    if (best <= R_cov) ++local_covered;
                 }
-                covered.fetch_add(local_covered, std::memory_order_relaxed);
-                tested.fetch_add(local_tested, std::memory_order_relaxed);
+                covered.fetch_add(local_covered,
+                                  std::memory_order_relaxed);
+                tested.fetch_add(local_tested,
+                                 std::memory_order_relaxed);
             }
         );
 
-        const uint32_t total_tested = tested.load();
+        const uint32_t total_tested  = tested.load();
         const uint32_t total_covered = covered.load();
-        const float rate = (total_tested > 0)
+        const float    rate = (total_tested > 0)
             ? (100.0f * total_covered / total_tested)
             : 0.0f;
 
-        const std::string covered_level =
-            (h == 0) ? "base" : fmt::format("L{}", h);
         ARTEA_INFO(fmt::format(
-            "  L{} covers {}: |L{}|={}, R_{}={:.4f}, coverage = {}/{} = {:.2f}%",
-            h + 1, covered_level, h + 1, n_cover, h + 1, R_h,
-            total_covered, total_tested, rate));
+            "  level {}: |cover|={}, R={:.4f}, coverage = {}/{} = {:.2f}%",
+            cur_level, n_cover, R_cov, total_covered, total_tested, rate));
 
         EXPECT_GE(rate, 50.0f)
-            << "Layer " << (h + 1) << " coverage of " << covered_level
-            << " is suspiciously low: " << rate << "%";
+            << "Level " << static_cast<int>(cur_level)
+            << " coverage is suspiciously low: " << rate << "%";
     }
 }
 
 // ============================================================
-//  Separation rate: for each layer h, what fraction of sampled
-//  layer-h vertices have their nearest other layer-h vertex at
-//  distance >= R_h?
-//
-//  An ideal r-net has separation = 100% (pairwise distances all >= R).
-//  Under optimistic concurrent insertion the paper explicitly allows
-//  localized violations; we measure the rate as a sanity check.
+//  Query-path smoke test: HierarchicalGraphRouter returns sane
+//  results against the built graph.
 // ============================================================
 
-TEST_F(StackedRGraphTest, SeparationRate) {
-    const auto& base_vecs = DataProvider::instance().get_dataset().get_base_vecs();
-    auto& dist_func = DataProvider::instance().get_dist_func();
-    const auto num_layers = _graph->get_num_layers();
-
-    ARTEA_INFO(fmt::format(
-        "--- Separation rate (num_samples={}) ---",
-        g_config.separation_num_samples));
-
-    for (layer_id_t l = 0; l < num_layers; ++l) {
-        const auto& layer = _graph->get_layer_graph(l);
-        const vertex_num_t n_l = layer.get_num_vertices();
-        if (n_l < 2) {
-            ARTEA_INFO(fmt::format(
-                "  Layer {}: |L_h|={}, too few vertices for separation test",
-                l + 1, n_l));
-            continue;
-        }
-
-        const distance_t R_h = static_cast<distance_t>(
-            radius_at_layer(DataProvider::instance().get_l1_radius(),
-                            g_config.rnet_beta,
-                            static_cast<layer_num_t>(l + 1)));
-
-        // Resolve every layer-h vertex back to its base_vid via the
-        // InternalGraph's O(1) per-vertex metadata.
-        std::vector<vertex_id_t> layer_base_vids(n_l);
-        for (vertex_num_t v = 0; v < n_l; ++v) {
-            layer_base_vids[v] = layer.get_base_vid(v);
-        }
-
-        // Sample at most separation_num_samples source vertices from this
-        // layer; for each source, brute-force scan all other layer-h
-        // vertices for the nearest.
-        const vertex_num_t num_samples =
-            std::min<vertex_num_t>(g_config.separation_num_samples, n_l);
-        const vertex_num_t step = std::max<vertex_num_t>(1, n_l / num_samples);
-
-        std::atomic<uint32_t> separated{0};
-        std::atomic<uint32_t> tested{0};
-        tbb::parallel_for(
-            tbb::blocked_range<vertex_num_t>(0, num_samples),
-            [&](const tbb::blocked_range<vertex_num_t>& r) {
-                uint32_t local_sep = 0;
-                uint32_t local_tested = 0;
-                for (vertex_num_t i = r.begin(); i < r.end(); ++i) {
-                    const vertex_num_t v = i * step;
-                    if (v >= n_l) break;
-                    const vertex_id_t src_bv = layer_base_vids[v];
-                    const vec_ele_t* src_vec = base_vecs.get(src_bv);
-
-                    distance_t nearest = std::numeric_limits<distance_t>::max();
-                    for (vertex_num_t u = 0; u < n_l; ++u) {
-                        if (u == v) continue;
-                        const distance_t d =
-                            dist_func(src_vec, base_vecs.get(layer_base_vids[u]));
-                        if (d < nearest) nearest = d;
-                    }
-                    ++local_tested;
-                    if (nearest >= R_h) ++local_sep;
-                }
-                separated.fetch_add(local_sep, std::memory_order_relaxed);
-                tested.fetch_add(local_tested, std::memory_order_relaxed);
-            }
-        );
-        const uint32_t total_tested = tested.load();
-        const uint32_t total_sep = separated.load();
-        const float rate = (total_tested > 0)
-            ? (100.0f * total_sep / total_tested)
-            : 0.0f;
-
-        ARTEA_INFO(fmt::format(
-            "  Layer {}: |L_h|={:>8}, R_{}={:>12.4f}, separation = {}/{} = {:.2f}%",
-            l + 1, n_l, l + 1, R_h, total_sep, total_tested, rate));
-
-        // Soft expectation: not a hard assertion, since the paper explicitly
-        // allows localized violations under concurrent insertion. We still
-        // want at least a meaningful fraction of vertices to satisfy the
-        // separation property; under 50% would indicate something broken.
-        EXPECT_GE(rate, 50.0f)
-            << "Layer " << l << " separation rate is suspiciously low: "
-            << rate << "%";
-    }
-}
-
-// ============================================================
-//  Benchmark: upper-layer beam-search latency for all base vertices
-// ============================================================
-
-TEST_F(StackedRGraphTest, UpperLayerSearchLatency) {
-    const auto& base_vecs = DataProvider::instance().get_dataset().get_base_vecs();
-    auto& dist_func = DataProvider::instance().get_dist_func();
+TEST_F(StackedRGraphTest, QueryRouterSmoke) {
     const auto& vecs_storage = _graph->get_vecs_storage();
-    const vertex_num_t n =
-        static_cast<vertex_num_t>(vecs_storage.get_num_vecs());
+    auto& dist_func = DataProvider::instance().get_dist_func();
 
-    constexpr vertex_num_t search_nn_qs = 40;
+    const vertex_num_t num_queries = std::min<vertex_num_t>(
+        100, static_cast<vertex_num_t>(vecs_storage.get_num_vecs()));
 
     dynamic::hierarchical_graph_router_t router(
         vecs_storage, dist_func,
         /*topk=*/1,
-        /*search_nn_qs=*/search_nn_qs,
-        /*candidate_queue_size=*/search_nn_qs);
+        /*search_nn_qs=*/g_config.search_nn_qs,
+        /*candidate_queue_size=*/g_config.search_nn_qs);
+    router.initialize();
 
     const auto& hg = _graph->get_hierarchical_graph();
-
-    // l1_nn[i] = base_vid of the 1-NN found by upper-layer search for
-    // base vertex i.
-    std::vector<vertex_id_t> l1_nn(n, base_traits_t::invalid_vertex_id);
-
-    // Warm up: a few queries to prime the visited-table pool / caches.
-    for (vertex_num_t i = 0; i < std::min<vertex_num_t>(100, n); ++i) {
-        router.beam_search(vecs_storage.get(i), hg);
+    for (vertex_num_t i = 0; i < num_queries; ++i) {
+        const auto results = router.beam_search(vecs_storage.get(i), hg);
+        ASSERT_FALSE(results.empty())
+            << "beam_search returned no candidates for query " << i;
     }
-
-    auto t0 = std::chrono::high_resolution_clock::now();
-
-    tbb::parallel_for(
-        tbb::blocked_range<vertex_num_t>(0, n),
-        [&](const tbb::blocked_range<vertex_num_t>& r) {
-            for (vertex_num_t i = r.begin(); i != r.end(); ++i) {
-                auto results = router.beam_search(vecs_storage.get(i), hg);
-                if (!results.empty()) {
-                    l1_nn[i] = results[0].get_base_id();
-                }
-            }
-        }
-    );
-
-    auto t1 = std::chrono::high_resolution_clock::now();
-    const double elapsed_ms =
-        std::chrono::duration_cast<std::chrono::microseconds>(t1 - t0).count()
-        / 1000.0;
-    const double per_query_us =
-        std::chrono::duration_cast<std::chrono::microseconds>(t1 - t0).count()
-        / static_cast<double>(n);
-
-    ARTEA_INFO(fmt::format(
-        "UpperLayerSearch: {} queries, search_nn_qs={}, "
-        "total = {:.1f} ms, per-query = {:.2f} us",
-        n, search_nn_qs, elapsed_ms, per_query_us));
-
-    // Count how many base vertices choose each L1 vertex as their 1-NN.
-    const auto& layer0 = _graph->get_layer_graph(0);
-    const vertex_num_t n_l1 = layer0.get_num_vertices();
-
-    // Map from L1 base_vid → count of base vertices claiming it as 1-NN.
-    std::unordered_map<vertex_id_t, vertex_num_t> nn_count;
-    for (vertex_num_t v = 0; v < n_l1; ++v) {
-        nn_count[layer0.get_base_vid(v)] = 0;
-    }
-    for (vertex_num_t i = 0; i < n; ++i) {
-        if (l1_nn[i] != base_traits_t::invalid_vertex_id) {
-            ++nn_count[l1_nn[i]];
-        }
-    }
-
-    const auto out_path =
-        std::filesystem::path("temp") / "test_stacked_rgraph.output";
-    std::filesystem::create_directories(out_path.parent_path());
-    std::ofstream ofs(out_path);
-    ASSERT_TRUE(ofs.is_open()) << "Cannot open " << out_path;
-    ofs << "# l1_base_vid  nn_count\n";
-    for (vertex_num_t v = 0; v < n_l1; ++v) {
-        const vertex_id_t bv = layer0.get_base_vid(v);
-        ofs << bv << "  " << nn_count[bv] << "\n";
-    }
-    ofs.close();
-    ARTEA_INFO(fmt::format(
-        "Wrote L1 nn_count ({} L1 vertices) to {}", n_l1, out_path.string()));
 }
 
 // ============================================================
@@ -674,95 +524,74 @@ int main(int argc, char** argv) {
         .default_value(std::string("sift-1m"))
         .help("Dataset name (as listed in datasets.json)");
 
-    // StackedRGraph parameters.
     program.add_argument("--beta")
-        .default_value(2.0f)
-        .scan<'g', float>()
-        .help("R-net radius growth factor between layers (default: 2.0)");
+        .default_value(2.0f).scan<'g', float>()
+        .help("R-net radius growth factor between layers");
     program.add_argument("--l1-radius")
-        .default_value(-1.0f)
-        .scan<'g', float>()
-        .help("L1 rnet_radius. If negative or unset, auto-probe via DatasetProber.");
+        .default_value(-1.0f).scan<'g', float>()
+        .help("L1 rnet_radius. If negative, auto-probe via DatasetProber.");
     program.add_argument("--max-nbr-size")
-        .default_value(32u)
-        .scan<'u', uint32_t>()
-        .help("Per-vertex neighbor capacity for every layer (default: 32)");
+        .default_value(32u).scan<'u', uint32_t>()
+        .help("Per-vertex neighbor capacity at upper levels (level 0 = 2x).");
 
-    // DatasetProber parameters (used only for auto-probing).
     program.add_argument("--probe-num-samples")
-        .default_value(500u)
-        .scan<'u', uint32_t>()
-        .help("Number of samples for DatasetProber (default: 500)");
+        .default_value(500u).scan<'u', uint32_t>();
     program.add_argument("--probe-quantile")
-        .default_value(0.9f)
-        .scan<'g', float>()
-        .help("Quantile of 1-NN distance to use as L1 radius (default: 0.9)");
+        .default_value(0.9f).scan<'g', float>();
 
-    // Beam search queue sizes.
     program.add_argument("--search-nn-qs")
-        .default_value(40u)
-        .scan<'u', uint32_t>()
-        .help("Queue size for Phase 1 beam-search descent (default: 40)");
+        .default_value(40u).scan<'u', uint32_t>();
     program.add_argument("--select-nbrs-qs")
-        .default_value(500u)
-        .scan<'u', uint32_t>()
-        .help("Queue size for Phase 2 candidate gathering (default: 500)");
+        .default_value(500u).scan<'u', uint32_t>();
 
-    // Coverage / separation sampling parameters.
+    program.add_argument("--pruning-scale")
+        .default_value(1.0f).scan<'g', float>()
+        .help("RNG triangle-inequality scale for HierarchicalPruningUpdater");
+
     program.add_argument("--coverage-num-samples")
-        .default_value(1000u)
-        .scan<'u', uint32_t>()
-        .help("Base points sampled per layer for coverage rate test (default: 1000)");
-    program.add_argument("--separation-num-samples")
-        .default_value(500u)
-        .scan<'u', uint32_t>()
-        .help("Layer-h vertices sampled per layer for separation rate test (default: 500)");
+        .default_value(1000u).scan<'u', uint32_t>();
 
     program.add_argument("-v", "--verbose")
-        .default_value(false)
-        .implicit_value(true);
+        .default_value(false).implicit_value(true);
 
     try {
         program.parse_args(argc, argv);
     } catch (const std::exception& err) {
-        std::cerr << err.what() << std::endl;
-        std::cerr << program;
+        std::cerr << err.what() << "\n" << program;
         return 1;
     }
 
-    g_config.config_path  = program.get<std::string>("--config");
-    g_config.dataset_name = program.get<std::string>("--dataset");
-    g_config.rnet_beta    = program.get<float>("--beta");
-    g_config.max_nbr_size = program.get<uint32_t>("--max-nbr-size");
-    g_config.probe_num_samples = program.get<uint32_t>("--probe-num-samples");
-    g_config.probe_quantile    = program.get<float>("--probe-quantile");
-    g_config.search_nn_qs       = program.get<uint32_t>("--search-nn-qs");
-    g_config.select_nbrs_qs     = program.get<uint32_t>("--select-nbrs-qs");
-    g_config.coverage_num_samples   = program.get<uint32_t>("--coverage-num-samples");
-    g_config.separation_num_samples = program.get<uint32_t>("--separation-num-samples");
-    g_config.verbose      = program.get<bool>("--verbose");
+    g_config.config_path           = program.get<std::string>("--config");
+    g_config.dataset_name          = program.get<std::string>("--dataset");
+    g_config.rnet_beta             = program.get<float>("--beta");
+    g_config.max_nbr_size          = program.get<uint32_t>("--max-nbr-size");
+    g_config.probe_num_samples     = program.get<uint32_t>("--probe-num-samples");
+    g_config.probe_quantile        = program.get<float>("--probe-quantile");
+    g_config.search_nn_qs          = program.get<uint32_t>("--search-nn-qs");
+    g_config.select_nbrs_qs        = program.get<uint32_t>("--select-nbrs-qs");
+    g_config.pruning_scale         = program.get<float>("--pruning-scale");
+    g_config.coverage_num_samples  = program.get<uint32_t>("--coverage-num-samples");
+    g_config.verbose               = program.get<bool>("--verbose");
 
     const float l1 = program.get<float>("--l1-radius");
     g_config.l1_radius_provided = (l1 >= 0.0f);
     g_config.l1_rnet_radius     = l1;
 
-    // Print configuration.
-    std::cout << "\n=== Test Configuration ===" << std::endl;
-    std::cout << "Dataset:      " << g_config.dataset_name << std::endl;
-    std::cout << "rnet_beta:    " << g_config.rnet_beta << std::endl;
+    std::cout << "\n=== Test Configuration ===\n";
+    std::cout << "Dataset:      " << g_config.dataset_name << "\n";
+    std::cout << "rnet_beta:    " << g_config.rnet_beta << "\n";
     if (g_config.l1_radius_provided) {
-        std::cout << "L1 radius:    " << g_config.l1_rnet_radius << " (user-provided)" << std::endl;
+        std::cout << "L1 radius:    " << g_config.l1_rnet_radius
+                  << " (user-provided)\n";
     } else {
-        std::cout << "L1 radius:    auto-probe" << std::endl;
-        std::cout << "  probe samples: " << g_config.probe_num_samples << std::endl;
-        std::cout << "  probe quantile: " << g_config.probe_quantile << std::endl;
+        std::cout << "L1 radius:    auto-probe\n";
     }
-    std::cout << "max_nbr_size: " << g_config.max_nbr_size << std::endl;
-    std::cout << "search_nn_qs:   " << g_config.search_nn_qs << std::endl;
-    std::cout << "select_nbrs_qs: " << g_config.select_nbrs_qs << std::endl;
-    std::cout << "==========================\n" << std::endl;
+    std::cout << "max_nbr_size: " << g_config.max_nbr_size << "\n";
+    std::cout << "search_nn_qs:   " << g_config.search_nn_qs << "\n";
+    std::cout << "select_nbrs_qs: " << g_config.select_nbrs_qs << "\n";
+    std::cout << "pruning_scale:  " << g_config.pruning_scale << "\n";
+    std::cout << "==========================\n\n";
 
     DataProvider::instance().init();
-
     return RUN_ALL_TESTS();
 }

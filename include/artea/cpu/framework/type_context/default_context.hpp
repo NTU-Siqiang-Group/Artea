@@ -51,7 +51,11 @@ using layer_num_t = typename base_traits_t::layer_num_t;
 using layer_id_t = typename base_traits_t::layer_id_t;
 using hash_num_t = typename base_traits_t::hash_num_t;
 using iter_t = typename base_traits_t::iter_t;
-using inbr_t = typename base_traits_t::inbr_t;
+using nbr_t = typename base_traits_t::nbr_t;
+using nbr_comp_t = typename base_traits_t::nbr_comp_t;
+using strict_nbr_comp_t = typename base_traits_t::strict_nbr_comp_t;
+using nbr_id_comp_t = typename base_traits_t::nbr_id_comp_t;
+using nbr_dist_comp_t = typename base_traits_t::nbr_dist_comp_t;
 using bnbr_t = typename base_traits_t::bnbr_t;
 using bnbr_arr_t = typename base_traits_t::bnbr_arr_t;
 using bnbr_comp_t = typename base_traits_t::bnbr_comp_t;
@@ -109,25 +113,23 @@ using bottom_graph_compactor_t = typename index_traits_t::bottom_graph_compactor
 using flat_graph_file_manager_t = typename index_traits_t::flat_graph_file_manager_t;
 using index_size_calculator_t = typename index_traits_t::index_size_calculator_t;
 using radius_prober_t = typename index_traits_t::radius_prober_t;
-using internal_graph_compactor_t = typename index_traits_t::internal_graph_compactor_t;
 using hierarchical_graph_compactor_t = typename index_traits_t::hierarchical_graph_compactor_t;
 
 namespace compact {
     using bottom_graph_t        = index_traits_t::compact::bottom_graph_t;
-    using internal_graph_t       = index_traits_t::compact::internal_graph_t;
-    using hierarchical_graph_t   = index_traits_t::compact::hierarchical_graph_t;
+    using hierarchical_graph_t  = index_traits_t::compact::hierarchical_graph_t;
     using bottom_graph_router_t = router_traits_t::compact::bottom_graph_router_t;
 }   // namespace compact
 namespace dynamic {
-    using internal_graph_t            = index_traits_t::dynamic::internal_graph_t;
     using hierarchical_graph_t        = index_traits_t::dynamic::hierarchical_graph_t;
-    using bottom_graph_router_t      = router_traits_t::dynamic::bottom_graph_router_t;
-    using internal_graph_router_t     = router_traits_t::dynamic::internal_graph_router_t;
+    using bottom_graph_router_t       = router_traits_t::dynamic::bottom_graph_router_t;
+    using single_layer_router_t       = router_traits_t::dynamic::single_layer_router_t;
     using hierarchical_graph_router_t = router_traits_t::dynamic::hierarchical_graph_router_t;
 }   // namespace dynamic
 
 // Refiner types from RefinerTraits
 using triangle_updater_t = typename refiner_traits_t::template triangle_updater_t<typename index_traits_t::conv_graph::index_t>;
+using hierarchical_pruning_updater_t = typename refiner_traits_t::hierarchical_pruning_updater_t;
 using reverse_updater_t = typename refiner_traits_t::template reverse_updater_t<typename index_traits_t::conv_graph::index_t>;
 using random_updater_t = typename refiner_traits_t::template random_updater_t<typename index_traits_t::conv_graph::index_t>;
 using routing_updater_t = typename refiner_traits_t::template routing_updater_t<typename index_traits_t::conv_graph::index_t>;

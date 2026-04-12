@@ -30,7 +30,6 @@
 #include <artea/cpu/containers/thread_local_bitmap.hpp>
 #include <artea/cpu/containers/version_tag_table.hpp>
 #include <artea/cpu/containers/word_aligned_bitmap.hpp>
-#include <artea/cpu/index/internal_nbr.hpp>
 #include <artea/cpu/index/neighbor.hpp>
 
 namespace artea {
@@ -149,10 +148,7 @@ public:
     /** @brief version-tag visited table */
     using version_tag_table_t = VersionTagTable;
 
-    /** @brief layer neighbor entries. */
-    using inbr_t = InternalNeighbor<base_traits_t>;
-
-    /** @brief Unified neighbor entries used by the new hierarchical-graph
+    /** @brief Unified neighbor entries used by the hierarchical-graph
      *         storage (vid + distance + new/old flag, 8 bytes). */
     using nbr_t = Neighbor<base_traits_t>;
 
@@ -274,9 +270,6 @@ public:
         return std::numeric_limits<vertex_id_t>::max();
     }
     static constexpr vertex_id_t invalid_vertex_id = invalid_vertex_id_generator();
-
-    /** @brief Sentinel layer neighbor: both base_vid and layer_vid set to invalid_vertex_id. */
-    static constexpr inbr_t invalid_inbr = inbr_t(invalid_vertex_id, invalid_vertex_id);
 
     __attribute__((always_inline))
     static constexpr auto nan_distance_generator() -> distance_t {

@@ -36,6 +36,10 @@
 #include <span>
 #include <vector>
 
+#include <immintrin.h>
+
+#include <tbb/concurrent_vector.h>
+
 #include <artea/common/logger.hpp>
 #include <artea/cpu/index/dynamic_structure/level_group_arena.hpp>
 
@@ -115,6 +119,7 @@ class HierarchicalGraph {
 
     using level_group_arena_t = LevelGroupArena<IndexTraitsT>;
 
+public:
     static constexpr vertex_id_t invalid_vertex_id = IndexTraitsT::invalid_vertex_id;
 
     /** @brief Sentinel @c highest_level_id for rows that have not yet
@@ -124,7 +129,6 @@ class HierarchicalGraph {
     static constexpr layer_id_t unassigned_highest_level_id =
         std::numeric_limits<layer_id_t>::max();
 
-public:
     /**
      * @brief Per-vertex row in @c _vertex_info_table.
      *
@@ -165,22 +169,29 @@ public:
     };
 
     /**
-     * @brief Construct an empty hierarchical graph.
+     * @brief Construct an empty hierarchical graph with every arena
+     *        pre-sized so no later call to @c add_vertices needs to
+     *        grow storage.
      *
      * @param max_highest_level_id  Inclusive upper bound on the value of
      *                              @c highest_level_id for any vertex in
      *                              this graph. Determines how many
-     *                              per-level-group arenas are pre-allocated
+     *                              per-level-group arenas are allocated
      *                              (one arena per possible
      *                              @c highest_level_id in
      *                              @c [0, max_highest_level_id]).
      * @param max_nbr_size          Per-vertex neighbor capacity at every
      *                              upper level. The bottom level
      *                              automatically uses @c 2 * max_nbr_size.
+     * @param total_vertices        Expected eventual base-set size. Each
+     *                              arena is sized to its worst-case cap
+     *                              so live slot claims never need a
+     *                              concurrent-unsafe @c resize.
      */
     HierarchicalGraph(
         const layer_num_t  max_highest_level_id,
-        const vertex_num_t max_nbr_size
+        const vertex_num_t max_nbr_size,
+        const vertex_num_t total_vertices
     ) :
         _max_highest_level_id(max_highest_level_id),
         _max_nbr_size(max_nbr_size)
@@ -189,12 +200,15 @@ public:
             static_cast<std::size_t>(max_highest_level_id) + 1;
         _arenas.reserve(num_arenas);
         for (std::size_t h = 0; h < num_arenas; ++h) {
-            _arenas.emplace_back(
-                std::make_unique<level_group_arena_t>(
-                    /*highest_level_id=*/static_cast<layer_id_t>(h),
-                    /*slot_nbrs_count=*/_compute_slots_nbr_count(
-                        static_cast<layer_id_t>(h))));
+            const layer_id_t layer = static_cast<layer_id_t>(h);
+            auto arena = std::make_unique<level_group_arena_t>(
+                /*highest_level_id=*/layer,
+                /*slot_nbrs_count=*/_compute_slots_nbr_count(layer));
+            arena->ensure_slot_capacity(
+                _default_slot_capacity_for_arena(layer, total_vertices));
+            _arenas.emplace_back(std::move(arena));
         }
+        _vids_by_highest_level.resize(num_arenas);
     }
 
     // Copy and move both deleted: contains std::deque<VertexInfo> (whose
@@ -233,18 +247,8 @@ public:
             _vertex_info_table.emplace_back();
         }
 
-        const vertex_num_t total_vertices =
-            static_cast<vertex_num_t>(_vertex_info_table.size());
-
-        // Grow every arena to its per-level-group decayed capacity based
-        // on the freshly-updated total vertex count.
-        for (std::size_t h = 0; h < _arenas.size(); ++h) {
-            const vertex_num_t target_slot_capacity =
-                _default_slot_capacity_for_arena(
-                    static_cast<layer_id_t>(h), total_vertices);
-            _arenas[h]->ensure_slot_capacity(target_slot_capacity);
-        }
-
+        // Arenas are pre-sized at construction for the expected
+        // total_vertices, so no resize-on-growth path is triggered here.
         return first_new_vertex_id;
     }
 
@@ -288,6 +292,12 @@ public:
         auto& vinfo = _vertex_info_table[vid];
         vinfo.highest_level_id = highest_level_id;
         vinfo.slot_offset      = slot_offset;
+
+        // Record vid into the bucket keyed by its highest_level_id so
+        // that router seeding and compactor materialization can both
+        // enumerate this group without linear-scanning the full info
+        // table.
+        _vids_by_highest_level[highest_level_id].push_back(vid);
     }
 
     // =================================================================
@@ -438,6 +448,50 @@ public:
         return _vertex_info_table;
     }
 
+    /**
+     * @brief Vids whose @c highest_level_id equals @p h. Populated by
+     *        @c assign_layer; consumed by router seeding and the
+     *        compactor.
+     */
+    __attribute__((always_inline))
+    auto get_vids_with_highest_level(const layer_id_t h) const
+        -> const tbb::concurrent_vector<vertex_id_t>&
+    {
+        return _vids_by_highest_level[h];
+    }
+
+    /**
+     * @brief Largest @c h in @c [0, max_highest_level_id] with a non-empty
+     *        bucket, or @c unassigned_highest_level_id if every bucket
+     *        is empty (i.e. no vertex has been assigned yet).
+     *
+     * Linear scan over (max_highest_level_id + 1) buckets — typically
+     * ≤ 20 — so this is effectively O(1).
+     */
+    auto top_occupied_highest_level_id() const -> layer_id_t {
+        for (std::size_t h = _vids_by_highest_level.size(); h-- > 0; ) {
+            if (!_vids_by_highest_level[h].empty()) {
+                return static_cast<layer_id_t>(h);
+            }
+        }
+        return unassigned_highest_level_id;
+    }
+
+    /** @brief Per-vertex slot offset inside its group's arena
+     *         (nbr_t-count units from arena base). Valid only after
+     *         @c assign_layer. */
+    __attribute__((always_inline))
+    auto get_slot_offset(const vertex_id_t vid) const -> std::size_t {
+        return _vertex_info_table[vid].slot_offset;
+    }
+
+    /** @brief Current bump-allocator capacity (in slots) of arena @p h.
+     *         Used by the compactor to size the compact arena. */
+    __attribute__((always_inline))
+    auto get_arena_slot_capacity(const layer_id_t h) const -> vertex_num_t {
+        return _arenas[h]->slot_capacity();
+    }
+
 private:
     // -----------------------------------------------------------------
     //   Helpers
@@ -454,15 +508,27 @@ private:
     }
 
     /** @brief Heuristic pre-allocation: arena @p highest_level_id expects
-     *         to host roughly @c total_vertices / 2^highest_level_id
-     *         vertices. Floored at @c min_arena_slot_capacity. */
+     *         to host up to @c total_vertices / conservative_beta^h
+     *         vertices. Using a pessimistic beta (1.2) + 2x safety
+     *         absorbs early-build skew (sparse upper layers inflate
+     *         NN estimates and push more vertices into arena[1..2] than
+     *         the steady-state r-net geometry predicts). Hard-capped
+     *         at @c total_vertices — any single arena trivially
+     *         bounded by N. Floored at @c min_arena_slot_capacity. */
     auto _default_slot_capacity_for_arena(
         const layer_id_t   highest_level_id,
         const vertex_num_t total_vertices
     ) const -> vertex_num_t {
         constexpr vertex_num_t min_arena_slot_capacity = 64;
-        std::size_t cap = static_cast<std::size_t>(total_vertices);
-        cap >>= highest_level_id;
+        constexpr double conservative_beta  = 1.2;
+        constexpr double safety_multiplier  = 2.0;
+
+        double cap = static_cast<double>(total_vertices) * safety_multiplier;
+        for (layer_id_t i = 0; i < highest_level_id; ++i) {
+            cap /= conservative_beta;
+        }
+        cap = std::min(cap, static_cast<double>(total_vertices));
+
         return std::max<vertex_num_t>(
             static_cast<vertex_num_t>(cap), min_arena_slot_capacity);
     }
@@ -475,9 +541,7 @@ private:
                    std::memory_order_acquire,
                    std::memory_order_relaxed)) {
             expected = 0;
-            #if defined(__x86_64__) || defined(__i386__)
-            __builtin_ia32_pause();
-            #endif
+            _mm_pause();
         }
     }
 
@@ -506,6 +570,15 @@ private:
      *         @c emplace_back, which is essential because @c VertexInfo
      *         is non-movable (it holds a @c std::atomic<uint8_t> lock). */
     std::deque<VertexInfo> _vertex_info_table;
+
+    /** @brief @c _vids_by_highest_level[h] holds every vid whose
+     *         @c highest_level_id == h. Populated concurrently by
+     *         @c assign_layer and consumed by
+     *           (1) SingleLayerRouter::sample_entries — seeds top-level
+     *               beam search with random entry vertices;
+     *           (2) HierarchicalGraphCompactor — materializes the compact
+     *               graph by walking each bucket in order. */
+    std::vector<tbb::concurrent_vector<vertex_id_t>> _vids_by_highest_level;
 
 };  // class HierarchicalGraph
 

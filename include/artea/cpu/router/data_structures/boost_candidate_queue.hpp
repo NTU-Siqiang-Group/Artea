@@ -240,6 +240,23 @@ public:
         return _capacity;
     }
 
+    /**
+     * @brief Adjust the result-set capacity.
+     *
+     *   - Upward resize: contents preserved, threshold relaxes.
+     *   - Downward resize: pop worst-distance entries from
+     *     @c _top_candidates until size <= @p new_capacity. The
+     *     unexplored-set is not touched.
+     */
+    __attribute__((always_inline))
+    auto set_capacity(std::size_t new_capacity) -> void {
+        _capacity = new_capacity;
+        while (_top_candidates.size() > _capacity) {
+            _top_candidates.pop();
+        }
+        _update_lower_bound();
+    }
+
     /** @brief Get the current lower bound (worst distance in top candidates). */
     __attribute__((always_inline))
     auto lower_bound() const -> distance_t {

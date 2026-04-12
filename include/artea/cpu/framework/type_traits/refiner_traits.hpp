@@ -35,6 +35,7 @@ enum class IVFConstructPolicyT {
 template <typename RefinerTraitsT, typename BottomGraphT, typename DerivedClassT> class NeighborUpdater;
 template <typename RefinerTraitsT, typename BottomGraphT> class TriangleUpdater;
 template <typename RefinerTraitsT, typename BottomGraphT> class PruningUpdater;
+template <typename RefinerTraitsT> class HierarchicalPruningUpdater;
 template <typename RefinerTraitsT, typename BottomGraphT> class ReverseUpdater;
 template <typename RefinerTraitsT, typename BottomGraphT> class RandomUpdater;
 template <typename RefinerTraitsT, typename BottomGraphT> class RoutingUpdater;
@@ -67,6 +68,12 @@ struct RefinerTraits :
     /** @brief Pruning updater (no log writes). */
     template <typename BottomGraphT>
     using pruning_updater_t = PruningUpdater<refiner_traits_t, BottomGraphT>;
+
+    /** @brief Hierarchical pruning updater — operates on nbr_t, not
+     *         bnbr_t, and takes max_nbr_size as a per-call argument.
+     *         Consumed by stacked_rgraph::IndexFactory. */
+    using hierarchical_pruning_updater_t =
+        HierarchicalPruningUpdater<refiner_traits_t>;
 
     /** @brief Reverse edge updater. */
     template <typename BottomGraphT>
