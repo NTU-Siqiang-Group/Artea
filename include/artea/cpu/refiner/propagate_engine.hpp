@@ -88,21 +88,29 @@ public:
     template <typename UdfUpdaterT>
         requires std::derived_from<UdfUpdaterT, neighbor_updater_t<UdfUpdaterT>>
     auto propagate(UdfUpdaterT& udf_updater) -> void {
-        const vertex_num_t num_vertices = _refining_graph->get_num_vertices();
-
-        // Dense Mode: Iterate all vertices
+        // Dense Mode: Iterate all vertices via the RefiningGraph helper.
+        // It hands out global vids (identity in dense-RG, translated in
+        // sparse-RG), keeping every downstream fetch_nbrs / vecs_data.get
+        // call uniform.
         if constexpr (not selective_schedule) {
-            tbb::parallel_for(
-                tbb::blocked_range<vertex_id_t>(0, num_vertices),
-                [&](const tbb::blocked_range<vertex_id_t>& r) {
-                    for (vertex_id_t pivot_vid = r.begin(); pivot_vid != r.end(); ++pivot_vid) {
-                        propagate<UdfUpdaterT>(pivot_vid, udf_updater);
-                    }
-                }
-            );
+            _refining_graph->parallel_for_each_vertex(
+                [&](const vertex_id_t pivot_vid) {
+                    propagate<UdfUpdaterT>(pivot_vid, udf_updater);
+                });
         }
-        // Sparse Mode: Word Skipping + Bit Scanning
+        // Sparse-bitmap Mode: Word Skipping + Bit Scanning. The bitmap is
+        // indexed by global vid in [0, _executor_bitmap.size()); this only
+        // makes sense when the RefiningGraph itself is identity-mapped.
         else {
+            #ifndef NDEBUG
+            if (!_refining_graph->is_identity_mapped()) {
+                ARTEA_ERROR(
+                    "PropagateEngine selective_schedule mode requires an "
+                    "identity-mapped RefiningGraph (the executor bitmap is "
+                    "indexed by global vid).");
+            }
+            #endif
+            const vertex_num_t num_vertices = _refining_graph->get_num_vertices();
             const size_t num_words = _executor_bitmap.get_num_words();
 
             tbb::parallel_for(
@@ -148,29 +156,29 @@ public:
      *  @return Total number of logs merged in this call.
      */
     auto merge_logs() -> size_t {
-        // Dense Mode: Iterate all vertices
+        // Dense Mode: Iterate all vertices via the RefiningGraph helper.
         if constexpr (not selective_schedule) {
-            const vertex_num_t num_vertices = _refining_graph->get_num_vertices();
-
-            // Thread-local counters for lock-free statistics
             tbb::enumerable_thread_specific<size_t> local_counts;
 
-            tbb::parallel_for(
-                tbb::blocked_range<vertex_id_t>(0, num_vertices),
-                [&](const tbb::blocked_range<vertex_id_t>& r) {
-                    size_t& local_count = local_counts.local();
-                    for (vertex_id_t executor_vid = r.begin(); executor_vid != r.end(); ++executor_vid) {
-                        local_count += merge_logs(executor_vid);
-                    }
-                }
-            );  // end tbb::parallel_for
+            _refining_graph->parallel_for_each_vertex(
+                [&](const vertex_id_t executor_vid) {
+                    local_counts.local() += merge_logs(executor_vid);
+                });
 
             if constexpr (profiling_mode) {
                 _merged_logs_count = local_counts.combine(std::plus<size_t>());
             }
         }
-        // Sparse Mode: Word Skipping + Bit Scanning
+        // Sparse-bitmap Mode: Word Skipping + Bit Scanning. Requires
+        // identity-mapped RefiningGraph (bitmap indexes global vids).
         else {
+            #ifndef NDEBUG
+            if (!_refining_graph->is_identity_mapped()) {
+                ARTEA_ERROR(
+                    "PropagateEngine selective_schedule merge_logs requires "
+                    "an identity-mapped RefiningGraph.");
+            }
+            #endif
             _executor_bitmap.clear();
 
             const size_t num_words = _executor_bitmap.get_num_words();

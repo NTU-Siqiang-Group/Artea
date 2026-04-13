@@ -144,6 +144,21 @@ public:
         return _refining_graph->get_vecs_data();
     }
 
+    __attribute__((always_inline))
+    auto is_identity_mapped() const -> bool {
+        return _refining_graph->is_identity_mapped();
+    }
+
+    __attribute__((always_inline))
+    auto vid_at(const vertex_num_t local_idx) const -> vertex_id_t {
+        return _refining_graph->vid_at(local_idx);
+    }
+
+    template <typename Fn>
+    auto parallel_for_each_vertex(Fn&& fn) const -> void {
+        _refining_graph->parallel_for_each_vertex(std::forward<Fn>(fn));
+    }
+
     auto get_base_metadata() const -> nlohmann::json {
         return _refining_graph->get_base_metadata();
     }

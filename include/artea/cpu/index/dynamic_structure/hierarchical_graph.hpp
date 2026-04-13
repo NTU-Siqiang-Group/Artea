@@ -31,6 +31,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <deque>
+#include <execution>
 #include <limits>
 #include <memory>
 #include <span>
@@ -39,6 +40,8 @@
 #include <immintrin.h>
 
 #include <tbb/concurrent_vector.h>
+#include <tbb/parallel_for.h>
+#include <tbb/blocked_range.h>
 
 #include <artea/common/logger.hpp>
 #include <artea/cpu/index/dynamic_structure/level_group_arena.hpp>
@@ -498,6 +501,162 @@ public:
     __attribute__((always_inline))
     auto get_arena_capacity_in_arena(const layer_id_t h) const -> vertex_num_t {
         return _arenas[h]->slot_capacity();
+    }
+
+    // =================================================================
+    //   Layer ↔ RefiningGraph conversion
+    // =================================================================
+
+    /**
+     * @brief Build the (local_to_global, global_to_local) maps for the
+     *        participating-vid set at @p level_id.
+     *
+     * For @p level_id == 0, both maps are returned empty (identity mode):
+     *        the caller should construct the @c RefiningGraph with the
+     *        dense ctor.
+     *
+     * For @p level_id >= 1, walks every bucket
+     *        @c _vids_by_highest_level[h] for @c h in @c [level_id,
+     *        max_restrict_level], concatenates the vids, sorts ascending
+     *        for reproducible row order, and builds the inverse map of
+     *        size @c get_num_vertices() with @c invalid_vertex_id in
+     *        non-participating slots.
+     */
+    auto collect_layer_vids(const layer_id_t level_id) const
+        -> std::pair<std::vector<vertex_id_t>, std::vector<vertex_id_t>>
+    {
+        if (level_id == 0) {
+            return {std::vector<vertex_id_t>{},
+                    std::vector<vertex_id_t>{}};
+        }
+
+        // Phase 1: prefix-sum bucket sizes so each bucket gets its own
+        // disjoint write window in the result vector. Cheap and serial —
+        // (max_restrict_level + 1) is typically ≤ 20.
+        const std::size_t num_buckets =
+            static_cast<std::size_t>(_max_restrict_level - level_id + 1);
+        std::vector<std::size_t> offsets(num_buckets + 1, 0);
+        for (std::size_t k = 0; k < num_buckets; ++k) {
+            const layer_id_t h = static_cast<layer_id_t>(level_id + k);
+            offsets[k + 1] = offsets[k] + _vids_by_highest_level[h].size();
+        }
+        std::vector<vertex_id_t> local_to_global(offsets.back());
+
+        // Phase 2: parallel bulk-copy each bucket into its window.
+        tbb::parallel_for(
+            tbb::blocked_range<std::size_t>(0, num_buckets),
+            [&](const tbb::blocked_range<std::size_t>& r) {
+                for (std::size_t k = r.begin(); k != r.end(); ++k) {
+                    const layer_id_t h = static_cast<layer_id_t>(level_id + k);
+                    const auto& bucket = _vids_by_highest_level[h];
+                    std::copy(bucket.begin(), bucket.end(),
+                              local_to_global.begin() + offsets[k]);
+                }
+            });
+
+        // Phase 3: parallel sort. Stable order is not required; just need
+        // reproducible cache-friendly layout.
+        std::sort(std::execution::par,
+                  local_to_global.begin(), local_to_global.end());
+
+        // Phase 4: build the inverse map. First fill with invalid in
+        // parallel, then scatter local indices.
+        const vertex_num_t n_global = get_num_vertices();
+        std::vector<vertex_id_t> global_to_local(n_global);
+        tbb::parallel_for(
+            tbb::blocked_range<vertex_num_t>(0, n_global),
+            [&](const tbb::blocked_range<vertex_num_t>& r) {
+                std::fill(global_to_local.begin() + r.begin(),
+                          global_to_local.begin() + r.end(),
+                          invalid_vertex_id);
+            });
+        tbb::parallel_for(
+            tbb::blocked_range<std::size_t>(0, local_to_global.size()),
+            [&](const tbb::blocked_range<std::size_t>& r) {
+                for (std::size_t i = r.begin(); i != r.end(); ++i) {
+                    global_to_local[local_to_global[i]] =
+                        static_cast<vertex_id_t>(i);
+                }
+            });
+        return {std::move(local_to_global), std::move(global_to_local)};
+    }
+
+    /**
+     * @brief Populate @p refining_graph's @c _nbrs_arr from level
+     *        @p level_id of this hierarchical graph.
+     *
+     * The caller must already have constructed @p refining_graph with
+     * the matching mapping (dense ctor for L0; sparse ctor with the
+     * maps from @c collect_layer_vids for upper layers).
+     *
+     * Embarrassingly parallel: each iteration writes only its own row.
+     * No locks needed — extraction is a phase-boundary operation.
+     */
+    template <typename RefiningGraphT>
+    auto fill_refining_graph_from_layer(
+        RefiningGraphT&  refining_graph,
+        const layer_id_t level_id
+    ) const -> void {
+        refining_graph.parallel_for_each_vertex(
+            [&](const vertex_id_t global_vid) {
+                // Skip vids that were never assign_layer'd. Possible when
+                // the caller constructed a dense RG with a vector array
+                // larger than the assigned set (e.g. reusing the global
+                // dataset for a partial fixture). Not produced by the
+                // standard add_vertices → assign_layer flow, so warn.
+                if (!is_vertex_assigned(global_vid)) {
+                    ARTEA_WARN(fmt::format(
+                        "fill_refining_graph_from_layer: skipping "
+                        "unassigned vid={} (level_id={})",
+                        global_vid, level_id));
+                    return;
+                }
+                const auto src = fetch_layer_nbrs(global_vid, level_id);
+                auto& dst = refining_graph.fetch_nbrs(global_vid);
+                dst.clear();
+                for (const auto& nbr : src) {
+                    if (nbr.is_invalid()) break;
+                    dst.push_back(nbr);
+                }
+            });
+    }
+
+    /**
+     * @brief Write @p refining_graph's neighbor lists back into level
+     *        @p level_id of this hierarchical graph.
+     *
+     * Per-vertex spinlock guards each write; in practice writeback runs
+     * as a phase boundary so contention is nil. The destination slot is
+     * truncated to its capacity for @p level_id (handles the L0 2× cap
+     * automatically) and terminated with the invalid sentinel.
+     */
+    template <typename RefiningGraphT>
+    auto writeback_layer_from_refining_graph(
+        RefiningGraphT&  refining_graph,
+        const layer_id_t level_id
+    ) -> void {
+        refining_graph.parallel_for_each_vertex(
+            [&](const vertex_id_t global_vid) {
+                if (!is_vertex_assigned(global_vid)) {
+                    ARTEA_WARN(fmt::format(
+                        "writeback_layer_from_refining_graph: skipping "
+                        "unassigned vid={} (level_id={})",
+                        global_vid, level_id));
+                    return;
+                }
+                const auto& src = refining_graph.fetch_nbrs(global_vid);
+                with_locked_nbrs(global_vid, level_id,
+                    [&](std::span<nbr_t> dst, vertex_num_t /*old_cnt*/) {
+                        const std::size_t copy_n =
+                            std::min(src.size(), dst.size());
+                        for (std::size_t i = 0; i < copy_n; ++i) {
+                            dst[i] = src[i];
+                        }
+                        if (copy_n < dst.size()) {
+                            dst[copy_n] = nbr_t::make_invalid_nbr();
+                        }
+                    });
+            });
     }
 
 private:

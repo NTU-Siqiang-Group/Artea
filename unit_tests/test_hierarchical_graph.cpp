@@ -96,6 +96,10 @@ public:
             _dataset->get_base_vecs().get_num_vecs());
     }
 
+    auto vectors() const -> const auto& {
+        return _dataset->get_base_vecs();
+    }
+
 private:
     DataProvider() = default;
     std::unique_ptr<vector_dataset_t> _dataset;
@@ -605,6 +609,99 @@ TEST_F(HierarchicalGraphTest, CompactorPreservesTopology) {
                         << " l=" << l << " i=" << i;
                 }
             }
+        }
+    }
+}
+
+// ============================================================
+//  Layer ↔ RefiningGraph round-trip (extract → mutate → writeback)
+// ============================================================
+
+namespace {
+
+// Minimal CRTP-derived RefiningGraph for the test. The base supplies the
+// dense + sparse ctors and every method we need.
+struct TestRefiningGraph
+    : public dynamic::RefiningGraph<index_traits_t, TestRefiningGraph>
+{
+    using base_t = dynamic::RefiningGraph<index_traits_t, TestRefiningGraph>;
+    using base_t::base_t;
+};
+
+}  // namespace
+
+// Walk every level h ∈ [0, top_occupied_level_id]. Extract → assert
+// equivalence with the source slot → mutate one row → writeback → re-extract
+// → assert the mutation round-tripped. Covers L0 (identity-mapped) and L1+
+// (sparse-mapped) paths in one pass.
+TEST_F(HierarchicalGraphTest, LayerRefiningGraphRoundTrip) {
+    // Construct a sized-down VectorArray matching the fixture's vid space.
+    // Values are not read by this test (fill/writeback never call dist_func),
+    // so an uninitialized buffer of the right shape is sufficient.
+    const auto& full_vecs = DataProvider::instance().vectors();
+    vector_array_t vecs(_num_vertices, full_vecs.get_vec_dim());
+    const layer_config_t layer_cfg(_max_nbr, /*reserved=*/_max_nbr);
+
+    const layer_id_t top_h = _graph->top_occupied_level_id();
+    ASSERT_NE(top_h, hg_t::unassigned_highest_level_id);
+
+    for (layer_id_t h = 0; h <= top_h; ++h) {
+        // ---- Build the (l2g, g2l) maps and construct the matching RG. ----
+        auto [l2g, g2l] = _graph->collect_layer_vids(h);
+        std::unique_ptr<TestRefiningGraph> rg;
+        if (h == 0) {
+            EXPECT_TRUE(l2g.empty()) << "L0 should be identity-mapped";
+            EXPECT_TRUE(g2l.empty()) << "L0 should be identity-mapped";
+            rg = std::make_unique<TestRefiningGraph>(vecs, layer_cfg);
+        } else {
+            // Participating-vid count must equal Σ |bucket[h..]|.
+            vertex_num_t expected = 0;
+            for (layer_id_t hh = h; hh <= _max_h; ++hh) {
+                expected += static_cast<vertex_num_t>(
+                    _graph->get_vids_with_highest_level(hh).size());
+            }
+            EXPECT_EQ(l2g.size(), expected);
+            EXPECT_EQ(g2l.size(), _num_vertices);
+            rg = std::make_unique<TestRefiningGraph>(
+                vecs, layer_cfg, l2g, g2l);
+            EXPECT_FALSE(rg->is_identity_mapped());
+        }
+
+        // ---- Fill from the layer. ----
+        _graph->fill_refining_graph_from_layer(*rg, h);
+
+        // For freshly-built indexes the slot is all-invalid (no edges
+        // written by the fixture), so num_valid_nbrs == 0 and rg rows are
+        // empty. Just sanity-check counts and identity round-trip.
+        rg->parallel_for_each_vertex([&](const vertex_id_t global_vid) {
+            if (!_graph->is_vertex_assigned(global_vid)) return;
+            const vertex_num_t hg_cnt = _graph->num_valid_nbrs(global_vid, h);
+            const auto& rg_nbrs = rg->fetch_nbrs(global_vid);
+            EXPECT_EQ(rg_nbrs.size(), hg_cnt)
+                << "vid=" << global_vid << " h=" << h;
+        });
+
+        // ---- Mutate one row: pick the first local row, push a fake
+        //      neighbor pair (vid_at(other), 1.0). Writeback, re-extract,
+        //      assert the mutation survived. ----
+        if (rg->get_num_vertices() < 2) continue;
+        const vertex_id_t pivot_global = rg->vid_at(0);
+        const vertex_id_t other_global = rg->vid_at(1);
+        rg->fetch_nbrs(pivot_global).clear();
+        rg->fetch_nbrs(pivot_global).emplace_back(
+            other_global, distance_t{1}, /*is_new=*/true);
+
+        _graph->writeback_layer_from_refining_graph(*rg, h);
+
+        // Re-read the slot directly from hg.
+        const auto written = _graph->fetch_layer_nbrs(pivot_global, h);
+        ASSERT_GE(written.size(), 1u);
+        EXPECT_FALSE(written[0].is_invalid());
+        EXPECT_EQ(written[0].get_vid(), other_global);
+        EXPECT_EQ(written[0].get_distance(), distance_t{1});
+        if (written.size() >= 2) {
+            EXPECT_TRUE(written[1].is_invalid())
+                << "writeback must terminate the slot with a sentinel";
         }
     }
 }

@@ -23,6 +23,7 @@
 #include <algorithm>
 #include <tbb/parallel_for.h>
 #include <tbb/blocked_range.h>
+#include <tbb/enumerable_thread_specific.h>
 
 namespace artea {
 namespace cpu {
@@ -72,51 +73,49 @@ public:
         // RandomSeq uses thread-local storage internally, so it's safe to share across threads
         random_seq_t random_seq;
 
-        tbb::parallel_for(
-            tbb::blocked_range<vertex_id_t>(0, num_vertices),
-            [&](const tbb::blocked_range<vertex_id_t>& r) {
-                // Pre-allocate vector for random IDs (reused for each vertex in this thread)
-                std::vector<vertex_id_t> random_nbr_ids(init_nbr_size);
+        // Per-thread reusable buffer for random local indices. Indices are
+        // drawn in [0, num_vertices) (i.e. local row space when sparse,
+        // identical to global vid space when identity-mapped) and then
+        // translated to global vids via refining_graph.vid_at(...).
+        tbb::enumerable_thread_specific<std::vector<vertex_id_t>>
+            tls_random_local_ids([init_nbr_size]{
+                return std::vector<vertex_id_t>(init_nbr_size);
+            });
 
-                for (vertex_id_t vid = r.begin(); vid != r.end(); ++vid) {
-                    nbr_arr_t& nbrs = refining_graph.fetch_nbrs(vid);
-                    const vec_ele_t* query_vec = vecs_data.get(vid);
+        refining_graph.parallel_for_each_vertex(
+            [&](const vertex_id_t pivot_vid) {
+                auto& random_local_ids = tls_random_local_ids.local();
+                nbr_arr_t& nbrs = refining_graph.fetch_nbrs(pivot_vid);
+                const vec_ele_t* query_vec = vecs_data.get(pivot_vid);
 
-                    // Generate random neighbor IDs
-                    random_seq.generate(random_nbr_ids, num_vertices, init_nbr_size);
+                random_seq.generate(random_local_ids, num_vertices, init_nbr_size);
 
-                    // Create neighbors with distances
-                    nbrs.clear();
-                    // Note: nbrs already has reserved capacity from RefiningGraph constructor
+                nbrs.clear();
 
-                    for (vertex_num_t i = 0; i < init_nbr_size; ++i) {
-                        const vertex_id_t nbr_id = random_nbr_ids[i];
+                for (vertex_num_t i = 0; i < init_nbr_size; ++i) {
+                    const vertex_id_t nbr_vid =
+                        refining_graph.vid_at(random_local_ids[i]);
 
-                        // Skip self-loops
-                        if (nbr_id == vid) {
-                            continue;
-                        }
-
-                        const vec_ele_t* nbr_vec = vecs_data.get(nbr_id);
-                        const distance_t dist = _dist_func(query_vec, nbr_vec);
-
-                        // Create neighbor with status "new"
-                        nbrs.emplace_back(nbr_id, dist, /* is_new = */ true);
+                    if (nbr_vid == pivot_vid) {
+                        continue;
                     }
 
-                    // Sort by distance
-                    std::sort(nbrs.begin(), nbrs.end(), nbr_comp);
+                    const vec_ele_t* nbr_vec = vecs_data.get(nbr_vid);
+                    const distance_t dist = _dist_func(query_vec, nbr_vec);
 
-                    // Remove duplicates (keep the one with smaller distance)
-                    auto last = std::unique(
-                        nbrs.begin(),
-                        nbrs.end(),
-                        [](const nbr_t& a, const nbr_t& b) {
-                            return a.get_vid() == b.get_vid();
-                        }
-                    );
-                    nbrs.erase(last, nbrs.end());
+                    nbrs.emplace_back(nbr_vid, dist, /* is_new = */ true);
                 }
+
+                std::sort(nbrs.begin(), nbrs.end(), nbr_comp);
+
+                auto last = std::unique(
+                    nbrs.begin(),
+                    nbrs.end(),
+                    [](const nbr_t& a, const nbr_t& b) {
+                        return a.get_vid() == b.get_vid();
+                    }
+                );
+                nbrs.erase(last, nbrs.end());
             }
         );
     }
