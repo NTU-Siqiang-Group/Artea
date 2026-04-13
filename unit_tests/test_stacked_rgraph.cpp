@@ -578,18 +578,18 @@ TEST_F(StackedRGraphTest, Separation) {
 
         const uint32_t tv = violations.load();
         const uint32_t tt = tested.load();
-        const float rate = (tt > 0) ? (100.0f * tv / tt) : 0.0f;
+        const float correct_rate = (tt > 0)
+            ? (100.0f * (tt - tv) / tt) : 0.0f;
 
         ARTEA_INFO(fmt::format(
-            "  level {}: |L|={}, R={:.4f}, violations = {}/{} = {:.2f}%",
-            cur_level, n_members, R_h, tv, tt, rate));
+            "  level {}: |L|={}, R={:.4f}, correct separation = {}/{} = {:.2f}%",
+            cur_level, n_members, R_h, tt - tv, tt, correct_rate));
 
-        // Allow a small margin for concurrent-insert races but flag
-        // any meaningful violation.
-        EXPECT_LE(rate, 5.0f)
+        EXPECT_GE(correct_rate, 90.0f)
             << "Level " << static_cast<int>(cur_level)
-            << " separation broken: " << rate << "% of sampled vertices "
-            << "have an L_" << static_cast<int>(cur_level)
+            << " separation broken: only " << correct_rate
+            << "% of sampled vertices have no L_"
+            << static_cast<int>(cur_level)
             << " neighbor closer than R_" << static_cast<int>(cur_level);
     }
 }

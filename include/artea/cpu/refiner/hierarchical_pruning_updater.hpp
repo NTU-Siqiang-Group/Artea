@@ -126,10 +126,7 @@ public:
         // The closest candidate is always retained.
         retained_nbrs.push_back(origin_nbrs[0]);
 
-        for (vertex_num_t i = 1;
-             i < origin_nbrs.size() && retained_nbrs.size() < max_nbr_size;
-             ++i)
-        {
+        for (vertex_num_t i = 1; i < origin_nbrs.size() && retained_nbrs.size() < max_nbr_size; ++i) {
             const nbr_t& ori_nbr = origin_nbrs[i];
             if (_internal_check<ConditionType>(ori_nbr, retained_nbrs)) {
                 retained_nbrs.push_back(ori_nbr);
@@ -165,8 +162,7 @@ private:
         const std::vector<nbr_t>& retained_nbrs
     ) const -> bool {
         const vec_ele_t* ori_vec = _vecs_data.get(ori_nbr.get_vid());
-        const distance_t threshold =
-            _compute_threshold<ConditionType>(ori_nbr.get_distance());
+        const distance_t threshold = _compute_threshold<ConditionType>(ori_nbr.get_distance());
 
         for (const nbr_t& retained_nbr : retained_nbrs) {
             // Matches PruningUpdater: if both candidate and retained are
@@ -174,10 +170,8 @@ private:
             // round), skip the triangle check to save work.
             if (ori_nbr.is_old() && retained_nbr.is_old()) continue;
 
-            const vec_ele_t* retained_vec =
-                _vecs_data.get(retained_nbr.get_vid());
-            const distance_t dist_to_retained =
-                _dist_func(ori_vec, retained_vec);
+            const vec_ele_t* retained_vec = _vecs_data.get(retained_nbr.get_vid());
+            const distance_t dist_to_retained = _dist_func(ori_vec, retained_vec);
             if (dist_to_retained < threshold) return rejected;
         }
 

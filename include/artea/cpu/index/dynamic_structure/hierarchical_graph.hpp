@@ -501,9 +501,7 @@ private:
      *         Upper levels 1..H each take @c max_nbr_size entries; level 0
      *         takes @c 2 * max_nbr_size. Total = (H + 2) * max_nbr_size. */
     __attribute__((always_inline))
-    auto _compute_slots_nbr_count(const layer_id_t highest_level_id) const
-        -> vertex_num_t
-    {
+    auto _compute_slots_nbr_count(const layer_id_t highest_level_id) const -> vertex_num_t {
         return static_cast<vertex_num_t>(highest_level_id + 2) * _max_nbr_size;
     }
 

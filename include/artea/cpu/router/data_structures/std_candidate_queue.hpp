@@ -432,6 +432,52 @@ public:
     }
 
     /**
+     * @brief Relax @c _lower_bound back to @c max_distance.
+     *
+     * Needed when @c set_capacity() is used to grow a previously-saturated
+     * queue (e.g. reusing a descent-phase queue for Step D select with a
+     * larger beam). @c set_capacity on upsize does not touch
+     * @c _lower_bound — it still equals the OLD worst-of-top. The beam
+     * extension would then immediately @c should_terminate because the
+     * residual unexplored entries are, by construction, farther than that
+     * old bound. Calling this relaxes the bound so the extended beam
+     * accepts the newly-within-capacity candidates.
+     */
+    __attribute__((always_inline))
+    auto reset_lower_bound() -> void {
+        _lower_bound = max_distance;
+    }
+
+    /**
+     * @brief Seed this queue from another queue's top_candidates.
+     *
+     * Clears current state, then pushes each entry in @p src's top
+     * candidates into both heaps of @c *this, honoring @c _capacity.
+     * Avoids the extract_results → try_push round-trip (two O(N log N)
+     * passes) when forking a per-level descent queue into the next
+     * level's working queue. Also resets @c _lower_bound to
+     * @c max_distance so the forked queue starts with a clean rejection
+     * threshold.
+     */
+    auto seed_from_queue(const StdCandidateQueue& src) -> void {
+        _unexplored_set = min_heap_t();
+        _top_candidates = max_heap_t();
+        _lower_bound = max_distance;
+        for (const auto& cand : src._top_candidates) {
+            if (_top_candidates.size() >= _capacity &&
+                cand.get_distance() >= _lower_bound) {
+                continue;
+            }
+            _unexplored_set.push(cand);
+            _top_candidates.push(cand);
+            if (_top_candidates.size() > _capacity) {
+                _top_candidates.pop();
+            }
+            _update_lower_bound();
+        }
+    }
+
+    /**
      * @brief Retrieve and mark the best unexplored candidate.
      *
      * Legacy 2-element pair overload kept for backward compatibility with

@@ -50,6 +50,7 @@
 #include <cstdint>
 #include <limits>
 #include <memory>
+#include <optional>
 #include <utility>
 #include <vector>
 
@@ -108,7 +109,7 @@ class IndexFactory {
 public:
     /** @brief Number of vertices inserted serially during bootstrap
      *         before switching to @c tbb::parallel_for. */
-    static constexpr vertex_num_t startup_points = 500;
+    static constexpr vertex_num_t startup_points = 0;
 
     /**
      * @brief Append @p batch_vecs to @p index's owned storage, then
@@ -209,17 +210,24 @@ private:
         // via L_h edges can be rejected by try_push even though
         // expanding IT would have reached the true NN. Fresh queues
         // avoid that gating entirely.
-        std::vector<distance_t> min_dist_per_level;
-        // Per-level sorted result vectors, used both by Step B
-        // (min_dist) and by Step D's run_select_at_level (re-seed).
-        std::vector<std::vector<candidate_entry_t>> sorted_cands_per_level;
+        // Sized to cover every level Step D could reach
+        // (highest_insert_level_id is capped at max_restrict_level).
+        // Each slot is pre-emplaced with an empty queue so the two
+        // uncached cases — first-vertex bootstrap (descent skipped
+        // entirely) and lazy-growth top_level_id+1 (new top layer whose
+        // only participant is new_vid) — safely no-op inside
+        // run_select_at_level (beam_search early-exits on empty queue,
+        // yielding an empty pruned_results that Step D skips).
+        const std::size_t cache_size =
+            static_cast<std::size_t>(max_restrict_level) + 1;
+        std::vector<distance_t> min_dist_per_level(cache_size, max_distance);
+        std::vector<std::optional<std_candidate_queue_t>>
+            descent_queue_per_level(cache_size);
+        for (auto& slot : descent_queue_per_level) {
+            slot.emplace(search_nn_qs);
+        }
 
         if (top_level_id != unassigned_highest_level_id && top_level_id >= 1) {
-            min_dist_per_level.assign(
-                static_cast<std::size_t>(top_level_id) + 1, max_distance);
-            sorted_cands_per_level.resize(
-                static_cast<std::size_t>(top_level_id) + 1);
-
             // Top-layer seeds (one-shot sample from bucket[top]).
             std_candidate_queue_t cur_queue(search_nn_qs);
             router.sample_entries(
@@ -231,26 +239,28 @@ private:
                 router.beam_search(
                     new_vec, index, cur_level_id, cur_queue, visited);
 
-                const std::size_t result_size = cur_queue.get_result_size();
-                if (result_size > 0) {
+                if (cur_queue.get_result_size() > 0) {
                     min_dist_per_level[cur_level_id] =
                         cur_queue.best_result_distance();
-                    sorted_cands_per_level[cur_level_id] =
-                        cur_queue.extract_results(result_size);
                 }
 
-                if (cur_level_id == 1) break;   // avoid underflow
+                if (cur_level_id == 1) {
+                    // Last level: just stash for Step D.
+                    descent_queue_per_level[cur_level_id].emplace(
+                        std::move(cur_queue));
+                    break;
+                }
 
-                // Next layer: fresh queue re-seeded with THIS layer's
-                // sorted candidates. Every candidate makes it in (try_push
-                // starts from an empty queue, so no _lower_bound gating).
+                // Fork a fresh queue for the next (lower) level BEFORE
+                // handing ownership of cur_queue to the per-level slot.
+                // seed_from_queue copies this layer's top_candidates into
+                // the new queue in one O(L) pass with a clean
+                // _lower_bound (no cross-layer gating), replacing the
+                // extract_results + try_push round-trip.
                 std_candidate_queue_t next_queue(search_nn_qs);
-                for (const auto& cand :
-                         sorted_cands_per_level[cur_level_id])
-                {
-                    next_queue.try_push(
-                        cand.get_base_vid(), cand.get_distance());
-                }
+                next_queue.seed_from_queue(cur_queue);
+                descent_queue_per_level[cur_level_id].emplace(
+                    std::move(cur_queue));
                 cur_queue = std::move(next_queue);
             }
         }
@@ -329,34 +339,27 @@ private:
         auto run_select_at_level = [&](const layer_id_t target_level_id)
             -> std::vector<nbr_t>
         {
-            // Legacy Phase 2: fresh queue with select_nbrs_qs cap,
-            // seeded from Phase 1's sorted candidates at this same
-            // level. No carry-over _lower_bound from descent.
-            std_candidate_queue_t select_queue(select_nbrs_qs);
-
-            const bool has_descent_cache =
-                target_level_id < sorted_cands_per_level.size() &&
-                !sorted_cands_per_level[target_level_id].empty();
-            if (has_descent_cache) {
-                for (const auto& cand :
-                         sorted_cands_per_level[target_level_id])
-                {
-                    select_queue.try_push(
-                        cand.get_base_vid(), cand.get_distance());
-                }
-            } else {
-                router.sample_entries(
-                    index, target_level_id, new_vec, select_queue);
-            }
+            // descent_queue_per_level is pre-sized to max_restrict_level+1
+            // with empty queues in every slot (see Step A). Uncached
+            // levels therefore present an empty queue here, which makes
+            // beam_search a no-op and yields an empty pruned_results
+            // that Step D safely skips.
+            auto& cached_queue = descent_queue_per_level[target_level_id];
+            std_candidate_queue_t select_queue = std::move(*cached_queue);
+            cached_queue.reset();
+            // Grow the queue to the select-phase beam width and relax
+            // the rejection threshold so the wider search can accept
+            // candidates that were filtered by the narrower descent pass.
+            select_queue.set_capacity(select_nbrs_qs);
+            select_queue.reset_lower_bound();
             router.beam_search(
                 new_vec, index, target_level_id, select_queue, visited);
-            auto* select_queue_ptr = &select_queue;
 
             std::vector<nbr_t> pruned_results;
-            const std::size_t result_size = select_queue_ptr->get_result_size();
+            const std::size_t result_size = select_queue.get_result_size();
             if (result_size == 0) return pruned_results;
 
-            auto sorted = select_queue_ptr->extract_results(result_size);
+            auto sorted = select_queue.extract_results(result_size);
             pruned_results.reserve(sorted.size());
             for (const auto& cand : sorted) {
                 // Skip self: assign_layer already placed new_vid in its
