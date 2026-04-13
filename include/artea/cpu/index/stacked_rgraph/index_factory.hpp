@@ -130,16 +130,14 @@ public:
         const dist_func_t&   dist_func,
         PruningUpdaterT&     pruning_updater
     ) -> void {
-        const vertex_num_t batch_size =
-            static_cast<vertex_num_t>(batch_vecs.get_num_vecs());
+        const vertex_num_t batch_size = static_cast<vertex_num_t>(batch_vecs.get_num_vecs());
         if (batch_size == 0) return;
 
         index.append_vecs(std::move(batch_vecs));
         const vertex_id_t first_new_vid = index.add_vertices(batch_size);
 
         const auto& vecs_storage = index.get_vecs_storage();
-        const vertex_num_t total_vecs =
-            static_cast<vertex_num_t>(vecs_storage.get_num_vecs());
+        const vertex_num_t total_vecs = static_cast<vertex_num_t>(vecs_storage.get_num_vecs());
 
         hg_router_t router(
             vecs_storage, dist_func,
@@ -147,20 +145,15 @@ public:
             /*search_nn_qs=*/index.search_nn_qs(),
             /*candidate_queue_size=*/index.select_nbrs_qs());
 
-        tbb::enumerable_thread_specific<visited_table_t> visited_pool(
-            [total_vecs]() {
-                return visited_table_t(static_cast<std::size_t>(total_vecs));
-            });
+        tbb::enumerable_thread_specific<visited_table_t> visited_pool([total_vecs]() {
+            return visited_table_t(static_cast<std::size_t>(total_vecs));
+        });
 
-        const vertex_id_t serial_cutoff =
-            first_new_vid +
-            std::min<vertex_num_t>(startup_points, batch_size);
-
-        {
+        const vertex_id_t serial_cutoff = first_new_vid + std::min<vertex_num_t>(startup_points, batch_size);
+        {   // serial insert phase
             auto& visited = visited_pool.local();
             for (vertex_id_t vid = first_new_vid; vid < serial_cutoff; ++vid) {
-                _insert_one(index, router, vid, dist_func,
-                            pruning_updater, visited);
+                _insert_one(index, router, vid, dist_func, pruning_updater, visited);
             }
         }
         if (serial_cutoff == first_new_vid + batch_size) return;
