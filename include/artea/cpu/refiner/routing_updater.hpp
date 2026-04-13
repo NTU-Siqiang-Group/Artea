@@ -28,15 +28,15 @@ namespace artea {
 namespace cpu {
 
 /**
- * @brief RoutingUpdater uses a dynamic-mode BottomGraphRouter to find
+ * @brief RoutingUpdater uses a dynamic-mode RefiningGraphRouter to find
  *        candidate nearest neighbors for each pivot vertex and logs them.
  *
  * @tparam GraphFactoryTraitsT Must expose both RefinerTraits and RouterTraits
  *         (i.e. GraphFactoryTraits or any traits that inherits both).
  */
-template <typename RefinerTraitsT, typename BottomGraphT>
+template <typename RefinerTraitsT, typename RefiningGraphT>
 class RoutingUpdater :
-    public RefinerTraitsT::template neighbor_updater_t<BottomGraphT, RoutingUpdater<RefinerTraitsT, BottomGraphT>>
+    public RefinerTraitsT::template neighbor_updater_t<RefiningGraphT, RoutingUpdater<RefinerTraitsT, RefiningGraphT>>
 {
     using vertex_id_t = typename RefinerTraitsT::vertex_id_t;
     using vertex_num_t = typename RefinerTraitsT::vertex_num_t;
@@ -47,8 +47,8 @@ class RoutingUpdater :
     using nbr_arr_t = typename RefinerTraitsT::nbr_arr_t;
     using log_table_t = typename RefinerTraitsT::log_table_t;
     using dist_func_t = typename RefinerTraitsT::dist_func_t;
-    using router_t = typename RefinerTraitsT::dynamic::bottom_graph_router_t;
-    using base_class_t = typename RefinerTraitsT::template neighbor_updater_t<BottomGraphT, RoutingUpdater<RefinerTraitsT, BottomGraphT>>;
+    using router_t = typename RefinerTraitsT::dynamic::refining_graph_router_t;
+    using base_class_t = typename RefinerTraitsT::template neighbor_updater_t<RefiningGraphT, RoutingUpdater<RefinerTraitsT, RefiningGraphT>>;
 
 public:
     static constexpr const char* updater_name = "routing_updater";
@@ -58,7 +58,7 @@ public:
      * @param dist_func            Distance function reference.
      * @param vecs_data            Vector array containing all vertex data.
      * @param log_table            Log table for recording edge operations.
-     * @param bottom_graph           The descent graph to navigate during construction.
+     * @param refining_graph           The descent graph to navigate during construction.
      * @param topk                 Number of nearest neighbors to retrieve per query.
      * @param candidate_queue_size Beam width for the router's candidate queue.
      */
@@ -66,10 +66,10 @@ public:
         const dist_func_t& dist_func,
         const vector_array_t& vecs_data,
         log_table_t& log_table,
-        const BottomGraphT& bottom_graph,
+        const RefiningGraphT& refining_graph,
         const vertex_num_t topk,
         const vertex_num_t candidate_queue_size
-    ) : base_class_t(dist_func, vecs_data, log_table, bottom_graph),
+    ) : base_class_t(dist_func, vecs_data, log_table, refining_graph),
         _router(vecs_data, dist_func, topk, candidate_queue_size),
         _topk(topk)
     {   _router.initialize();   }
@@ -86,17 +86,17 @@ public:
         nbr_arr_t& origin_nbrs
     ) -> void {
         const vec_ele_t* pivot_vec = this->_vecs_data.get(pivot_vid);
-        auto knn_results = _router.query(pivot_vec, this->_bottom_graph);
+        auto knn_results = _router.query(pivot_vec, this->_refining_graph);
 
         std::vector<vertex_id_t> knn_ids;
         std::vector<distance_t> knn_dists;
         knn_ids.reserve(knn_results.size());
         knn_dists.reserve(knn_results.size());
-        const vertex_num_t max_sz = this->_bottom_graph.layer_config().max_nbr_size();
+        const vertex_num_t max_sz = this->_refining_graph.layer_config().max_nbr_size();
         for (const auto& entry : knn_results) {
             if (entry.is_invalid()) { continue; }
             if (entry.get_vid() == pivot_vid) { continue; }
-            const nbr_arr_t& target_nbrs = this->_bottom_graph.fetch_nbrs(pivot_vid);
+            const nbr_arr_t& target_nbrs = this->_refining_graph.fetch_nbrs(pivot_vid);
             if (target_nbrs.size() >= max_sz &&
                 target_nbrs[max_sz - 1].get_distance() <= entry.get_distance()) {
                 continue;

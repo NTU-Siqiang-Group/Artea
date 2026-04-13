@@ -41,8 +41,8 @@ public:
      * @brief Calculate size of a descent graph (uses max_nbr_size)
      * Each vertex has max_nbr_size neighbors.
      */
-    template <typename BottomGraphT>
-    static auto calculate_bottom_graph_size(const BottomGraphT& graph) -> IndexSizeInfo {
+    template <typename RefiningGraphT>
+    static auto calculate_refining_graph_size(const RefiningGraphT& graph) -> IndexSizeInfo {
         IndexSizeInfo info;
 
         vertex_num_t num_vertices = graph.get_num_vertices();
@@ -58,7 +58,7 @@ public:
      * @brief Calculate size of a flat search graph (uses extracted_nbr_size)
      * CSR format: num_vertices * extracted_nbr_size.
      */
-    static auto calculate_size(const compact::bottom_graph_t& search_graph) -> IndexSizeInfo {
+    static auto calculate_size(const compact::refining_graph_t& search_graph) -> IndexSizeInfo {
         IndexSizeInfo info;
 
         vertex_num_t num_vertices = search_graph.get_num_vertices();

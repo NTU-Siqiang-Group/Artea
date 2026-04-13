@@ -65,7 +65,7 @@ class IndexFactory {
     using query_vecs_t = typename GraphFactoryTraitsT::query_vecs_t;
     using ground_truth_t = typename GraphFactoryTraitsT::ground_truth_t;
     using recall_estimator_t = typename GraphFactoryTraitsT::recall_estimator_t;
-    using bottom_graph_router_t = typename GraphFactoryTraitsT::dynamic::bottom_graph_router_t;
+    using refining_graph_router_t = typename GraphFactoryTraitsT::dynamic::refining_graph_router_t;
     using knn_graph = typename GraphFactoryTraitsT::knn_graph;
 
 public:
@@ -76,10 +76,10 @@ public:
         const pruning_config_t pruning_config,
         const propagate_config_t propagate_config
     ) -> this_index_t {
-        this_index_t bottom_graph(base_vecs, layer_config, pruning_config, propagate_config);
+        this_index_t refining_graph(base_vecs, layer_config, pruning_config, propagate_config);
         dist_func_t dist_func(base_vecs.get_vec_dim());
-        _build_loop(bottom_graph, dist_func, pruning_config, propagate_config);
-        return bottom_graph;
+        _build_loop(refining_graph, dist_func, pruning_config, propagate_config);
+        return refining_graph;
     }
 
     /**
@@ -103,14 +103,14 @@ public:
         const auto& vecs_data = knn_graph_index.get_vecs_data();
         const auto layer_config = knn_graph_index.layer_config();
         propagate_config_t propagate_config(0, 0);  // unused: edges already built
-        this_index_t bottom_graph(vecs_data, layer_config, pruning_config, propagate_config);
-        bottom_graph.get_nbrs_arr() = std::move(knn_graph_index.get_nbrs_arr());
+        this_index_t refining_graph(vecs_data, layer_config, pruning_config, propagate_config);
+        refining_graph.get_nbrs_arr() = std::move(knn_graph_index.get_nbrs_arr());
 
-        const vertex_num_t num_vertices = bottom_graph.get_num_vertices();
-        dist_func_t dist_func(bottom_graph.get_vecs_data().get_vec_dim());
+        const vertex_num_t num_vertices = refining_graph.get_num_vertices();
+        dist_func_t dist_func(refining_graph.get_vecs_data().get_vec_dim());
 
         propagate_engine_t propagate_engine(num_vertices, dist_func);
-        propagate_engine.set_graph(bottom_graph);
+        propagate_engine.set_graph(refining_graph);
 
         auto pruning_updater = propagate_engine.template make_updater<pruning_updater_t>(
             pruning_config.scale_coeffs(), pruning_config.shifted_coeffs());
@@ -120,7 +120,7 @@ public:
         propagate_engine.next(pruning_updater)
                         .next(reverse_updater).next(truncate_updater);
 
-        return bottom_graph;
+        return refining_graph;
     }
 
     /** @brief construct a new convergent graph from dataset, with per-build-loop recall/throughput profiling */
@@ -134,19 +134,19 @@ public:
         const query_vecs_t& query_vecs = dataset.get_query_vecs();
         const ground_truth_t& groundtruth = dataset.get_gt_vecs();
 
-        this_index_t bottom_graph(base_vecs, layer_config, pruning_config, propagate_config);
+        this_index_t refining_graph(base_vecs, layer_config, pruning_config, propagate_config);
         dist_func_t dist_func(base_vecs.get_vec_dim());
 
         recall_estimator_t recall_estimator;
         const vertex_num_t topk = 20;
         const vertex_num_t candidate_queue_size = 40;
-        bottom_graph_router_t router(base_vecs, dist_func, topk, candidate_queue_size);
+        refining_graph_router_t router(base_vecs, dist_func, topk, candidate_queue_size);
         router.initialize();
 
-        _build_loop(bottom_graph, dist_func, pruning_config, propagate_config,
+        _build_loop(refining_graph, dist_func, pruning_config, propagate_config,
             [&](iter_t build_loop) {
                 auto t0 = std::chrono::high_resolution_clock::now();
-                auto results = router.batch_query(query_vecs, bottom_graph);
+                auto results = router.batch_query(query_vecs, refining_graph);
                 auto t1 = std::chrono::high_resolution_clock::now();
                 double qps = query_vecs.get_num_vecs() * 1e6 /
                     std::chrono::duration_cast<std::chrono::microseconds>(t1 - t0).count();
@@ -169,7 +169,7 @@ private:
      * schedule. An optional per-iter callback is invoked at the end of each
      * build loop (e.g. for recall/QPS profiling in the dataset overload).
      *
-     * @param bottom_graph       The graph being constructed (modified in-place).
+     * @param refining_graph       The graph being constructed (modified in-place).
      * @param dist_func        Distance function for this graph.
      * @param pruning_config   Pruning configuration (scale_coeffs, shifted_coeffs).
      * @param propagate_config Propagation configuration (num_build_loops, num_triangle_updater_iters, prefill_ratio).
@@ -177,21 +177,21 @@ private:
      *                         the current build loop index. Pass nullptr to skip.
      */
     static auto _build_loop(
-        this_index_t& bottom_graph,
+        this_index_t& refining_graph,
         const dist_func_t& dist_func,
         const pruning_config_t& pruning_config,
         const propagate_config_t& propagate_config,
         std::function<void(iter_t)> on_iter_end = nullptr
     ) -> void {
-        const vertex_num_t num_vertices = bottom_graph.get_num_vertices();
-        const vertex_num_t max_nbr_size = bottom_graph.layer_config().max_nbr_size();
+        const vertex_num_t num_vertices = refining_graph.get_num_vertices();
+        const vertex_num_t max_nbr_size = refining_graph.layer_config().max_nbr_size();
         const vertex_num_t init_nbr_size = static_cast<vertex_num_t>(max_nbr_size * propagate_config.prefill_ratio());
 
         random_eg_t random_eg(dist_func);
-        random_eg.generate(bottom_graph, init_nbr_size);
+        random_eg.generate(refining_graph, init_nbr_size);
 
         propagate_engine_t propagate_engine(num_vertices, dist_func);
-        propagate_engine.set_graph(bottom_graph);
+        propagate_engine.set_graph(refining_graph);
 
         auto triangle_updater  = propagate_engine.template make_updater<triangle_updater_t>(
             pruning_config.scale_coeffs(), pruning_config.shifted_coeffs());

@@ -1,7 +1,7 @@
 /*
  * @FilePath: /Artea/include/artea/cpu/index/knn_graph/index_structure.hpp
  * @Author: Chandler (Weitang Ye) <weitang.ye@ntu.edu.sg>
- * @Description: KNN graph index structure. Composes a BottomGraph plus
+ * @Description: KNN graph index structure. Composes a RefiningGraph plus
  *               propagation config. Pruning is hardcoded to identity
  *               (scale_coeffs=1.0, shifted_coeffs=0.0) since a KNN graph
  *               does not use RNG-style pruning.
@@ -20,7 +20,7 @@ namespace cpu {
 namespace knn_graph {
 
 /**
- * @brief KNN graph index. Composes a @c BottomGraph with a fixed
+ * @brief KNN graph index. Composes a @c RefiningGraph with a fixed
  *        identity pruning config and a caller-supplied propagation config.
  *
  * Unlike @c conv_graph::IndexStructure, the pruning configuration is NOT
@@ -33,7 +33,7 @@ namespace knn_graph {
 template <typename IndexTraitsT>
 class IndexStructure {
 
-    using bottom_graph_t    = typename IndexTraitsT::template bottom_graph_t<IndexStructure<IndexTraitsT>>;
+    using refining_graph_t    = typename IndexTraitsT::template refining_graph_t<IndexStructure<IndexTraitsT>>;
     using vertex_num_t       = typename IndexTraitsT::vertex_num_t;
     using vertex_id_t        = typename IndexTraitsT::vertex_id_t;
     using nbr_arr_t         = typename IndexTraitsT::nbr_arr_t;
@@ -54,7 +54,7 @@ public:
         const vector_array_t& vecs_data,
         const layer_config_t layer_config,
         const propagate_config_t propagate_config
-    ) : _bottom_graph(std::make_unique<bottom_graph_t>(vecs_data, layer_config)),
+    ) : _refining_graph(std::make_unique<refining_graph_t>(vecs_data, layer_config)),
         _pruning_config(ratio_t(1.0), ratio_t(0.0)),
         _propagate_config(propagate_config)
     {}
@@ -68,55 +68,55 @@ public:
     // --- Composed graph accessor ---
 
     __attribute__((always_inline))
-    auto get_bottom_graph() -> bottom_graph_t& { return *_bottom_graph; }
+    auto get_refining_graph() -> refining_graph_t& { return *_refining_graph; }
 
     __attribute__((always_inline))
-    auto get_bottom_graph() const -> const bottom_graph_t& { return *_bottom_graph; }
+    auto get_refining_graph() const -> const refining_graph_t& { return *_refining_graph; }
 
-    // --- BottomGraph public API forwarders ---
+    // --- RefiningGraph public API forwarders ---
 
     __attribute__((always_inline))
     auto get_num_vertices() const -> vertex_num_t {
-        return _bottom_graph->get_num_vertices();
+        return _refining_graph->get_num_vertices();
     }
 
     __attribute__((always_inline))
     auto layer_config() const -> const layer_config_t& {
-        return _bottom_graph->layer_config();
+        return _refining_graph->layer_config();
     }
 
     __attribute__((always_inline))
     auto layer_config() -> layer_config_t& {
-        return _bottom_graph->layer_config();
+        return _refining_graph->layer_config();
     }
 
     __attribute__((always_inline))
     auto get_nbrs_arr() -> std::vector<nbr_arr_t>& {
-        return _bottom_graph->get_nbrs_arr();
+        return _refining_graph->get_nbrs_arr();
     }
 
     __attribute__((always_inline))
     auto get_nbrs_arr() const -> const std::vector<nbr_arr_t>& {
-        return _bottom_graph->get_nbrs_arr();
+        return _refining_graph->get_nbrs_arr();
     }
 
     __attribute__((always_inline))
     auto fetch_nbrs(const vertex_id_t src) const -> const nbr_arr_t& {
-        return _bottom_graph->fetch_nbrs(src);
+        return _refining_graph->fetch_nbrs(src);
     }
 
     __attribute__((always_inline))
     auto fetch_nbrs(const vertex_id_t src) -> nbr_arr_t& {
-        return _bottom_graph->fetch_nbrs(src);
+        return _refining_graph->fetch_nbrs(src);
     }
 
     __attribute__((always_inline))
     auto get_vecs_data() const -> const vector_array_t& {
-        return _bottom_graph->get_vecs_data();
+        return _refining_graph->get_vecs_data();
     }
 
     auto get_base_metadata() const -> nlohmann::json {
-        return _bottom_graph->get_base_metadata();
+        return _refining_graph->get_base_metadata();
     }
 
     // --- Config accessors ---
@@ -131,7 +131,7 @@ public:
     auto propagate_config() -> propagate_config_t& { return _propagate_config; }
 
 private:
-    std::unique_ptr<bottom_graph_t> _bottom_graph;
+    std::unique_ptr<refining_graph_t> _refining_graph;
     pruning_config_t   _pruning_config;
     propagate_config_t _propagate_config;
 };

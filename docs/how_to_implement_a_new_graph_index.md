@@ -63,9 +63,9 @@ namespace artea::cpu::my_graph {
 
 template <typename IndexTraitsT>
 class IndexStructure :
-    public IndexTraitsT::template bottom_graph_t<IndexStructure<IndexTraitsT>>
+    public IndexTraitsT::template refining_graph_t<IndexStructure<IndexTraitsT>>
 {
-    using base_t             = typename IndexTraitsT::template bottom_graph_t<IndexStructure<IndexTraitsT>>;
+    using base_t             = typename IndexTraitsT::template refining_graph_t<IndexStructure<IndexTraitsT>>;
     using propagate_config_t = typename IndexTraitsT::my_graph::propagate_config_t;
     using pruning_config_t   = typename IndexTraitsT::my_graph::pruning_config_t;
 
@@ -115,14 +115,14 @@ class IndexFactory {
 
 public:
     static auto construct_graph(const vector_array_t& base_vecs, ...) -> this_index_t {
-        this_index_t bottom_graph(base_vecs, layer_config, pruning_config, propagate_config);
+        this_index_t refining_graph(base_vecs, layer_config, pruning_config, propagate_config);
         dist_func_t dist_func(base_vecs.get_vec_dim());
-        _build_loop(bottom_graph, dist_func, pruning_config, propagate_config);
-        return bottom_graph;
+        _build_loop(refining_graph, dist_func, pruning_config, propagate_config);
+        return refining_graph;
     }
 
 private:
-    static auto _build_loop(this_index_t& bottom_graph, ...) -> void {
+    static auto _build_loop(this_index_t& refining_graph, ...) -> void {
         // 1. Initialize random edges
         // 2. Create propagate engine + updaters
         // 3. Run your build schedule  <-- THIS IS WHERE GRAPH TYPES DIVERGE
@@ -238,15 +238,15 @@ CMake auto-discovers all `.cpp` files via `file(GLOB ...)`. Create `test_my_grap
 using namespace artea::cpu;
 
 // 1. Build
-auto bottom_graph = my_graph::factory_t::construct_graph(
+auto refining_graph = my_graph::factory_t::construct_graph(
     base_vecs, layer_config, pruning_config, propagate_config);
 
 // 2. Convert to search graph
-auto search_graph = bottom_graph_compactor_t::from_bottom_graph(bottom_graph, extracted_nbr_size);
+auto search_graph = refining_graph_compactor_t::from_refining_graph(refining_graph, extracted_nbr_size);
 
 // 3. Grid-search QPS vs Recall
 for (uint32_t qs = start; qs <= end; qs += step) {
-    bottom_graph_router_t<graph_mode_t::compact_mode> router(
+    refining_graph_router_t<graph_mode_t::compact_mode> router(
         base_vecs, dist_func, search_graph, topk, qs);
     router.initialize();
 

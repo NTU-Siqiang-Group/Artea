@@ -34,7 +34,7 @@
 namespace artea {
 namespace cpu {
 
-template <typename RefinerTraitsT, typename BottomGraphT, bool SelectiveSchedule>
+template <typename RefinerTraitsT, typename RefiningGraphT, bool SelectiveSchedule>
 class PropagateEngine {
 
     using vertex_num_t = typename RefinerTraitsT::vertex_num_t;
@@ -51,7 +51,7 @@ class PropagateEngine {
     using dist_func_t = typename RefinerTraitsT::dist_func_t;
 
     template <typename DerivedClassT>
-    using neighbor_updater_t = typename RefinerTraitsT::template neighbor_updater_t<BottomGraphT, DerivedClassT>;
+    using neighbor_updater_t = typename RefinerTraitsT::template neighbor_updater_t<RefiningGraphT, DerivedClassT>;
 
     static constexpr bool selective_schedule = SelectiveSchedule;
     static constexpr bool profiling_mode = RefinerTraitsT::profiling_mode;
@@ -60,14 +60,14 @@ public:
     PropagateEngine(const vertex_num_t num_vertices, const dist_func_t& dist_func) :
         _log_table(num_vertices),
         _executor_bitmap(num_vertices),
-        _bottom_graph(nullptr),
+        _refining_graph(nullptr),
         _dist_func(dist_func)
     {}
 
     /** @brief Set the descent graph to operate on. */
     __attribute__((always_inline))
-    auto set_graph(BottomGraphT& bottom_graph) -> void {
-        _bottom_graph = &bottom_graph;
+    auto set_graph(RefiningGraphT& refining_graph) -> void {
+        _refining_graph = &refining_graph;
 
         // Initialize executor bitmap for selective scheduling
         if constexpr (selective_schedule) {
@@ -81,14 +81,14 @@ public:
         const vertex_id_t pivot_vid,
         UdfUpdaterT& udf_updater
     ) -> void {
-        nbr_arr_t& origin_nbrs = _bottom_graph->fetch_nbrs(pivot_vid);
+        nbr_arr_t& origin_nbrs = _refining_graph->fetch_nbrs(pivot_vid);
         udf_updater(pivot_vid, origin_nbrs);
     }
 
     template <typename UdfUpdaterT>
         requires std::derived_from<UdfUpdaterT, neighbor_updater_t<UdfUpdaterT>>
     auto propagate(UdfUpdaterT& udf_updater) -> void {
-        const vertex_num_t num_vertices = _bottom_graph->get_num_vertices();
+        const vertex_num_t num_vertices = _refining_graph->get_num_vertices();
 
         // Dense Mode: Iterate all vertices
         if constexpr (not selective_schedule) {
@@ -141,7 +141,7 @@ public:
     __attribute__((always_inline))
     auto merge_logs(const vertex_id_t executor_vid) -> size_t {
         // Logic decoupled to NbrLogTable
-        return _log_table.apply_logs(executor_vid, *_bottom_graph);
+        return _log_table.apply_logs(executor_vid, *_refining_graph);
     }
 
     /** @brief Merge the logged operations for all vertices back to the descent graph.
@@ -150,7 +150,7 @@ public:
     auto merge_logs() -> size_t {
         // Dense Mode: Iterate all vertices
         if constexpr (not selective_schedule) {
-            const vertex_num_t num_vertices = _bottom_graph->get_num_vertices();
+            const vertex_num_t num_vertices = _refining_graph->get_num_vertices();
 
             // Thread-local counters for lock-free statistics
             tbb::enumerable_thread_specific<size_t> local_counts;
@@ -287,43 +287,43 @@ public:
       *   - triangle_updater_t: Requires scale_coeffs and optional shifted_coeffs
       *   - reverse_updater_t: No additional parameters required
       *   - random_updater_t: Requires rand_gen_size (num_vertices is auto-provided)
-      *   - routing_updater_t: Requires topk, candidate_queue_size (bottom_graph is auto-provided from internal state)
+      *   - routing_updater_t: Requires topk, candidate_queue_size (refining_graph is auto-provided from internal state)
       */
     template <typename UpdaterT, typename... Args>
     auto make_updater(Args&&... args) -> UpdaterT {
-        using triangle_updater_t = typename RefinerTraitsT::template triangle_updater_t<BottomGraphT>;
-        using pruning_updater_t = typename RefinerTraitsT::template pruning_updater_t<BottomGraphT>;
-        using reverse_updater_t = typename RefinerTraitsT::template reverse_updater_t<BottomGraphT>;
-        using random_updater_t = typename RefinerTraitsT::template random_updater_t<BottomGraphT>;
-        using routing_updater_t = typename RefinerTraitsT::template routing_updater_t<BottomGraphT>;
-        using truncate_updater_t = typename RefinerTraitsT::template truncate_updater_t<BottomGraphT>;
+        using triangle_updater_t = typename RefinerTraitsT::template triangle_updater_t<RefiningGraphT>;
+        using pruning_updater_t = typename RefinerTraitsT::template pruning_updater_t<RefiningGraphT>;
+        using reverse_updater_t = typename RefinerTraitsT::template reverse_updater_t<RefiningGraphT>;
+        using random_updater_t = typename RefinerTraitsT::template random_updater_t<RefiningGraphT>;
+        using routing_updater_t = typename RefinerTraitsT::template routing_updater_t<RefiningGraphT>;
+        using truncate_updater_t = typename RefinerTraitsT::template truncate_updater_t<RefiningGraphT>;
 
-        const auto& vecs_arr = _bottom_graph->get_vecs_data();
+        const auto& vecs_arr = _refining_graph->get_vecs_data();
         auto& log_table = _log_table;
-        const auto max_nbr_size = _bottom_graph->layer_config().max_nbr_size();
-        const auto num_vertices = _bottom_graph->get_num_vertices();
+        const auto max_nbr_size = _refining_graph->layer_config().max_nbr_size();
+        const auto num_vertices = _refining_graph->get_num_vertices();
 
         if constexpr (std::is_same_v<UpdaterT, triangle_updater_t>) {
-            // TriangleUpdater(dist_func, vecs_arr, log_table, bottom_graph, scale_coeffs, shifted_coeffs)
-            return UpdaterT(_dist_func, vecs_arr, log_table, *_bottom_graph, std::forward<Args>(args)...);
+            // TriangleUpdater(dist_func, vecs_arr, log_table, refining_graph, scale_coeffs, shifted_coeffs)
+            return UpdaterT(_dist_func, vecs_arr, log_table, *_refining_graph, std::forward<Args>(args)...);
         } else if constexpr (std::is_same_v<UpdaterT, pruning_updater_t>) {
-            // PruningUpdater(dist_func, vecs_arr, log_table, bottom_graph, scale_coeffs, shifted_coeffs)
-            return UpdaterT(_dist_func, vecs_arr, log_table, *_bottom_graph, std::forward<Args>(args)...);
+            // PruningUpdater(dist_func, vecs_arr, log_table, refining_graph, scale_coeffs, shifted_coeffs)
+            return UpdaterT(_dist_func, vecs_arr, log_table, *_refining_graph, std::forward<Args>(args)...);
         } else if constexpr (std::is_same_v<UpdaterT, reverse_updater_t>) {
             // ReverseUpdater constructor signature:
-            // ReverseUpdater(dist_func, vecs_arr, log_table, bottom_graph)
-            return UpdaterT(_dist_func, vecs_arr, log_table, *_bottom_graph);
+            // ReverseUpdater(dist_func, vecs_arr, log_table, refining_graph)
+            return UpdaterT(_dist_func, vecs_arr, log_table, *_refining_graph);
         } else if constexpr (std::is_same_v<UpdaterT, random_updater_t>) {
             // RandomUpdater constructor signature:
-            // RandomUpdater(dist_func, vecs_arr, log_table, bottom_graph, num_vertices, rand_gen_size)
-            return UpdaterT(_dist_func, vecs_arr, log_table, *_bottom_graph, num_vertices, std::forward<Args>(args)...);
+            // RandomUpdater(dist_func, vecs_arr, log_table, refining_graph, num_vertices, rand_gen_size)
+            return UpdaterT(_dist_func, vecs_arr, log_table, *_refining_graph, num_vertices, std::forward<Args>(args)...);
         } else if constexpr (std::is_same_v<UpdaterT, routing_updater_t>) {
             // RoutingUpdater constructor signature:
-            // RoutingUpdater(dist_func, vecs_arr, log_table, bottom_graph, candidate_queue_size)
-            return UpdaterT(_dist_func, vecs_arr, log_table, *_bottom_graph, std::forward<Args>(args)...);
+            // RoutingUpdater(dist_func, vecs_arr, log_table, refining_graph, candidate_queue_size)
+            return UpdaterT(_dist_func, vecs_arr, log_table, *_refining_graph, std::forward<Args>(args)...);
         } else if constexpr (std::is_same_v<UpdaterT, truncate_updater_t>) {
-            // TruncateUpdater(dist_func, vecs_arr, log_table, bottom_graph, [truncate_size])
-            return UpdaterT(_dist_func, vecs_arr, log_table, *_bottom_graph, std::forward<Args>(args)...);
+            // TruncateUpdater(dist_func, vecs_arr, log_table, refining_graph, [truncate_size])
+            return UpdaterT(_dist_func, vecs_arr, log_table, *_refining_graph, std::forward<Args>(args)...);
         } else {
             ARTEA_ERROR("Unsupported updater type");
         }
@@ -338,7 +338,7 @@ private:
     word_aligned_bitmap_t _executor_bitmap;
 
     /** @brief Pointer to the descent graph being operated on. */
-    BottomGraphT* _bottom_graph;
+    RefiningGraphT* _refining_graph;
 
     /** @brief Distance function reference. */
     const dist_func_t& _dist_func;

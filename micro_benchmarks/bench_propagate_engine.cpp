@@ -61,7 +61,7 @@ public:
 
         // Initialize flat graph with random edges
         ARTEA_INFO("Initializing descent graph with random edges...");
-        bottom_graph_ = std::make_unique<conv_graph::index_t>(
+        refining_graph_ = std::make_unique<conv_graph::index_t>(
             base_vecs_,
             g_config.layer_config,
             g_config.pruning_config,
@@ -69,7 +69,7 @@ public:
         );
 
         random_eg_t random_eg(*dist_func_);
-        random_eg.generate(*bottom_graph_, static_cast<vec_num_t>(
+        random_eg.generate(*refining_graph_, static_cast<vec_num_t>(
             g_config.layer_config.max_nbr_size() * g_config.propagate_config.prefill_ratio()
         ));
         ARTEA_INFO("Descent graph initialization complete.");
@@ -82,11 +82,11 @@ public:
     vec_num_t get_num_base_vecs() const { return num_base_vecs_; }
     const vector_array_t& get_base_vecs() const { return base_vecs_; }
     const dist_func_t& get_dist_func() const { return *dist_func_; }
-    conv_graph::index_t& get_bottom_graph() const { return *bottom_graph_; }
+    conv_graph::index_t& get_refining_graph() const { return *refining_graph_; }
 
     // Reset graph to initial state
     void reset_graph() {
-        auto& nbrs_arr = bottom_graph_->get_nbrs_arr();
+        auto& nbrs_arr = refining_graph_->get_nbrs_arr();
         for (size_t i = 0; i < nbrs_arr.size(); ++i) {
             nbrs_arr[i] = initial_nbrs_[i];
         }
@@ -94,7 +94,7 @@ public:
 
 private:
     void save_initial_state() {
-        const auto& nbrs_arr = bottom_graph_->get_nbrs_arr();
+        const auto& nbrs_arr = refining_graph_->get_nbrs_arr();
         initial_nbrs_.resize(nbrs_arr.size());
         for (size_t i = 0; i < nbrs_arr.size(); ++i) {
             initial_nbrs_[i] = nbrs_arr[i];
@@ -105,7 +105,7 @@ private:
     vec_num_t num_base_vecs_;
     vector_array_t base_vecs_;
     std::unique_ptr<dist_func_t> dist_func_;
-    std::unique_ptr<conv_graph::index_t> bottom_graph_;
+    std::unique_ptr<conv_graph::index_t> refining_graph_;
     std::vector<nbr_arr_t> initial_nbrs_;
 };
 
@@ -113,15 +113,15 @@ private:
 static void BM_TriangleUpdater(benchmark::State& state) {
     auto& provider = DataProvider::instance();
     const auto& dist_func = provider.get_dist_func();
-    conv_graph::index_t& bottom_graph = provider.get_bottom_graph();
+    conv_graph::index_t& refining_graph = provider.get_refining_graph();
     const vec_num_t num_vertices = provider.get_num_base_vecs();
 
     // Set max_nbr_size on the flat graph
-    bottom_graph.layer_config().max_nbr_size(g_config.layer_config.max_nbr_size());
+    refining_graph.layer_config().max_nbr_size(g_config.layer_config.max_nbr_size());
 
     // Create PropagateEngine instance
     propagate_engine_ss_t propagate_engine(num_vertices, dist_func);
-    propagate_engine.set_graph(bottom_graph);
+    propagate_engine.set_graph(refining_graph);
 
     // Create TriangleUpdater using the factory method
     auto triangle_updater = propagate_engine.make_updater<triangle_updater_t>(
@@ -139,7 +139,7 @@ static void BM_TriangleUpdater(benchmark::State& state) {
         propagate_engine.run(g_config.num_iters, triangle_updater);
 
         // Prevent optimization from removing the work
-        benchmark::DoNotOptimize(bottom_graph);
+        benchmark::DoNotOptimize(refining_graph);
         benchmark::ClobberMemory();
     }
 
@@ -156,15 +156,15 @@ static void BM_TriangleUpdater(benchmark::State& state) {
 static void BM_TriangleUpdater_NoSS(benchmark::State& state) {
     auto& provider = DataProvider::instance();
     const auto& dist_func = provider.get_dist_func();
-    conv_graph::index_t& bottom_graph = provider.get_bottom_graph();
+    conv_graph::index_t& refining_graph = provider.get_refining_graph();
     const vec_num_t num_vertices = provider.get_num_base_vecs();
 
     // Set max_nbr_size on the flat graph
-    bottom_graph.layer_config().max_nbr_size(g_config.layer_config.max_nbr_size());
+    refining_graph.layer_config().max_nbr_size(g_config.layer_config.max_nbr_size());
 
     // Create PropagateEngine instance without selective scheduling
     propagate_engine_noss_t propagate_engine(num_vertices, dist_func);
-    propagate_engine.set_graph(bottom_graph);
+    propagate_engine.set_graph(refining_graph);
 
     // Create TriangleUpdater using the factory method
     auto triangle_updater = propagate_engine.make_updater<triangle_updater_t>(
@@ -182,7 +182,7 @@ static void BM_TriangleUpdater_NoSS(benchmark::State& state) {
         propagate_engine.run(g_config.num_iters, triangle_updater);
 
         // Prevent optimization from removing the work
-        benchmark::DoNotOptimize(bottom_graph);
+        benchmark::DoNotOptimize(refining_graph);
         benchmark::ClobberMemory();
     }
 
@@ -199,12 +199,12 @@ static void BM_TriangleUpdater_NoSS(benchmark::State& state) {
 static void BM_ReverseUpdater(benchmark::State& state) {
     auto& provider = DataProvider::instance();
     const auto& dist_func = provider.get_dist_func();
-    conv_graph::index_t& bottom_graph = provider.get_bottom_graph();
+    conv_graph::index_t& refining_graph = provider.get_refining_graph();
     const vec_num_t num_vertices = provider.get_num_base_vecs();
 
     // Create PropagateEngine instance
     propagate_engine_ss_t propagate_engine(num_vertices, dist_func);
-    propagate_engine.set_graph(bottom_graph);
+    propagate_engine.set_graph(refining_graph);
 
     // Create ReverseUpdater using the factory method
     auto reverse_updater = propagate_engine.make_updater<reverse_updater_t>();
@@ -219,7 +219,7 @@ static void BM_ReverseUpdater(benchmark::State& state) {
         propagate_engine.run(g_config.num_iters, reverse_updater);
 
         // Prevent optimization from removing the work
-        benchmark::DoNotOptimize(bottom_graph);
+        benchmark::DoNotOptimize(refining_graph);
         benchmark::ClobberMemory();
     }
 
@@ -236,12 +236,12 @@ static void BM_ReverseUpdater(benchmark::State& state) {
 static void BM_ReverseUpdater_NoSS(benchmark::State& state) {
     auto& provider = DataProvider::instance();
     const auto& dist_func = provider.get_dist_func();
-    conv_graph::index_t& bottom_graph = provider.get_bottom_graph();
+    conv_graph::index_t& refining_graph = provider.get_refining_graph();
     const vec_num_t num_vertices = provider.get_num_base_vecs();
 
     // Create PropagateEngine instance without selective scheduling
     propagate_engine_noss_t propagate_engine(num_vertices, dist_func);
-    propagate_engine.set_graph(bottom_graph);
+    propagate_engine.set_graph(refining_graph);
 
     // Create ReverseUpdater using the factory method
     auto reverse_updater = propagate_engine.make_updater<reverse_updater_t>();
@@ -256,7 +256,7 @@ static void BM_ReverseUpdater_NoSS(benchmark::State& state) {
         propagate_engine.run(g_config.num_iters, reverse_updater);
 
         // Prevent optimization from removing the work
-        benchmark::DoNotOptimize(bottom_graph);
+        benchmark::DoNotOptimize(refining_graph);
         benchmark::ClobberMemory();
     }
 
@@ -273,12 +273,12 @@ static void BM_ReverseUpdater_NoSS(benchmark::State& state) {
 static void BM_RandomUpdater(benchmark::State& state) {
     auto& provider = DataProvider::instance();
     const auto& dist_func = provider.get_dist_func();
-    conv_graph::index_t& bottom_graph = provider.get_bottom_graph();
+    conv_graph::index_t& refining_graph = provider.get_refining_graph();
     const vec_num_t num_vertices = provider.get_num_base_vecs();
 
     // Create PropagateEngine instance
     propagate_engine_ss_t propagate_engine(num_vertices, dist_func);
-    propagate_engine.set_graph(bottom_graph);
+    propagate_engine.set_graph(refining_graph);
 
     // Create RandomUpdater using the factory method
     auto random_updater = propagate_engine.make_updater<random_updater_t>(g_config.rand_gen_size);
@@ -293,7 +293,7 @@ static void BM_RandomUpdater(benchmark::State& state) {
         propagate_engine.run(g_config.num_iters, random_updater);
 
         // Prevent optimization from removing the work
-        benchmark::DoNotOptimize(bottom_graph);
+        benchmark::DoNotOptimize(refining_graph);
         benchmark::ClobberMemory();
     }
 
@@ -310,12 +310,12 @@ static void BM_RandomUpdater(benchmark::State& state) {
 static void BM_RandomUpdater_NoSS(benchmark::State& state) {
     auto& provider = DataProvider::instance();
     const auto& dist_func = provider.get_dist_func();
-    conv_graph::index_t& bottom_graph = provider.get_bottom_graph();
+    conv_graph::index_t& refining_graph = provider.get_refining_graph();
     const vec_num_t num_vertices = provider.get_num_base_vecs();
 
     // Create PropagateEngine instance without selective scheduling
     propagate_engine_noss_t propagate_engine(num_vertices, dist_func);
-    propagate_engine.set_graph(bottom_graph);
+    propagate_engine.set_graph(refining_graph);
 
     // Create RandomUpdater using the factory method
     auto random_updater = propagate_engine.make_updater<random_updater_t>(g_config.rand_gen_size);
@@ -330,7 +330,7 @@ static void BM_RandomUpdater_NoSS(benchmark::State& state) {
         propagate_engine.run(g_config.num_iters, random_updater);
 
         // Prevent optimization from removing the work
-        benchmark::DoNotOptimize(bottom_graph);
+        benchmark::DoNotOptimize(refining_graph);
         benchmark::ClobberMemory();
     }
 

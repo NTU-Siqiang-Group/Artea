@@ -45,12 +45,12 @@
 
 #include <artea/cpu/index/layer_config.hpp>
 #include <artea/cpu/index/neighbor.hpp>
-#include <artea/cpu/index/dynamic_structure/bottom_graph.hpp>
-#include <artea/cpu/index/compact_structure/bottom_graph.hpp>
+#include <artea/cpu/index/dynamic_structure/refining_graph.hpp>
+#include <artea/cpu/index/compact_structure/refining_graph.hpp>
 #include <artea/cpu/index/dynamic_structure/level_group_arena.hpp>
 #include <artea/cpu/index/dynamic_structure/hierarchical_graph.hpp>
 #include <artea/cpu/index/compact_structure/hierarchical_graph.hpp>
-#include <artea/cpu/index/compactor/bottom_graph_compactor.hpp>
+#include <artea/cpu/index/compactor/refining_graph_compactor.hpp>
 #include <artea/cpu/index/compactor/hierarchical_graph_compactor.hpp>
 #include <artea/cpu/index/index_size_calculator.hpp>
 #include <artea/cpu/index/persistence/flat_graph_file_manager.hpp>
@@ -72,8 +72,8 @@
 
 #include <artea/cpu/router/vector_router.hpp>
 #include <artea/cpu/router/bruteforce_router.hpp>
-#include <artea/cpu/router/compact/bottom_graph_router.hpp>
-#include <artea/cpu/router/dynamic/bottom_graph_router.hpp>
+#include <artea/cpu/router/compact/refining_graph_router.hpp>
+#include <artea/cpu/router/dynamic/refining_graph_router.hpp>
 #include <artea/cpu/router/dynamic/single_layer_router.hpp>
 #include <artea/cpu/router/dynamic/hierarchical_graph_router.hpp>
 #include <artea/cpu/router/data_structures/candidate_entry.hpp>

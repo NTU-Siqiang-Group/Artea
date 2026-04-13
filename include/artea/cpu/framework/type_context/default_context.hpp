@@ -104,20 +104,20 @@ using log_table_t = typename buffer_traits_t::log_table_t;
 using layer_config_t = typename base_traits_t::layer_config_t;
 
 // Index types from IndexTraits
-using bottom_graph_compactor_t = typename index_traits_t::bottom_graph_compactor_t;
+using refining_graph_compactor_t = typename index_traits_t::refining_graph_compactor_t;
 using flat_graph_file_manager_t = typename index_traits_t::flat_graph_file_manager_t;
 using index_size_calculator_t = typename index_traits_t::index_size_calculator_t;
 using radius_prober_t = typename index_traits_t::radius_prober_t;
 using hierarchical_graph_compactor_t = typename index_traits_t::hierarchical_graph_compactor_t;
 
 namespace compact {
-    using bottom_graph_t        = index_traits_t::compact::bottom_graph_t;
+    using refining_graph_t        = index_traits_t::compact::refining_graph_t;
     using hierarchical_graph_t  = index_traits_t::compact::hierarchical_graph_t;
-    using bottom_graph_router_t = router_traits_t::compact::bottom_graph_router_t;
+    using refining_graph_router_t = router_traits_t::compact::refining_graph_router_t;
 }   // namespace compact
 namespace dynamic {
     using hierarchical_graph_t        = index_traits_t::dynamic::hierarchical_graph_t;
-    using bottom_graph_router_t       = router_traits_t::dynamic::bottom_graph_router_t;
+    using refining_graph_router_t       = router_traits_t::dynamic::refining_graph_router_t;
     using single_layer_router_t       = router_traits_t::dynamic::single_layer_router_t;
     using hierarchical_graph_router_t = router_traits_t::dynamic::hierarchical_graph_router_t;
 }   // namespace dynamic

@@ -92,7 +92,7 @@ public:
         ARTEA_INFO("Building symmetric KNN graph from scratch...");
         auto start_time = std::chrono::high_resolution_clock::now();
 
-        bottom_graph_ = std::make_unique<symmetric_knn_graph::index_t>(
+        refining_graph_ = std::make_unique<symmetric_knn_graph::index_t>(
             symmetric_knn_graph::factory_t::construct_graph(
                 base_vecs,
                 g_config.layer_config,
@@ -103,21 +103,21 @@ public:
         auto end_time = std::chrono::high_resolution_clock::now();
         auto duration = std::chrono::duration_cast<std::chrono::microseconds>(end_time - start_time);
         g_test_results.build_time_s = duration.count() / 1e6;
-        g_test_results.num_vertices = bottom_graph_->get_num_vertices();
+        g_test_results.num_vertices = refining_graph_->get_num_vertices();
 
         ARTEA_INFO(fmt::format("Graph built with {} vertices", g_test_results.num_vertices));
         ARTEA_INFO(fmt::format("Build time: {:.2f} s", g_test_results.build_time_s));
 
         // Compute average degree
-        g_test_results.avg_degree = compute_average_degree(*bottom_graph_);
+        g_test_results.avg_degree = compute_average_degree(*refining_graph_);
         ARTEA_INFO(fmt::format("Average degree: {:.2f}", g_test_results.avg_degree));
 
         // Convert to flat search graph
         ARTEA_INFO("Converting to flat search graph...");
         start_time = std::chrono::high_resolution_clock::now();
 
-        compact_bottom_graph_ = std::make_unique<compact::bottom_graph_t>(
-            bottom_graph_compactor_t::compact_graph(*bottom_graph_, g_config.extracted_nbr_size)
+        compact_refining_graph_ = std::make_unique<compact::refining_graph_t>(
+            refining_graph_compactor_t::compact_graph(*refining_graph_, g_config.extracted_nbr_size)
         );
 
         end_time = std::chrono::high_resolution_clock::now();
@@ -132,15 +132,15 @@ public:
 
     vector_dataset_t& get_dataset() { return *dataset_; }
     dist_func_t& get_dist_func() { return *dist_func_; }
-    compact::bottom_graph_t& get_compact_bottom_graph() { return *compact_bottom_graph_; }
+    compact::refining_graph_t& get_compact_refining_graph() { return *compact_refining_graph_; }
     const idlist_array_t& get_groundtruth() { return dataset_->get_gt_vecs(); }
 
 private:
     DataProvider() = default;
     std::unique_ptr<vector_dataset_t> dataset_;
     std::unique_ptr<dist_func_t> dist_func_;
-    std::unique_ptr<symmetric_knn_graph::index_t> bottom_graph_;
-    std::unique_ptr<compact::bottom_graph_t> compact_bottom_graph_;
+    std::unique_ptr<symmetric_knn_graph::index_t> refining_graph_;
+    std::unique_ptr<compact::refining_graph_t> compact_refining_graph_;
 };
 
 class SymKnnGraphTest : public ::testing::Test {};
@@ -149,7 +149,7 @@ TEST_F(SymKnnGraphTest, QueryRecall) {
     auto& provider = DataProvider::instance();
     auto& dataset = provider.get_dataset();
     auto& dist_func = provider.get_dist_func();
-    auto& compact_bottom_graph = provider.get_compact_bottom_graph();
+    auto& compact_refining_graph = provider.get_compact_refining_graph();
     const auto& groundtruth = provider.get_groundtruth();
 
     const auto& base_vecs = dataset.get_base_vecs();
@@ -161,8 +161,8 @@ TEST_F(SymKnnGraphTest, QueryRecall) {
         g_config.queue_start, g_config.queue_end, g_config.queue_step));
 
     for (uint32_t queue_size = g_config.queue_start; queue_size <= g_config.queue_end; queue_size += g_config.queue_step) {
-        compact::bottom_graph_router_t router(
-            base_vecs, dist_func, compact_bottom_graph, g_config.topk, queue_size);
+        compact::refining_graph_router_t router(
+            base_vecs, dist_func, compact_refining_graph, g_config.topk, queue_size);
         router.initialize();
 
         // Warmup runs

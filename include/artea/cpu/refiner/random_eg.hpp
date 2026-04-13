@@ -58,16 +58,16 @@ public:
 
     /**
      * @brief Generate random edges for a descent graph.
-     * @param bottom_graph The graph to initialize with random edges.
+     * @param refining_graph The graph to initialize with random edges.
      * @param init_nbr_size Number of random neighbors to generate for each vertex.
      */
-    template <typename BottomGraphT>
+    template <typename RefiningGraphT>
     auto generate(
-        BottomGraphT& bottom_graph,
+        RefiningGraphT& refining_graph,
         const vertex_num_t init_nbr_size
     ) -> void {
-        const vertex_num_t num_vertices = bottom_graph.get_num_vertices();
-        const vector_array_t& vecs_data = bottom_graph.get_vecs_data();
+        const vertex_num_t num_vertices = refining_graph.get_num_vertices();
+        const vector_array_t& vecs_data = refining_graph.get_vecs_data();
 
         // RandomSeq uses thread-local storage internally, so it's safe to share across threads
         random_seq_t random_seq;
@@ -79,7 +79,7 @@ public:
                 std::vector<vertex_id_t> random_nbr_ids(init_nbr_size);
 
                 for (vertex_id_t vid = r.begin(); vid != r.end(); ++vid) {
-                    nbr_arr_t& nbrs = bottom_graph.fetch_nbrs(vid);
+                    nbr_arr_t& nbrs = refining_graph.fetch_nbrs(vid);
                     const vec_ele_t* query_vec = vecs_data.get(vid);
 
                     // Generate random neighbor IDs
@@ -87,7 +87,7 @@ public:
 
                     // Create neighbors with distances
                     nbrs.clear();
-                    // Note: nbrs already has reserved capacity from BottomGraph constructor
+                    // Note: nbrs already has reserved capacity from RefiningGraph constructor
 
                     for (vertex_num_t i = 0; i < init_nbr_size; ++i) {
                         const vertex_id_t nbr_id = random_nbr_ids[i];

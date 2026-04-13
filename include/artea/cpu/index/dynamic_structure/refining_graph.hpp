@@ -1,5 +1,5 @@
 /*
- * @FilePath: /Artea/include/artea/cpu/index/bottom_graph.hpp
+ * @FilePath: /Artea/include/artea/cpu/index/refining_graph.hpp
  * @Author: Chandler (Weitang Ye) <weitang.ye@ntu.edu.sg>
  * @Description: CRTP base descent graph structure for graph-based index.
  */
@@ -22,7 +22,7 @@ namespace dynamic {
  * @tparam DerivedClassT The concrete derived graph type (CRTP).
  */
 template <typename IndexTraitsT, typename DerivedClassT>
-class BottomGraph {
+class RefiningGraph {
 
 protected:
     using vertex_num_t = typename IndexTraitsT::vertex_num_t;
@@ -39,7 +39,7 @@ public:
      * @param vecs_data Reference to the vector data for this layer.
      * @param layer_config Layer configuration (max_nbr_size and reserved_nbr_size).
      */
-    BottomGraph(
+    RefiningGraph(
         const vector_array_t& vecs_data,
         const layer_config_t layer_config
     ) :
@@ -53,17 +53,17 @@ public:
         }
     }
 
-    BottomGraph(const BottomGraph&) = delete;
-    BottomGraph& operator=(const BottomGraph&) = delete;
+    RefiningGraph(const RefiningGraph&) = delete;
+    RefiningGraph& operator=(const RefiningGraph&) = delete;
 
-    BottomGraph(BottomGraph&& other) noexcept
+    RefiningGraph(RefiningGraph&& other) noexcept
         : _num_vertices(other._num_vertices),
           _layer_config(other._layer_config),
           _nbrs_arr(std::move(other._nbrs_arr)),
           _vecs_data(other._vecs_data)
     {}
 
-    BottomGraph& operator=(BottomGraph&& other) noexcept {
+    RefiningGraph& operator=(RefiningGraph&& other) noexcept {
         _num_vertices = other._num_vertices;
         _layer_config = other._layer_config;
         _nbrs_arr = std::move(other._nbrs_arr);
@@ -99,7 +99,7 @@ public:
 
     auto get_base_metadata() const -> nlohmann::json {
         nlohmann::json meta;
-        meta["graph_type"] = "bottom_graph";
+        meta["graph_type"] = "refining_graph";
         meta["version"] = "1.0";
         meta["num_vertices"] = _num_vertices;
         meta["layer_config"] = {
@@ -122,7 +122,7 @@ protected:
     /** @brief Const reference to vector data for this layer. */
     const vector_array_t& _vecs_data;
 
-};  // class BottomGraph
+};  // class RefiningGraph
 
 }   // namespace dynamic
 }   // namespace cpu

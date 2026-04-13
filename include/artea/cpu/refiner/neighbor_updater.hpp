@@ -28,7 +28,7 @@
 namespace artea {
 namespace cpu {
 
-template <typename RefinerTraitsT, typename BottomGraphT, typename DerivedClassT>
+template <typename RefinerTraitsT, typename RefiningGraphT, typename DerivedClassT>
 class NeighborUpdater {
 
     using vertex_id_t = typename RefinerTraitsT::vertex_id_t;
@@ -48,8 +48,8 @@ public:
         const dist_func_t& dist_func,
         const vector_array_t& vecs_data,
         log_table_t& log_table,
-        const BottomGraphT& bottom_graph
-    ) : _dist_func(dist_func), _vecs_data(vecs_data), _log_table(log_table), _bottom_graph(bottom_graph) {}
+        const RefiningGraphT& refining_graph
+    ) : _dist_func(dist_func), _vecs_data(vecs_data), _log_table(log_table), _refining_graph(refining_graph) {}
 
     /**
      * @brief Operator that delegates to the derived class's update_impl.
@@ -87,7 +87,7 @@ protected:
     log_table_t& _log_table;
 
     /** @brief Reference to the descent graph for neighbor overflow check. */
-    const BottomGraphT& _bottom_graph;
+    const RefiningGraphT& _refining_graph;
 
 };  //  class NeighborUpdater
 

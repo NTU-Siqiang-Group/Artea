@@ -13,10 +13,10 @@
 // limitations under the License.
 
 /*
- * @FilePath: /Artea/include/artea/cpu/router/compact_bottom_graph_router.hpp
+ * @FilePath: /Artea/include/artea/cpu/router/compact_refining_graph_router.hpp
  * @Author: Chandler (Weitang Ye) <weitang.ye@ntu.edu.sg>
- * @Description: compact_mode specialization of BottomGraphRouter.
- *               Operates on CompactBottomGraph (CSR vertex_id_t neighbors).
+ * @Description: compact_mode specialization of RefiningGraphRouter.
+ *               Operates on CompactRefiningGraph (CSR vertex_id_t neighbors).
  */
 
 #pragma once
@@ -38,8 +38,8 @@ namespace cpu {
 namespace compact {
 
 template <typename RouterTraitsT>
-class BottomGraphRouter :
-    public RouterTraitsT::template vector_router_t<BottomGraphRouter<RouterTraitsT>>
+class RefiningGraphRouter :
+    public RouterTraitsT::template vector_router_t<RefiningGraphRouter<RouterTraitsT>>
 {
 
     using vertex_num_t = typename RouterTraitsT::vertex_num_t;
@@ -55,18 +55,18 @@ class BottomGraphRouter :
     using visited_table_t = typename RouterTraitsT::visited_table_t;
     using visited_table_pool_t = typename RouterTraitsT::visited_table_pool_t;
     using knn_results_t = typename RouterTraitsT::knn_results_t;
-    using base_class_t = typename RouterTraitsT::template vector_router_t<BottomGraphRouter<RouterTraitsT>>;
+    using base_class_t = typename RouterTraitsT::template vector_router_t<RefiningGraphRouter<RouterTraitsT>>;
 
 public:
 
-    BottomGraphRouter(
+    RefiningGraphRouter(
         const vector_array_t& vecs_data,
         const dist_func_t& dist_func,
-        const compact::bottom_graph_t& compact_bottom_graph,
+        const compact::refining_graph_t& compact_refining_graph,
         const uint32_t topk,
         const vertex_num_t candidate_queue_size = 16
     ) : base_class_t(vecs_data, dist_func, topk),
-        _compact_bottom_graph(compact_bottom_graph),
+        _compact_refining_graph(compact_refining_graph),
         _candidate_queue_size(candidate_queue_size),
         _visited_table_pool(vecs_data.get_num_vecs()),
         _random_seq()
@@ -217,8 +217,8 @@ private:
             // Check for invalid entry or early termination
             if (current_id == RouterTraitsT::invalid_vertex_id) { break; }
             // Explore neighbors of current vertex
-            const vertex_id_t* neighbors = _compact_bottom_graph.get_neighbors(current_id);
-            const vertex_num_t nbr_count = _compact_bottom_graph.get_extracted_nbr_size();
+            const vertex_id_t* neighbors = _compact_refining_graph.get_neighbors(current_id);
+            const vertex_num_t nbr_count = _compact_refining_graph.get_extracted_nbr_size();
 
             for (vertex_num_t i = 0; i < nbr_count; ++i) {
                 const vertex_id_t nbr_id = neighbors[i];
@@ -280,8 +280,8 @@ private:
             visited_table.set(current_id);
 
             // Explore neighbors of current vertex
-            const vertex_id_t* neighbors = _compact_bottom_graph.get_neighbors(current_id);
-            const vertex_num_t nbr_count = _compact_bottom_graph.get_extracted_nbr_size();
+            const vertex_id_t* neighbors = _compact_refining_graph.get_neighbors(current_id);
+            const vertex_num_t nbr_count = _compact_refining_graph.get_extracted_nbr_size();
 
             for (vertex_num_t i = 0; i < nbr_count; ++i) {
                 const vertex_id_t nbr_id = neighbors[i];
@@ -322,7 +322,7 @@ private:
     }
 
     /** @brief Reference to the flat search graph for neighbor access. */
-    const compact::bottom_graph_t& _compact_bottom_graph;
+    const compact::refining_graph_t& _compact_refining_graph;
 
     /** @brief Candidate queue size for beam search. */
     vertex_num_t _candidate_queue_size = 0;
@@ -333,7 +333,7 @@ private:
     /** @brief Thread-safe random sequence generator (internally uses thread-local MKL streams). */
     mutable random_seq_t _random_seq;
 
-};  // class BottomGraphRouter
+};  // class RefiningGraphRouter
 
 }   // namespace compact
 }   // namespace cpu

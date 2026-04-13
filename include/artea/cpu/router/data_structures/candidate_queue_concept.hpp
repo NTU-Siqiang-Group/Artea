@@ -27,7 +27,7 @@ namespace cpu {
  *
  * All candidate queue implementations (LinearCandidateQueue, StdCandidateQueue,
  * FHCandidateQueue) must satisfy this concept to be used as a template parameter
- * in BottomGraphRouter.
+ * in RefiningGraphRouter.
  *
  * Design Philosophy:
  * The queue is parameterized on an entry type (@c candidate_entry_t) that

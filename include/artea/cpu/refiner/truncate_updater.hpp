@@ -25,9 +25,9 @@
 namespace artea {
 namespace cpu {
 
-template <typename RefinerTraitsT, typename BottomGraphT>
+template <typename RefinerTraitsT, typename RefiningGraphT>
 class TruncateUpdater :
-    public RefinerTraitsT::template neighbor_updater_t<BottomGraphT, TruncateUpdater<RefinerTraitsT, BottomGraphT>> {
+    public RefinerTraitsT::template neighbor_updater_t<RefiningGraphT, TruncateUpdater<RefinerTraitsT, RefiningGraphT>> {
 
     using vertex_id_t    = typename RefinerTraitsT::vertex_id_t;
     using vertex_num_t   = typename RefinerTraitsT::vertex_num_t;
@@ -35,7 +35,7 @@ class TruncateUpdater :
     using log_table_t    = typename RefinerTraitsT::log_table_t;
     using dist_func_t    = typename RefinerTraitsT::dist_func_t;
     using vector_array_t = typename RefinerTraitsT::vector_array_t;
-    using base_class_t   = typename RefinerTraitsT::template neighbor_updater_t<BottomGraphT, TruncateUpdater<RefinerTraitsT, BottomGraphT>>;
+    using base_class_t   = typename RefinerTraitsT::template neighbor_updater_t<RefiningGraphT, TruncateUpdater<RefinerTraitsT, RefiningGraphT>>;
 
 public:
     static constexpr const char* updater_name = "truncate_updater";
@@ -44,9 +44,9 @@ public:
         const dist_func_t& dist_func,
         const vector_array_t& vecs_data,
         log_table_t& log_table,
-        const BottomGraphT& bottom_graph,
+        const RefiningGraphT& refining_graph,
         vertex_num_t truncate_size = 0
-    ) : base_class_t(dist_func, vecs_data, log_table, bottom_graph),
+    ) : base_class_t(dist_func, vecs_data, log_table, refining_graph),
         _truncate_size(truncate_size) {}
 
     __attribute__((always_inline))
@@ -56,7 +56,7 @@ public:
     ) -> void {
         const vertex_num_t max_sz = (_truncate_size > 0)
             ? _truncate_size
-            : this->_bottom_graph.layer_config().max_nbr_size();
+            : this->_refining_graph.layer_config().max_nbr_size();
         if (origin_nbrs.size() > max_sz) {
             origin_nbrs.resize(max_sz);
         }

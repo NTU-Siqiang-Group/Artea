@@ -16,7 +16,7 @@
  * @FilePath: /Artea/include/artea/cpu/persistence/flat_graph_file_manager.hpp
  * @Author: Chandler (Weitang Ye) <weitang.ye@ntu.edu.sg>
  * @Date: 2026-03-14
- * @Description: File manager for BottomGraph snapshot and restore operations.
+ * @Description: File manager for RefiningGraph snapshot and restore operations.
  */
 
 #pragma once
@@ -32,7 +32,7 @@ namespace artea {
 namespace cpu {
 
 /**
- * @brief File manager for BottomGraph snapshot and restore operations.
+ * @brief File manager for RefiningGraph snapshot and restore operations.
  * @tparam IndexTraitsT The index traits type.
  */
 template <typename IndexTraitsT>
@@ -49,13 +49,13 @@ class FlatGraphFileManager {
 public:
     /**
      * @brief Snapshot descent graph to a directory with metadata.
-     * @param bottom_graph The descent graph to snapshot.
+     * @param refining_graph The descent graph to snapshot.
      * @param index_dir Target directory path.
      * @param metadata Optional metadata to include in metadata.json.
      */
-    template <typename BottomGraphT>
+    template <typename RefiningGraphT>
     static auto snapshot(
-        const BottomGraphT& bottom_graph,
+        const RefiningGraphT& refining_graph,
         const std::string& index_dir,
         const nlohmann::json& metadata = nlohmann::json::object()
     ) -> void {
@@ -69,8 +69,8 @@ public:
 
         // Write metadata.json
         nlohmann::json meta = metadata;
-        meta.merge_patch(bottom_graph.get_base_metadata());
-        meta.merge_patch(bottom_graph.get_metadata());
+        meta.merge_patch(refining_graph.get_base_metadata());
+        meta.merge_patch(refining_graph.get_metadata());
 
         std::string metadata_path = index_dir + "/metadata.json";
         std::ofstream meta_ofs(metadata_path);
@@ -89,9 +89,9 @@ public:
 
         const uint32_t magic = k_file_magic;
         const uint32_t version = k_file_version;
-        const vertex_num_t num_vertices = bottom_graph.get_num_vertices();
-        const vertex_num_t reserved_nbr_size = bottom_graph.layer_config().reserved_nbr_size();
-        const vertex_num_t max_nbr_size = bottom_graph.layer_config().max_nbr_size();
+        const vertex_num_t num_vertices = refining_graph.get_num_vertices();
+        const vertex_num_t reserved_nbr_size = refining_graph.layer_config().reserved_nbr_size();
+        const vertex_num_t max_nbr_size = refining_graph.layer_config().max_nbr_size();
 
         ofs.write(reinterpret_cast<const char*>(&magic), sizeof(magic));
         ofs.write(reinterpret_cast<const char*>(&version), sizeof(version));
@@ -100,7 +100,7 @@ public:
         ofs.write(reinterpret_cast<const char*>(&max_nbr_size), sizeof(max_nbr_size));
 
         // Write neighbor arrays
-        const auto& nbrs_arr = bottom_graph.get_nbrs_arr();
+        const auto& nbrs_arr = refining_graph.get_nbrs_arr();
         for (vertex_num_t i = 0; i < num_vertices; ++i) {
             const auto& nbrs = nbrs_arr[i];
             const vertex_num_t nbr_count = static_cast<vertex_num_t>(nbrs.size());
@@ -123,13 +123,13 @@ public:
      * @brief Restore descent graph from a snapshot directory.
      * @param index_dir Source directory path.
      * @param vecs_data Reference to the vector data that this graph should bind to.
-     * @return Loaded BottomGraph instance.
+     * @return Loaded RefiningGraph instance.
      */
-    template <typename BottomGraphT>
+    template <typename RefiningGraphT>
     static auto restore(
         const std::string& index_dir,
         const vector_array_t& vecs_data
-    ) -> BottomGraphT {
+    ) -> RefiningGraphT {
         static_assert(
             std::is_trivially_copyable_v<vertex_id_t> && std::is_trivially_copyable_v<distance_t>,
             "vertex_id_t and distance_t must be trivially copyable for binary loading."
@@ -147,7 +147,7 @@ public:
         meta_ifs.close();
 
         // Validate graph type
-        if (meta["graph_type"] != "bottom_graph") {
+        if (meta["graph_type"] != "refining_graph") {
             ARTEA_ERROR(fmt::format("Invalid graph type in metadata: {}", meta["graph_type"].get<std::string>()));
         }
 
@@ -185,18 +185,18 @@ public:
         layer_config_t layer_config(max_nbr_size, reserved_nbr_size);
 
         // Construct descent graph from metadata using subclass hook
-        BottomGraphT bottom_graph = BottomGraphT::from_metadata(meta, vecs_data, layer_config);
+        RefiningGraphT refining_graph = RefiningGraphT::from_metadata(meta, vecs_data, layer_config);
 
         // Check if the number of vertices matches
-        if (bottom_graph.get_num_vertices() != num_vertices) {
+        if (refining_graph.get_num_vertices() != num_vertices) {
             ARTEA_ERROR(fmt::format(
                 "Vertex count mismatch: vecs_data has {} vertices but file has {} vertices",
-                bottom_graph.get_num_vertices(), num_vertices
+                refining_graph.get_num_vertices(), num_vertices
             ));
         }
 
         // Read neighbor arrays
-        auto& nbrs_arr = bottom_graph.get_nbrs_arr();
+        auto& nbrs_arr = refining_graph.get_nbrs_arr();
         for (vertex_num_t i = 0; i < num_vertices; ++i) {
             vertex_num_t nbr_count = 0;
             ifs.read(reinterpret_cast<char*>(&nbr_count), sizeof(nbr_count));
@@ -214,7 +214,7 @@ public:
             ARTEA_ERROR(fmt::format("Failed to read descent graph data from file: {}", graph_bin_path));
         }
 
-        return bottom_graph;
+        return refining_graph;
     }
 
 private:

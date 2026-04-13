@@ -16,7 +16,7 @@
  * @FilePath: /Artea/include/artea/cpu/refiner/hierarchical_pruning_updater.hpp
  * @Author: Chandler (Weitang Ye) <weitang.ye@ntu.edu.sg>
  * @Description: RNG triangle-inequality pruning over nbr_t, decoupled
- *               from any BottomGraph / layer_config. Used by
+ *               from any RefiningGraph / layer_config. Used by
  *               stacked_rgraph::IndexFactory for both forward-edge
  *               pruning (new vertex's candidate list) and reverse-edge
  *               pruning (existing neighbors' lists under overflow).
@@ -45,7 +45,7 @@ namespace cpu {
  * most @c max_nbr_size entries that pass the scaled triangle-inequality
  * check against already-retained entries.
  *
- * Unlike the BottomGraph-centric @c PruningUpdater, this class is stateless
+ * Unlike the RefiningGraph-centric @c PruningUpdater, this class is stateless
  * except for the pruning coefficients and the references to
  * @c vecs_data + @c dist_func needed to compute neighbor-to-neighbor
  * distances. @c max_nbr_size is a per-call parameter because the
