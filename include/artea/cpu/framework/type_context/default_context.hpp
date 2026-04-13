@@ -111,9 +111,11 @@ using radius_prober_t = typename index_traits_t::radius_prober_t;
 using hierarchical_graph_compactor_t = typename index_traits_t::hierarchical_graph_compactor_t;
 
 namespace compact {
-    using refining_graph_t        = index_traits_t::compact::refining_graph_t;
-    using hierarchical_graph_t  = index_traits_t::compact::hierarchical_graph_t;
-    using refining_graph_router_t = router_traits_t::compact::refining_graph_router_t;
+    using refining_graph_t            = index_traits_t::compact::refining_graph_t;
+    using hierarchical_graph_t        = index_traits_t::compact::hierarchical_graph_t;
+    using refining_graph_router_t     = router_traits_t::compact::refining_graph_router_t;
+    using single_layer_router_t       = router_traits_t::compact::single_layer_router_t;
+    using hierarchical_graph_router_t = router_traits_t::compact::hierarchical_graph_router_t;
 }   // namespace compact
 namespace dynamic {
     using hierarchical_graph_t        = index_traits_t::dynamic::hierarchical_graph_t;

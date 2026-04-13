@@ -110,6 +110,36 @@ public:
     }
 
     /**
+     * @brief Query top-k nearest vertices with the candidate queue
+     *        pre-seeded from a sorted neighbor array.
+     *
+     *        Every @c seed_nbrs[i] carries an already-computed distance
+     *        to @p query_vec, so this overload skips the per-seed
+     *        @c dist_func call. Callers typically pass the pivot
+     *        vertex's own neighbor slot (sorted ascending by distance
+     *        after construction) to warm-start the search.
+     *
+     * @param query_vec      Pointer to the query vector data.
+     * @param seed_nbrs      Seed neighbors; (@c get_vid(), @c get_distance())
+     *                       pairs are pushed into the queue verbatim.
+     * @param refining_graph The descent graph to search on.
+     * @return knn_results_t Flat array of topk result entries sorted by distance.
+     */
+    template <typename RefiningGraphT>
+    __attribute__((always_inline))
+    auto query(
+        const vec_ele_t*       query_vec,
+        const nbr_arr_t&       seed_nbrs,
+        const RefiningGraphT&  refining_graph
+    ) const -> knn_results_t {
+        auto& visited_table = _visited_table_pool.acquire();
+        auto results = _beam_search_seeded(
+            query_vec, visited_table, seed_nbrs, refining_graph);
+        visited_table.clear();
+        return results;
+    }
+
+    /**
      * @brief Perform batch queries to find the top-k nearest vertices for multiple vectors.
      * @param query_vecs A VectorArray containing the query vectors.
      * @param refining_graph The descent graph to search on.
@@ -160,6 +190,56 @@ private:
         const distance_t entry_dist = this->_dist_func(query_vec, this->_vecs_data.get(entry_point));
         candidate_queue.try_push(entry_point, entry_dist);
         visited_table.set(entry_point);
+
+        while (!candidate_queue.empty()) {
+            if (candidate_queue.should_terminate()) { break; }
+            auto [current_id, current_dist] = candidate_queue.pop_best_unexplored();
+            if (current_id == RouterTraitsT::invalid_vertex_id) { break; }
+
+            const nbr_arr_t& nbrs = refining_graph.fetch_nbrs(current_id);
+            const vertex_num_t nbr_limit = std::min(static_cast<vertex_num_t>(nbrs.size()), _extracted_nbr_size);
+            for (vertex_num_t i = 0; i < nbr_limit; ++i) {
+                const vertex_id_t nbr_id = nbrs[i].get_vid();
+                if (nbr_id == RouterTraitsT::invalid_vertex_id) { break; }
+                if (visited_table.test(nbr_id)) { continue; }
+                visited_table.set(nbr_id);
+                const distance_t nbr_dist = this->_dist_func(query_vec, this->_vecs_data.get(nbr_id));
+                candidate_queue.try_push(nbr_id, nbr_dist);
+            }
+        }
+
+        return candidate_queue.extract_results(this->_topk);
+    }
+
+    /**
+     * @brief Beam search seeded from a pre-computed sorted neighbor list.
+     *
+     * Assumes @p seed_nbrs entries already carry distances to
+     * @p query_vec, so we skip the per-seed @c dist_func call. Each
+     * valid seed is pushed into the queue and marked visited once. The
+     * main loop is byte-identical to @c _beam_search after the seeding
+     * phase.
+     */
+    template <typename RefiningGraphT>
+    auto _beam_search_seeded(
+        const vec_ele_t*       query_vec,
+        visited_table_t&       visited_table,
+        const nbr_arr_t&       seed_nbrs,
+        const RefiningGraphT&  refining_graph
+    ) const -> knn_results_t {
+        const vertex_num_t queue_capacity = std::max(this->_topk, _candidate_queue_size);
+        candidate_queue_t candidate_queue(queue_capacity);
+
+        for (vertex_num_t i = 0;
+             i < static_cast<vertex_num_t>(seed_nbrs.size());
+             ++i)
+        {
+            const vertex_id_t seed_vid = seed_nbrs[i].get_vid();
+            if (seed_vid == RouterTraitsT::invalid_vertex_id) break;
+            if (visited_table.test(seed_vid)) continue;
+            visited_table.set(seed_vid);
+            candidate_queue.try_push(seed_vid, seed_nbrs[i].get_distance());
+        }
 
         while (!candidate_queue.empty()) {
             if (candidate_queue.should_terminate()) { break; }

@@ -86,7 +86,11 @@ public:
         nbr_arr_t& origin_nbrs
     ) -> void {
         const vec_ele_t* pivot_vec = this->_vecs_data.get(pivot_vid);
-        auto knn_results = _router.query(pivot_vec, this->_refining_graph);
+        // Warm-start beam search with the pivot's own (sorted, distance-
+        // cached) neighbor slot so the first few iterations don't have
+        // to re-explore from scratch.
+        const nbr_arr_t& pivot_nbrs = this->_refining_graph.fetch_nbrs(pivot_vid);
+        auto knn_results = _router.query(pivot_vec, pivot_nbrs, this->_refining_graph);
 
         std::vector<vertex_id_t> knn_ids;
         std::vector<distance_t> knn_dists;

@@ -30,6 +30,8 @@ namespace cpu {
 template <typename RouterTraitsT, typename DerivedClassT> class VectorRouter;
 template <typename RouterTraitsT> class BruteforceRouter;
 namespace compact { template <typename RouterTraitsT> class RefiningGraphRouter; }
+namespace compact { template <typename RouterTraitsT> class SingleLayerRouter; }
+namespace compact { template <typename RouterTraitsT> class HierarchicalGraphRouter; }
 namespace dynamic { template <typename RouterTraitsT> class RefiningGraphRouter; }
 namespace dynamic { template <typename RouterTraitsT> class SingleLayerRouter; }
 namespace dynamic { template <typename RouterTraitsT> class HierarchicalGraphRouter; }
@@ -104,10 +106,12 @@ struct RouterTraits : virtual public ComputerTraitsT, virtual public IndexTraits
 
     /** @brief Router + graph types grouped by mode. Inherits graph types from IndexTraits. */
     struct compact : IndexTraitsT::compact {
-        using refining_graph_router_t = cpu::compact::RefiningGraphRouter<router_traits_t>;
+        using refining_graph_router_t     = cpu::compact::RefiningGraphRouter<router_traits_t>;
+        using single_layer_router_t       = cpu::compact::SingleLayerRouter<router_traits_t>;
+        using hierarchical_graph_router_t = cpu::compact::HierarchicalGraphRouter<router_traits_t>;
     };
     struct dynamic : IndexTraitsT::dynamic {
-        using refining_graph_router_t       = cpu::dynamic::RefiningGraphRouter<router_traits_t>;
+        using refining_graph_router_t     = cpu::dynamic::RefiningGraphRouter<router_traits_t>;
         using single_layer_router_t       = cpu::dynamic::SingleLayerRouter<router_traits_t>;
         using hierarchical_graph_router_t = cpu::dynamic::HierarchicalGraphRouter<router_traits_t>;
     };

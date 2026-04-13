@@ -1,0 +1,208 @@
+// Copyright 2026 Weitang Ye
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     https://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+/*
+ * @FilePath: /Artea/include/artea/cpu/router/compact/single_layer_router.hpp
+ * @Author: Chandler (Weitang Ye) <weitang.ye@ntu.edu.sg>
+ * @Description: Single-level atom for beam-searching within one level of a
+ *               compact::HierarchicalGraph. Mirrors dynamic::SingleLayerRouter
+ *               but iterates plain vertex_id_t arrays (no nbr_t, no locks,
+ *               no memory fences: the compact graph is frozen post-compaction).
+ */
+
+#pragma once
+
+#include <algorithm>
+#include <cstddef>
+#include <cstdint>
+#include <random>
+#include <span>
+#include <vector>
+
+#include <artea/common/logger.hpp>
+
+namespace artea {
+namespace cpu {
+namespace compact {
+
+/**
+ * @brief Single-level beam-search primitive for
+ *        @c compact::HierarchicalGraph.
+ *
+ * Holds only what the atom needs: the base-vector array and the distance
+ * functor. Each call takes the graph as a template-parameterized argument,
+ * so the same router instance can service many graphs.
+ *
+ * Exposes two primitives:
+ *   - @c sample_entries — seed a pre-constructed candidate queue with
+ *     random vertices participating at a given level.
+ *   - @c beam_search    — extend a pre-seeded candidate queue by running
+ *     the standard beam-search loop on one level of the graph.
+ *
+ * Any cross-level composition lives in @c HierarchicalGraphRouter on top
+ * of these two primitives.
+ *
+ * @tparam RouterTraitsT The router traits type.
+ */
+template <typename RouterTraitsT>
+class SingleLayerRouter {
+
+    using vertex_num_t          = typename RouterTraitsT::vertex_num_t;
+    using vertex_id_t           = typename RouterTraitsT::vertex_id_t;
+    using layer_id_t            = typename RouterTraitsT::layer_id_t;
+    using vec_ele_t             = typename RouterTraitsT::vec_ele_t;
+    using distance_t            = typename RouterTraitsT::distance_t;
+    using dist_func_t           = typename RouterTraitsT::dist_func_t;
+    using vector_array_t        = typename RouterTraitsT::vector_array_t;
+    using candidate_entry_t     = typename RouterTraitsT::candidate_entry_t;
+    using std_candidate_queue_t = typename RouterTraitsT::std_candidate_queue_t;
+    using visited_table_t       = typename RouterTraitsT::visited_table_t;
+
+    static constexpr vertex_id_t invalid_vertex_id = RouterTraitsT::invalid_vertex_id;
+
+public:
+    SingleLayerRouter(
+        const vector_array_t& base_vecs,
+        const dist_func_t&    dist_func
+    ) :
+        _vecs_data(base_vecs),
+        _dist_func(dist_func) {}
+
+    /**
+     * @brief Seed @p candidate_queue with up to
+     *        @c candidate_queue.capacity() evenly-spaced random vertices
+     *        that participate at @p level_id.
+     *
+     * A vertex participates at level @p level_id iff its
+     * @c highest_level_id >= @p level_id. The eligible pool is the union
+     * of @c hg.get_vids_with_highest_level(h) for every @c h in
+     * @c [level_id, hg.top_occupied_level_id()].
+     */
+    template <typename HierarchicalGraphT>
+    auto sample_entries(
+        const HierarchicalGraphT& hg,
+        const layer_id_t          level_id,
+        const vec_ele_t*          query_vec,
+        std_candidate_queue_t&    candidate_queue
+    ) const -> void {
+        const layer_id_t top_level_id = hg.top_occupied_level_id();
+        if (top_level_id == HierarchicalGraphT::unassigned_highest_level_id) {
+            return;
+        }
+        if (level_id > top_level_id) {
+            return;
+        }
+
+        const layer_id_t num_eligible_buckets =
+            static_cast<layer_id_t>(top_level_id - level_id + 1);
+        std::vector<std::size_t> bucket_sizes(num_eligible_buckets);
+        std::size_t pool_size = 0;
+        for (layer_id_t i = 0; i < num_eligible_buckets; ++i) {
+            const layer_id_t h = static_cast<layer_id_t>(level_id + i);
+            bucket_sizes[i] = hg.get_vids_with_highest_level(h).size();
+            pool_size      += bucket_sizes[i];
+        }
+        if (pool_size == 0) return;
+
+        const std::size_t queue_cap = candidate_queue.capacity();
+
+        auto take_vid_from_pool = [&](std::size_t pool_index) -> vertex_id_t {
+            for (layer_id_t i = 0; i < num_eligible_buckets; ++i) {
+                if (pool_index < bucket_sizes[i]) {
+                    const layer_id_t h =
+                        static_cast<layer_id_t>(level_id + i);
+                    return hg.get_vids_with_highest_level(h)[pool_index];
+                }
+                pool_index -= bucket_sizes[i];
+            }
+            ARTEA_ERROR("sample_entries: pool_index overran total pool size");
+            return invalid_vertex_id;
+        };
+
+        const std::size_t start  = _draw_random_index(pool_size);
+        const std::size_t stride =
+            (pool_size <= queue_cap) ? 1 : (pool_size / queue_cap);
+        const std::size_t take   = std::min(queue_cap, pool_size);
+
+        for (std::size_t i = 0; i < take; ++i) {
+            const std::size_t pool_index =
+                (start + i * stride) % pool_size;
+            const vertex_id_t sampled_vid = take_vid_from_pool(pool_index);
+            const distance_t dist =
+                _dist_func(query_vec, _vecs_data.get(sampled_vid));
+            candidate_queue.try_push(sampled_vid, dist);
+        }
+    }
+
+    /**
+     * @brief Beam search on one level of @p hg, operating in-place on a
+     *        pre-seeded candidate queue.
+     *
+     *   1. Clears @p visited.
+     *   2. Marks every seed already in the queue as visited.
+     *   3. Runs the standard beam-search loop until
+     *      @c candidate_queue.should_terminate().
+     */
+    template <typename HierarchicalGraphT>
+    auto beam_search(
+        const vec_ele_t*          query_vec,
+        const HierarchicalGraphT& hg,
+        const layer_id_t          level_id,
+        std_candidate_queue_t&    candidate_queue,
+        visited_table_t&          visited
+    ) const -> void {
+        if (candidate_queue.empty()) return;
+
+        candidate_queue.reset_exploration();
+
+        visited.clear();
+        for (const auto& seed : candidate_queue) {
+            visited.set(seed.get_vid());
+        }
+
+        while (!candidate_queue.empty()) {
+            if (candidate_queue.should_terminate()) break;
+            const candidate_entry_t current = candidate_queue.pop_best_unexplored_entry();
+            if (current.is_invalid()) break;
+
+            const vertex_id_t cur_vid = current.get_vid();
+            const auto nbrs_span = hg.fetch_layer_nbrs(cur_vid, level_id);
+            const vertex_num_t cur_nbr_count = hg.num_valid_nbrs(cur_vid, level_id);
+
+            for (vertex_num_t i = 0; i < cur_nbr_count; ++i) {
+                const vertex_id_t nbr_vid = nbrs_span[i];
+                if (nbr_vid == invalid_vertex_id) break;
+                if (visited.test_and_set(nbr_vid)) continue;
+                const distance_t dist = _dist_func(query_vec, _vecs_data.get(nbr_vid));
+                candidate_queue.try_push(nbr_vid, dist);
+            }
+        }
+    }
+
+private:
+    __attribute__((always_inline))
+    static auto _draw_random_index(const std::size_t upper_bound) -> std::size_t {
+        thread_local std::mt19937_64 rng(std::random_device{}());
+        std::uniform_int_distribution<std::size_t> dist(0, upper_bound - 1);
+        return dist(rng);
+    }
+
+    const vector_array_t& _vecs_data;
+    const dist_func_t&    _dist_func;
+
+};  // class SingleLayerRouter
+
+}   // namespace compact
+}   // namespace cpu
+}   // namespace artea

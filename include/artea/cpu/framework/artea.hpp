@@ -73,6 +73,8 @@
 #include <artea/cpu/router/vector_router.hpp>
 #include <artea/cpu/router/bruteforce_router.hpp>
 #include <artea/cpu/router/compact/refining_graph_router.hpp>
+#include <artea/cpu/router/compact/single_layer_router.hpp>
+#include <artea/cpu/router/compact/hierarchical_graph_router.hpp>
 #include <artea/cpu/router/dynamic/refining_graph_router.hpp>
 #include <artea/cpu/router/dynamic/single_layer_router.hpp>
 #include <artea/cpu/router/dynamic/hierarchical_graph_router.hpp>

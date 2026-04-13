@@ -187,6 +187,11 @@ private:
         const vertex_num_t max_nbr_size = refining_graph.layer_config().max_nbr_size();
         const vertex_num_t init_nbr_size = static_cast<vertex_num_t>(max_nbr_size * propagate_config.prefill_ratio());
 
+        /** -------------------- Optimazation ------------------------------------- ***/
+        /** @brief A sparse graph is effecient enough to search nearest neighbors     */
+        refining_graph.layer_config().max_nbr_size(max_nbr_size / 2);
+        /** ----------------------------------------------------------------------- ***/
+
         random_eg_t random_eg(dist_func);
         random_eg.generate(refining_graph, init_nbr_size);
 
@@ -206,6 +211,11 @@ private:
                             .next(reverse_updater).next(truncate_updater);
             if (on_iter_end) { on_iter_end(build_loop); }
         }
+
+        /** -------------------- Optimazation --------------------------------------- ***/
+        /** @brief Reconstructed as dense graph with original edge number requirements  */
+        refining_graph.layer_config().max_nbr_size(max_nbr_size);
+        /** ------------------------------------------------------------------------- ***/
 
         for (iter_t routing_loop = 0; routing_loop < propagate_config.num_routing_loops(); ++routing_loop) {
             auto pruning_updater = propagate_engine.template make_updater<pruning_updater_t>(
