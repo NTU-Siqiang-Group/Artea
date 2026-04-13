@@ -25,22 +25,16 @@
  *   Step B — Compute highest_insert_level_id via the r-net covering
  *            rule.
  *   Step C — Claim a slot in the hierarchical graph via assign_layer.
- *   Step D — Edge insertion:
- *            - Run one select-neighbors search at level 1 to build
- *              pruned_l1_nbrs (used for every vertex).
- *            - Level 0 forward: write pruned_l1_nbrs into vid's L0 slot
- *              (first max_nbr_size positions; L0 has 2 * max_nbr_size
- *              capacity, rear half reserved for future refiner passes).
- *            - Level 0 reverse: add vid to each pruned neighbor's L0
- *              slot.
- *            - Level 1 forward + reverse (only if highest_insert_level
- *              >= 1).
- *            - For cur_level in [2, highest_insert_level]: normal
- *              select + forward + reverse.
- *
- * We **never** run beam_search at level 0 (level 0 is the full
- * N-vertex base, searching it during every insertion would be far too
- * expensive).
+ *   Step D — Edge insertion for cur_level_id in
+ *            [0, highest_insert_level_id]: per-level select_neighbors +
+ *            forward + reverse.
+ *            L0 doesn't get its own descent pass (running beam_search
+ *            on the full N-vertex base every insert would be far too
+ *            expensive), so before the loop we seed
+ *            descent_queue_per_level[0] from descent_queue_per_level[1]
+ *            via seed_from_queue. The L0 select then expands from
+ *            those L1 NN seeds with the standard select_nbrs_qs beam
+ *            (default 100).
  */
 
 #pragma once
@@ -329,23 +323,26 @@ private:
         index.assign_layer(new_vid, highest_insert_level_id);
 
         // ==============================================================
-        //   Step D — Edge insertion
+        //   Step D — Edge insertion (now includes L0)
         // ==============================================================
         //
-        // Matches legacy Phase 2: vertices absorbed at L_1
-        // (highest_insert_level_id == 0) don't participate in any
-        // upper layer, so there's nothing to write in this factory.
-        // Their L_0 slot will fill up via reverse edges from later
-        // L_1+ inserts that pick this vertex as a neighbor. Skipping
-        // Step D for base-only vertices is the single biggest speedup
-        // (96% of SIFT-1M vertices fall into this case).
-        if (highest_insert_level_id == 0) {
-            return;
+        // L0 has no descent pass of its own, so seed
+        // descent_queue_per_level[0] from descent_queue_per_level[1] —
+        // those L1 NNs are the closest seeds available without paying
+        // the cost of a full L0 beam search during descent.
+        //
+        // First-vertex bootstrap (top_level_id == unassigned) leaves
+        // descent_queue_per_level[1] empty; the seed call is then a
+        // no-op and L0's run_select_at_level will safely no-op too.
+        if (descent_queue_per_level[1] &&
+            descent_queue_per_level[1]->get_result_size() > 0)
+        {
+            descent_queue_per_level[0]->seed_from_queue(
+                *descent_queue_per_level[1]);
         }
 
-        // For cur_level_id in [1, highest_insert_level_id], run
-        // per-level select + forward + reverse. Level 0 is never
-        // touched here.
+        // For cur_level_id in [0, highest_insert_level_id], run
+        // per-level select + forward + reverse.
 
         auto run_select_at_level = [&](const layer_id_t target_level_id)
             -> std::vector<nbr_t>
@@ -449,9 +446,9 @@ private:
             }
         };
 
-        // ---- cur_level_id in [1, highest_insert_level_id]:
+        // ---- cur_level_id in [0, highest_insert_level_id]:
         //      per-level select + forward + reverse ----
-        for (layer_id_t cur_level_id = 1;
+        for (layer_id_t cur_level_id = 0;
              cur_level_id <= highest_insert_level_id;
              ++cur_level_id)
         {

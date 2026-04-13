@@ -39,7 +39,8 @@ struct RGraphConfig {
      * @param rnet_beta        Radius growth factor: R_h = L1_rnet_radius * rnet_beta^(h-1). Must be > 1.
      * @param L1_rnet_radius   Covering radius for layer 1 (the lowest upper layer). Must be > 0.
      * @param search_nn_qs     Beam-search queue size for Phase 1 descent. Must be >= 1.
-     * @param select_nbrs_qs   Beam-search queue size for Phase 2 candidate gathering. Must be >= 1.
+     * @param select_nbrs_qs   Beam-search queue size for Phase 2 candidate gathering at
+     *                         every level (L0..highest_insert_level). Must be >= 1. Default 100.
      * @param max_nbr_size     Per-vertex neighbor capacity for every layer (default: 32).
      * @param layer_cap_decay_ratio  Geometric decay ratio for per-layer initial capacity;
      *                               capacity(layer_id) = base_capacity * decay^layer_id.
@@ -51,7 +52,7 @@ struct RGraphConfig {
         ratio_t rnet_beta,
         distance_t L1_rnet_radius,
         vertex_num_t search_nn_qs,
-        vertex_num_t select_nbrs_qs,
+        vertex_num_t select_nbrs_qs = 100,
         vertex_num_t max_nbr_size = 32,
         ratio_t layer_cap_decay_ratio = ratio_t(0.5),
         vertex_num_t min_layer_cap = 1024

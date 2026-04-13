@@ -343,15 +343,12 @@ TEST_F(StackedRGraphTest, NeighborListsAreValid) {
     }
 }
 
-TEST_F(StackedRGraphTest, Level0IsHalfFilled) {
-    // IndexFactory writes only the first max_nbr_size positions of each
-    // vertex's L0 slot (L0 capacity is 2 * max_nbr_size; the back half
-    // stays invalid for a future refiner pass).
-    const auto& base_vecs =
-        DataProvider::instance().get_dataset().get_base_vecs();
-    (void)base_vecs;
-
-    const vertex_num_t cap_l0  = _graph->max_nbr_size(0);
+TEST_F(StackedRGraphTest, Level0CapacityRespected) {
+    // IndexFactory now builds L0 alongside the upper levels, so every
+    // vertex's L0 slot can be filled up to its full 2 * max_nbr_size
+    // capacity. The only invariant we still enforce is that no vertex
+    // overruns that hard cap.
+    const vertex_num_t cap_l0   = _graph->max_nbr_size(0);
     const vertex_num_t cap_soft = _graph->max_nbr_size();
     EXPECT_EQ(cap_l0, cap_soft * 2);
 
@@ -368,10 +365,9 @@ TEST_F(StackedRGraphTest, Level0IsHalfFilled) {
     {
         const vertex_id_t vid = bucket_l0[i];
         const vertex_num_t cnt = _graph->num_valid_nbrs(vid, 0);
-        EXPECT_LE(cnt, cap_soft)
+        EXPECT_LE(cnt, cap_l0)
             << "vid=" << vid << " L0 count=" << cnt
-            << " exceeds soft cap=" << cap_soft
-            << " — factory is supposed to leave the rear half as sentinel";
+            << " exceeds L0 capacity=" << cap_l0;
     }
 }
 
@@ -646,7 +642,7 @@ int main(int argc, char** argv) {
     program.add_argument("--search-nn-qs")
         .default_value(40u).scan<'u', uint32_t>();
     program.add_argument("--select-nbrs-qs")
-        .default_value(500u).scan<'u', uint32_t>();
+        .default_value(100u).scan<'u', uint32_t>();
 
     program.add_argument("--scale-coeffs")
         .default_value(1.1f).scan<'g', float>()
