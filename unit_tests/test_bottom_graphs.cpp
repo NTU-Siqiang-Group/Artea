@@ -77,10 +77,10 @@ protected:
                 vertex_id_t v = id_dist(rng);
                 if (v == u) v = (v + 1) % num_vertices;
                 const distance_t d = (*dist_func_)(vecs_->get(u), vecs_->get(v));
-                nbrs.push_back(bnbr_t(v, d, true));
+                nbrs.push_back(nbr_t(v, d, true));
             }
             std::sort(nbrs.begin(), nbrs.end(),
-                [](const bnbr_t& a, const bnbr_t& b) {
+                [](const nbr_t& a, const nbr_t& b) {
                     return a.get_distance() < b.get_distance();
                 });
         }
@@ -168,7 +168,7 @@ TEST_F(BottomGraphTest, CompactorBasicConversion) {
             std::min(static_cast<vertex_num_t>(src_nbrs.size()), extracted);
 
         for (vertex_num_t i = 0; i < expected_count; ++i) {
-            EXPECT_EQ(compact_nbrs[i], src_nbrs[i].get_level_vid());
+            EXPECT_EQ(compact_nbrs[i], src_nbrs[i].get_vid());
         }
         for (vertex_num_t i = expected_count; i < extracted; ++i) {
             EXPECT_EQ(compact_nbrs[i], base_traits_t::invalid_vertex_id);
@@ -203,7 +203,7 @@ TEST_F(BottomGraphTest, CompactorExtractedSmallerThanActual) {
         const vertex_num_t copy_count =
             std::min(static_cast<vertex_num_t>(src_nbrs.size()), extracted);
         for (vertex_num_t i = 0; i < copy_count; ++i) {
-            EXPECT_EQ(compact_nbrs[i], src_nbrs[i].get_level_vid());
+            EXPECT_EQ(compact_nbrs[i], src_nbrs[i].get_vid());
         }
     }
 }

@@ -47,8 +47,8 @@ class TriangleUpdater :
     using distance_t = typename RefinerTraitsT::distance_t;
     using ratio_t = typename RefinerTraitsT::ratio_t;
     using vector_array_t = typename RefinerTraitsT::vector_array_t;
-    using bnbr_t = typename RefinerTraitsT::bnbr_t;
-    using bnbr_arr_t = typename RefinerTraitsT::bnbr_arr_t;
+    using nbr_t = typename RefinerTraitsT::nbr_t;
+    using nbr_arr_t = typename RefinerTraitsT::nbr_arr_t;
     using log_table_t = typename RefinerTraitsT::log_table_t;
     using dist_func_t = typename RefinerTraitsT::dist_func_t;
     using base_class_t = typename RefinerTraitsT::template neighbor_updater_t<BottomGraphT, TriangleUpdater<RefinerTraitsT, BottomGraphT>>;
@@ -111,7 +111,7 @@ public:
     template <PruningConditionT ConditionType = PruningConditionT::scaled_ineq>
     auto update_impl(
         const vertex_id_t pivot_vid,
-        bnbr_arr_t& origin_nbrs
+        nbr_arr_t& origin_nbrs
     ) -> void {
         #ifndef NDEBUG
         if (origin_nbrs.empty()) {
@@ -119,7 +119,7 @@ public:
         }
         #endif
 
-        bnbr_arr_t retained_nbrs;
+        nbr_arr_t retained_nbrs;
         retained_nbrs.reserve(origin_nbrs.capacity());
         const vertex_num_t max_sz = this->_bottom_graph.layer_config().max_nbr_size();
 
@@ -127,7 +127,7 @@ public:
         retained_nbrs.push_back(origin_nbrs[0]);
 
         for (vertex_num_t i = 1; i < origin_nbrs.size(); ++i) {
-            const bnbr_t& ori_nbr = origin_nbrs[i];
+            const nbr_t& ori_nbr = origin_nbrs[i];
             auto [passed, conflict_vid, conflict_dist] = _internal_check<ConditionType>(ori_nbr, retained_nbrs);
 
             if (passed) {
@@ -139,7 +139,7 @@ public:
                 }
             }
             else {
-                this->_log_table.write_log(conflict_vid, ori_nbr.get_level_vid(), conflict_dist);
+                this->_log_table.write_log(conflict_vid, ori_nbr.get_vid(), conflict_dist);
             }
         }
 
@@ -178,10 +178,10 @@ private:
 
     template <PruningConditionT ConditionType>
     auto _internal_check(
-        const bnbr_t& ori_nbr,
-        const bnbr_arr_t& retained_nbrs
+        const nbr_t& ori_nbr,
+        const nbr_arr_t& retained_nbrs
     ) -> std::tuple<bool, vertex_id_t, distance_t> {
-        const vec_ele_t* ori_vec = this->_vecs_data.get(ori_nbr.get_level_vid());
+        const vec_ele_t* ori_vec = this->_vecs_data.get(ori_nbr.get_vid());
         const distance_t threshold = _compute_threshold<ConditionType>(ori_nbr.get_distance());
 
         // Check conflict with all retained neighbors
@@ -191,13 +191,13 @@ private:
                 continue;
             }
 
-            const bnbr_t& retained_nbr = retained_nbrs[i];
-            const vec_ele_t* retained_vec = this->_vecs_data.get(retained_nbr.get_level_vid());
+            const nbr_t& retained_nbr = retained_nbrs[i];
+            const vec_ele_t* retained_vec = this->_vecs_data.get(retained_nbr.get_vid());
             distance_t dist_to_retained = this->_dist_func(ori_vec, retained_vec);
 
             if (dist_to_retained < threshold) {
                 // RNG conflict detected, rejected
-                return std::make_tuple(rejected, retained_nbr.get_level_vid(), dist_to_retained);
+                return std::make_tuple(rejected, retained_nbr.get_vid(), dist_to_retained);
             }
         }
 

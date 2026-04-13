@@ -70,7 +70,7 @@ struct RefinerTraits :
     using pruning_updater_t = PruningUpdater<refiner_traits_t, BottomGraphT>;
 
     /** @brief Hierarchical pruning updater — operates on nbr_t, not
-     *         bnbr_t, and takes max_nbr_size as a per-call argument.
+     *         nbr_t, and takes max_nbr_size as a per-call argument.
      *         Consumed by stacked_rgraph::IndexFactory. */
     using hierarchical_pruning_updater_t =
         HierarchicalPruningUpdater<refiner_traits_t>;

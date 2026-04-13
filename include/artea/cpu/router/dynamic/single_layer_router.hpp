@@ -193,7 +193,7 @@ public:
 
         visited.clear();
         for (const auto& seed : candidate_queue) {
-            visited.set(seed.get_base_vid());
+            visited.set(seed.get_vid());
         }
 
         while (!candidate_queue.empty()) {
@@ -201,7 +201,7 @@ public:
             const candidate_entry_t current = candidate_queue.pop_best_unexplored_entry();
             if (current.is_invalid()) break;
 
-            const vertex_id_t cur_vid = current.get_base_vid();
+            const vertex_id_t cur_vid = current.get_vid();
             const auto nbrs_span = hg.fetch_layer_nbrs(cur_vid, level_id);
             const vertex_num_t cur_nbr_count = hg.num_valid_nbrs(cur_vid, level_id);
 

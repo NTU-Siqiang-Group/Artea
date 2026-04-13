@@ -40,8 +40,8 @@ class RandomUpdater :
     using distance_t = typename RefinerTraitsT::distance_t;
     using ratio_t = typename RefinerTraitsT::ratio_t;
     using vector_array_t = typename RefinerTraitsT::vector_array_t;
-    using bnbr_t = typename RefinerTraitsT::bnbr_t;
-    using bnbr_arr_t = typename RefinerTraitsT::bnbr_arr_t;
+    using nbr_t = typename RefinerTraitsT::nbr_t;
+    using nbr_arr_t = typename RefinerTraitsT::nbr_arr_t;
     using log_table_t = typename RefinerTraitsT::log_table_t;
     using dist_func_t = typename RefinerTraitsT::dist_func_t;
     using base_class_t = typename RefinerTraitsT::template neighbor_updater_t<BottomGraphT, RandomUpdater<RefinerTraitsT, BottomGraphT>>;
@@ -86,7 +86,7 @@ public:
      */
     auto update_impl(
         const vertex_id_t pivot_vid,
-        bnbr_arr_t& origin_nbrs
+        nbr_arr_t& origin_nbrs
     ) -> void {
         std::vector<vertex_id_t> rand_ids_buffer(_rand_gen_size);
         _random_seq.generate(rand_ids_buffer, _num_vertices, _rand_gen_size);
@@ -104,7 +104,7 @@ public:
             if (rand_nbr_id == pivot_vid) { continue; }
             const distance_t dist = this->_dist_func(pivot_vec, this->_vecs_data.get(rand_nbr_id));
 
-            const bnbr_arr_t& pivot_nbrs = this->_bottom_graph.fetch_nbrs(pivot_vid);
+            const nbr_arr_t& pivot_nbrs = this->_bottom_graph.fetch_nbrs(pivot_vid);
             if (pivot_nbrs.size() >= max_sz &&
                 pivot_nbrs[max_sz - 1].get_distance() <= dist) {
                 continue;

@@ -207,9 +207,7 @@ public:
         visited_table_t& visited_table
     ) {
         // This overload assumes a 2-arg entry constructor
-        // (vertex_id, distance). It is NOT meaningful for multi-layer entries,
-        // which carry a second identifier; inbr callers should seed
-        // manually via try_push(...) instead.
+        // (vertex_id, distance).
         static_assert(
             std::is_constructible_v<candidate_entry_t, vertex_id_t, distance_t>,
             "seeded_initialize requires an entry with (vid, dist) constructor");
@@ -243,7 +241,7 @@ public:
         for (auto& entry : init_candidates) {
             _unexplored_set.push(entry);
             _top_candidates.push(entry);
-            visited_table.set(entry.get_layer_id());
+            visited_table.set(entry.get_vid());
         }
 
         _update_lower_bound();
@@ -344,10 +342,7 @@ public:
      *
      * Variadic-perfect-forwarding API: the arguments are forwarded directly
      * into the entry type's constructor (plus a trailing @c false for the
-     * explored flag). This lets one queue implementation carry either
-     * @c CandidateEntry ("try_push(vid, dist)") or @c CandidateEntry
-     * ("try_push(base_vid, layer_vid, dist)") without any source-level
-     * divergence.
+     * explored flag).
      *
      * Insertion Strategy (following hnswlib approach):
      * 1. Build the entry via perfect-forwarding.
@@ -395,8 +390,7 @@ public:
     /**
      * @brief Retrieve and return the FULL best-unexplored entry.
      *
-     * Returns the complete @c candidate_entry_t so callers working with
-     * multi-layer entries can recover both @c base_vid and @c layer_vid.
+     * Returns the complete @c candidate_entry_t.
      *
      * @return The entry with smallest distance in the unexplored set, or an
      *         invalid sentinel entry if the unexplored set is empty.
@@ -494,7 +488,7 @@ public:
         if (entry.is_invalid()) {
             return {invalid_vertex_id, max_distance};
         }
-        return {entry.get_layer_id(), entry.get_distance()};
+        return {entry.get_vid(), entry.get_distance()};
     }
 
     /**

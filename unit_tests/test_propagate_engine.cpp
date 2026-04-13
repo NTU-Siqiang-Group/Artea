@@ -80,9 +80,9 @@ protected:
     }
 
     // Helper to check if edge (u, v) exists in neighbor array
-    bool has_edge(const bnbr_arr_t& nbrs, vertex_id_t target_id, distance_t* out_dist = nullptr) {
+    bool has_edge(const nbr_arr_t& nbrs, vertex_id_t target_id, distance_t* out_dist = nullptr) {
         for (const auto& nbr : nbrs) {
-            if (nbr.get_level_vid() == target_id) {
+            if (nbr.get_vid() == target_id) {
                 if (out_dist) *out_dist = nbr.get_distance();
                 return true;
             }
@@ -92,7 +92,7 @@ protected:
 
     // Verify RNG property manually
     bool verify_rng_property(
-        const std::vector<bnbr_arr_t>& nbrs_arr,
+        const std::vector<nbr_arr_t>& nbrs_arr,
         ratio_t scale_coeffs = 1.0,
         ratio_t shifted_coeffs = 0.0
     ) {
@@ -100,7 +100,7 @@ protected:
             const auto& nbrs = nbrs_arr[u];
 
             for (size_t i = 0; i < nbrs.size(); ++i) {
-                vertex_id_t v = nbrs[i].get_level_vid();
+                vertex_id_t v = nbrs[i].get_vid();
                 distance_t d_uv = nbrs[i].get_distance();
                 distance_t threshold = (d_uv / scale_coeffs) - shifted_coeffs;
 
@@ -140,16 +140,16 @@ TEST_F(PropagateEngineCorrectnessTest, TrianglePruningWithPropagateEngine) {
     auto& nbrs_arr = bottom_graph_->get_nbrs_arr();
 
     for (vertex_id_t u = 0; u < num_vertices_; ++u) {
-        bnbr_arr_t& nbrs = nbrs_arr[u];
+        nbr_arr_t& nbrs = nbrs_arr[u];
         for (vertex_id_t v = 0; v < num_vertices_; ++v) {
             if (v != u) {
                 distance_t dist = compute_distance(u, v);
-                nbrs.push_back(bnbr_t(v, dist, true));
+                nbrs.push_back(nbr_t(v, dist, true));
             }
         }
         // Sort by distance
         std::sort(nbrs.begin(), nbrs.end(),
-            [](const bnbr_t& a, const bnbr_t& b) {
+            [](const nbr_t& a, const nbr_t& b) {
                 return a.get_distance() < b.get_distance();
             });
     }
@@ -159,7 +159,7 @@ TEST_F(PropagateEngineCorrectnessTest, TrianglePruningWithPropagateEngine) {
         const auto& nbrs = nbrs_arr[u];
         std::string nbr_list;
         for (size_t i = 0; i < std::min(nbrs.size(), static_cast<size_t>(8)); ++i) {
-            nbr_list += fmt::format("({}, {:.3f})", nbrs[i].get_level_vid(), nbrs[i].get_distance());
+            nbr_list += fmt::format("({}, {:.3f})", nbrs[i].get_vid(), nbrs[i].get_distance());
             if (i < std::min(nbrs.size(), static_cast<size_t>(8)) - 1) nbr_list += ", ";
         }
         if (nbrs.size() > 8) nbr_list += "...";
@@ -191,7 +191,7 @@ TEST_F(PropagateEngineCorrectnessTest, TrianglePruningWithPropagateEngine) {
         const auto& nbrs = nbrs_arr[u];
         std::string nbr_list;
         for (size_t i = 0; i < nbrs.size(); ++i) {
-            nbr_list += fmt::format("({}, {:.3f})", nbrs[i].get_level_vid(), nbrs[i].get_distance());
+            nbr_list += fmt::format("({}, {:.3f})", nbrs[i].get_vid(), nbrs[i].get_distance());
             if (i < nbrs.size() - 1) nbr_list += ", ";
         }
         ARTEA_INFO(fmt::format("  v{} -> [{}]", u, nbr_list));
@@ -261,7 +261,7 @@ TEST_F(PropagateEngineCorrectnessTest, IntegratedRandomAndReverseUpdater) {
     int missing_reverse_before = 0;
     for (vertex_id_t u = 0; u < num_vertices_; ++u) {
         for (const auto& nbr : nbrs_arr[u]) {
-            vertex_id_t v = nbr.get_level_vid();
+            vertex_id_t v = nbr.get_vid();
             if (!has_edge(nbrs_arr[v], u)) {
                 missing_reverse_before++;
             }
@@ -297,7 +297,7 @@ TEST_F(PropagateEngineCorrectnessTest, IntegratedRandomAndReverseUpdater) {
 
     for (vertex_id_t u = 0; u < num_vertices_; ++u) {
         for (const auto& nbr : nbrs_arr[u]) {
-            vertex_id_t v = nbr.get_level_vid();
+            vertex_id_t v = nbr.get_vid();
             distance_t forward_dist = nbr.get_distance();
 
             distance_t reverse_dist;
@@ -325,15 +325,15 @@ TEST_F(PropagateEngineCorrectnessTest, ScaledTrianglePruning) {
     auto& nbrs_arr = bottom_graph_->get_nbrs_arr();
 
     for (vertex_id_t u = 0; u < num_vertices_; ++u) {
-        bnbr_arr_t& nbrs = nbrs_arr[u];
+        nbr_arr_t& nbrs = nbrs_arr[u];
         for (vertex_id_t v = 0; v < num_vertices_; ++v) {
             if (v != u) {
                 distance_t dist = compute_distance(u, v);
-                nbrs.push_back(bnbr_t(v, dist, true));
+                nbrs.push_back(nbr_t(v, dist, true));
             }
         }
         std::sort(nbrs.begin(), nbrs.end(),
-            [](const bnbr_t& a, const bnbr_t& b) {
+            [](const nbr_t& a, const nbr_t& b) {
                 return a.get_distance() < b.get_distance();
             });
     }
@@ -357,7 +357,7 @@ TEST_F(PropagateEngineCorrectnessTest, ScaledTrianglePruning) {
         const auto& nbrs = nbrs_arr[u];
         std::string nbr_list;
         for (size_t i = 0; i < nbrs.size(); ++i) {
-            nbr_list += fmt::format("({}, {:.3f})", nbrs[i].get_level_vid(), nbrs[i].get_distance());
+            nbr_list += fmt::format("({}, {:.3f})", nbrs[i].get_vid(), nbrs[i].get_distance());
             if (i < nbrs.size() - 1) nbr_list += ", ";
         }
         ARTEA_INFO(fmt::format("  v{} -> [{}]", u, nbr_list));
@@ -387,15 +387,15 @@ TEST_F(PropagateEngineCorrectnessTest, NeighborsSortedAfterPruning) {
     auto& nbrs_arr = bottom_graph_->get_nbrs_arr();
 
     for (vertex_id_t u = 0; u < num_vertices_; ++u) {
-        bnbr_arr_t& nbrs = nbrs_arr[u];
+        nbr_arr_t& nbrs = nbrs_arr[u];
         for (vertex_id_t v = 0; v < num_vertices_; ++v) {
             if (v != u) {
                 distance_t dist = compute_distance(u, v);
-                nbrs.push_back(bnbr_t(v, dist, true));
+                nbrs.push_back(nbr_t(v, dist, true));
             }
         }
         std::sort(nbrs.begin(), nbrs.end(),
-            [](const bnbr_t& a, const bnbr_t& b) {
+            [](const nbr_t& a, const nbr_t& b) {
                 return a.get_distance() < b.get_distance();
             });
     }
@@ -457,7 +457,7 @@ TEST_F(PropagateEngineCorrectnessTest, RandomUpdaterGeneratesEdges) {
     // Verify that all edges have valid vertex IDs and distances
     for (vertex_id_t u = 0; u < num_vertices_; ++u) {
         for (const auto& nbr : nbrs_arr[u]) {
-            vertex_id_t v = nbr.get_level_vid();
+            vertex_id_t v = nbr.get_vid();
             distance_t dist = nbr.get_distance();
 
             EXPECT_LT(v, num_vertices_) << fmt::format("Invalid neighbor ID {} for vertex {}", v, u);
@@ -477,7 +477,7 @@ TEST_F(PropagateEngineCorrectnessTest, RandomUpdaterGeneratesEdges) {
         const auto& nbrs = nbrs_arr[u];
         std::string nbr_list;
         for (size_t i = 0; i < nbrs.size(); ++i) {
-            nbr_list += fmt::format("({}, {:.3f})", nbrs[i].get_level_vid(), nbrs[i].get_distance());
+            nbr_list += fmt::format("({}, {:.3f})", nbrs[i].get_vid(), nbrs[i].get_distance());
             if (i < nbrs.size() - 1) nbr_list += ", ";
         }
         ARTEA_INFO(fmt::format("  v{} -> [{}]", u, nbr_list));
@@ -506,7 +506,7 @@ TEST_F(PropagateEngineCorrectnessTest, RandomUpdaterThreadSafety) {
     // Verify no corruption occurred
     for (vertex_id_t u = 0; u < num_vertices_; ++u) {
         for (const auto& nbr : nbrs_arr[u]) {
-            vertex_id_t v = nbr.get_level_vid();
+            vertex_id_t v = nbr.get_vid();
             EXPECT_LT(v, num_vertices_) << "Invalid neighbor ID after parallel execution";
             EXPECT_NE(v, u) << "Self-loop after parallel execution";
         }
@@ -527,15 +527,15 @@ TEST_F(PropagateEngineCorrectnessTest, TrianglePruningWithoutSelectiveScheduling
     auto& nbrs_arr = bottom_graph_->get_nbrs_arr();
 
     for (vertex_id_t u = 0; u < num_vertices_; ++u) {
-        bnbr_arr_t& nbrs = nbrs_arr[u];
+        nbr_arr_t& nbrs = nbrs_arr[u];
         for (vertex_id_t v = 0; v < num_vertices_; ++v) {
             if (v != u) {
                 distance_t dist = compute_distance(u, v);
-                nbrs.push_back(bnbr_t(v, dist, true));
+                nbrs.push_back(nbr_t(v, dist, true));
             }
         }
         std::sort(nbrs.begin(), nbrs.end(),
-            [](const bnbr_t& a, const bnbr_t& b) {
+            [](const nbr_t& a, const nbr_t& b) {
                 return a.get_distance() < b.get_distance();
             });
     }
@@ -558,7 +558,7 @@ TEST_F(PropagateEngineCorrectnessTest, TrianglePruningWithoutSelectiveScheduling
         const auto& nbrs = nbrs_arr[u];
         std::string nbr_list;
         for (size_t i = 0; i < nbrs.size(); ++i) {
-            nbr_list += fmt::format("({}, {:.3f})", nbrs[i].get_level_vid(), nbrs[i].get_distance());
+            nbr_list += fmt::format("({}, {:.3f})", nbrs[i].get_vid(), nbrs[i].get_distance());
             if (i < nbrs.size() - 1) nbr_list += ", ";
         }
         ARTEA_INFO(fmt::format("  v{} -> [{}]", u, nbr_list));

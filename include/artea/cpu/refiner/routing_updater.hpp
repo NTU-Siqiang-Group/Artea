@@ -43,8 +43,8 @@ class RoutingUpdater :
     using vec_ele_t = typename RefinerTraitsT::vec_ele_t;
     using distance_t = typename RefinerTraitsT::distance_t;
     using vector_array_t = typename RefinerTraitsT::vector_array_t;
-    using bnbr_t = typename RefinerTraitsT::bnbr_t;
-    using bnbr_arr_t = typename RefinerTraitsT::bnbr_arr_t;
+    using nbr_t = typename RefinerTraitsT::nbr_t;
+    using nbr_arr_t = typename RefinerTraitsT::nbr_arr_t;
     using log_table_t = typename RefinerTraitsT::log_table_t;
     using dist_func_t = typename RefinerTraitsT::dist_func_t;
     using router_t = typename RefinerTraitsT::dynamic::bottom_graph_router_t;
@@ -83,7 +83,7 @@ public:
      */
     auto update_impl(
         const vertex_id_t pivot_vid,
-        bnbr_arr_t& origin_nbrs
+        nbr_arr_t& origin_nbrs
     ) -> void {
         const vec_ele_t* pivot_vec = this->_vecs_data.get(pivot_vid);
         auto knn_results = _router.query(pivot_vec, this->_bottom_graph);
@@ -95,13 +95,13 @@ public:
         const vertex_num_t max_sz = this->_bottom_graph.layer_config().max_nbr_size();
         for (const auto& entry : knn_results) {
             if (entry.is_invalid()) { continue; }
-            if (entry.get_base_id() == pivot_vid) { continue; }
-            const bnbr_arr_t& target_nbrs = this->_bottom_graph.fetch_nbrs(pivot_vid);
+            if (entry.get_vid() == pivot_vid) { continue; }
+            const nbr_arr_t& target_nbrs = this->_bottom_graph.fetch_nbrs(pivot_vid);
             if (target_nbrs.size() >= max_sz &&
                 target_nbrs[max_sz - 1].get_distance() <= entry.get_distance()) {
                 continue;
             }
-            knn_ids.push_back(entry.get_base_id());
+            knn_ids.push_back(entry.get_vid());
             knn_dists.push_back(entry.get_distance());
         }
 

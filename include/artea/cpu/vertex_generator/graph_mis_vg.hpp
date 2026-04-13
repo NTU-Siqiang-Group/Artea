@@ -60,7 +60,7 @@ class GraphMISVG : public VertexGeneratorTraitsT::template vertex_generator_t<Gr
     using distance_t = typename VertexGeneratorTraitsT::distance_t;
     using vec_dim_t = typename VertexGeneratorTraitsT::vec_dim_t;
     using vector_array_t = typename VertexGeneratorTraitsT::vector_array_t;
-    using bnbr_arr_t = typename VertexGeneratorTraitsT::bnbr_arr_t;
+    using nbr_arr_t = typename VertexGeneratorTraitsT::nbr_arr_t;
     using approx_rnet_t = typename VertexGeneratorTraitsT::approx_rnet_t;
     using knn_graph = typename VertexGeneratorTraitsT::knn_graph;
 
@@ -178,7 +178,7 @@ public:
                             const auto& nbrs = graph.fetch_nbrs(v);
                             for (vertex_num_t i = 0; i < nbrs.size(); ++i) {
                                 if (nbrs[i].get_distance() >= current_radius) break;
-                                state[nbrs[i].get_level_vid()].store(OUT, std::memory_order_relaxed);
+                                state[nbrs[i].get_vid()].store(OUT, std::memory_order_relaxed);
                             }
                         }
                     }
@@ -228,7 +228,7 @@ public:
                             for (vertex_num_t i = 0; i < nbrs.size(); ++i) {
                                 if (nbrs[i].get_distance() >= current_radius) break;
 
-                                const vertex_id_t u = nbrs[i].get_level_vid();
+                                const vertex_id_t u = nbrs[i].get_vid();
                                 const uint8_t u_state = state[u].load(std::memory_order_relaxed);
 
                                 if (u_state == IN) {
@@ -265,7 +265,7 @@ public:
                             for (vertex_num_t i = 0; i < nbrs.size(); ++i) {
                                 if (nbrs[i].get_distance() >= current_radius) break;
 
-                                const vertex_id_t u = nbrs[i].get_level_vid();
+                                const vertex_id_t u = nbrs[i].get_vid();
                                 if (proposal[u] == IN) {
                                     veto[u].store(true, std::memory_order_relaxed);
                                 }
@@ -288,7 +288,7 @@ public:
                                 const auto& nbrs = graph.fetch_nbrs(v);
                                 for (vertex_num_t i = 0; i < nbrs.size(); ++i) {
                                     if (nbrs[i].get_distance() >= current_radius) break;
-                                    state[nbrs[i].get_level_vid()].store(OUT, std::memory_order_relaxed);
+                                    state[nbrs[i].get_vid()].store(OUT, std::memory_order_relaxed);
                                 }
                             }
                         }

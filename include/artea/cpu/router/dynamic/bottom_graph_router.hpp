@@ -16,7 +16,7 @@
  * @FilePath: /Artea/include/artea/cpu/router/bottom_graph_router.hpp
  * @Author: Chandler (Weitang Ye) <weitang.ye@ntu.edu.sg>
  * @Description: dynamic_mode specialization of BottomGraphRouter.
- *               Operates on BottomGraph (bnbr_t neighbors) for build-time navigation.
+ *               Operates on BottomGraph (nbr_t neighbors) for build-time navigation.
  */
 
 #pragma once
@@ -46,7 +46,7 @@ class BottomGraphRouter :
     using dist_func_t = typename RouterTraitsT::dist_func_t;
     using vector_array_t = typename RouterTraitsT::vector_array_t;
     using query_vecs_t = typename RouterTraitsT::query_vecs_t;
-    using bnbr_arr_t = typename RouterTraitsT::bnbr_arr_t;
+    using nbr_arr_t = typename RouterTraitsT::nbr_arr_t;
     using candidate_queue_t = typename RouterTraitsT::candidate_queue_t;
     using visited_table_t = typename RouterTraitsT::visited_table_t;
     using visited_table_pool_t = typename RouterTraitsT::visited_table_pool_t;
@@ -166,10 +166,10 @@ private:
             auto [current_id, current_dist] = candidate_queue.pop_best_unexplored();
             if (current_id == RouterTraitsT::invalid_vertex_id) { break; }
 
-            const bnbr_arr_t& nbrs = bottom_graph.fetch_nbrs(current_id);
+            const nbr_arr_t& nbrs = bottom_graph.fetch_nbrs(current_id);
             const vertex_num_t nbr_limit = std::min(static_cast<vertex_num_t>(nbrs.size()), _extracted_nbr_size);
             for (vertex_num_t i = 0; i < nbr_limit; ++i) {
-                const vertex_id_t nbr_id = nbrs[i].get_level_vid();
+                const vertex_id_t nbr_id = nbrs[i].get_vid();
                 if (nbr_id == RouterTraitsT::invalid_vertex_id) { break; }
                 if (visited_table.test(nbr_id)) { continue; }
                 visited_table.set(nbr_id);

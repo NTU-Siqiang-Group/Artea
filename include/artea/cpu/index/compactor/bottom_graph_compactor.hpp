@@ -82,7 +82,7 @@ public:
                     const vertex_num_t copy_count = std::min(
                         static_cast<vertex_num_t>(nbrs.size()), extracted_nbr_size);
                     for (vertex_num_t i = 0; i < extracted_nbr_size; ++i) {
-                        dst[i] = (i < copy_count) ? nbrs[i].get_level_vid() : invalid_id;
+                        dst[i] = (i < copy_count) ? nbrs[i].get_vid() : invalid_id;
                     }
 
                     #ifndef NDEBUG

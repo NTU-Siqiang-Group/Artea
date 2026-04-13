@@ -36,8 +36,8 @@ class ReverseUpdater :
     using distance_t = typename RefinerTraitsT::distance_t;
     using ratio_t = typename RefinerTraitsT::ratio_t;
     using vector_array_t = typename RefinerTraitsT::vector_array_t;
-    using bnbr_t = typename RefinerTraitsT::bnbr_t;
-    using bnbr_arr_t = typename RefinerTraitsT::bnbr_arr_t;
+    using nbr_t = typename RefinerTraitsT::nbr_t;
+    using nbr_arr_t = typename RefinerTraitsT::nbr_arr_t;
     using log_table_t = typename RefinerTraitsT::log_table_t;
     using dist_func_t = typename RefinerTraitsT::dist_func_t;
     using base_class_t = typename RefinerTraitsT::template neighbor_updater_t<BottomGraphT, ReverseUpdater<RefinerTraitsT, BottomGraphT>>;
@@ -70,17 +70,17 @@ public:
      */
     auto update_impl(
         const vertex_id_t pivot_vid,
-        bnbr_arr_t& origin_nbrs
+        nbr_arr_t& origin_nbrs
     ) -> void {
         // For each neighbor in origin_nbrs, add a reverse edge from that neighbor to pivot_vid
         const vertex_num_t max_sz = this->_bottom_graph.layer_config().max_nbr_size();
         for (vertex_num_t i = 0; i < origin_nbrs.size(); ++i) {
-            const bnbr_t& nbr = origin_nbrs[i];
-            vertex_id_t nbr_id = nbr.get_level_vid();
+            const nbr_t& nbr = origin_nbrs[i];
+            vertex_id_t nbr_id = nbr.get_vid();
             distance_t dist = nbr.get_distance();
 
             // Check if nbr_id's neighbor array is already full with closer neighbors
-            const bnbr_arr_t& nbr_vertex_nbrs = this->_bottom_graph.fetch_nbrs(nbr_id);
+            const nbr_arr_t& nbr_vertex_nbrs = this->_bottom_graph.fetch_nbrs(nbr_id);
             // if (nbr_vertex_nbrs.size() >= max_sz &&
             //     nbr_vertex_nbrs[max_sz - 1].get_distance() <= dist) {
             //     continue;

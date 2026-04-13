@@ -31,7 +31,7 @@ class TruncateUpdater :
 
     using vertex_id_t    = typename RefinerTraitsT::vertex_id_t;
     using vertex_num_t   = typename RefinerTraitsT::vertex_num_t;
-    using bnbr_arr_t      = typename RefinerTraitsT::bnbr_arr_t;
+    using nbr_arr_t      = typename RefinerTraitsT::nbr_arr_t;
     using log_table_t    = typename RefinerTraitsT::log_table_t;
     using dist_func_t    = typename RefinerTraitsT::dist_func_t;
     using vector_array_t = typename RefinerTraitsT::vector_array_t;
@@ -52,7 +52,7 @@ public:
     __attribute__((always_inline))
     auto update_impl(
         const vertex_id_t /* pivot_vid */,
-        bnbr_arr_t& origin_nbrs
+        nbr_arr_t& origin_nbrs
     ) -> void {
         const vertex_num_t max_sz = (_truncate_size > 0)
             ? _truncate_size

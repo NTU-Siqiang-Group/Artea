@@ -30,7 +30,7 @@ class RadiusProber {
     using vertex_num_t = typename IndexTraitsT::vertex_num_t;
     using vertex_id_t = typename IndexTraitsT::vertex_id_t;
     using distance_t = typename IndexTraitsT::distance_t;
-    using bnbr_arr_t = typename IndexTraitsT::bnbr_arr_t;
+    using nbr_arr_t = typename IndexTraitsT::nbr_arr_t;
     using nbr_arr_checker_t = typename IndexTraitsT::nbr_arr_checker_t;
 
     static constexpr distance_t max_distance = IndexTraitsT::max_distance;
@@ -69,7 +69,7 @@ public:
             tbb::blocked_range<vertex_id_t>(0, num_vertices),
             [&](const tbb::blocked_range<vertex_id_t>& r) {
                 for (vertex_id_t vid = r.begin(); vid != r.end(); ++vid) {
-                    const bnbr_arr_t& nbrs = graph.fetch_nbrs(vid);
+                    const nbr_arr_t& nbrs = graph.fetch_nbrs(vid);
                     if (nbrs.empty()) {
                         ARTEA_ERROR(fmt::format("[RadiusProber] vertex {} has empty neighbor array", vid));
                     }
@@ -91,7 +91,7 @@ public:
             tbb::blocked_range<vertex_id_t>(0, num_vertices),
             [&](const tbb::blocked_range<vertex_id_t>& r) {
                 for (vertex_id_t vid = r.begin(); vid != r.end(); ++vid) {
-                    const bnbr_arr_t& nbrs = graph.fetch_nbrs(vid);
+                    const nbr_arr_t& nbrs = graph.fetch_nbrs(vid);
                     distances[vid] = (nbrs.size() > nbr_index)
                         ? nbrs[nbr_index].get_distance()
                         : max_distance;

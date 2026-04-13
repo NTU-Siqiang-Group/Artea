@@ -36,8 +36,8 @@ class NeighborUpdater {
     using vec_ele_t = typename RefinerTraitsT::vec_ele_t;
     using distance_t = typename RefinerTraitsT::distance_t;
     using vector_array_t = typename RefinerTraitsT::vector_array_t;
-    using bnbr_t = typename RefinerTraitsT::bnbr_t;
-    using bnbr_arr_t = typename RefinerTraitsT::bnbr_arr_t;
+    using nbr_t = typename RefinerTraitsT::nbr_t;
+    using nbr_arr_t = typename RefinerTraitsT::nbr_arr_t;
     using log_table_t = typename RefinerTraitsT::log_table_t;
     using dist_func_t = typename RefinerTraitsT::dist_func_t;
     using nbr_arr_checker_t = typename RefinerTraitsT::nbr_arr_checker_t;
@@ -60,7 +60,7 @@ public:
     __attribute__((always_inline))
     auto operator()(
         const vertex_id_t pivot_vid,
-        bnbr_arr_t& origin_nbrs
+        nbr_arr_t& origin_nbrs
     ) -> void {
         static_cast<DerivedClassT*>(this)->update_impl(pivot_vid, origin_nbrs);
 

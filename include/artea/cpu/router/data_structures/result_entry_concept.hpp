@@ -16,7 +16,7 @@
  * @FilePath: /Artea/include/artea/cpu/router/data_structures/result_entry_concept.hpp
  * @Author: Chandler (Weitang Ye) <weitang.ye@ntu.edu.sg>
  * @Description: Concept for result entries returned by routers. Any type that
- *               exposes get_base_id() and get_distance() can be consumed by
+ *               exposes get_vid() and get_distance() can be consumed by
  *               recall estimation and other result-processing utilities.
  */
 
@@ -32,7 +32,7 @@ namespace cpu {
  * @brief Concept for router result entries.
  *
  * A ResultEntry must expose:
- *   - @c get_base_id()  — the base-dataset vertex identity.
+ *   - @c get_vid()      — the vertex identity.
  *   - @c get_distance() — the distance to the query.
  *
  * @c CandidateEntry satisfies this concept.
@@ -42,7 +42,7 @@ concept ResultEntry = requires(const EntryT ce) {
     typename EntryT::vertex_id_t;
     typename EntryT::distance_t;
 
-    { ce.get_base_id() }  -> std::convertible_to<typename EntryT::vertex_id_t>;
+    { ce.get_vid() }  -> std::convertible_to<typename EntryT::vertex_id_t>;
     { ce.get_distance() } -> std::convertible_to<typename EntryT::distance_t>;
 };
 

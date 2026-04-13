@@ -56,8 +56,8 @@ class MyUpdater :
     using vertex_id_t    = typename RefinerTraitsT::vertex_id_t;
     using vertex_num_t   = typename RefinerTraitsT::vertex_num_t;
     using distance_t     = typename RefinerTraitsT::distance_t;
-    using bnbr_t          = typename RefinerTraitsT::bnbr_t;
-    using bnbr_arr_t      = typename RefinerTraitsT::bnbr_arr_t;
+    using nbr_t          = typename RefinerTraitsT::nbr_t;
+    using nbr_arr_t      = typename RefinerTraitsT::nbr_arr_t;
     using log_table_t    = typename RefinerTraitsT::log_table_t;
     using dist_func_t    = typename RefinerTraitsT::dist_func_t;
     using vector_array_t = typename RefinerTraitsT::vector_array_t;
@@ -82,7 +82,7 @@ public:
     // Required: the core logic, called once per vertex during propagation
     auto update_impl(
         const vertex_id_t pivot_vid,
-        bnbr_arr_t& origin_nbrs
+        nbr_arr_t& origin_nbrs
     ) -> void {
         // Access base class members via this->:
         //   this->_dist_func    -- distance function

@@ -49,7 +49,7 @@ class IndexStructure {
     using bottom_graph_t    = typename IndexTraitsT::template bottom_graph_t<IndexStructure<IndexTraitsT>>;
     using vertex_num_t       = typename IndexTraitsT::vertex_num_t;
     using vertex_id_t        = typename IndexTraitsT::vertex_id_t;
-    using bnbr_arr_t         = typename IndexTraitsT::bnbr_arr_t;
+    using nbr_arr_t         = typename IndexTraitsT::nbr_arr_t;
     using vector_array_t     = typename IndexTraitsT::vector_array_t;
     using layer_config_t     = typename IndexTraitsT::layer_config_t;
     using propagate_config_t = typename IndexTraitsT::conv_graph::propagate_config_t;
@@ -120,22 +120,22 @@ public:
     }
 
     __attribute__((always_inline))
-    auto get_nbrs_arr() -> std::vector<bnbr_arr_t>& {
+    auto get_nbrs_arr() -> std::vector<nbr_arr_t>& {
         return _bottom_graph->get_nbrs_arr();
     }
 
     __attribute__((always_inline))
-    auto get_nbrs_arr() const -> const std::vector<bnbr_arr_t>& {
+    auto get_nbrs_arr() const -> const std::vector<nbr_arr_t>& {
         return _bottom_graph->get_nbrs_arr();
     }
 
     __attribute__((always_inline))
-    auto fetch_nbrs(const vertex_id_t src) const -> const bnbr_arr_t& {
+    auto fetch_nbrs(const vertex_id_t src) const -> const nbr_arr_t& {
         return _bottom_graph->fetch_nbrs(src);
     }
 
     __attribute__((always_inline))
-    auto fetch_nbrs(const vertex_id_t src) -> bnbr_arr_t& {
+    auto fetch_nbrs(const vertex_id_t src) -> nbr_arr_t& {
         return _bottom_graph->fetch_nbrs(src);
     }
 

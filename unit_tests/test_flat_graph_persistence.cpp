@@ -160,7 +160,7 @@ TEST_F(FlatGraphPersistenceTest, BottomGraphSnapshotRestore) {
         } else {
             // Check neighbor content
             for (uint32_t j = 0; j < original_nbrs[i].size(); ++j) {
-                EXPECT_EQ(original_nbrs[i][j].get_level_vid(), restored_nbrs[i][j].get_level_vid())
+                EXPECT_EQ(original_nbrs[i][j].get_vid(), restored_nbrs[i][j].get_vid())
                     << fmt::format("Vertex {} neighbor {} ID mismatch", i, j);
                 EXPECT_FLOAT_EQ(original_nbrs[i][j].get_distance(), restored_nbrs[i][j].get_distance())
                     << fmt::format("Vertex {} neighbor {} distance mismatch", i, j);

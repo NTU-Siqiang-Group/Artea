@@ -42,8 +42,8 @@ class PropagateEngine {
     using vertex_id_t = typename RefinerTraitsT::vertex_id_t;
     using distance_t = typename RefinerTraitsT::distance_t;
     using iter_t = typename RefinerTraitsT::iter_t;
-    using bnbr_t = typename RefinerTraitsT::bnbr_t;
-    using bnbr_arr_t = typename RefinerTraitsT::bnbr_arr_t;
+    using nbr_t = typename RefinerTraitsT::nbr_t;
+    using nbr_arr_t = typename RefinerTraitsT::nbr_arr_t;
     using log_buffer_t = typename RefinerTraitsT::log_buffer_t;
     using log_container_t = typename RefinerTraitsT::log_container_t;
     using log_table_t = typename RefinerTraitsT::log_table_t;
@@ -81,7 +81,7 @@ public:
         const vertex_id_t pivot_vid,
         UdfUpdaterT& udf_updater
     ) -> void {
-        bnbr_arr_t& origin_nbrs = _bottom_graph->fetch_nbrs(pivot_vid);
+        nbr_arr_t& origin_nbrs = _bottom_graph->fetch_nbrs(pivot_vid);
         udf_updater(pivot_vid, origin_nbrs);
     }
 

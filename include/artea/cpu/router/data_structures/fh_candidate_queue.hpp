@@ -211,7 +211,7 @@ public:
         for (auto& entry : init_candidates) {
             _unexplored_set.push(entry);
             _top_candidates.push(entry);
-            visited_table.set(entry.get_layer_id());
+            visited_table.set(entry.get_vid());
         }
 
         _update_lower_bound();
@@ -345,7 +345,7 @@ public:
         if (entry.is_invalid()) {
             return {invalid_vertex_id, max_distance};
         }
-        return {entry.get_layer_id(), entry.get_distance()};
+        return {entry.get_vid(), entry.get_distance()};
     }
 
     /**

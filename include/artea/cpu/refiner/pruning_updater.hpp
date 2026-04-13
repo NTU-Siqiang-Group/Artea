@@ -39,8 +39,8 @@ class PruningUpdater :
     using distance_t = typename RefinerTraitsT::distance_t;
     using ratio_t = typename RefinerTraitsT::ratio_t;
     using vector_array_t = typename RefinerTraitsT::vector_array_t;
-    using bnbr_t = typename RefinerTraitsT::bnbr_t;
-    using bnbr_arr_t = typename RefinerTraitsT::bnbr_arr_t;
+    using nbr_t = typename RefinerTraitsT::nbr_t;
+    using nbr_arr_t = typename RefinerTraitsT::nbr_arr_t;
     using log_table_t = typename RefinerTraitsT::log_table_t;
     using dist_func_t = typename RefinerTraitsT::dist_func_t;
     using pruning_condition_t = typename RefinerTraitsT::pruning_condition_t;
@@ -80,7 +80,7 @@ public:
     template <pruning_condition_t ConditionType = pruning_condition_t::scaled_ineq>
     auto update_impl(
         const vertex_id_t pivot_vid,
-        bnbr_arr_t& origin_nbrs
+        nbr_arr_t& origin_nbrs
     ) -> void {
         #ifndef NDEBUG
         if (origin_nbrs.empty()) {
@@ -88,7 +88,7 @@ public:
         }
         #endif
 
-        bnbr_arr_t retained_nbrs;
+        nbr_arr_t retained_nbrs;
         retained_nbrs.reserve(origin_nbrs.capacity());
         const vertex_num_t max_sz = this->_bottom_graph.layer_config().max_nbr_size();
 
@@ -96,7 +96,7 @@ public:
         retained_nbrs.push_back(origin_nbrs[0]);
 
         for (vertex_num_t i = 1; i < origin_nbrs.size(); ++i) {
-            const bnbr_t& ori_nbr = origin_nbrs[i];
+            const nbr_t& ori_nbr = origin_nbrs[i];
             bool passed = _internal_check<ConditionType>(ori_nbr, retained_nbrs);
 
             if (passed) {
@@ -139,10 +139,10 @@ private:
 
     template <PruningConditionT ConditionType>
     auto _internal_check(
-        const bnbr_t& ori_nbr,
-        const bnbr_arr_t& retained_nbrs
+        const nbr_t& ori_nbr,
+        const nbr_arr_t& retained_nbrs
     ) -> bool {
-        const vec_ele_t* ori_vec = this->_vecs_data.get(ori_nbr.get_level_vid());
+        const vec_ele_t* ori_vec = this->_vecs_data.get(ori_nbr.get_vid());
         const distance_t threshold = _compute_threshold<ConditionType>(ori_nbr.get_distance());
 
         for (vertex_num_t i = 0; i < retained_nbrs.size(); ++i) {
@@ -150,8 +150,8 @@ private:
                 continue;
             }
 
-            const bnbr_t& retained_nbr = retained_nbrs[i];
-            const vec_ele_t* retained_vec = this->_vecs_data.get(retained_nbr.get_level_vid());
+            const nbr_t& retained_nbr = retained_nbrs[i];
+            const vec_ele_t* retained_vec = this->_vecs_data.get(retained_nbr.get_vid());
             distance_t dist_to_retained = this->_dist_func(ori_vec, retained_vec);
 
             if (dist_to_retained < threshold) {

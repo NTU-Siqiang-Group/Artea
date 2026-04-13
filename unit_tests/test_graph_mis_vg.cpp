@@ -195,11 +195,11 @@ TEST_F(GraphMISVGTest, VerifyIndependence) {
         const auto& nbrs = knn_graph.fetch_nbrs(vid);
         for (vertex_num_t i = 0; i < nbrs.size(); ++i) {
             if (nbrs[i].get_distance() >= min_radius) break;
-            if (selected_set.count(nbrs[i].get_level_vid())) {
+            if (selected_set.count(nbrs[i].get_vid())) {
                 violations++;
                 if (g_config.verbose && violations <= 5) {
                     ARTEA_INFO(fmt::format("  Independence violation: vertex {} and {} (dist={:.6f} < {:.6f})",
-                        vid, nbrs[i].get_level_vid(), nbrs[i].get_distance(), min_radius));
+                        vid, nbrs[i].get_vid(), nbrs[i].get_distance(), min_radius));
                 }
             }
         }
@@ -241,7 +241,7 @@ TEST_F(GraphMISVGTest, VerifyCoverage) {
         const auto& nbrs = knn_graph.fetch_nbrs(vid);
         for (vertex_num_t i = 0; i < nbrs.size(); ++i) {
             if (nbrs[i].get_distance() >= min_radius) break;
-            is_covered[nbrs[i].get_level_vid()] = true;
+            is_covered[nbrs[i].get_vid()] = true;
         }
     }
 
@@ -251,7 +251,7 @@ TEST_F(GraphMISVGTest, VerifyCoverage) {
         const auto& nbrs = knn_graph.fetch_nbrs(u);
         for (vertex_num_t i = 0; i < nbrs.size(); ++i) {
             if (nbrs[i].get_distance() >= min_radius) break;
-            if (selected_set.count(nbrs[i].get_level_vid())) {
+            if (selected_set.count(nbrs[i].get_vid())) {
                 is_covered[u] = true;
                 break;
             }

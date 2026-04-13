@@ -24,6 +24,7 @@
 #pragma once
 
 #include <cstdint>
+#include <limits>
 #include <type_traits>
 
 namespace artea {
@@ -194,6 +195,28 @@ inline constexpr bool __neighbor_is_trivially_copyable =
 template <typename BaseTraitsT>
 inline constexpr bool __neighbor_is_trivially_destructible =
     std::is_trivially_destructible<Neighbor<BaseTraitsT>>::value;
+
+namespace detail {
+/** @brief Minimal traits stub used only for Neighbor triviality checks
+ *         below. Avoids a circular include of @c base_traits.hpp. */
+struct __neighbor_triviality_check_traits {
+    using vertex_num_t = uint32_t;
+    using vertex_id_t  = uint32_t;
+    using vec_ele_t    = float;
+    using distance_t   = float;
+    static constexpr vertex_id_t invalid_vertex_id =
+        std::numeric_limits<vertex_id_t>::max();
+    static constexpr distance_t max_distance =
+        std::numeric_limits<distance_t>::max();
+};
+}  // namespace detail
+
+static_assert(
+    std::is_trivially_copyable<Neighbor<detail::__neighbor_triviality_check_traits>>::value,
+    "Neighbor must be trivially copyable to enable vector memcpy optimizations!");
+static_assert(
+    std::is_trivially_destructible<Neighbor<detail::__neighbor_triviality_check_traits>>::value,
+    "Neighbor must be trivially destructible!");
 
 /** @brief Comparator (distance primary, vid secondary). */
 template <typename BaseTraitsT>

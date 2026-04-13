@@ -28,8 +28,8 @@ protected:
     using vertex_num_t = typename IndexTraitsT::vertex_num_t;
     using vertex_id_t = typename IndexTraitsT::vertex_id_t;
     using distance_t = typename IndexTraitsT::distance_t;
-    using bnbr_t = typename IndexTraitsT::bnbr_t;
-    using bnbr_arr_t = typename IndexTraitsT::bnbr_arr_t;
+    using nbr_t = typename IndexTraitsT::nbr_t;
+    using nbr_arr_t = typename IndexTraitsT::nbr_arr_t;
     using vector_array_t = typename IndexTraitsT::vector_array_t;
     using layer_config_t = typename IndexTraitsT::layer_config_t;
 
@@ -83,16 +83,16 @@ public:
     auto layer_config() -> layer_config_t& { return _layer_config; }
 
     __attribute__((always_inline))
-    auto get_nbrs_arr() -> std::vector<bnbr_arr_t>& { return _nbrs_arr; }
+    auto get_nbrs_arr() -> std::vector<nbr_arr_t>& { return _nbrs_arr; }
 
     __attribute__((always_inline))
-    auto get_nbrs_arr() const -> const std::vector<bnbr_arr_t>& { return _nbrs_arr; }
+    auto get_nbrs_arr() const -> const std::vector<nbr_arr_t>& { return _nbrs_arr; }
 
     __attribute__((always_inline))
-    auto fetch_nbrs(const vertex_id_t src) const -> const bnbr_arr_t& { return _nbrs_arr[src]; }
+    auto fetch_nbrs(const vertex_id_t src) const -> const nbr_arr_t& { return _nbrs_arr[src]; }
 
     __attribute__((always_inline))
-    auto fetch_nbrs(const vertex_id_t src) -> bnbr_arr_t& { return _nbrs_arr[src]; }
+    auto fetch_nbrs(const vertex_id_t src) -> nbr_arr_t& { return _nbrs_arr[src]; }
 
     __attribute__((always_inline))
     auto get_vecs_data() const -> const vector_array_t& { return _vecs_data; }
@@ -117,7 +117,7 @@ protected:
     layer_config_t _layer_config;
 
     /** @brief Array of neighbors for each vertex. */
-    std::vector<bnbr_arr_t> _nbrs_arr;
+    std::vector<nbr_arr_t> _nbrs_arr;
 
     /** @brief Const reference to vector data for this layer. */
     const vector_array_t& _vecs_data;

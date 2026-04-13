@@ -61,7 +61,7 @@ public:
     using distance_t = typename RouterTraitsT::distance_t;
     using candidate_entry_t = EntryT;
     /** @brief Distance-ordered comparator. Delegates to EntryT::operator<
-     *         which compares by distance with base_vid tie-break. */
+     *         which compares by distance with vid tie-break. */
     using entry_comp_t = std::less<candidate_entry_t>;
     /** @brief knn_results_t is a queue-local type that tracks @c EntryT. */
     using knn_results_t = std::vector<candidate_entry_t>;
@@ -195,7 +195,7 @@ public:
 
         // Mark all initial candidates as visited
         for (const auto& entry : _data) {
-            visited_table.set(entry.get_layer_id());
+            visited_table.set(entry.get_vid());
         }
 
         _update_thresh_distance();
@@ -267,8 +267,7 @@ public:
      *
      * Variadic-perfect-forwarding API: the arguments are forwarded directly
      * into @c candidate_entry_t's constructor (with a trailing @c false for
-     * the explored flag). This lets one queue implementation carry either
-     * bnbr or multi-layer entries.
+     * the explored flag).
      *
      * Uses fast rejection (O(1)) for entries that are too far, then performs
      * binary search insertion to maintain sorted order. Updates cursor and
@@ -312,10 +311,8 @@ public:
     /**
      * @brief Retrieve and return the FULL best-unexplored entry.
      *
-     * Returns a copy of the complete @c candidate_entry_t so callers working
-     * with multi-layer entries can recover both @c base_vid and @c layer_vid.
-     * The entry inside @c _data is marked as explored and the cursor is
-     * advanced.
+     * Returns a copy of the complete @c candidate_entry_t. The entry
+     * inside @c _data is marked as explored and the cursor is advanced.
      */
     __attribute__((always_inline))
     auto pop_best_unexplored_entry() -> candidate_entry_t {
@@ -347,7 +344,7 @@ public:
         if (entry.is_invalid()) {
             return {invalid_vertex_id, max_distance};
         }
-        return {entry.get_layer_id(), entry.get_distance()};
+        return {entry.get_vid(), entry.get_distance()};
     }
 
     /**

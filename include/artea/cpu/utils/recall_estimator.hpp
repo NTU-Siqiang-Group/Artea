@@ -203,7 +203,7 @@ public:
 
                     buffers.sorted_pred.resize(k);
                     for (std::size_t j = 0; j < k; ++j) {
-                        buffers.sorted_pred[j] = pred_row[j].get_base_id();
+                        buffers.sorted_pred[j] = pred_row[j].get_vid();
                     }
                     std::sort(buffers.sorted_pred.begin(), buffers.sorted_pred.end());
 

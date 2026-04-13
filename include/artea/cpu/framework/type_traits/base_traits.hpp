@@ -36,7 +36,6 @@ namespace artea {
 namespace cpu {
 
 /* ------ Forward Declarations ------ */
-template <typename BaseTraitsT> struct BottomNeighbor;
 template <typename BaseTraitsT> struct Neighbor;
 template <typename BaseTraitsT> struct NbrComparator;
 template <typename BaseTraitsT> struct StrictNbrComparator;
@@ -49,10 +48,6 @@ template <typename BaseTraitsT> class NbrArrChecker;
 template <typename BaseTraitsT> class RandomSeq;
 template <typename BaseTraitsT> class RandomSeqNR;
 template <typename BaseTraitsT> class CentroidComputer;
-template <typename BaseTraitsT> struct BNbrComparator;
-template <typename BaseTraitsT> struct StrictBNbrComparator;
-template <typename BaseTraitsT> struct BNbrIdComparator;
-template <typename BaseTraitsT> struct BNbrDistanceComparator;
 template <typename BaseTraitsT> struct VertexSubset;
 template <typename T, typename ContainerT, typename Compare> class FourAryHeap;
 template <typename BaseTraitsT> struct LayerConfig;
@@ -158,23 +153,8 @@ public:
     using nbr_id_comp_t     = NbrIdComparator<base_traits_t>;
     using nbr_dist_comp_t   = NbrDistanceComparator<base_traits_t>;
 
-    /** @brief neighbor entries. */
-    using bnbr_t = BottomNeighbor<base_traits_t>;
-
-    /** @brief neighbor comparator. */
-    using bnbr_comp_t = BNbrComparator<base_traits_t>;
-
-    /** @brief strict neighbor comparator. */
-    using strict_bnbr_comp_t = StrictBNbrComparator<base_traits_t>;
-
-    /** @brief ID-only comparator. */
-    using bnbr_id_comp_t = BNbrIdComparator<base_traits_t>;
-
-    /** @brief distance-only comparator. */
-    using bnbr_dist_comp_t = BNbrDistanceComparator<base_traits_t>;
-
     /** @brief neighbor arrays. */
-    using bnbr_arr_t = std::vector<bnbr_t>;
+    using nbr_arr_t = std::vector<nbr_t>;
 
     /** @brief CSR graph format. */
     using csr_vids_t = cache_aligned_container_t<vertex_id_t>;

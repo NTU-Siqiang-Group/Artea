@@ -40,13 +40,13 @@ class RandomEG {
     using distance_t = typename RefinerTraitsT::distance_t;
     using vec_dim_t = typename RefinerTraitsT::vec_dim_t;
     using vector_array_t = typename RefinerTraitsT::vector_array_t;
-    using bnbr_t = typename RefinerTraitsT::bnbr_t;
-    using bnbr_arr_t = typename RefinerTraitsT::bnbr_arr_t;
-    using bnbr_comp_t = typename RefinerTraitsT::bnbr_comp_t;
+    using nbr_t = typename RefinerTraitsT::nbr_t;
+    using nbr_arr_t = typename RefinerTraitsT::nbr_arr_t;
+    using nbr_comp_t = typename RefinerTraitsT::nbr_comp_t;
     using dist_func_t = typename RefinerTraitsT::dist_func_t;
     using random_seq_t = typename RefinerTraitsT::random_seq_t;
 
-    static constexpr bnbr_comp_t nbr_comp {};
+    static constexpr nbr_comp_t nbr_comp {};
 
 public:
     /**
@@ -79,7 +79,7 @@ public:
                 std::vector<vertex_id_t> random_nbr_ids(init_nbr_size);
 
                 for (vertex_id_t vid = r.begin(); vid != r.end(); ++vid) {
-                    bnbr_arr_t& nbrs = bottom_graph.fetch_nbrs(vid);
+                    nbr_arr_t& nbrs = bottom_graph.fetch_nbrs(vid);
                     const vec_ele_t* query_vec = vecs_data.get(vid);
 
                     // Generate random neighbor IDs
@@ -111,8 +111,8 @@ public:
                     auto last = std::unique(
                         nbrs.begin(),
                         nbrs.end(),
-                        [](const bnbr_t& a, const bnbr_t& b) {
-                            return a.get_level_vid() == b.get_level_vid();
+                        [](const nbr_t& a, const nbr_t& b) {
+                            return a.get_vid() == b.get_vid();
                         }
                     );
                     nbrs.erase(last, nbrs.end());

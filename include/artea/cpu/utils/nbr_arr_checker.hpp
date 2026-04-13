@@ -35,18 +35,18 @@ class NbrArrChecker {
     using vertex_id_t = typename BaseTraitsT::vertex_id_t;
     using vec_ele_t = typename BaseTraitsT::vec_ele_t;
     using distance_t = typename BaseTraitsT::distance_t;
-    using bnbr_t = typename BaseTraitsT::bnbr_t;
-    using bnbr_arr_t = typename BaseTraitsT::bnbr_arr_t;
-    using bnbr_dist_comp_t = typename BaseTraitsT::bnbr_dist_comp_t;
+    using nbr_t = typename BaseTraitsT::nbr_t;
+    using nbr_arr_t = typename BaseTraitsT::nbr_arr_t;
+    using nbr_dist_comp_t = typename BaseTraitsT::nbr_dist_comp_t;
 
-    constexpr static bnbr_dist_comp_t nbr_dist_comp {};
+    constexpr static nbr_dist_comp_t nbr_dist_comp {};
 
 public:
 
-    static auto invalid_id_suffix_check(const bnbr_arr_t& nbrs) -> bool {
+    static auto invalid_id_suffix_check(const nbr_arr_t& nbrs) -> bool {
         bool seen_invalid_id = false;
         for (std::size_t i = 0; i < nbrs.size(); ++i) {
-            const vertex_id_t nbr_id = nbrs[i].get_level_vid();
+            const vertex_id_t nbr_id = nbrs[i].get_vid();
             const bool is_invalid_id = nbr_id == BaseTraitsT::invalid_vertex_id;
             if (is_invalid_id) {
                 seen_invalid_id = true;
@@ -72,7 +72,7 @@ public:
         return true;
     }
 
-    static auto no_nan_check(const bnbr_arr_t& nbrs) -> bool {
+    static auto no_nan_check(const nbr_arr_t& nbrs) -> bool {
         for (std::size_t i = 0; i < nbrs.size(); ++i) {
             if (BaseTraitsT::is_nan_distance(nbrs[i].get_distance())) {
                 ARTEA_ERROR("Neighbor array contains NaN distances before applying logs.");
@@ -83,12 +83,12 @@ public:
         return true;
     }
 
-    static auto no_duplicate_check(const bnbr_arr_t& nbrs) -> bool {
+    static auto no_duplicate_check(const nbr_arr_t& nbrs) -> bool {
         std::vector<vertex_num_t> seen_ids;
         seen_ids.reserve(nbrs.size());
 
         for (std::size_t i = 0; i < nbrs.size(); ++i) {
-            vertex_num_t nbr_id = nbrs[i].get_level_vid();
+            vertex_num_t nbr_id = nbrs[i].get_vid();
             if (nbr_id == BaseTraitsT::invalid_vertex_id) {
                 break;
             }
@@ -101,10 +101,10 @@ public:
         return true;
     }
 
-    static auto distance_order_check(const bnbr_arr_t& nbrs) -> bool {
+    static auto distance_order_check(const nbr_arr_t& nbrs) -> bool {
         for (std::size_t i = 1; i < nbrs.size(); ++i) {
-            if (nbrs[i - 1].get_level_vid() == BaseTraitsT::invalid_vertex_id ||
-                nbrs[i].get_level_vid() == BaseTraitsT::invalid_vertex_id) {
+            if (nbrs[i - 1].get_vid() == BaseTraitsT::invalid_vertex_id ||
+                nbrs[i].get_vid() == BaseTraitsT::invalid_vertex_id) {
                 break;
             }
             if (nbr_dist_comp(nbrs[i], nbrs[i - 1])) {
@@ -115,7 +115,7 @@ public:
         return true;
     }
 
-    static auto full_check(const bnbr_arr_t& nbrs) -> bool {
+    static auto full_check(const nbr_arr_t& nbrs) -> bool {
         return invalid_id_suffix_check(nbrs) &&
                no_nan_check(nbrs) &&
                no_duplicate_check(nbrs) &&

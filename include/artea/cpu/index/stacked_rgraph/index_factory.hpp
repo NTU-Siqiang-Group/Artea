@@ -359,9 +359,9 @@ private:
                 // bucket, so sample_entries / beam_search may have
                 // picked it as a seed with distance 0. Including it
                 // here would produce a forward self-loop.
-                if (cand.get_base_vid() == new_vid) continue;
+                if (cand.get_vid() == new_vid) continue;
                 pruned_results.emplace_back(
-                    cand.get_base_vid(), cand.get_distance(), /*is_new=*/true);
+                    cand.get_vid(), cand.get_distance(), /*is_new=*/true);
             }
             pruning_updater.update_impl(
                 new_vid, pruned_results, index.max_nbr_size(target_level_id));

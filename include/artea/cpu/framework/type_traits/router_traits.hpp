@@ -47,9 +47,9 @@ struct RouterTraits : virtual public ComputerTraitsT, virtual public IndexTraits
     /** ------ Self Traits ------ **/
     using router_traits_t = RouterTraits<ComputerTraitsT, IndexTraitsT, IntraQueryParallel>;
 
-    // --- Candidate / result entry (unified 12-byte type) ---
+    // --- Candidate / result entry (unified 8-byte type) ---
 
-    /** @brief Unified candidate entry (level_vid + base_vid + distance). */
+    /** @brief Unified candidate entry (vid + explored bit + distance). */
     using candidate_entry_t = CandidateEntry<router_traits_t>;
 
     /** @brief Result entry is the same unified type. */

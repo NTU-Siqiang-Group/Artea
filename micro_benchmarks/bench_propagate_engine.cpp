@@ -106,7 +106,7 @@ private:
     vector_array_t base_vecs_;
     std::unique_ptr<dist_func_t> dist_func_;
     std::unique_ptr<conv_graph::index_t> bottom_graph_;
-    std::vector<bnbr_arr_t> initial_nbrs_;
+    std::vector<nbr_arr_t> initial_nbrs_;
 };
 
 // Benchmark for PropagateEngine with TriangleUpdater (with selective scheduling)

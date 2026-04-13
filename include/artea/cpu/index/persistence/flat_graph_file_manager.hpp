@@ -41,8 +41,8 @@ class FlatGraphFileManager {
     using vertex_num_t = typename IndexTraitsT::vertex_num_t;
     using vertex_id_t = typename IndexTraitsT::vertex_id_t;
     using distance_t = typename IndexTraitsT::distance_t;
-    using bnbr_t = typename IndexTraitsT::bnbr_t;
-    using bnbr_arr_t = typename IndexTraitsT::bnbr_arr_t;
+    using nbr_t = typename IndexTraitsT::nbr_t;
+    using nbr_arr_t = typename IndexTraitsT::nbr_arr_t;
     using vector_array_t = typename IndexTraitsT::vector_array_t;
     using layer_config_t = typename IndexTraitsT::layer_config_t;
 
@@ -109,7 +109,7 @@ public:
             if (nbr_count > 0) {
                 ofs.write(
                     reinterpret_cast<const char*>(nbrs.data()),
-                    static_cast<std::streamsize>(nbr_count * sizeof(bnbr_t))
+                    static_cast<std::streamsize>(nbr_count * sizeof(nbr_t))
                 );
             }
         }
@@ -205,7 +205,7 @@ public:
                 nbrs_arr[i].resize(nbr_count);
                 ifs.read(
                     reinterpret_cast<char*>(nbrs_arr[i].data()),
-                    static_cast<std::streamsize>(nbr_count * sizeof(bnbr_t))
+                    static_cast<std::streamsize>(nbr_count * sizeof(nbr_t))
                 );
             }
         }
