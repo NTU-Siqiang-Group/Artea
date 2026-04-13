@@ -24,6 +24,7 @@
 #pragma once
 
 #include <algorithm>
+#include <atomic>
 #include <cstddef>
 #include <cstdint>
 #include <random>
@@ -127,6 +128,12 @@ public:
             pool_size      += bucket_sizes[i];
         }
         if (pool_size == 0) return;
+
+        // Acquire-fence pair to the release fence in
+        // HierarchicalGraph::assign_layer: any vid we just observed in a
+        // bucket is paired with a fully-published _vertex_info_table entry
+        // before fetch_layer_nbrs dereferences it inside beam_search.
+        std::atomic_thread_fence(std::memory_order_acquire);
 
         const std::size_t queue_cap = candidate_queue.capacity();
 

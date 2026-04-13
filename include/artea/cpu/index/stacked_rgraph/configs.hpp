@@ -8,10 +8,15 @@
 
 #include <cmath>
 #include <artea/common/logger.hpp>
+#include <artea/cpu/index/conv_graph/configs.hpp>
 
 namespace artea {
 namespace cpu {
 namespace stacked_rgraph {
+
+/** @brief Stacked R-Graph reuses the same PruningConfig as conv_graph. */
+template <typename BaseTraitsT>
+using PruningConfig = conv_graph::PruningConfig<BaseTraitsT>;
 
 /**
  * @brief Configuration for the Stacked R-Net hierarchical index.

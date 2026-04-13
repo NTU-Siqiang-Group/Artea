@@ -69,6 +69,7 @@ namespace symmetric_knn_graph {
 
 namespace stacked_rgraph {
     template <typename BaseTraitsT> struct RGraphConfig;
+    template <typename BaseTraitsT> using PruningConfig = conv_graph::PruningConfig<BaseTraitsT>;
 }
 
 /* ------ Enumerations ------ */
@@ -236,7 +237,8 @@ public:
     /** @brief Namespace-specific type aliases for stacked_rgraph. */
     struct stacked_rgraph {
         stacked_rgraph() = delete;
-        using rgraph_config_t = cpu::stacked_rgraph::RGraphConfig<base_traits_t>;
+        using rgraph_config_t  = cpu::stacked_rgraph::RGraphConfig<base_traits_t>;
+        using pruning_config_t = cpu::stacked_rgraph::PruningConfig<base_traits_t>;
     };
 
     #ifdef ARTEA_PROFILING

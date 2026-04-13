@@ -67,8 +67,9 @@ struct TestConfig {
     uint32_t search_nn_qs;
     uint32_t select_nbrs_qs;
 
-    // RNG pruning scale (passed to HierarchicalPruningUpdater).
-    float pruning_scale;
+    // RNG pruning coefficients (forwarded to stacked_rgraph::pruning_config_t).
+    float scale_coeffs;
+    float shifted_coeffs;
 
     // Coverage sampling parameters
     uint32_t coverage_num_samples;
@@ -178,10 +179,10 @@ protected:
         ARTEA_INFO(fmt::format(
             "Building StackedRGraph: beta={:.3f}, L1_radius={:.6f}, "
             "max_nbr={}, search_nn_qs={}, select_nbrs_qs={}, "
-            "pruning_scale={:.3f}",
+            "scale_coeffs={:.3f}, shifted_coeffs={:.3f}",
             beta, l1_radius, g_config.max_nbr_size,
             g_config.search_nn_qs, g_config.select_nbrs_qs,
-            g_config.pruning_scale));
+            g_config.scale_coeffs, g_config.shifted_coeffs));
 
         auto t0 = std::chrono::high_resolution_clock::now();
 
@@ -195,13 +196,9 @@ protected:
         _graph = std::make_unique<stacked_rgraph::index_t>(
             total_vertices, rgraph_config);
 
-        // Build the updater fresh for this suite. It only needs the
-        // distance functor, the vector storage (for RNG triangle
-        // checks), and a scale coefficient.
-        _pruning_updater = std::make_unique<hierarchical_pruning_updater_t>(
-            dist_func,
-            _graph->get_vecs_storage(),
-            static_cast<ratio_t>(g_config.pruning_scale));
+        stacked_rgraph::pruning_config_t pruning_config(
+            static_cast<ratio_t>(g_config.scale_coeffs),
+            static_cast<ratio_t>(g_config.shifted_coeffs));
 
         vector_array_t owned_batch =
             base_vecs.extract_subset(0, total_vertices);
@@ -209,7 +206,7 @@ protected:
             *_graph,
             std::move(owned_batch),
             dist_func,
-            *_pruning_updater);
+            pruning_config);
 
         auto t1 = std::chrono::high_resolution_clock::now();
         _build_ms = std::chrono::duration_cast<std::chrono::milliseconds>(
@@ -250,18 +247,14 @@ protected:
 
     static void TearDownTestSuite() {
         _graph.reset();
-        _pruning_updater.reset();
     }
 
-    static std::unique_ptr<stacked_rgraph::index_t>         _graph;
-    static std::unique_ptr<hierarchical_pruning_updater_t>  _pruning_updater;
-    static int64_t                                          _build_ms;
+    static std::unique_ptr<stacked_rgraph::index_t>  _graph;
+    static int64_t                                   _build_ms;
 };
 
 std::unique_ptr<stacked_rgraph::index_t>
     StackedRGraphTest::_graph = nullptr;
-std::unique_ptr<hierarchical_pruning_updater_t>
-    StackedRGraphTest::_pruning_updater = nullptr;
 int64_t StackedRGraphTest::_build_ms = 0;
 
 // ============================================================
@@ -656,9 +649,12 @@ int main(int argc, char** argv) {
     program.add_argument("--select-nbrs-qs")
         .default_value(500u).scan<'u', uint32_t>();
 
-    program.add_argument("--pruning-scale")
-        .default_value(1.0f).scan<'g', float>()
-        .help("RNG triangle-inequality scale for HierarchicalPruningUpdater");
+    program.add_argument("--scale-coeffs")
+        .default_value(1.1f).scan<'g', float>()
+        .help("RNG pruning scale coefficient (stacked_rgraph::pruning_config_t)");
+    program.add_argument("--shifted-coeffs")
+        .default_value(0.0f).scan<'g', float>()
+        .help("RNG pruning shifted coefficient (stacked_rgraph::pruning_config_t)");
 
     program.add_argument("--coverage-num-samples")
         .default_value(1000u).scan<'u', uint32_t>();
@@ -681,7 +677,8 @@ int main(int argc, char** argv) {
     g_config.probe_quantile        = program.get<float>("--probe-quantile");
     g_config.search_nn_qs          = program.get<uint32_t>("--search-nn-qs");
     g_config.select_nbrs_qs        = program.get<uint32_t>("--select-nbrs-qs");
-    g_config.pruning_scale         = program.get<float>("--pruning-scale");
+    g_config.scale_coeffs          = program.get<float>("--scale-coeffs");
+    g_config.shifted_coeffs        = program.get<float>("--shifted-coeffs");
     g_config.coverage_num_samples  = program.get<uint32_t>("--coverage-num-samples");
     g_config.verbose               = program.get<bool>("--verbose");
 
@@ -701,7 +698,8 @@ int main(int argc, char** argv) {
     std::cout << "max_nbr_size: " << g_config.max_nbr_size << "\n";
     std::cout << "search_nn_qs:   " << g_config.search_nn_qs << "\n";
     std::cout << "select_nbrs_qs: " << g_config.select_nbrs_qs << "\n";
-    std::cout << "pruning_scale:  " << g_config.pruning_scale << "\n";
+    std::cout << "scale_coeffs:   " << g_config.scale_coeffs   << "\n";
+    std::cout << "shifted_coeffs: " << g_config.shifted_coeffs << "\n";
     std::cout << "==========================\n\n";
 
     DataProvider::instance().init();

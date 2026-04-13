@@ -293,6 +293,14 @@ public:
         vinfo.highest_level_id = highest_level_id;
         vinfo.slot_offset      = slot_offset;
 
+        // Publish: ensure the vinfo writes above are visible to any thread
+        // that later observes `vid` in _vids_by_highest_level. Without
+        // this fence, a concurrent sample_entries / descent may read vid
+        // from the bucket but see vinfo.highest_level_id ==
+        // unassigned_highest_level_id, then index _arenas[unassigned] in
+        // fetch_layer_nbrs and segfault.
+        std::atomic_thread_fence(std::memory_order_release);
+
         // Record vid into the bucket keyed by its highest_level_id so
         // that router seeding and compactor materialization can both
         // enumerate this group without linear-scanning the full info

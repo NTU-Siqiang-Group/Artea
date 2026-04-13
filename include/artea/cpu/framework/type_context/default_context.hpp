@@ -187,9 +187,10 @@ namespace symmetric_knn_graph {
 }
 
 namespace stacked_rgraph {
-    using rgraph_config_t = typename graph_factory_traits_t::stacked_rgraph::rgraph_config_t;
-    using index_t         = typename graph_factory_traits_t::stacked_rgraph::index_t;
-    using factory_t       = typename graph_factory_traits_t::stacked_rgraph::factory_t;
+    using rgraph_config_t  = typename graph_factory_traits_t::stacked_rgraph::rgraph_config_t;
+    using pruning_config_t = typename graph_factory_traits_t::stacked_rgraph::pruning_config_t;
+    using index_t          = typename graph_factory_traits_t::stacked_rgraph::index_t;
+    using factory_t        = typename graph_factory_traits_t::stacked_rgraph::factory_t;
 }
 
 }   // namespace cpu

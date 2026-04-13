@@ -89,6 +89,11 @@ class IndexFactory {
     using nbr_t            = typename GraphFactoryTraitsT::nbr_t;
     using vector_array_t   = typename GraphFactoryTraitsT::vector_array_t;
     using dist_func_t      = typename GraphFactoryTraitsT::dist_func_t;
+    using ratio_t          = typename GraphFactoryTraitsT::ratio_t;
+
+    using pruning_config_t = typename GraphFactoryTraitsT::stacked_rgraph::pruning_config_t;
+    using hierarchical_pruning_updater_t =
+        typename GraphFactoryTraitsT::hierarchical_pruning_updater_t;
 
     using hierarchical_graph_t =
         typename GraphFactoryTraitsT::dynamic::hierarchical_graph_t;
@@ -111,6 +116,12 @@ public:
      *         before switching to @c tbb::parallel_for. */
     static constexpr vertex_num_t startup_points = 0;
 
+    /** @brief Default PruningConfig used when the caller does not supply
+     *         one. */
+    static auto default_pruning_config() -> pruning_config_t {
+        return pruning_config_t(ratio_t(1.1), ratio_t(0.0));
+    }
+
     /**
      * @brief Append @p batch_vecs to @p index's owned storage, then
      *        insert every newly-appended vector as a new vertex.
@@ -118,23 +129,30 @@ public:
      * @param index            The index whose hierarchy is being grown.
      * @param batch_vecs       Batch to insert. Moved into @p index.
      * @param dist_func        Distance functor (must outlive this call).
-     * @param pruning_updater  Neighbor-pruning object implementing
-     *        @c update_impl(pivot_vid, std::vector<nbr_t>&, max_nbr_size).
-     *        Used for both forward-edge pruning and reverse-edge
-     *        overflow handling.
+     * @param pruning_config   RNG pruning coefficients. The factory
+     *        constructs its own @c hierarchical_pruning_updater_t from
+     *        these. Defaults to (scale=1.1, shifted=0.0).
      */
-    template <typename PruningUpdaterT>
     static auto add_vertices(
-        this_index_t&        index,
-        vector_array_t&&     batch_vecs,
-        const dist_func_t&   dist_func,
-        PruningUpdaterT&     pruning_updater
+        this_index_t&            index,
+        vector_array_t&&         batch_vecs,
+        const dist_func_t&       dist_func,
+        const pruning_config_t&  pruning_config = default_pruning_config()
     ) -> void {
         const vertex_num_t batch_size = static_cast<vertex_num_t>(batch_vecs.get_num_vecs());
         if (batch_size == 0) return;
 
         index.append_vecs(std::move(batch_vecs));
         const vertex_id_t first_new_vid = index.add_vertices(batch_size);
+
+        // Construct the pruning updater AFTER append_vecs so the storage
+        // reference it captures already points at populated data (belt-
+        // and-suspenders; vecs_storage_t is stable either way).
+        hierarchical_pruning_updater_t pruning_updater(
+            dist_func,
+            index.get_vecs_storage(),
+            pruning_config.scale_coeffs(),
+            pruning_config.shifted_coeffs());
 
         const auto& vecs_storage = index.get_vecs_storage();
         const vertex_num_t total_vecs = static_cast<vertex_num_t>(vecs_storage.get_num_vecs());
