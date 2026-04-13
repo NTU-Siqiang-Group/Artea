@@ -33,7 +33,7 @@ namespace knn_graph {
 template <typename IndexTraitsT>
 class IndexStructure {
 
-    using refining_graph_t    = typename IndexTraitsT::template refining_graph_t<IndexStructure<IndexTraitsT>>;
+    using refining_graph_t    = typename IndexTraitsT::dynamic::refining_graph_t;
     using vertex_num_t       = typename IndexTraitsT::vertex_num_t;
     using vertex_id_t        = typename IndexTraitsT::vertex_id_t;
     using nbr_arr_t         = typename IndexTraitsT::nbr_arr_t;

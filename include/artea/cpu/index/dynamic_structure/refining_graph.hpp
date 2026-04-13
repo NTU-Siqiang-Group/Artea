@@ -18,13 +18,17 @@ namespace cpu {
 namespace dynamic {
 
 /**
- * @brief Descent Graph: CRTP base graph structure suitable for gradient descent scenarios.
- *        Stores only graph topology and layer config.
- *        Subclasses (e.g. conv_graph::IndexStructure) extend with algorithm-specific configs.
+ * @brief Descent Graph: ordinary graph type that stores graph topology and
+ *        layer config. Used by composition (conv_graph::IndexStructure,
+ *        knn_graph::IndexStructure hold one through unique_ptr).
+ *
+ *        Optionally carries a sparse vid mapping (local_to_global /
+ *        global_to_local) so a single layer of HierarchicalGraph can be
+ *        extracted into a standalone RefiningGraph for refinement.
+ *
  * @tparam IndexTraitsT The index traits type.
- * @tparam DerivedClassT The concrete derived graph type (CRTP).
  */
-template <typename IndexTraitsT, typename DerivedClassT>
+template <typename IndexTraitsT>
 class RefiningGraph {
 
 protected:

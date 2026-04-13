@@ -24,7 +24,6 @@ namespace artea {
 namespace cpu {
 
 /** ------ Forward Declaration  ------ **/
-template <typename IndexTraitsT, typename DerivedClassT> class RefiningGraph;
 namespace conv_graph {
     template <typename IndexTraitsT> class IndexStructure;
 }
@@ -40,7 +39,7 @@ namespace compact {
     template <typename IndexTraitsT> class HierarchicalGraph;
 }
 namespace dynamic {
-    template <typename IndexTraitsT, typename DerivedClassT> class RefiningGraph;
+    template <typename IndexTraitsT> class RefiningGraph;
     template <typename IndexTraitsT> class HierarchicalGraph;
 }
 template <typename IndexTraitsT> class RefiningGraphCompactor;
@@ -61,18 +60,15 @@ struct IndexTraits : virtual public BaseTraitsT {
     /** @brief Base traits type. */
     using base_traits_t = BaseTraitsT;
 
-    /** @brief CRTP base descent graph type (template on DerivedClassT). */
-    template <typename DerivedClassT>
-    using refining_graph_t = dynamic::RefiningGraph<index_traits_t, DerivedClassT>;
-
     /** @brief Graph structures grouped by mode. */
     struct compact {
         compact() = delete;
-        using refining_graph_t       = cpu::compact::RefiningGraph<index_traits_t>;
+        using refining_graph_t     = cpu::compact::RefiningGraph<index_traits_t>;
         using hierarchical_graph_t = cpu::compact::HierarchicalGraph<index_traits_t>;
     };
     struct dynamic {
         dynamic() = delete;
+        using refining_graph_t     = cpu::dynamic::RefiningGraph<index_traits_t>;
         using hierarchical_graph_t = cpu::dynamic::HierarchicalGraph<index_traits_t>;
     };
 

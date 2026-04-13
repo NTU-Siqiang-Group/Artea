@@ -56,23 +56,23 @@ using IndexStructure = conv_graph::IndexStructure<IndexTraitsT>;
 }
 ```
 
-Otherwise, define a new class using the CRTP pattern:
+Otherwise, define a new class that **composes** a `dynamic::RefiningGraph`
+(it is an ordinary class — no CRTP):
 
 ```cpp
 namespace artea::cpu::my_graph {
 
 template <typename IndexTraitsT>
-class IndexStructure :
-    public IndexTraitsT::template refining_graph_t<IndexStructure<IndexTraitsT>>
-{
-    using base_t             = typename IndexTraitsT::template refining_graph_t<IndexStructure<IndexTraitsT>>;
+class IndexStructure {
+    using refining_graph_t   = typename IndexTraitsT::dynamic::refining_graph_t;
     using propagate_config_t = typename IndexTraitsT::my_graph::propagate_config_t;
     using pruning_config_t   = typename IndexTraitsT::my_graph::pruning_config_t;
 
 public:
     IndexStructure(const vector_array_t& vecs, const layer_config_t cfg,
                    const pruning_config_t pc, const propagate_config_t pp)
-        : base_t(vecs, cfg), _pruning_config(pc), _propagate_config(pp) {}
+        : _refining_graph(std::make_unique<refining_graph_t>(vecs, cfg)),
+          _pruning_config(pc), _propagate_config(pp) {}
 
     // Move-only
     IndexStructure(const IndexStructure&) = delete;

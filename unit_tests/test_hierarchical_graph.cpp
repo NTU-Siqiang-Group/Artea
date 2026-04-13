@@ -619,14 +619,9 @@ TEST_F(HierarchicalGraphTest, CompactorPreservesTopology) {
 
 namespace {
 
-// Minimal CRTP-derived RefiningGraph for the test. The base supplies the
-// dense + sparse ctors and every method we need.
-struct TestRefiningGraph
-    : public dynamic::RefiningGraph<index_traits_t, TestRefiningGraph>
-{
-    using base_t = dynamic::RefiningGraph<index_traits_t, TestRefiningGraph>;
-    using base_t::base_t;
-};
+// RefiningGraph is now an ordinary (non-CRTP) class, so we can use it
+// directly without a derived stub.
+using TestRefiningGraph = dynamic::RefiningGraph<index_traits_t>;
 
 }  // namespace
 
