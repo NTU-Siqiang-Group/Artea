@@ -412,6 +412,26 @@ public:
     }
 
     /**
+     * @brief Re-mark every top-candidate as "unexplored" by rebuilding
+     *        @c _unexplored_set from @c _top_candidates.
+     *
+     * After a beam_search call, every candidate it popped is gone from
+     * @c _unexplored_set forever. In a single-layer search that's fine,
+     * but the shared-queue hierarchical descent calls beam_search
+     * multiple times on the same queue (once per level). Without this
+     * reset, candidates that were popped at level H never get their
+     * level-(H-1) neighbors expanded in the subsequent beam_search —
+     * the queue silently collapses and @c min_dist_per_level[1] reflects
+     * only the residual unexplored entries rather than the true L_1 NN.
+     */
+    auto reset_exploration() -> void {
+        _unexplored_set = min_heap_t();
+        for (const auto& cand : _top_candidates) {
+            _unexplored_set.push(cand);
+        }
+    }
+
+    /**
      * @brief Retrieve and mark the best unexplored candidate.
      *
      * Legacy 2-element pair overload kept for backward compatibility with

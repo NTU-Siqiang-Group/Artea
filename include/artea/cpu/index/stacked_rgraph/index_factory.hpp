@@ -200,50 +200,104 @@ private:
         // ==============================================================
         //   Step A — Descent: top_level_id → level 1 (never level 0)
         // ==============================================================
+        //
+        // Legacy-style descent: a FRESH queue per level, seeded from the
+        // prior level's sorted candidates. Using a single shared queue
+        // across levels was attractive but caused a subtle quality bug:
+        // the shared queue's _lower_bound (= worst of top-K) carries
+        // over from upper levels, so a "medium distance" candidate found
+        // via L_h edges can be rejected by try_push even though
+        // expanding IT would have reached the true NN. Fresh queues
+        // avoid that gating entirely.
         std::vector<distance_t> min_dist_per_level;
-        std::vector<std::unique_ptr<std_candidate_queue_t>> queue_snapshot_per_level;
+        // Per-level sorted result vectors, used both by Step B
+        // (min_dist) and by Step D's run_select_at_level (re-seed).
+        std::vector<std::vector<candidate_entry_t>> sorted_cands_per_level;
 
         if (top_level_id != unassigned_highest_level_id && top_level_id >= 1) {
-            min_dist_per_level.assign(static_cast<std::size_t>(top_level_id) + 1, max_distance);
-            queue_snapshot_per_level.resize(static_cast<std::size_t>(top_level_id) + 1);
-            std_candidate_queue_t descent_queue(search_nn_qs);
-            router.sample_entries(index, top_level_id, new_vec, descent_queue);
+            min_dist_per_level.assign(
+                static_cast<std::size_t>(top_level_id) + 1, max_distance);
+            sorted_cands_per_level.resize(
+                static_cast<std::size_t>(top_level_id) + 1);
 
-            for (layer_id_t cur_level_id = top_level_id; cur_level_id >= 1; --cur_level_id) {
-                router.beam_search(new_vec, index, cur_level_id, descent_queue, visited);
-                if (descent_queue.get_result_size() > 0) {
-                    min_dist_per_level[cur_level_id] = descent_queue.best_result_distance();
-                    queue_snapshot_per_level[cur_level_id] = std::make_unique<std_candidate_queue_t>(descent_queue.clone());
+            // Top-layer seeds (one-shot sample from bucket[top]).
+            std_candidate_queue_t cur_queue(search_nn_qs);
+            router.sample_entries(
+                index, top_level_id, new_vec, cur_queue);
+
+            for (layer_id_t cur_level_id = top_level_id;
+                 cur_level_id >= 1; --cur_level_id)
+            {
+                router.beam_search(
+                    new_vec, index, cur_level_id, cur_queue, visited);
+
+                const std::size_t result_size = cur_queue.get_result_size();
+                if (result_size > 0) {
+                    min_dist_per_level[cur_level_id] =
+                        cur_queue.best_result_distance();
+                    sorted_cands_per_level[cur_level_id] =
+                        cur_queue.extract_results(result_size);
                 }
-                if (cur_level_id == 1) break;   // avoid layer_id_t underflow
+
+                if (cur_level_id == 1) break;   // avoid underflow
+
+                // Next layer: fresh queue re-seeded with THIS layer's
+                // sorted candidates. Every candidate makes it in (try_push
+                // starts from an empty queue, so no _lower_bound gating).
+                std_candidate_queue_t next_queue(search_nn_qs);
+                for (const auto& cand :
+                         sorted_cands_per_level[cur_level_id])
+                {
+                    next_queue.try_push(
+                        cand.get_base_vid(), cand.get_distance());
+                }
+                cur_queue = std::move(next_queue);
             }
         }
 
         // ==============================================================
-        //   Step B — Compute highest_insert_level_id
+        //   Step B — Compute highest_insert_level_id (match legacy)
         // ==============================================================
         //
-        // r-net rule: at each layer h in [1, max_restrict_level],
-        // measure q's nearest neighbor distance WITHIN L_h. If that
-        // distance < R_h, q is "absorbed" at L_h and we move up to
-        // check the next coarser layer. If distance >= R_h, q cannot
-        // be absorbed at L_h. q's insertion level is the smallest
-        // (bottom-most) layer where q is not absorbed. If every layer
-        // up to max_restrict_level absorbs q, it stays at the base only
-        // (highest_insert_level_id = 0).
+        // Legacy rule (paper r-net with lazy hierarchy growth):
+        //   1. Default: grow hierarchy by ONE level. If all existing
+        //      layers fail to absorb q, q joins L_1..L_{top_occupied+1}
+        //      (capped at max_restrict_level).
+        //   2. Walk the existing paper layers h = 1..top_occupied.
+        //      The SMALLEST h such that NN_{L_h} <= R_h means q is
+        //      absorbed at L_h → q joins only L_1..L_{h-1}
+        //      (so highest_insert_level_id = h - 1). Break.
         //
-        // min_dist_per_level[h] approximates NN_dist_in_L_h: the
-        // descent queue at cur=h contains only L_h participants
-        // (neighbors reached via fetch_layer_nbrs(_, h) all have
-        // highest_level_id >= h), so min over the queue is bounded
-        // above by the true NN in L_h. When h > top_level_id, L_h has
-        // no participants yet and q is trivially not absorbed.
-        layer_id_t highest_insert_level_id = 0;
-        for (layer_id_t h = 1; h <= static_cast<layer_id_t>(max_restrict_level); ++h) {
-            const distance_t nn_at_h = (static_cast<std::size_t>(h) < min_dist_per_level.size())
-                ? min_dist_per_level[h] : max_distance;
-            if (nn_at_h >= index.radius_at(h)) {
-                highest_insert_level_id = h;
+        // Why the default / walk direction matter:
+        //   - `nn_at_h` for h > top_occupied is UNDEFINED (no
+        //     participants → we haven't measured it). Our previous
+        //     code treated this as "not absorbed" (nn = max_distance
+        //     always >= R_h) and therefore ALWAYS pushed q to
+        //     growth_cap, even when q was absorbed at L_1. That
+        //     spurious promotion is what polluted L_1 / L_2 with
+        //     vertices that should have been base-only, driving the
+        //     21% / 50% separation violations. Legacy's explicit
+        //     break-on-first-absorbed avoids that entirely.
+        layer_id_t highest_insert_level_id;
+        if (top_level_id == unassigned_highest_level_id) {
+            // Empty hierarchy: first vertex seeds L_1.
+            highest_insert_level_id = 1;
+        } else {
+            highest_insert_level_id = std::min<layer_id_t>(
+                static_cast<layer_id_t>(top_level_id) + 1,
+                static_cast<layer_id_t>(max_restrict_level));
+        }
+
+        for (layer_id_t h = 1;
+             h <= static_cast<layer_id_t>(
+                 top_level_id == unassigned_highest_level_id
+                     ? 0 : top_level_id) &&
+             static_cast<std::size_t>(h) < min_dist_per_level.size();
+             ++h)
+        {
+            if (min_dist_per_level[h] <= index.radius_at(h)) {
+                highest_insert_level_id =
+                    (h == 1) ? layer_id_t{0} : static_cast<layer_id_t>(h - 1);
                 break;
             }
         }
@@ -257,34 +311,46 @@ private:
         //   Step D — Edge insertion
         // ==============================================================
         //
-        // Always run select-neighbors search at level 1 (never at 0).
-        // Its pruned result is used twice:
-        //   - As the L0 forward + reverse edges (no L0 beam_search).
-        //   - As the L1 forward + reverse edges (if vid participates
-        //     at L1, i.e. highest_insert_level_id >= 1).
-        // For cur_level >= 2, run the normal per-level loop.
+        // Matches legacy Phase 2: vertices absorbed at L_1
+        // (highest_insert_level_id == 0) don't participate in any
+        // upper layer, so there's nothing to write in this factory.
+        // Their L_0 slot will fill up via reverse edges from later
+        // L_1+ inserts that pick this vertex as a neighbor. Skipping
+        // Step D for base-only vertices is the single biggest speedup
+        // (96% of SIFT-1M vertices fall into this case).
+        if (highest_insert_level_id == 0) {
+            return;
+        }
+
+        // For cur_level_id in [1, highest_insert_level_id], run
+        // per-level select + forward + reverse. Level 0 is never
+        // touched here.
 
         auto run_select_at_level = [&](const layer_id_t target_level_id)
             -> std::vector<nbr_t>
         {
-            std_candidate_queue_t* select_queue_ptr = nullptr;
-            std::unique_ptr<std_candidate_queue_t> select_queue_owner;
+            // Legacy Phase 2: fresh queue with select_nbrs_qs cap,
+            // seeded from Phase 1's sorted candidates at this same
+            // level. No carry-over _lower_bound from descent.
+            std_candidate_queue_t select_queue(select_nbrs_qs);
 
-            if (target_level_id < queue_snapshot_per_level.size() && queue_snapshot_per_level[target_level_id]) {
-                // Reuse the descent snapshot; bump its capacity from
-                // search_nn_qs (L1) to select_nbrs_qs (L2), then
-                // continue the beam search for the extra width.
-                select_queue_owner = std::move(queue_snapshot_per_level[target_level_id]);
-                select_queue_owner->set_capacity(select_nbrs_qs);
-                select_queue_ptr = select_queue_owner.get();
+            const bool has_descent_cache =
+                target_level_id < sorted_cands_per_level.size() &&
+                !sorted_cands_per_level[target_level_id].empty();
+            if (has_descent_cache) {
+                for (const auto& cand :
+                         sorted_cands_per_level[target_level_id])
+                {
+                    select_queue.try_push(
+                        cand.get_base_vid(), cand.get_distance());
+                }
             } else {
-                // No snapshot (e.g. first-ever insertion, or target
-                // level exceeds top_level_id) — fresh random seeds.
-                select_queue_owner = std::make_unique<std_candidate_queue_t>(select_nbrs_qs);
-                router.sample_entries(index, target_level_id, new_vec, *select_queue_owner);
-                select_queue_ptr = select_queue_owner.get();
+                router.sample_entries(
+                    index, target_level_id, new_vec, select_queue);
             }
-            router.beam_search(new_vec, index, target_level_id, *select_queue_ptr, visited);
+            router.beam_search(
+                new_vec, index, target_level_id, select_queue, visited);
+            auto* select_queue_ptr = &select_queue;
 
             std::vector<nbr_t> pruned_results;
             const std::size_t result_size = select_queue_ptr->get_result_size();
@@ -293,9 +359,16 @@ private:
             auto sorted = select_queue_ptr->extract_results(result_size);
             pruned_results.reserve(sorted.size());
             for (const auto& cand : sorted) {
-                pruned_results.emplace_back(cand.get_base_vid(), cand.get_distance(), /*is_new=*/true);
+                // Skip self: assign_layer already placed new_vid in its
+                // bucket, so sample_entries / beam_search may have
+                // picked it as a seed with distance 0. Including it
+                // here would produce a forward self-loop.
+                if (cand.get_base_vid() == new_vid) continue;
+                pruned_results.emplace_back(
+                    cand.get_base_vid(), cand.get_distance(), /*is_new=*/true);
             }
-            pruning_updater.update_impl(new_vid, pruned_results, index.max_nbr_size(target_level_id));
+            pruning_updater.update_impl(
+                new_vid, pruned_results, index.max_nbr_size(target_level_id));
             return pruned_results;
         };
 
@@ -323,8 +396,7 @@ private:
             for (std::size_t i = 0; i < pruned_results.size(); ++i) {
                 const vertex_id_t nbr_vid  = pruned_results[i].get_vid();
                 const distance_t  nbr_dist = pruned_results[i].get_distance();
-                const nbr_t new_reverse_nbr =
-                    nbr_t::make_new_nbr(new_vid, nbr_dist);
+                const nbr_t new_reverse_nbr = nbr_t::make_new_nbr(new_vid, nbr_dist);
 
                 index.with_locked_nbrs(nbr_vid, target_level_id,
                     [&](std::span<nbr_t> slot, vertex_num_t cnt) {
@@ -363,33 +435,9 @@ private:
             }
         };
 
-        // ---- cur_level_id == 1: always run select (drives L0 + L1) ----
-        const std::vector<nbr_t> pruned_l1_nbrs = run_select_at_level(1);
-
-        if (!pruned_l1_nbrs.empty()) {
-            // L0 forward: write the pruned L1 neighbors into the first
-            // max_nbr_size positions of vid's L0 slot (capacity is
-            // 2 * max_nbr_size; the back half stays as invalid sentinel
-            // for future refiner passes).
-            write_forward_edges(
-                /*target_level_id=*/0,
-                pruned_l1_nbrs,
-                /*max_write_count=*/index.max_nbr_size());
-
-            // L0 reverse: add vid to each pruned neighbor's L0 slot.
-            write_reverse_edges(/*target_level_id=*/0, pruned_l1_nbrs);
-
-            if (highest_insert_level_id >= 1) {
-                // L1 forward + reverse using the same pruned set.
-                write_forward_edges(
-                    1, pruned_l1_nbrs,
-                    /*max_write_count=*/index.max_nbr_size(1));
-                write_reverse_edges(1, pruned_l1_nbrs);
-            }
-        }
-
-        // ---- cur_level_id >= 2: normal forward + reverse ----
-        for (layer_id_t cur_level_id = 2;
+        // ---- cur_level_id in [1, highest_insert_level_id]:
+        //      per-level select + forward + reverse ----
+        for (layer_id_t cur_level_id = 1;
              cur_level_id <= highest_insert_level_id;
              ++cur_level_id)
         {

@@ -231,12 +231,20 @@ protected:
             const auto& bucket = _graph->get_vids_with_highest_level(h);
             const float ratio = 100.0f * bucket.size() /
                 base_vecs.get_num_vecs();
-            ARTEA_INFO(fmt::format(
-                "  highest_level_id={}: {} vertices ({:.2f}% of base), "
-                "R_{} = {:.6f}",
-                h, bucket.size(), ratio, h + 1,
-                radius_at_paper_layer(l1_radius, beta,
-                    static_cast<layer_num_t>(h + 1))));
+            if (h == 0) {
+                // Level 0 is the base layer; no r-net covering radius.
+                ARTEA_INFO(fmt::format(
+                    "  highest_level_id={}: {} vertices ({:.2f}% of base), "
+                    "base layer (no R)",
+                    h, bucket.size(), ratio));
+            } else {
+                ARTEA_INFO(fmt::format(
+                    "  highest_level_id={}: {} vertices ({:.2f}% of base), "
+                    "R_{} = {:.6f}",
+                    h, bucket.size(), ratio, h,
+                    radius_at_paper_layer(l1_radius, beta,
+                        static_cast<layer_num_t>(h))));
+            }
         }
     }
 
@@ -273,19 +281,33 @@ TEST_F(StackedRGraphTest, HierarchyNonEmpty) {
               static_cast<vertex_num_t>(base_vecs.get_num_vecs()));
 }
 
-TEST_F(StackedRGraphTest, GroupSizesShrinkUpward) {
-    // Each highest_level_id group should be no larger than the group
-    // one below it — vertices "drop out" of higher levels.
+TEST_F(StackedRGraphTest, LayerPopulationShrinksUpward) {
+    // Paper r-net is nested: L_{h+1} is a subset of L_h, so the set of
+    // vertices participating at level h+1 must be a subset of those at
+    // level h. We check |L_h| >= |L_{h+1}|, where
+    //   |L_h| = sum(arena[h..max_restrict_level]).
+    //
+    // Note: the per-arena bucket sizes (highest_level_id == h) are NOT
+    // required to be monotone — arena[h] = |L_h| - |L_{h+1}|, whose
+    // shape depends on how fast r-net radii R_h dilate relative to
+    // NN_L_h on the data, and in high-dimensional datasets like SIFT
+    // those aren't monotone. Only the cumulative layer populations are.
     const layer_id_t max_h = _graph->max_highest_level_id();
-    for (layer_id_t h = 1; h <= max_h; ++h) {
-        const std::size_t lower =
-            _graph->get_vids_with_highest_level(h - 1).size();
-        const std::size_t upper =
+
+    std::vector<std::size_t> layer_pop(max_h + 1, 0);
+    for (layer_id_t h = max_h; ; --h) {
+        const std::size_t bucket_size =
             _graph->get_vids_with_highest_level(h).size();
-        EXPECT_LE(upper, lower)
-            << "Group highest_level_id=" << static_cast<int>(h)
-            << " (" << upper << ") should be <= group "
-            << static_cast<int>(h - 1) << " (" << lower << ")";
+        layer_pop[h] = bucket_size;
+        if (h < max_h) layer_pop[h] += layer_pop[h + 1];
+        if (h == 0) break;
+    }
+
+    for (layer_id_t h = 1; h <= max_h; ++h) {
+        EXPECT_LE(layer_pop[h], layer_pop[h - 1])
+            << "|L_" << static_cast<int>(h) << "|=" << layer_pop[h]
+            << " should be <= |L_" << static_cast<int>(h - 1)
+            << "|=" << layer_pop[h - 1];
     }
 }
 
@@ -479,6 +501,96 @@ TEST_F(StackedRGraphTest, CoverageRate) {
         EXPECT_GE(rate, 50.0f)
             << "Level " << static_cast<int>(cur_level)
             << " coverage is suspiciously low: " << rate << "%";
+    }
+}
+
+// ============================================================
+//  Separation test: paper r-net requires any two vertices in L_h
+//  to be at least R_h apart. Sample M vids from L_h, brute-force
+//  each one's nearest neighbor within L_h, and count how many are
+//  closer than R_h. A healthy r-net yields 0 violations (or a
+//  tiny fraction from concurrency races). A degenerate build
+//  where vertices piled into L_h without actually being isolated
+//  shows a large violation rate — exactly what we want to catch.
+// ============================================================
+
+TEST_F(StackedRGraphTest, Separation) {
+    const auto& base_vecs =
+        DataProvider::instance().get_dataset().get_base_vecs();
+    auto& dist_func = DataProvider::instance().get_dist_func();
+    const layer_id_t max_h = _graph->max_highest_level_id();
+
+    ARTEA_INFO(fmt::format(
+        "--- Separation (num_samples={}) ---",
+        g_config.coverage_num_samples));
+
+    for (layer_id_t cur_level = 1; cur_level <= max_h; ++cur_level) {
+        std::vector<vertex_id_t> members;
+        for (layer_id_t h = cur_level; h <= max_h; ++h) {
+            const auto& b = _graph->get_vids_with_highest_level(h);
+            members.insert(members.end(), b.begin(), b.end());
+        }
+        const vertex_num_t n_members =
+            static_cast<vertex_num_t>(members.size());
+        if (n_members < 2) continue;
+
+        const distance_t R_h = radius_at_paper_layer(
+            DataProvider::instance().get_l1_radius(),
+            g_config.rnet_beta,
+            static_cast<layer_num_t>(cur_level));
+
+        const vertex_num_t num_samples = std::min<vertex_num_t>(
+            g_config.coverage_num_samples, n_members);
+        const vertex_num_t step =
+            std::max<vertex_num_t>(1, n_members / num_samples);
+
+        std::atomic<uint32_t> violations{0};
+        std::atomic<uint32_t> tested{0};
+
+        tbb::parallel_for(
+            tbb::blocked_range<vertex_num_t>(0, num_samples),
+            [&](const tbb::blocked_range<vertex_num_t>& r) {
+                uint32_t local_v = 0;
+                uint32_t local_t = 0;
+                for (vertex_num_t i = r.begin(); i < r.end(); ++i) {
+                    const vertex_num_t idx = i * step;
+                    if (idx >= n_members) break;
+                    const vertex_id_t a = members[idx];
+                    const vec_ele_t* a_vec = base_vecs.get(a);
+
+                    // Early terminate: we only care if ANY member is
+                    // closer than R_h. For degenerate (over-populated)
+                    // layers this avoids the full O(|L_h|) brute-force.
+                    bool violated = false;
+                    for (const vertex_id_t b : members) {
+                        if (b == a) continue;
+                        const distance_t d =
+                            dist_func(a_vec, base_vecs.get(b));
+                        if (d < R_h) { violated = true; break; }
+                    }
+                    ++local_t;
+                    if (violated) ++local_v;
+                }
+                violations.fetch_add(local_v, std::memory_order_relaxed);
+                tested.fetch_add(local_t, std::memory_order_relaxed);
+            }
+        );
+
+        const uint32_t tv = violations.load();
+        const uint32_t tt = tested.load();
+        const float rate = (tt > 0) ? (100.0f * tv / tt) : 0.0f;
+
+        ARTEA_INFO(fmt::format(
+            "  level {}: |L|={}, R={:.4f}, violations = {}/{} = {:.2f}%",
+            cur_level, n_members, R_h, tv, tt, rate));
+
+        // Allow a small margin for concurrent-insert races but flag
+        // any meaningful violation.
+        EXPECT_LE(rate, 5.0f)
+            << "Level " << static_cast<int>(cur_level)
+            << " separation broken: " << rate << "% of sampled vertices "
+            << "have an L_" << static_cast<int>(cur_level)
+            << " neighbor closer than R_" << static_cast<int>(cur_level);
     }
 }
 

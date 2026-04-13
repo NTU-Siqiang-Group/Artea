@@ -181,6 +181,16 @@ public:
     ) const -> void {
         if (candidate_queue.empty()) return;
 
+        // Re-mark every existing candidate as unexplored. In a fresh
+        // single-layer call this is a no-op, but under shared-queue
+        // hierarchical descent (same queue across cur=top..1), candidates
+        // popped at an upper layer would otherwise never be expanded via
+        // this layer's edges because pop_best_unexplored permanently
+        // removes them from the unexplored heap. That silent loss causes
+        // min_dist_per_level to under-reflect the true NN and wrecks
+        // subsequent absorption decisions.
+        candidate_queue.reset_exploration();
+
         visited.clear();
         for (const auto& seed : candidate_queue) {
             visited.set(seed.get_base_vid());
@@ -188,22 +198,19 @@ public:
 
         while (!candidate_queue.empty()) {
             if (candidate_queue.should_terminate()) break;
-            const candidate_entry_t current =
-                candidate_queue.pop_best_unexplored_entry();
+            const candidate_entry_t current = candidate_queue.pop_best_unexplored_entry();
             if (current.is_invalid()) break;
 
             const vertex_id_t cur_vid = current.get_base_vid();
             const auto nbrs_span = hg.fetch_layer_nbrs(cur_vid, level_id);
-            const vertex_num_t cur_nbr_count =
-                hg.num_valid_nbrs(cur_vid, level_id);
+            const vertex_num_t cur_nbr_count = hg.num_valid_nbrs(cur_vid, level_id);
 
             for (vertex_num_t i = 0; i < cur_nbr_count; ++i) {
                 const nbr_t nbr = nbrs_span[i];
                 if (nbr.is_invalid()) break;
                 const vertex_id_t nbr_vid = nbr.get_vid();
                 if (visited.test_and_set(nbr_vid)) continue;
-                const distance_t dist =
-                    _dist_func(query_vec, _vecs_data.get(nbr_vid));
+                const distance_t dist = _dist_func(query_vec, _vecs_data.get(nbr_vid));
                 candidate_queue.try_push(nbr_vid, dist);
             }
         }
