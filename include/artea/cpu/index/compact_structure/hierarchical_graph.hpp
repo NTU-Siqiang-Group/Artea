@@ -91,7 +91,7 @@ public:
      * @brief Construct a compact graph sized to hold every vid's slot
      *        from a source dynamic graph.
      *
-     * @param max_highest_level_id          Inclusive upper bound of
+     * @param max_restrict_level          Inclusive upper bound of
      *                                      per-vertex @c highest_level_id.
      * @param max_nbr_size                  Per-vertex capacity at upper
      *                                      levels; level 0 uses 2x this.
@@ -104,17 +104,17 @@ public:
      *                                      into that arena.
      */
     HierarchicalGraph(
-        const layer_num_t              max_highest_level_id,
+        const layer_num_t              max_restrict_level,
         const vertex_num_t             max_nbr_size,
         const vertex_num_t             num_vertices,
         std::vector<std::size_t>       arena_vid_capacity_per_group
     ) :
-        _max_highest_level_id(max_highest_level_id),
+        _max_restrict_level(max_restrict_level),
         _max_nbr_size(max_nbr_size),
         _num_vertices(num_vertices),
-        _arenas(static_cast<std::size_t>(max_highest_level_id) + 1),
+        _arenas(static_cast<std::size_t>(max_restrict_level) + 1),
         _vids_by_highest_level(
-            static_cast<std::size_t>(max_highest_level_id) + 1),
+            static_cast<std::size_t>(max_restrict_level) + 1),
         _vertex_info_table(num_vertices)
     {
         for (std::size_t h = 0; h < _arenas.size(); ++h) {
@@ -141,8 +141,8 @@ public:
     }
 
     __attribute__((always_inline))
-    auto max_highest_level_id() const -> layer_id_t {
-        return _max_highest_level_id;
+    auto max_restrict_level() const -> layer_id_t {
+        return _max_restrict_level;
     }
 
     __attribute__((always_inline))
@@ -225,7 +225,7 @@ public:
      * @brief Largest @c h with a non-empty bucket, or
      *        @c unassigned_highest_level_id if every bucket is empty.
      */
-    auto top_occupied_highest_level_id() const -> layer_id_t {
+    auto top_occupied_level_id() const -> layer_id_t {
         for (std::size_t h = _vids_by_highest_level.size(); h-- > 0; ) {
             if (!_vids_by_highest_level[h].empty()) {
                 return static_cast<layer_id_t>(h);
@@ -267,12 +267,12 @@ public:
     }
 
 private:
-    layer_num_t  _max_highest_level_id;
+    layer_num_t  _max_restrict_level;
     vertex_num_t _max_nbr_size;
     vertex_num_t _num_vertices;
 
     /** @brief One arena per highest_level_id in
-     *         @c [0, _max_highest_level_id]. */
+     *         @c [0, _max_restrict_level]. */
     std::vector<vid_arena_container_t>    _arenas;
 
     /** @brief _vids_by_highest_level[h] lists every vid with

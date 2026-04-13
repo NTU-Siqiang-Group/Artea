@@ -92,7 +92,7 @@ public:
      * @c highest_level_id >= @p level_id. In storage terms, the eligible
      * vids are the union of @c hg.get_vids_with_highest_level(h) for
      * every @c h in
-     * @c [level_id, hg.top_occupied_highest_level_id()].
+     * @c [level_id, hg.top_occupied_level_id()].
      *
      * The accumulated cross-bucket index range is sampled via one random
      * starting offset plus a fixed stride, matching the old
@@ -106,7 +106,7 @@ public:
         const vec_ele_t*          query_vec,
         std_candidate_queue_t&    candidate_queue
     ) const -> void {
-        const layer_id_t top_level_id = hg.top_occupied_highest_level_id();
+        const layer_id_t top_level_id = hg.top_occupied_level_id();
         if (top_level_id == HierarchicalGraphT::unassigned_highest_level_id) {
             return;
         }

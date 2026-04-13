@@ -207,7 +207,7 @@ private:
         const vertex_num_t search_nn_qs   = index.search_nn_qs();
         const vertex_num_t select_nbrs_qs = index.select_nbrs_qs();
         const layer_num_t  max_restrict_level = index.max_restrict_level();
-        const layer_id_t   top_level_id = index.top_occupied_highest_level_id();
+        const layer_id_t   top_level_id = index.top_occupied_level_id();
 
         // ==============================================================
         //   Step A — Descent: top_level_id → level 1 (never level 0)

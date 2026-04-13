@@ -125,7 +125,7 @@ public:
     /** @brief Sentinel @c highest_level_id for rows that have not yet
      *         been passed through @c assign_layer. Chosen to be
      *         distinguishable from any valid level id in the usable
-     *         range @c [0, max_highest_level_id]. */
+     *         range @c [0, max_restrict_level]. */
     static constexpr layer_id_t unassigned_highest_level_id =
         std::numeric_limits<layer_id_t>::max();
 
@@ -173,13 +173,13 @@ public:
      *        pre-sized so no later call to @c add_vertices needs to
      *        grow storage.
      *
-     * @param max_highest_level_id  Inclusive upper bound on the value of
+     * @param max_restrict_level  Inclusive upper bound on the value of
      *                              @c highest_level_id for any vertex in
      *                              this graph. Determines how many
      *                              per-level-group arenas are allocated
      *                              (one arena per possible
      *                              @c highest_level_id in
-     *                              @c [0, max_highest_level_id]).
+     *                              @c [0, max_restrict_level]).
      * @param max_nbr_size          Per-vertex neighbor capacity at every
      *                              upper level. The bottom level
      *                              automatically uses @c 2 * max_nbr_size.
@@ -189,15 +189,15 @@ public:
      *                              concurrent-unsafe @c resize.
      */
     HierarchicalGraph(
-        const layer_num_t  max_highest_level_id,
+        const layer_num_t  max_restrict_level,
         const vertex_num_t max_nbr_size,
         const vertex_num_t total_vertices
     ) :
-        _max_highest_level_id(max_highest_level_id),
+        _max_restrict_level(max_restrict_level),
         _max_nbr_size(max_nbr_size)
     {
         const std::size_t num_arenas =
-            static_cast<std::size_t>(max_highest_level_id) + 1;
+            static_cast<std::size_t>(max_restrict_level) + 1;
         _arenas.reserve(num_arenas);
         for (std::size_t h = 0; h < num_arenas; ++h) {
             const layer_id_t layer = static_cast<layer_id_t>(h);
@@ -270,11 +270,11 @@ public:
         const vertex_id_t vid,
         const layer_id_t  highest_level_id
     ) -> void {
-        if (highest_level_id > _max_highest_level_id) {
+        if (highest_level_id > _max_restrict_level) {
             ARTEA_ERROR(fmt::format(
                 "assign_layer: highest_level_id ({}) exceeds "
-                "max_highest_level_id ({})",
-                highest_level_id, _max_highest_level_id));
+                "max_restrict_level ({})",
+                highest_level_id, _max_restrict_level));
         }
 
         auto& arena = *_arenas[highest_level_id];
@@ -417,8 +417,8 @@ public:
     // =================================================================
 
     __attribute__((always_inline))
-    auto max_highest_level_id() const -> layer_id_t {
-        return _max_highest_level_id;
+    auto max_restrict_level() const -> layer_id_t {
+        return _max_restrict_level;
     }
 
     /** @brief Per-vertex neighbor capacity at @p level_id (double for L0). */
@@ -469,14 +469,14 @@ public:
     }
 
     /**
-     * @brief Largest @c h in @c [0, max_highest_level_id] with a non-empty
+     * @brief Largest @c h in @c [0, max_restrict_level] with a non-empty
      *        bucket, or @c unassigned_highest_level_id if every bucket
      *        is empty (i.e. no vertex has been assigned yet).
      *
-     * Linear scan over (max_highest_level_id + 1) buckets — typically
+     * Linear scan over (max_restrict_level + 1) buckets — typically
      * ≤ 20 — so this is effectively O(1).
      */
-    auto top_occupied_highest_level_id() const -> layer_id_t {
+    auto top_occupied_level_id() const -> layer_id_t {
         for (std::size_t h = _vids_by_highest_level.size(); h-- > 0; ) {
             if (!_vids_by_highest_level[h].empty()) {
                 return static_cast<layer_id_t>(h);
@@ -496,7 +496,7 @@ public:
     /** @brief Current bump-allocator capacity (in slots) of arena @p h.
      *         Used by the compactor to size the compact arena. */
     __attribute__((always_inline))
-    auto get_arena_slot_capacity(const layer_id_t h) const -> vertex_num_t {
+    auto get_arena_capacity_in_arena(const layer_id_t h) const -> vertex_num_t {
         return _arenas[h]->slot_capacity();
     }
 
@@ -561,14 +561,14 @@ private:
     // -----------------------------------------------------------------
 
     /** @brief Inclusive upper bound of @c highest_level_id for any vertex. */
-    layer_num_t _max_highest_level_id;
+    layer_num_t _max_restrict_level;
 
     /** @brief Per-vertex neighbor capacity at every upper layer. The
      *         bottom layer implicitly uses @c 2 * _max_nbr_size. */
     vertex_num_t _max_nbr_size;
 
     /** @brief One arena per possible @c highest_level_id in
-     *         @c [0, _max_highest_level_id]. */
+     *         @c [0, _max_restrict_level]. */
     std::vector<std::unique_ptr<level_group_arena_t>> _arenas;
 
     /** @brief Per-vertex info records, indexed by @c vertex_id_t.

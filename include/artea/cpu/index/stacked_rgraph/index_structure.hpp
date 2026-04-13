@@ -93,7 +93,7 @@ public:
         _max_restrict_level(
             rgraph_config_t::compute_max_restrict_level(total_vertices)),
         _hierarchical_graph(std::make_unique<hierarchical_graph_t>(
-            // max_highest_level_id == paper's max_restrict_level.
+            // max_restrict_level == paper's max_restrict_level.
             // Valid highest_level_id values: [0, max_restrict_level].
             //   - 0                 = vertex participates only at the
             //                         base (level 0).
@@ -185,18 +185,13 @@ public:
     }
 
     __attribute__((always_inline))
-    auto top_occupied_highest_level_id() const -> layer_id_t {
-        return _hierarchical_graph->top_occupied_highest_level_id();
+    auto top_occupied_level_id() const -> layer_id_t {
+        return _hierarchical_graph->top_occupied_level_id();
     }
 
     __attribute__((always_inline))
     auto get_num_vertices() const -> vertex_num_t {
         return _hierarchical_graph->get_num_vertices();
-    }
-
-    __attribute__((always_inline))
-    auto max_highest_level_id() const -> layer_id_t {
-        return _hierarchical_graph->max_highest_level_id();
     }
 
     /** @brief Per-vertex neighbor capacity at upper levels (level 0

@@ -72,28 +72,33 @@ public:
     static auto compact_graph(
         const typename dynamic::hierarchical_graph_t& src
     ) -> typename compact::hierarchical_graph_t {
-        const layer_id_t   max_h        = src.max_highest_level_id();
+        using src_graph_t = typename dynamic::hierarchical_graph_t;
+
         const vertex_num_t num_vertices = src.get_num_vertices();
         const vertex_num_t max_nbr_size = src.max_nbr_size();
+
+        // Trim the compact graph's max_restrict_level down to the
+        // actually-occupied top level — any trailing arenas that src
+        // pre-allocated but never filled are dropped. When src is
+        // empty we fall back to 0 (a single L0 arena with 0 capacity)
+        // so the compact graph remains a valid empty container.
+        const layer_id_t src_top = src.top_occupied_level_id();
+        const layer_id_t max_h   =
+            (src_top == src_graph_t::unassigned_highest_level_id)
+                ? layer_id_t{0}
+                : src_top;
 
         // 1. Size each compact arena exactly to match the source's
         //    current bump-allocator capacity. slot_capacity >= num
         //    claimed slots, so slot_offsets copied verbatim from src
         //    always fit.
-        std::vector<std::size_t> arena_vid_capacity(
-            static_cast<std::size_t>(max_h) + 1);
+        std::vector<std::size_t> arena_vid_capacity(static_cast<std::size_t>(max_h) + 1);
         for (layer_id_t h = 0; h <= max_h; ++h) {
-            const std::size_t slot_nbrs_count =
-                static_cast<std::size_t>(h + 2) *
-                static_cast<std::size_t>(max_nbr_size);
-            arena_vid_capacity[h] =
-                static_cast<std::size_t>(src.get_arena_slot_capacity(h)) *
-                slot_nbrs_count;
+            const std::size_t slot_nbrs_count = static_cast<std::size_t>(h + 2) * static_cast<std::size_t>(max_nbr_size);
+            arena_vid_capacity[h] = static_cast<std::size_t>(src.get_arena_capacity_in_arena(h)) * slot_nbrs_count;
         }
 
-        typename compact::hierarchical_graph_t result(
-            max_h, max_nbr_size, num_vertices,
-            std::move(arena_vid_capacity));
+        typename compact::hierarchical_graph_t result(max_h, max_nbr_size, num_vertices, std::move(arena_vid_capacity));
 
         // 2. Copy per-vertex (highest_level_id, slot_offset) verbatim.
         auto& compact_vit = result.get_vertex_info_table_mut();
@@ -102,8 +107,7 @@ public:
             compact_vit[vid].slot_offset      = src.get_slot_offset(vid);
         }
 
-        // 3. Copy per-group vid buckets (tbb::concurrent_vector →
-        //    std::vector).
+        // 3. Copy per-group vid buckets (tbb::concurrent_vector → std::vector).
         auto& compact_buckets = result.get_vids_by_highest_level_mut();
         for (layer_id_t h = 0; h <= max_h; ++h) {
             const auto& src_bucket = src.get_vids_with_highest_level(h);
@@ -118,14 +122,10 @@ public:
         //    friendly.
         for (layer_id_t h = 0; h <= max_h; ++h) {
             for (const vertex_id_t vid : compact_buckets[h]) {
-                const std::size_t slot_offset =
-                    compact_vit[vid].slot_offset;
+                const std::size_t slot_offset = compact_vit[vid].slot_offset;
                 vertex_id_t* slot_base = result.arena_base(h) + slot_offset;
 
-                for (layer_id_t cur_level = 0;
-                     cur_level <= h;
-                     ++cur_level)
-                {
+                for (layer_id_t cur_level = 0; cur_level <= h; ++cur_level) {
                     const auto src_layer_nbrs =
                         src.fetch_layer_nbrs(vid, cur_level);
                     const vertex_num_t count =

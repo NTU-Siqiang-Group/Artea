@@ -213,18 +213,17 @@ protected:
             t1 - t0).count();
 
         const layer_id_t top_level_id =
-            _graph->top_occupied_highest_level_id();
+            _graph->top_occupied_level_id();
         ARTEA_INFO(fmt::format(
             "StackedRGraph built in {} ms: top_occupied_level={}, "
-            "max_highest_level_id={}, max_restrict_level={}",
+            "max_restrict_level={}",
             _build_ms,
             (top_level_id == dynamic::hierarchical_graph_t
                 ::unassigned_highest_level_id)
                 ? -1 : static_cast<int>(top_level_id),
-            _graph->max_highest_level_id(),
             _graph->max_restrict_level()));
 
-        for (layer_id_t h = 0; h <= _graph->max_highest_level_id(); ++h) {
+        for (layer_id_t h = 0; h <= _graph->max_restrict_level(); ++h) {
             const auto& bucket = _graph->get_vids_with_highest_level(h);
             const float ratio = 100.0f * bucket.size() /
                 base_vecs.get_num_vecs();
@@ -264,7 +263,7 @@ int64_t StackedRGraphTest::_build_ms = 0;
 TEST_F(StackedRGraphTest, HierarchyNonEmpty) {
     ASSERT_NE(_graph, nullptr);
     using HG = dynamic::hierarchical_graph_t;
-    EXPECT_NE(_graph->top_occupied_highest_level_id(),
+    EXPECT_NE(_graph->top_occupied_level_id(),
               HG::unassigned_highest_level_id);
 
     // Level 0 must hold every vertex — it's the base layer.
@@ -285,7 +284,7 @@ TEST_F(StackedRGraphTest, LayerPopulationShrinksUpward) {
     // shape depends on how fast r-net radii R_h dilate relative to
     // NN_L_h on the data, and in high-dimensional datasets like SIFT
     // those aren't monotone. Only the cumulative layer populations are.
-    const layer_id_t max_h = _graph->max_highest_level_id();
+    const layer_id_t max_h = _graph->max_restrict_level();
 
     std::vector<std::size_t> layer_pop(max_h + 1, 0);
     for (layer_id_t h = max_h; ; --h) {
@@ -308,7 +307,7 @@ TEST_F(StackedRGraphTest, NeighborListsAreValid) {
     const auto& base_vecs =
         DataProvider::instance().get_dataset().get_base_vecs();
     const vertex_num_t n = static_cast<vertex_num_t>(base_vecs.get_num_vecs());
-    const layer_id_t max_h = _graph->max_highest_level_id();
+    const layer_id_t max_h = _graph->max_restrict_level();
 
     // Sample-based verification across per-highest-level groups.
     constexpr vertex_num_t max_per_group = 5000;
@@ -390,7 +389,7 @@ TEST_F(StackedRGraphTest, CoverageRate) {
     const auto& base_vecs =
         DataProvider::instance().get_dataset().get_base_vecs();
     auto& dist_func = DataProvider::instance().get_dist_func();
-    const layer_id_t max_h = _graph->max_highest_level_id();
+    const layer_id_t max_h = _graph->max_restrict_level();
 
     ARTEA_INFO(fmt::format(
         "--- Coverage rate (num_samples={}) ---",
@@ -511,7 +510,7 @@ TEST_F(StackedRGraphTest, Separation) {
     const auto& base_vecs =
         DataProvider::instance().get_dataset().get_base_vecs();
     auto& dist_func = DataProvider::instance().get_dist_func();
-    const layer_id_t max_h = _graph->max_highest_level_id();
+    const layer_id_t max_h = _graph->max_restrict_level();
 
     ARTEA_INFO(fmt::format(
         "--- Separation (num_samples={}) ---",

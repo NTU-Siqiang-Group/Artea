@@ -22,7 +22,7 @@
  *                 - fetch_layer_nbrs slot layout and sentinel init,
  *                 - with_locked_nbrs serializing concurrent edge writes,
  *                 - bucket accessors (get_vids_with_highest_level,
- *                   top_occupied_highest_level_id),
+ *                   top_occupied_level_id),
  *                 - compactor fidelity (dynamic topology → compact
  *                   topology byte-for-byte).
  *               A dataset is loaded only to fix a realistic vertex count;
@@ -61,7 +61,7 @@ struct TestConfig {
     std::string dataset_name;
     uint32_t    num_vertices;          // scale for the fixture graph
     uint32_t    max_nbr_size;
-    uint32_t    max_highest_level_id;
+    uint32_t    max_restrict_level;
     uint32_t    seed;
 } g_config;
 
@@ -143,10 +143,10 @@ protected:
             g_config.num_vertices,
             DataProvider::instance().dataset_size());
         _max_nbr      = g_config.max_nbr_size;
-        _max_h        = static_cast<layer_id_t>(g_config.max_highest_level_id);
+        _max_h        = static_cast<layer_id_t>(g_config.max_restrict_level);
 
         _graph = std::make_unique<hg_t>(
-            /*max_highest_level_id=*/_max_h,
+            /*max_restrict_level=*/_max_h,
             /*max_nbr_size=*/_max_nbr,
             /*total_vertices=*/_num_vertices);
 
@@ -191,7 +191,7 @@ layer_id_t               HierarchicalGraphTest::_max_h        = 0;
 
 // ---- 1. Construction metadata: immutable graph-level properties ----
 TEST_F(HierarchicalGraphTest, ConstructionMetadata) {
-    EXPECT_EQ(_graph->max_highest_level_id(), _max_h);
+    EXPECT_EQ(_graph->max_restrict_level(), _max_h);
     EXPECT_EQ(_graph->max_nbr_size(), _max_nbr);
     // Level 0 is doubled; other levels are not.
     EXPECT_EQ(_graph->max_nbr_size(0),
@@ -206,10 +206,10 @@ TEST_F(HierarchicalGraphTest, ConstructionMetadata) {
 // ---- 2. add_vertices on a fresh graph returns contiguous ids and
 //         leaves rows unassigned until assign_layer runs. ----
 TEST(HierarchicalGraphStandalone, AddVerticesBasics) {
-    hg_t fresh(/*max_highest_level_id=*/2, /*max_nbr_size=*/16,
+    hg_t fresh(/*max_restrict_level=*/2, /*max_nbr_size=*/16,
                /*total_vertices=*/1024);
     EXPECT_EQ(fresh.get_num_vertices(), 0u);
-    EXPECT_EQ(fresh.top_occupied_highest_level_id(),
+    EXPECT_EQ(fresh.top_occupied_level_id(),
               hg_t::unassigned_highest_level_id);
 
     const vertex_id_t first_a = fresh.add_vertices(200);
@@ -226,7 +226,7 @@ TEST(HierarchicalGraphStandalone, AddVerticesBasics) {
                   hg_t::unassigned_highest_level_id);
     }
     // No bucket populated yet.
-    EXPECT_EQ(fresh.top_occupied_highest_level_id(),
+    EXPECT_EQ(fresh.top_occupied_level_id(),
               hg_t::unassigned_highest_level_id);
 }
 
@@ -250,7 +250,7 @@ TEST_F(HierarchicalGraphTest, ParallelAssignLayerSlotUniqueness) {
                 << " inside arena h=" << h;
         }
         // And all offsets fit inside the pre-sized arena.
-        const auto cap = _graph->get_arena_slot_capacity(h);
+        const auto cap = _graph->get_arena_capacity_in_arena(h);
         for (const vertex_id_t vid : bucket) {
             const auto off = _graph->get_slot_offset(vid);
             // slot_offset is in nbr_t units; convert to slot units.
@@ -270,7 +270,7 @@ TEST_F(HierarchicalGraphTest, ParallelAssignLayerSlotUniqueness) {
     }
     EXPECT_EQ(total, _num_vertices);
 
-    // (d) top_occupied_highest_level_id equals the largest h with
+    // (d) top_occupied_level_id equals the largest h with
     //     any assignment.
     layer_id_t expected_top = 0;
     for (layer_id_t h = 0; h <= _max_h; ++h) {
@@ -278,7 +278,7 @@ TEST_F(HierarchicalGraphTest, ParallelAssignLayerSlotUniqueness) {
             expected_top = h;
         }
     }
-    EXPECT_EQ(_graph->top_occupied_highest_level_id(), expected_top);
+    EXPECT_EQ(_graph->top_occupied_level_id(), expected_top);
 }
 
 // ---- 4. fetch_layer_nbrs layout + sentinel init ----
@@ -540,15 +540,16 @@ TEST_F(HierarchicalGraphTest, IndexFactoryLikeWorkload) {
 TEST_F(HierarchicalGraphTest, CompactorPreservesTopology) {
     auto compact_graph = compactor_t::compact_graph(*_graph);
 
-    // Structural metadata matches.
-    EXPECT_EQ(compact_graph.max_highest_level_id(),
-              _graph->max_highest_level_id());
+    // Structural metadata matches. Compactor trims max_restrict_level
+    // to the source's top_occupied_level_id, so compare against that.
+    EXPECT_EQ(compact_graph.max_restrict_level(),
+              _graph->top_occupied_level_id());
     EXPECT_EQ(compact_graph.max_nbr_size(),
               _graph->max_nbr_size());
     EXPECT_EQ(compact_graph.get_num_vertices(),
               _graph->get_num_vertices());
-    EXPECT_EQ(compact_graph.top_occupied_highest_level_id(),
-              _graph->top_occupied_highest_level_id());
+    EXPECT_EQ(compact_graph.top_occupied_level_id(),
+              _graph->top_occupied_level_id());
 
     // Per-vertex highest_level_id matches.
     const vertex_num_t check_n =
@@ -560,7 +561,11 @@ TEST_F(HierarchicalGraphTest, CompactorPreservesTopology) {
 
     // Buckets match (elements as sets — dynamic source is a
     // tbb::concurrent_vector, compact copy is a std::vector).
-    for (layer_id_t h = 0; h <= _max_h; ++h) {
+    // Iterate up to compact's (trimmed) max — trailing dynamic arenas
+    // past top_occupied_level_id are empty by construction, so
+    // nothing is lost.
+    const layer_id_t compact_max_h = compact_graph.max_restrict_level();
+    for (layer_id_t h = 0; h <= compact_max_h; ++h) {
         const auto& src_bucket =
             _graph->get_vids_with_highest_level(h);
         const auto dst_span =
@@ -578,7 +583,7 @@ TEST_F(HierarchicalGraphTest, CompactorPreservesTopology) {
 
     // Per-level neighbor vids match (nbr_t → vertex_id_t).
     // Sample vids to keep the test bounded.
-    for (layer_id_t h = 0; h <= _max_h; ++h) {
+    for (layer_id_t h = 0; h <= compact_max_h; ++h) {
         const auto& bucket = _graph->get_vids_with_highest_level(h);
         const std::size_t sample_n =
             std::min<std::size_t>(bucket.size(), 200);
@@ -638,14 +643,14 @@ int main(int argc, char** argv) {
     g_config.dataset_name         = program.get<std::string>("--dataset");
     g_config.num_vertices         = program.get<uint32_t>("--num-vertices");
     g_config.max_nbr_size         = program.get<uint32_t>("--max-nbr-size");
-    g_config.max_highest_level_id = program.get<uint32_t>("--max-highest-level-id");
+    g_config.max_restrict_level = program.get<uint32_t>("--max-highest-level-id");
     g_config.seed                 = program.get<uint32_t>("--seed");
 
     std::cout << "\n=== Test Configuration ===\n"
               << "Dataset:              " << g_config.dataset_name << "\n"
               << "num_vertices:         " << g_config.num_vertices << "\n"
               << "max_nbr_size:         " << g_config.max_nbr_size << "\n"
-              << "max_highest_level_id: " << g_config.max_highest_level_id << "\n"
+              << "max_restrict_level: " << g_config.max_restrict_level << "\n"
               << "seed:                 " << g_config.seed << "\n"
               << "==========================\n\n";
 
