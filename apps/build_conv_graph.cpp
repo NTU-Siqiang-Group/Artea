@@ -156,7 +156,7 @@ int main(int argc, char** argv) {
         params.num_routing_loops
     );
 
-    conv_graph::index_t refining_graph = conv_graph::factory_t::construct_graph(
+    conv_graph::index_t graph_index = conv_graph::factory_t::construct_graph(
         dataset.get_base_vecs(),
         layer_config,
         pruning_config,
@@ -170,7 +170,7 @@ int main(int argc, char** argv) {
 
     // Calculate and output index size
     index_size_calculator_t index_size_calc;
-    auto index_size_info = index_size_calc.calculate_refining_graph_size(refining_graph);
+    auto index_size_info = index_size_calc.calculate_refining_graph_size(graph_index);
 
     ARTEA_INFO(fmt::format("Index size: {:.2f} MB ({} bytes)",
         index_size_info.total_mb, index_size_info.total_bytes));
@@ -201,7 +201,7 @@ int main(int argc, char** argv) {
     std::cout << fmt::format("  Triangle updater iters: {}", params.num_triu_iters) << std::endl;
     std::cout << fmt::format("  Routing loops:          {}", params.num_routing_loops) << std::endl;
     std::cout << "\n--- Build Results ---" << std::endl;
-    std::cout << fmt::format("  Num vertices:           {}", refining_graph.get_num_vertices()) << std::endl;
+    std::cout << fmt::format("  Num vertices:           {}", graph_index.get_num_vertices()) << std::endl;
     std::cout << fmt::format("  Index size:             {:.2f} MB ({} bytes)", index_size_info.total_mb, index_size_info.total_bytes) << std::endl;
     std::cout << fmt::format("  Construction time:      {:.2f} s", duration.count() / 1000.0) << std::endl;
     std::cout << "\n--- Output ---" << std::endl;
@@ -229,7 +229,7 @@ int main(int argc, char** argv) {
     timestamp_stream << std::put_time(std::gmtime(&time_t_now), "%Y-%m-%dT%H:%M:%SZ");
     metadata["timestamp"] = timestamp_stream.str();
 
-    flat_graph_file_manager_t::snapshot(refining_graph, output_path.string(), metadata);
+    flat_graph_file_manager_t::snapshot(graph_index, output_path.string(), metadata);
 
     ARTEA_INFO("Graph saved successfully");
 

@@ -29,9 +29,9 @@
 namespace artea {
 namespace cpu {
 
-template <typename RefinerTraitsT, typename RefiningGraphT>
+template <typename RefinerTraitsT>
 class PruningUpdater :
-    public RefinerTraitsT::template neighbor_updater_t<RefiningGraphT, PruningUpdater<RefinerTraitsT, RefiningGraphT>> {
+    public RefinerTraitsT::template neighbor_updater_t<PruningUpdater<RefinerTraitsT>> {
 
     using vertex_id_t = typename RefinerTraitsT::vertex_id_t;
     using vertex_num_t = typename RefinerTraitsT::vertex_num_t;
@@ -44,7 +44,8 @@ class PruningUpdater :
     using log_table_t = typename RefinerTraitsT::log_table_t;
     using dist_func_t = typename RefinerTraitsT::dist_func_t;
     using pruning_condition_t = typename RefinerTraitsT::pruning_condition_t;
-    using base_class_t = typename RefinerTraitsT::template neighbor_updater_t<RefiningGraphT, PruningUpdater<RefinerTraitsT, RefiningGraphT>>;
+    using refining_graph_t = typename RefinerTraitsT::dynamic::refining_graph_t;
+    using base_class_t = typename RefinerTraitsT::template neighbor_updater_t<PruningUpdater<RefinerTraitsT>>;
     static constexpr vertex_id_t invalid_vertex_id = RefinerTraitsT::invalid_vertex_id;
     static constexpr distance_t nan_distance = RefinerTraitsT::nan_distance;
     static constexpr distance_t max_distance = RefinerTraitsT::max_distance;
@@ -55,12 +56,12 @@ public:
     static constexpr const char* updater_name = "pruning_updater";
 
     PruningUpdater(
-        const dist_func_t& dist_func,
-        const vector_array_t& vecs_data,
-        log_table_t& log_table,
-        const RefiningGraphT& refining_graph,
-        const ratio_t scale_coeffs,
-        const ratio_t shifted_coeffs = 0.0
+        const dist_func_t&        dist_func,
+        const vector_array_t&     vecs_data,
+        log_table_t&              log_table,
+        const refining_graph_t&   refining_graph,
+        const ratio_t             scale_coeffs,
+        const ratio_t             shifted_coeffs = 0.0
     ) : base_class_t(dist_func, vecs_data, log_table, refining_graph),
         _inv_scale_coeffs(static_cast<ratio_t>(1.0) / scale_coeffs),
         _shifted_coeffs(shifted_coeffs) {}
@@ -79,7 +80,8 @@ public:
      */
     template <pruning_condition_t ConditionType = pruning_condition_t::scaled_ineq>
     auto update_impl(
-        const vertex_id_t pivot_vid,
+        const vertex_id_t /*local_vid*/,
+        const vertex_id_t /*global_vid*/,
         nbr_arr_t& origin_nbrs
     ) -> void {
         #ifndef NDEBUG

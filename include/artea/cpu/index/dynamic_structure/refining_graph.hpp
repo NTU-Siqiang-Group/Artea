@@ -150,6 +150,13 @@ public:
         return _global_to_local;
     }
 
+    /** @brief Translate a single global vid to its local row index
+     *         (identity passthrough in dense mode). */
+    __attribute__((always_inline))
+    auto local_id_of(const vertex_id_t global_vid) const -> vertex_id_t {
+        return _global_to_local.empty() ? global_vid : _global_to_local[global_vid];
+    }
+
     /** @brief Translate a local row index to its global vid (identity
      *         passthrough in dense mode). */
     __attribute__((always_inline))
@@ -190,29 +197,22 @@ public:
 
     /**
      * @brief Iterate over every participating vertex in parallel. The
-     *        callback receives the global vid (identity in dense mode,
-     *        translated in sparse mode), so refiner bodies that pass it
-     *        into @c fetch_nbrs / @c _vecs_data.get(...) work uniformly.
+     *        callback receives @c (local_vid, global_vid). In identity
+     *        mode both are equal; in sparse mode @c local_vid is the
+     *        row index in @c _nbrs_arr and @c global_vid is the resolved
+     *        global id (via @c vid_at). Callers that only need one can
+     *        ignore the other with an unused-parameter lambda.
      */
     template <typename Fn>
     auto parallel_for_each_vertex(Fn&& fn) const -> void {
-        if (is_identity_mapped()) {
-            tbb::parallel_for(
-                tbb::blocked_range<vertex_id_t>(0, _num_vertices),
-                [&](const tbb::blocked_range<vertex_id_t>& r) {
-                    for (vertex_id_t v = r.begin(); v != r.end(); ++v) {
-                        fn(v);
-                    }
-                });
-        } else {
-            tbb::parallel_for(
-                tbb::blocked_range<std::size_t>(0, _local_to_global.size()),
-                [&](const tbb::blocked_range<std::size_t>& r) {
-                    for (std::size_t i = r.begin(); i != r.end(); ++i) {
-                        fn(_local_to_global[i]);
-                    }
-                });
-        }
+        tbb::parallel_for(
+            tbb::blocked_range<vertex_num_t>(0, _num_vertices),
+            [&](const tbb::blocked_range<vertex_num_t>& r) {
+                for (vertex_num_t i = r.begin(); i != r.end(); ++i) {
+                    const vertex_id_t local = static_cast<vertex_id_t>(i);
+                    fn(local, vid_at(i));
+                }
+            });
     }
 
     auto get_base_metadata() const -> nlohmann::json {

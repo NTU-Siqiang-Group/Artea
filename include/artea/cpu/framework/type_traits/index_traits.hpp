@@ -50,6 +50,9 @@ template <typename IndexTraitsT> class HierarchicalGraphCompactor;
 namespace stacked_rgraph {
     template <typename IndexTraitsT> class IndexStructure;
 }
+namespace artea_graph {
+    template <typename IndexTraitsT> class IndexStructure;
+}
 
 template <typename BaseTraitsT>
 struct IndexTraits : virtual public BaseTraitsT {
@@ -110,6 +113,13 @@ struct IndexTraits : virtual public BaseTraitsT {
     struct stacked_rgraph : BaseTraitsT::stacked_rgraph {
         stacked_rgraph() = delete;
         using index_t = cpu::stacked_rgraph::IndexStructure<index_traits_t>;
+    };
+
+    /** @brief Namespace-scoped index types for artea_graph
+     *  (stacked_rgraph backbone with per-layer conv_graph refinement). */
+    struct artea_graph : BaseTraitsT::artea_graph {
+        artea_graph() = delete;
+        using index_t = cpu::artea_graph::IndexStructure<index_traits_t>;
     };
 
     /** @brief Minimum number of vertices required for a layer to continue building upper layers. */

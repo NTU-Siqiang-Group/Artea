@@ -32,16 +32,16 @@ enum class IVFConstructPolicyT {
 };
 
 // ----- Forward Declaration  ------ //
-template <typename RefinerTraitsT, typename RefiningGraphT, typename DerivedClassT> class NeighborUpdater;
-template <typename RefinerTraitsT, typename RefiningGraphT> class TriangleUpdater;
-template <typename RefinerTraitsT, typename RefiningGraphT> class PruningUpdater;
+template <typename RefinerTraitsT, typename DerivedClassT> class NeighborUpdater;
+template <typename RefinerTraitsT> class TriangleUpdater;
+template <typename RefinerTraitsT> class PruningUpdater;
 template <typename RefinerTraitsT> class HierarchicalPruningUpdater;
-template <typename RefinerTraitsT, typename RefiningGraphT> class ReverseUpdater;
-template <typename RefinerTraitsT, typename RefiningGraphT> class RandomUpdater;
-template <typename RefinerTraitsT, typename RefiningGraphT> class RoutingUpdater;
-template <typename RefinerTraitsT, typename RefiningGraphT> class TruncateUpdater;
+template <typename RefinerTraitsT> class ReverseUpdater;
+template <typename RefinerTraitsT> class RandomUpdater;
+template <typename RefinerTraitsT> class RoutingUpdater;
+template <typename RefinerTraitsT> class TruncateUpdater;
 template <typename RefinerTraitsT> class RandomEG;
-template <typename RefinerTraitsT, typename RefiningGraphT, bool SelectiveSchedule> class PropagateEngine;
+template <typename RefinerTraitsT> class PropagateEngine;
 template <typename RefinerTraitsT> class IVFPartitions;
 
 template <typename ComputerTraitsT, typename BufferTraitsT, typename IndexTraitsT, typename RouterTraitsT>
@@ -58,16 +58,14 @@ struct RefinerTraits :
     /** @brief IVF construction policy type. */
     using ivf_construct_policy_t = IVFConstructPolicyT;
 
-    template <typename RefiningGraphT, typename DerivedClassT>
-    using neighbor_updater_t = NeighborUpdater<refiner_traits_t, RefiningGraphT, DerivedClassT>;
+    template <typename DerivedClassT>
+    using neighbor_updater_t = NeighborUpdater<refiner_traits_t, DerivedClassT>;
 
     /** @brief Triangle updater. */
-    template <typename RefiningGraphT>
-    using triangle_updater_t = TriangleUpdater<refiner_traits_t, RefiningGraphT>;
+    using triangle_updater_t = TriangleUpdater<refiner_traits_t>;
 
     /** @brief Pruning updater (no log writes). */
-    template <typename RefiningGraphT>
-    using pruning_updater_t = PruningUpdater<refiner_traits_t, RefiningGraphT>;
+    using pruning_updater_t = PruningUpdater<refiner_traits_t>;
 
     /** @brief Hierarchical pruning updater — operates on nbr_t, not
      *         nbr_t, and takes max_nbr_size as a per-call argument.
@@ -76,27 +74,22 @@ struct RefinerTraits :
         HierarchicalPruningUpdater<refiner_traits_t>;
 
     /** @brief Reverse edge updater. */
-    template <typename RefiningGraphT>
-    using reverse_updater_t = ReverseUpdater<refiner_traits_t, RefiningGraphT>;
+    using reverse_updater_t = ReverseUpdater<refiner_traits_t>;
 
     /** @brief Random neighbor updater. */
-    template <typename RefiningGraphT>
-    using random_updater_t = RandomUpdater<refiner_traits_t, RefiningGraphT>;
+    using random_updater_t = RandomUpdater<refiner_traits_t>;
 
     /** @brief Routing-based neighbor updater (uses construct-mode router). */
-    template <typename RefiningGraphT>
-    using routing_updater_t = RoutingUpdater<refiner_traits_t, RefiningGraphT>;
+    using routing_updater_t = RoutingUpdater<refiner_traits_t>;
 
     /** @brief Truncate updater: trims neighbor arrays to max_nbr_size. */
-    template <typename RefiningGraphT>
-    using truncate_updater_t = TruncateUpdater<refiner_traits_t, RefiningGraphT>;
+    using truncate_updater_t = TruncateUpdater<refiner_traits_t>;
 
     /** @brief Random edge generator. */
     using random_eg_t = RandomEG<refiner_traits_t>;
 
     /** @brief Type for propagation engine. */
-    template <typename RefiningGraphT, bool SelectiveSchedule>
-    using propagate_engine_t = PropagateEngine<refiner_traits_t, RefiningGraphT, SelectiveSchedule>;
+    using propagate_engine_t = PropagateEngine<refiner_traits_t>;
 
     /** @brief Neighbor array checker. */
     using nbr_arr_checker_t = typename IndexTraitsT::nbr_arr_checker_t;

@@ -1,0 +1,33 @@
+# TSan can't model libgomp's barrier / team-end, which causes spurious
+# races between OpenMP workers (from_vecs_file) and the main thread's
+# subsequent move-assigns. These are NOT real races — they are false
+# positives due to invisible OMP synchronization.
+#
+# Suppression syntax reminders:
+#   race:<substr>          matches if any frame's function name contains substr
+#   called_from_lib:<lib>  matches only immediate caller; libgomp at stack
+#                          bottom is NOT matched — avoid it here.
+#
+# Keep active only while hunting a non-OMP race.
+
+# OMP workers touching VectorArray::_storage during parallel file load.
+race:VectorArray
+race:_Vector_impl_data
+race:_M_move_assign
+race:_M_copy_data
+race:stl_vector.h
+# OMP thread entry point (catches the "previous read by T#" side).
+race:gomp_thread_start
+
+# --- TBB work-stealing / partitioner internals ---
+# TBB uses relaxed atomics + fences that TSan does not fully model,
+# yielding spurious races in libtbb code paths (partitioner.h,
+# task_dispatcher, work-stealing check_being_stolen, small_object_pool).
+# Same principle as the OMP suppressions above: silence library internals
+# so we can see the real races in *our* code.
+race:tbb::detail::d1
+race:tbb::detail::r1
+race:check_being_stolen
+race:adaptive_mode
+race:partitioner.h
+race:task_dispatcher

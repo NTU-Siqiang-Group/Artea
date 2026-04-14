@@ -64,7 +64,7 @@ protected:
         dist_func_ = std::make_unique<dist_func_t>(vec_dim_);
 
         // Initialize descent graph
-        refining_graph_ = std::make_unique<conv_graph::index_t>(
+        graph_index_ = std::make_unique<conv_graph::index_t>(
             *vecs_,
             layer_config_,
             pruning_config_,
@@ -132,12 +132,12 @@ protected:
     conv_graph::propagate_config_t propagate_config_{4, 14, 0.6};
     std::unique_ptr<vector_array_t> vecs_;
     std::unique_ptr<dist_func_t> dist_func_;
-    std::unique_ptr<conv_graph::index_t> refining_graph_;
+    std::unique_ptr<conv_graph::index_t> graph_index_;
 };
 
 TEST_F(PropagateEngineCorrectnessTest, TrianglePruningWithPropagateEngine) {
     // Create initial complete graph
-    auto& nbrs_arr = refining_graph_->get_nbrs_arr();
+    auto& nbrs_arr = graph_index_->get_nbrs_arr();
 
     for (vertex_id_t u = 0; u < num_vertices_; ++u) {
         nbr_arr_t& nbrs = nbrs_arr[u];
@@ -176,10 +176,10 @@ TEST_F(PropagateEngineCorrectnessTest, TrianglePruningWithPropagateEngine) {
     const ratio_t shifted_coeffs = 0.0;
     const vec_num_t max_nbr_size = 6;
 
-    refining_graph_->layer_config().max_nbr_size(max_nbr_size);
+    graph_index_->layer_config().max_nbr_size(max_nbr_size);
 
-    propagate_engine_ss_t propagate_engine(num_vertices_, *dist_func_);
-    propagate_engine.set_graph(*refining_graph_);
+    propagate_engine_t propagate_engine(*dist_func_);
+    propagate_engine.set_graph(graph_index_->get_refining_graph());
 
     auto triangle_updater = propagate_engine.make_updater<triangle_updater_t>(scale_coeffs, shifted_coeffs);
 
@@ -232,7 +232,7 @@ TEST_F(PropagateEngineCorrectnessTest, IntegratedRandomAndReverseUpdater) {
     // Step 3: Apply ReverseUpdater to make it bidirectional
     // Step 4: Verify bidirectionality
 
-    auto& nbrs_arr = refining_graph_->get_nbrs_arr();
+    auto& nbrs_arr = graph_index_->get_nbrs_arr();
 
     // Step 1: Start with empty neighbor arrays
     for (vertex_id_t u = 0; u < num_vertices_; ++u) {
@@ -241,8 +241,8 @@ TEST_F(PropagateEngineCorrectnessTest, IntegratedRandomAndReverseUpdater) {
 
     ARTEA_INFO("Step 1: Starting with empty graph");
 
-    propagate_engine_ss_t propagate_engine(num_vertices_, *dist_func_);
-    propagate_engine.set_graph(*refining_graph_);
+    propagate_engine_t propagate_engine(*dist_func_);
+    propagate_engine.set_graph(graph_index_->get_refining_graph());
 
     // Step 2: Apply RandomUpdater to generate asymmetric edges
     const vec_num_t rand_gen_size = 5;
@@ -322,7 +322,7 @@ TEST_F(PropagateEngineCorrectnessTest, IntegratedRandomAndReverseUpdater) {
 
 TEST_F(PropagateEngineCorrectnessTest, ScaledTrianglePruning) {
     // Test with scale_coeffs > 1.0 for more conservative pruning (keeping more edges)
-    auto& nbrs_arr = refining_graph_->get_nbrs_arr();
+    auto& nbrs_arr = graph_index_->get_nbrs_arr();
 
     for (vertex_id_t u = 0; u < num_vertices_; ++u) {
         nbr_arr_t& nbrs = nbrs_arr[u];
@@ -343,10 +343,10 @@ TEST_F(PropagateEngineCorrectnessTest, ScaledTrianglePruning) {
     const ratio_t shifted_coeffs = 0.0;
     const vec_num_t max_nbr_size = 6;
 
-    refining_graph_->layer_config().max_nbr_size(max_nbr_size);
+    graph_index_->layer_config().max_nbr_size(max_nbr_size);
 
-    propagate_engine_ss_t propagate_engine(num_vertices_, *dist_func_);
-    propagate_engine.set_graph(*refining_graph_);
+    propagate_engine_t propagate_engine(*dist_func_);
+    propagate_engine.set_graph(graph_index_->get_refining_graph());
 
     auto triangle_updater = propagate_engine.make_updater<triangle_updater_t>(scale_coeffs, shifted_coeffs);
 
@@ -384,7 +384,7 @@ TEST_F(PropagateEngineCorrectnessTest, ScaledTrianglePruning) {
 
 TEST_F(PropagateEngineCorrectnessTest, NeighborsSortedAfterPruning) {
     // Verify neighbors remain sorted by distance after pruning
-    auto& nbrs_arr = refining_graph_->get_nbrs_arr();
+    auto& nbrs_arr = graph_index_->get_nbrs_arr();
 
     for (vertex_id_t u = 0; u < num_vertices_; ++u) {
         nbr_arr_t& nbrs = nbrs_arr[u];
@@ -401,10 +401,10 @@ TEST_F(PropagateEngineCorrectnessTest, NeighborsSortedAfterPruning) {
     }
 
     const vec_num_t max_nbr_size = 6;
-    refining_graph_->layer_config().max_nbr_size(max_nbr_size);
+    graph_index_->layer_config().max_nbr_size(max_nbr_size);
 
-    propagate_engine_ss_t propagate_engine(num_vertices_, *dist_func_);
-    propagate_engine.set_graph(*refining_graph_);
+    propagate_engine_t propagate_engine(*dist_func_);
+    propagate_engine.set_graph(graph_index_->get_refining_graph());
 
     auto triangle_updater = propagate_engine.make_updater<triangle_updater_t>(1.0, 0.0);
 
@@ -424,7 +424,7 @@ TEST_F(PropagateEngineCorrectnessTest, NeighborsSortedAfterPruning) {
 
 TEST_F(PropagateEngineCorrectnessTest, RandomUpdaterGeneratesEdges) {
     // Test that RandomUpdater generates random edges and writes them to the log table
-    auto& nbrs_arr = refining_graph_->get_nbrs_arr();
+    auto& nbrs_arr = graph_index_->get_nbrs_arr();
 
     // Start with empty neighbor arrays
     for (vertex_id_t u = 0; u < num_vertices_; ++u) {
@@ -433,8 +433,8 @@ TEST_F(PropagateEngineCorrectnessTest, RandomUpdaterGeneratesEdges) {
 
     ARTEA_INFO("Testing RandomUpdater with empty initial graph:");
 
-    propagate_engine_ss_t propagate_engine(num_vertices_, *dist_func_);
-    propagate_engine.set_graph(*refining_graph_);
+    propagate_engine_t propagate_engine(*dist_func_);
+    propagate_engine.set_graph(graph_index_->get_refining_graph());
 
     const vec_num_t rand_gen_size = 5;  // Generate 5 random neighbors per vertex
 
@@ -486,15 +486,15 @@ TEST_F(PropagateEngineCorrectnessTest, RandomUpdaterGeneratesEdges) {
 
 TEST_F(PropagateEngineCorrectnessTest, RandomUpdaterThreadSafety) {
     // Test that RandomUpdater works correctly in parallel execution
-    auto& nbrs_arr = refining_graph_->get_nbrs_arr();
+    auto& nbrs_arr = graph_index_->get_nbrs_arr();
 
     // Start with empty neighbor arrays
     for (vertex_id_t u = 0; u < num_vertices_; ++u) {
         nbrs_arr[u].clear();
     }
 
-    propagate_engine_ss_t propagate_engine(num_vertices_, *dist_func_);
-    propagate_engine.set_graph(*refining_graph_);
+    propagate_engine_t propagate_engine(*dist_func_);
+    propagate_engine.set_graph(graph_index_->get_refining_graph());
 
     const vec_num_t rand_gen_size = 10;
 
@@ -521,10 +521,10 @@ TEST_F(PropagateEngineCorrectnessTest, RandomUpdaterThreadSafety) {
     EXPECT_GT(total_edges, 0) << "Should have generated edges in parallel";
 }
 
-// Test with selective scheduling disabled (propagate_engine_noss_t)
+// Test with selective scheduling disabled (propagate_engine_t)
 TEST_F(PropagateEngineCorrectnessTest, TrianglePruningWithoutSelectiveScheduling) {
     // Create initial complete graph
-    auto& nbrs_arr = refining_graph_->get_nbrs_arr();
+    auto& nbrs_arr = graph_index_->get_nbrs_arr();
 
     for (vertex_id_t u = 0; u < num_vertices_; ++u) {
         nbr_arr_t& nbrs = nbrs_arr[u];
@@ -544,10 +544,10 @@ TEST_F(PropagateEngineCorrectnessTest, TrianglePruningWithoutSelectiveScheduling
     const ratio_t shifted_coeffs = 0.0;
     const vec_num_t max_nbr_size = 6;
 
-    refining_graph_->layer_config().max_nbr_size(max_nbr_size);
+    graph_index_->layer_config().max_nbr_size(max_nbr_size);
 
-    propagate_engine_noss_t propagate_engine(num_vertices_, *dist_func_);
-    propagate_engine.set_graph(*refining_graph_);
+    propagate_engine_t propagate_engine(*dist_func_);
+    propagate_engine.set_graph(graph_index_->get_refining_graph());
 
     auto triangle_updater = propagate_engine.make_updater<triangle_updater_t>(scale_coeffs, shifted_coeffs);
 

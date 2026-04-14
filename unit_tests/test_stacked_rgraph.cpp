@@ -610,6 +610,131 @@ TEST_F(StackedRGraphTest, QueryRouterSmoke) {
 }
 
 // ============================================================
+//  Compact the internal hierarchical graph, validate the copy,
+//  then measure search recall / throughput on the compact form.
+// ============================================================
+
+TEST_F(StackedRGraphTest, CompactGraphSearchRecallAndThroughput) {
+    auto& provider = DataProvider::instance();
+    const auto& dataset    = provider.get_dataset();
+    const auto& base_vecs  = dataset.get_base_vecs();
+    const auto& query_vecs = dataset.get_query_vecs();
+    const auto& gt         = dataset.get_gt_vecs();
+    auto&       dist_func  = provider.get_dist_func();
+
+    // ---- Step 1: compact the dynamic hierarchical graph. ----
+    const auto& dyn_hg = _graph->get_hierarchical_graph();
+    auto t_compact_0 = std::chrono::high_resolution_clock::now();
+    auto compact_hg = hierarchical_graph_compactor_t::compact_graph(dyn_hg);
+    auto t_compact_1 = std::chrono::high_resolution_clock::now();
+    const auto compact_ms = std::chrono::duration_cast<std::chrono::milliseconds>(
+        t_compact_1 - t_compact_0).count();
+    ARTEA_INFO(fmt::format("Hierarchical graph compacted in {} ms", compact_ms));
+
+    // ---- Step 2: basic structural fidelity. ----
+    ASSERT_EQ(compact_hg.get_num_vertices(), dyn_hg.get_num_vertices());
+    ASSERT_EQ(compact_hg.max_nbr_size(),     dyn_hg.max_nbr_size());
+    ASSERT_EQ(compact_hg.top_occupied_level_id(),
+              dyn_hg.top_occupied_level_id());
+    ASSERT_EQ(compact_hg.max_restrict_level(),
+              dyn_hg.top_occupied_level_id());
+
+    // Spot-check neighbor-list fidelity on a sampled subset of vertices
+    // across every occupied level (full equivalence is covered by
+    // test_hierarchical_graph.cpp::CompactorPreservesTopology).
+    const layer_id_t top_level = compact_hg.max_restrict_level();
+    for (layer_id_t h = 0; h <= top_level; ++h) {
+        const auto& bucket = dyn_hg.get_vids_with_highest_level(h);
+        const std::size_t sample_n = std::min<std::size_t>(bucket.size(), 64);
+        for (std::size_t k = 0; k < sample_n; ++k) {
+            const vertex_id_t vid = bucket[k];
+            for (layer_id_t l = 0; l <= h; ++l) {
+                const auto dyn_span = dyn_hg.fetch_layer_nbrs(vid, l);
+                const auto cmp_span = compact_hg.fetch_layer_nbrs(vid, l);
+                const vertex_num_t dyn_cnt = dyn_hg.num_valid_nbrs(vid, l);
+                const vertex_num_t cmp_cnt = compact_hg.num_valid_nbrs(vid, l);
+                ASSERT_EQ(dyn_cnt, cmp_cnt)
+                    << "vid=" << vid << " level=" << static_cast<int>(l);
+                for (vertex_num_t i = 0; i < dyn_cnt; ++i) {
+                    ASSERT_EQ(dyn_span[i].get_vid(), cmp_span[i])
+                        << "vid=" << vid
+                        << " level=" << static_cast<int>(l)
+                        << " i=" << i;
+                }
+            }
+        }
+    }
+
+    // ---- Step 3: search on compact vs dynamic; recall + throughput. ----
+    const uint32_t topk       = std::min<uint32_t>(10u, gt.get_vec_dim());
+    const uint32_t queue_size = std::max<uint32_t>(g_config.search_nn_qs, topk);
+    const uint32_t warmup_runs = 1;
+    const uint32_t test_runs   = 3;
+    const uint32_t num_queries = static_cast<uint32_t>(query_vecs.get_num_vecs());
+
+    auto time_router = [&](auto& router, const auto& hg) {
+        for (uint32_t w = 0; w < warmup_runs; ++w) {
+            [[maybe_unused]] auto _ = router.batch_query(query_vecs, hg);
+        }
+        double total_us = 0.0;
+        float  total_recall = 0.0f;
+        knn_results_t last_results;
+        recall_estimator_t re;
+        for (uint32_t r = 0; r < test_runs; ++r) {
+            auto t0 = std::chrono::high_resolution_clock::now();
+            last_results = router.batch_query(query_vecs, hg);
+            auto t1 = std::chrono::high_resolution_clock::now();
+            total_us += std::chrono::duration_cast<std::chrono::microseconds>(
+                t1 - t0).count();
+            total_recall += re.calculate_recall_at_k(
+                last_results, gt, topk, num_queries);
+        }
+        const double avg_us = total_us / test_runs;
+        const float  recall = total_recall / test_runs;
+        const double qps    = num_queries * 1e6 / avg_us;
+        return std::make_tuple(std::move(last_results), recall, avg_us, qps);
+    };
+
+    compact::hierarchical_graph_router_t compact_router(
+        base_vecs, dist_func,
+        /*topk=*/topk,
+        /*search_nn_qs=*/g_config.search_nn_qs,
+        /*candidate_queue_size=*/queue_size);
+    compact_router.initialize();
+    auto [compact_results, compact_recall, compact_us, compact_qps] =
+        time_router(compact_router, compact_hg);
+
+    ASSERT_EQ(compact_results.size(),
+              static_cast<std::size_t>(num_queries) * topk);
+
+    dynamic::hierarchical_graph_router_t dyn_router(
+        _graph->get_vecs_storage(), dist_func,
+        /*topk=*/topk,
+        /*search_nn_qs=*/g_config.search_nn_qs,
+        /*candidate_queue_size=*/queue_size);
+    dyn_router.initialize();
+    auto [dyn_results, dyn_recall, dyn_us, dyn_qps] =
+        time_router(dyn_router, dyn_hg);
+
+    ARTEA_INFO(fmt::format(
+        "Search comparison (num_queries={}, topk={}, search_nn_qs={}, "
+        "queue_size={}):",
+        num_queries, topk, g_config.search_nn_qs, queue_size));
+    ARTEA_INFO(fmt::format(
+        "  compact : recall@{}={:.4f}, batch_latency={:.2f} ms, QPS={:.1f}",
+        topk, compact_recall, compact_us / 1000.0, compact_qps));
+    ARTEA_INFO(fmt::format(
+        "  dynamic : recall@{}={:.4f}, batch_latency={:.2f} ms, QPS={:.1f}",
+        topk, dyn_recall, dyn_us / 1000.0, dyn_qps));
+    ARTEA_INFO(fmt::format(
+        "  speedup : compact QPS / dynamic QPS = {:.2f}x",
+        compact_qps / dyn_qps));
+
+    EXPECT_GT(compact_recall, 0.0f);
+    EXPECT_GT(dyn_recall, 0.0f);
+}
+
+// ============================================================
 //  main: argparse + test suite runner
 // ============================================================
 

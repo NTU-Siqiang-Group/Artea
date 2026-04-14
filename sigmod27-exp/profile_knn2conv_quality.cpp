@@ -98,7 +98,7 @@ public:
         // Part 2: Convert knn_graph -> conv_graph via move
         ARTEA_INFO("Part 2: Converting KNN graph to conv_graph (move + triangle/reverse pruning)...");
         conv_graph_ = std::make_unique<conv_graph::index_t>(conv_graph::factory_t::construct_graph(
-            std::move(knn_index),
+            std::move(knn_index.get_refining_graph()),
             g_config.conv_pruning_config
         ));
 

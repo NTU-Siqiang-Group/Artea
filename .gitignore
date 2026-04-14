@@ -19,3 +19,4 @@ reference/
 scratch/
 temp/
 backup_prefill/
+build-tsan/

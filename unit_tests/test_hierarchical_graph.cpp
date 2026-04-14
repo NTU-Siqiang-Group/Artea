@@ -668,7 +668,7 @@ TEST_F(HierarchicalGraphTest, LayerRefiningGraphRoundTrip) {
         // For freshly-built indexes the slot is all-invalid (no edges
         // written by the fixture), so num_valid_nbrs == 0 and rg rows are
         // empty. Just sanity-check counts and identity round-trip.
-        rg->parallel_for_each_vertex([&](const vertex_id_t global_vid) {
+        rg->parallel_for_each_vertex([&](const vertex_id_t /*local_vid*/, const vertex_id_t global_vid) {
             if (!_graph->is_vertex_assigned(global_vid)) return;
             const vertex_num_t hg_cnt = _graph->num_valid_nbrs(global_vid, h);
             const auto& rg_nbrs = rg->fetch_nbrs(global_vid);

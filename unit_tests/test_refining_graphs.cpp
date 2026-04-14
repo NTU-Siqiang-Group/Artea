@@ -58,7 +58,7 @@ protected:
         dist_func_ = std::make_unique<dist_func_t>(vec_dim);
 
         layer_config_ = layer_config_t(64, 128);
-        refining_graph_ = std::make_unique<conv_graph::index_t>(
+        graph_index_ = std::make_unique<conv_graph::index_t>(
             *vecs_, layer_config_,
             conv_graph::pruning_config_t(1.0, 0.0),
             conv_graph::propagate_config_t(4, 14));
@@ -67,7 +67,7 @@ protected:
     void populate_random_neighbors(const vertex_num_t max_nbrs_per_vertex) {
         std::mt19937 rng(42);
         std::uniform_int_distribution<vertex_id_t> id_dist(0, num_vertices - 1);
-        auto& nbrs_arr = refining_graph_->get_nbrs_arr();
+        auto& nbrs_arr = graph_index_->get_nbrs_arr();
 
         for (vertex_id_t u = 0; u < num_vertices; ++u) {
             auto& nbrs = nbrs_arr[u];
@@ -89,7 +89,7 @@ protected:
     layer_config_t layer_config_{64, 128};
     std::unique_ptr<vector_array_t> vecs_;
     std::unique_ptr<dist_func_t>    dist_func_;
-    std::unique_ptr<conv_graph::index_t> refining_graph_;
+    std::unique_ptr<conv_graph::index_t> graph_index_;
 };
 
 // ============================================================
@@ -97,12 +97,12 @@ protected:
 // ============================================================
 
 TEST_F(RefiningGraphTest, Construction) {
-    EXPECT_EQ(refining_graph_->get_num_vertices(), num_vertices);
-    EXPECT_EQ(refining_graph_->layer_config().max_nbr_size(), 64u);
+    EXPECT_EQ(graph_index_->get_num_vertices(), num_vertices);
+    EXPECT_EQ(graph_index_->layer_config().max_nbr_size(), 64u);
 }
 
 TEST_F(RefiningGraphTest, InitialNeighborsEmpty) {
-    const auto& nbrs_arr = refining_graph_->get_nbrs_arr();
+    const auto& nbrs_arr = graph_index_->get_nbrs_arr();
     for (vertex_id_t v = 0; v < num_vertices; ++v) {
         EXPECT_TRUE(nbrs_arr[v].empty());
     }
@@ -110,7 +110,7 @@ TEST_F(RefiningGraphTest, InitialNeighborsEmpty) {
 
 TEST_F(RefiningGraphTest, PopulateAndReadNeighbors) {
     populate_random_neighbors(50);
-    const auto& nbrs_arr = refining_graph_->get_nbrs_arr();
+    const auto& nbrs_arr = graph_index_->get_nbrs_arr();
 
     uint64_t total_edges = 0;
     for (vertex_id_t v = 0; v < num_vertices; ++v) {
@@ -123,7 +123,7 @@ TEST_F(RefiningGraphTest, PopulateAndReadNeighbors) {
 
 TEST_F(RefiningGraphTest, NeighborsSortedByDistance) {
     populate_random_neighbors(50);
-    const auto& nbrs_arr = refining_graph_->get_nbrs_arr();
+    const auto& nbrs_arr = graph_index_->get_nbrs_arr();
 
     for (vertex_id_t v = 0; v < num_vertices; ++v) {
         const auto& nbrs = nbrs_arr[v];
@@ -134,16 +134,16 @@ TEST_F(RefiningGraphTest, NeighborsSortedByDistance) {
 }
 
 TEST_F(RefiningGraphTest, VecsDataAccessor) {
-    EXPECT_EQ(refining_graph_->get_vecs_data().get_num_vecs(), num_vertices);
-    EXPECT_EQ(refining_graph_->get_vecs_data().get_vec_dim(), vec_dim);
+    EXPECT_EQ(graph_index_->get_vecs_data().get_num_vecs(), num_vertices);
+    EXPECT_EQ(graph_index_->get_vecs_data().get_vec_dim(), vec_dim);
 }
 
 TEST_F(RefiningGraphTest, MoveSemantics) {
     populate_random_neighbors(30);
-    const auto& nbrs_before = refining_graph_->get_nbrs_arr();
+    const auto& nbrs_before = graph_index_->get_nbrs_arr();
     const size_t edges_v0 = nbrs_before[0].size();
 
-    conv_graph::index_t moved = std::move(*refining_graph_);
+    conv_graph::index_t moved = std::move(*graph_index_);
     EXPECT_EQ(moved.get_num_vertices(), num_vertices);
     EXPECT_EQ(moved.get_nbrs_arr()[0].size(), edges_v0);
 }
@@ -156,11 +156,11 @@ TEST_F(RefiningGraphTest, CompactorBasicConversion) {
     populate_random_neighbors(50);
     const vertex_num_t extracted = 32;
 
-    auto compact = refining_graph_compactor_t::compact_graph(*refining_graph_, extracted);
+    auto compact = refining_graph_compactor_t::compact_graph(*graph_index_, extracted);
     EXPECT_EQ(compact.get_num_vertices(), num_vertices);
     EXPECT_EQ(compact.get_extracted_nbr_size(), extracted);
 
-    const auto& src_nbrs_arr = refining_graph_->get_nbrs_arr();
+    const auto& src_nbrs_arr = graph_index_->get_nbrs_arr();
     for (vertex_id_t v = 0; v < num_vertices; ++v) {
         const auto& src_nbrs = src_nbrs_arr[v];
         auto compact_nbrs = compact.fetch_nbrs(v);
@@ -179,7 +179,7 @@ TEST_F(RefiningGraphTest, CompactorBasicConversion) {
 TEST_F(RefiningGraphTest, CompactorEmptyGraph) {
     // Neighbors are empty (default after construction).
     const vertex_num_t extracted = 16;
-    auto compact = refining_graph_compactor_t::compact_graph(*refining_graph_, extracted);
+    auto compact = refining_graph_compactor_t::compact_graph(*graph_index_, extracted);
     EXPECT_EQ(compact.get_num_vertices(), num_vertices);
 
     for (vertex_id_t v = 0; v < num_vertices; ++v) {
@@ -194,8 +194,8 @@ TEST_F(RefiningGraphTest, CompactorExtractedSmallerThanActual) {
     populate_random_neighbors(50);
     const vertex_num_t extracted = 8;
 
-    auto compact = refining_graph_compactor_t::compact_graph(*refining_graph_, extracted);
-    const auto& src_nbrs_arr = refining_graph_->get_nbrs_arr();
+    auto compact = refining_graph_compactor_t::compact_graph(*graph_index_, extracted);
+    const auto& src_nbrs_arr = graph_index_->get_nbrs_arr();
 
     for (vertex_id_t v = 0; v < num_vertices; ++v) {
         auto compact_nbrs = compact.fetch_nbrs(v);
@@ -212,7 +212,7 @@ TEST_F(RefiningGraphTest, CompactorNeighborOrderPreserved) {
     populate_random_neighbors(50);
     const vertex_num_t extracted = 32;
 
-    auto compact = refining_graph_compactor_t::compact_graph(*refining_graph_, extracted);
+    auto compact = refining_graph_compactor_t::compact_graph(*graph_index_, extracted);
 
     for (vertex_id_t v = 0; v < std::min<vertex_id_t>(100, num_vertices); ++v) {
         auto nbrs = compact.fetch_nbrs(v);
@@ -230,8 +230,8 @@ TEST_F(RefiningGraphTest, CompactorExtractedLargerThanMaxThrows) {
     populate_random_neighbors(10);
     EXPECT_THROW({
         refining_graph_compactor_t::compact_graph(
-            *refining_graph_,
-            refining_graph_->layer_config().max_nbr_size() + 1);
+            *graph_index_,
+            graph_index_->layer_config().max_nbr_size() + 1);
     }, std::runtime_error);
 }
 
@@ -239,7 +239,7 @@ TEST_F(RefiningGraphTest, CompactReadWriteRoundTrip) {
     populate_random_neighbors(50);
     const vertex_num_t extracted = 32;
 
-    auto compact = refining_graph_compactor_t::compact_graph(*refining_graph_, extracted);
+    auto compact = refining_graph_compactor_t::compact_graph(*graph_index_, extracted);
 
     // Verify get_neighbors (raw pointer) matches fetch_nbrs (span)
     for (vertex_id_t v = 0; v < std::min<vertex_id_t>(100, num_vertices); ++v) {
@@ -253,7 +253,7 @@ TEST_F(RefiningGraphTest, CompactReadWriteRoundTrip) {
 
 TEST_F(RefiningGraphTest, CompactVecsDataAccessor) {
     const vertex_num_t extracted = 16;
-    auto compact = refining_graph_compactor_t::compact_graph(*refining_graph_, extracted);
+    auto compact = refining_graph_compactor_t::compact_graph(*graph_index_, extracted);
     EXPECT_EQ(compact.get_vecs_data().get_num_vecs(), num_vertices);
 }
 

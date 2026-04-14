@@ -94,13 +94,13 @@ public:
         layer_config_t layer_cfg(16, 24);
         conv_graph::pruning_config_t pruning_cfg(1.0f, 0.0f);
         conv_graph::propagate_config_t propagate_cfg(4, 14, 0.6f);
-        refining_graph_ = std::make_unique<conv_graph::index_t>(
+        graph_index_ = std::make_unique<conv_graph::index_t>(
             conv_graph::factory_t::construct_graph(base_vecs, layer_cfg, pruning_cfg, propagate_cfg)
         );
 
         // Convert to search graph
         compact_refining_graph_ = std::make_unique<compact::refining_graph_t>(
-            refining_graph_compactor_t::compact_graph(*refining_graph_, g_config.extracted_nbr_size)
+            refining_graph_compactor_t::compact_graph(*graph_index_, g_config.extracted_nbr_size)
         );
 
         ARTEA_INFO("DataProvider ready.");
@@ -108,7 +108,7 @@ public:
 
     vector_dataset_t&    get_dataset()          { return *dataset_; }
     dist_func_t&         get_dist_func()         { return *dist_func_; }
-    conv_graph::index_t&        get_refining_graph()         { return *refining_graph_; }
+    conv_graph::index_t&        get_graph_index()         { return *graph_index_; }
     compact::refining_graph_t& get_compact_refining_graph() { return *compact_refining_graph_; }
     const idlist_array_t& get_gt()              { return dataset_->get_gt_vecs(); }
 
@@ -116,7 +116,7 @@ private:
     DataProvider() = default;
     std::unique_ptr<vector_dataset_t>    dataset_;
     std::unique_ptr<dist_func_t>         dist_func_;
-    std::unique_ptr<conv_graph::index_t>        refining_graph_;
+    std::unique_ptr<conv_graph::index_t>        graph_index_;
     std::unique_ptr<compact::refining_graph_t> compact_refining_graph_;
 };
 
@@ -246,13 +246,14 @@ TEST_F(ConvGraphSearchTest, ConstructModeBatchQuery) {
 
     dynamic::refining_graph_router_t router(
         base_vecs, p.get_dist_func(),
+        p.get_graph_index().get_refining_graph(),
         g_config.topk, g_config.queue_size
     );
     router.initialize();
 
     // Warmup runs
     for (uint32_t w = 0; w < g_config.warmup_runs; ++w) {
-        [[maybe_unused]] auto _ = router.batch_query(query_vecs, p.get_refining_graph());
+        [[maybe_unused]] auto _ = router.batch_query(query_vecs);
     }
 
     // Test runs
@@ -262,7 +263,7 @@ TEST_F(ConvGraphSearchTest, ConstructModeBatchQuery) {
     recall_estimator_t re;
     for (uint32_t r = 0; r < g_config.test_runs; ++r) {
         auto t0 = std::chrono::high_resolution_clock::now();
-        last_results = router.batch_query(query_vecs, p.get_refining_graph());
+        last_results = router.batch_query(query_vecs);
         auto t1 = std::chrono::high_resolution_clock::now();
         total_us += std::chrono::duration_cast<std::chrono::microseconds>(t1 - t0).count();
         total_recall += re.calculate_recall_at_k(last_results, p.get_gt(), g_config.topk, g_results.num_queries);

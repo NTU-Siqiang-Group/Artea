@@ -72,6 +72,12 @@ namespace stacked_rgraph {
     template <typename BaseTraitsT> using PruningConfig = conv_graph::PruningConfig<BaseTraitsT>;
 }
 
+namespace artea_graph {
+    template <typename BaseTraitsT> using PropagateConfig = conv_graph::PropagateConfig<BaseTraitsT>;
+    template <typename BaseTraitsT> using PruningConfig = conv_graph::PruningConfig<BaseTraitsT>;
+    template <typename BaseTraitsT> using RGraphConfig = stacked_rgraph::RGraphConfig<BaseTraitsT>;
+}
+
 /* ------ Enumerations ------ */
 enum class PruningConditionT;
 
@@ -239,6 +245,15 @@ public:
         stacked_rgraph() = delete;
         using rgraph_config_t  = cpu::stacked_rgraph::RGraphConfig<base_traits_t>;
         using pruning_config_t = cpu::stacked_rgraph::PruningConfig<base_traits_t>;
+    };
+
+    /** @brief Namespace-specific type aliases for artea_graph
+     *         (stacked_rgraph backbone + per-layer conv_graph refinement). */
+    struct artea_graph {
+        artea_graph() = delete;
+        using rgraph_config_t    = cpu::artea_graph::RGraphConfig<base_traits_t>;
+        using propagate_config_t = cpu::artea_graph::PropagateConfig<base_traits_t>;
+        using pruning_config_t   = cpu::artea_graph::PruningConfig<base_traits_t>;
     };
 
     #ifdef ARTEA_PROFILING

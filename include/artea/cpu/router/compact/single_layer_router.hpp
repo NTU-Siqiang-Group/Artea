@@ -162,9 +162,14 @@ public:
         std_candidate_queue_t&    candidate_queue,
         visited_table_t&          visited
     ) const -> void {
-        if (candidate_queue.empty()) return;
-
+        // Repopulate _unexplored_set from _top_candidates BEFORE the
+        // empty check. candidate_queue.empty() inspects _unexplored_set,
+        // which is fully drained after the previous level's beam loop;
+        // checking it first would skip this level entirely under shared-
+        // queue hierarchical descent, leaving every seed from the upper
+        // level unexpanded at this level.
         candidate_queue.reset_exploration();
+        if (candidate_queue.empty()) return;
 
         visited.clear();
         for (const auto& seed : candidate_queue) {

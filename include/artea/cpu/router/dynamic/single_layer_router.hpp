@@ -186,8 +186,6 @@ public:
         std_candidate_queue_t&    candidate_queue,
         visited_table_t&          visited
     ) const -> void {
-        if (candidate_queue.empty()) return;
-
         // Re-mark every existing candidate as unexplored. In a fresh
         // single-layer call this is a no-op, but under shared-queue
         // hierarchical descent (same queue across cur=top..1), candidates
@@ -196,7 +194,13 @@ public:
         // removes them from the unexplored heap. That silent loss causes
         // min_dist_per_level to under-reflect the true NN and wrecks
         // subsequent absorption decisions.
+        //
+        // MUST run BEFORE the empty() check: empty() inspects
+        // _unexplored_set, which is fully drained after the previous
+        // level's beam loop; checking it first would skip this level
+        // entirely in the shared-queue descent path.
         candidate_queue.reset_exploration();
+        if (candidate_queue.empty()) return;
 
         visited.clear();
         for (const auto& seed : candidate_queue) {

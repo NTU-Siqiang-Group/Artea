@@ -36,6 +36,9 @@ namespace symmetric_knn_graph {
 namespace stacked_rgraph {
     template <typename GraphFactoryTraitsT> class IndexFactory;
 }
+namespace artea_graph {
+    template <typename GraphFactoryTraitsT> class IndexFactory;
+}
 
 template <
     typename VertexGeneratorTraitsT,
@@ -70,6 +73,12 @@ struct GraphFactoryTraits :
     struct stacked_rgraph : RefinerTraitsT::stacked_rgraph {
         stacked_rgraph() = delete;
         using factory_t = cpu::stacked_rgraph::IndexFactory<graph_factory_traits_t>;
+    };
+
+    /** @brief Namespace-scoped factory types for artea_graph, extending IndexTraits::artea_graph. */
+    struct artea_graph : RefinerTraitsT::artea_graph {
+        artea_graph() = delete;
+        using factory_t = cpu::artea_graph::IndexFactory<graph_factory_traits_t>;
     };
 
 };  // struct GraphFactoryTraits

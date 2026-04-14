@@ -39,11 +39,11 @@ class IndexFactory {
     using propagate_config_t = typename GraphFactoryTraitsT::symmetric_knn_graph::propagate_config_t;
     using pruning_config_t = typename GraphFactoryTraitsT::symmetric_knn_graph::pruning_config_t;
     using random_eg_t = typename GraphFactoryTraitsT::random_eg_t;
-    using propagate_engine_t = typename GraphFactoryTraitsT::template propagate_engine_t<this_index_t, false>;
-    using triangle_updater_t = typename GraphFactoryTraitsT::template triangle_updater_t<this_index_t>;
-    using reverse_updater_t = typename GraphFactoryTraitsT::template reverse_updater_t<this_index_t>;
-    using routing_updater_t = typename GraphFactoryTraitsT::template routing_updater_t<this_index_t>;
-    using truncate_updater_t = typename GraphFactoryTraitsT::template truncate_updater_t<this_index_t>;
+    using propagate_engine_t = typename GraphFactoryTraitsT::propagate_engine_t;
+    using triangle_updater_t = typename GraphFactoryTraitsT::triangle_updater_t;
+    using reverse_updater_t  = typename GraphFactoryTraitsT::reverse_updater_t;
+    using routing_updater_t  = typename GraphFactoryTraitsT::routing_updater_t;
+    using truncate_updater_t = typename GraphFactoryTraitsT::truncate_updater_t;
     using vector_array_t = typename GraphFactoryTraitsT::vector_array_t;
     using query_vecs_t = typename GraphFactoryTraitsT::query_vecs_t;
     using ground_truth_t = typename GraphFactoryTraitsT::ground_truth_t;
@@ -58,10 +58,10 @@ public:
         const layer_config_t layer_config,
         const propagate_config_t propagate_config
     ) -> this_index_t {
-        this_index_t refining_graph(base_vecs, layer_config, propagate_config);
+        this_index_t graph_index(base_vecs, layer_config, propagate_config);
         dist_func_t dist_func(base_vecs.get_vec_dim());
-        _build_loop(refining_graph, dist_func, propagate_config);
-        return refining_graph;
+        _build_loop(graph_index, dist_func, propagate_config);
+        return graph_index;
     }
 
     /**
@@ -77,19 +77,19 @@ public:
     static auto construct_graph(
         typename knn_graph::index_t&& knn_graph_index
     ) -> this_index_t {
-        this_index_t refining_graph(std::move(knn_graph_index));
+        this_index_t graph_index(std::move(knn_graph_index));
 
-        const vertex_num_t num_vertices = refining_graph.get_num_vertices();
-        dist_func_t dist_func(refining_graph.get_vecs_data().get_vec_dim());
+        const vertex_num_t num_vertices = graph_index.get_num_vertices();
+        dist_func_t dist_func(graph_index.get_vecs_data().get_vec_dim());
 
-        propagate_engine_t propagate_engine(num_vertices, dist_func);
-        propagate_engine.set_graph(refining_graph);
+        propagate_engine_t propagate_engine(dist_func);
+        propagate_engine.set_graph(graph_index.get_refining_graph());
 
         auto reverse_updater = propagate_engine.template make_updater<reverse_updater_t>();
 
         propagate_engine.next(reverse_updater);
 
-        return refining_graph;
+        return graph_index;
     }
 
     /** @brief Construct with per-build-loop recall/throughput profiling. */
@@ -102,19 +102,22 @@ public:
         const query_vecs_t& query_vecs = dataset.get_query_vecs();
         const ground_truth_t& groundtruth = dataset.get_gt_vecs();
 
-        this_index_t refining_graph(base_vecs, layer_config, propagate_config);
+        this_index_t graph_index(base_vecs, layer_config, propagate_config);
         dist_func_t dist_func(base_vecs.get_vec_dim());
 
         recall_estimator_t recall_estimator;
         const vertex_num_t topk = 20;
         const vertex_num_t candidate_queue_size = 40;
-        refining_graph_router_t router(base_vecs, dist_func, topk, candidate_queue_size);
+        refining_graph_router_t router(
+            base_vecs, dist_func,
+            graph_index.get_refining_graph(),
+            topk, candidate_queue_size);
         router.initialize();
 
-        _build_loop(refining_graph, dist_func, propagate_config,
+        _build_loop(graph_index, dist_func, propagate_config,
             [&](iter_t build_loop) {
                 auto t0 = std::chrono::high_resolution_clock::now();
-                auto results = router.batch_query(query_vecs, refining_graph);
+                auto results = router.batch_query(query_vecs);
                 auto t1 = std::chrono::high_resolution_clock::now();
                 double qps = query_vecs.get_num_vecs() * 1e6 /
                     std::chrono::duration_cast<std::chrono::microseconds>(t1 - t0).count();
@@ -135,27 +138,27 @@ private:
      *        reverse edges without truncation to make it symmetric.
      */
     static auto _build_loop(
-        this_index_t& refining_graph,
+        this_index_t& graph_index,
         const dist_func_t& dist_func,
         const propagate_config_t& propagate_config,
         std::function<void(iter_t)> on_iter_end = nullptr
     ) -> void {
-        const vertex_num_t num_vertices = refining_graph.get_num_vertices();
-        const vertex_num_t max_nbr_size = refining_graph.layer_config().max_nbr_size();
+        const vertex_num_t num_vertices = graph_index.get_num_vertices();
+        const vertex_num_t max_nbr_size = graph_index.layer_config().max_nbr_size();
         const vertex_num_t init_nbr_size = static_cast<vertex_num_t>(max_nbr_size * propagate_config.prefill_ratio());
 
         /** -------------------- Optimazation ------------------------------------- ***/
         /** @brief A sparse graph is effecient enough to search nearest neighbors     */
-        refining_graph.layer_config().max_nbr_size(max_nbr_size / 2);
+        graph_index.layer_config().max_nbr_size(max_nbr_size / 2);
         /** ----------------------------------------------------------------------- ***/
 
         random_eg_t random_eg(dist_func);
-        random_eg.generate(refining_graph, init_nbr_size);
+        random_eg.generate(graph_index.get_refining_graph(), init_nbr_size);
 
-        propagate_engine_t propagate_engine(num_vertices, dist_func);
-        propagate_engine.set_graph(refining_graph);
+        propagate_engine_t propagate_engine(dist_func);
+        propagate_engine.set_graph(graph_index.get_refining_graph());
 
-        const auto& pruning_config = refining_graph.pruning_config();
+        const auto& pruning_config = graph_index.pruning_config();
         auto triangle_updater  = propagate_engine.template make_updater<triangle_updater_t>(
             pruning_config.scale_coeffs(), pruning_config.shifted_coeffs());
         auto reverse_updater   = propagate_engine.template make_updater<reverse_updater_t>();
@@ -172,7 +175,7 @@ private:
 
         /** -------------------- Optimazation --------------------------------------- ***/
         /** @brief Reconstructed as dense graph with original edge number requirements  */
-        refining_graph.layer_config().max_nbr_size(max_nbr_size);
+        graph_index.layer_config().max_nbr_size(max_nbr_size);
         /** ------------------------------------------------------------------------- ***/
 
         for (iter_t routing_loop = 0; routing_loop < propagate_config.num_routing_loops(); ++routing_loop) {

@@ -47,6 +47,7 @@ class RefiningGraphRouter :
     using vector_array_t = typename RouterTraitsT::vector_array_t;
     using query_vecs_t = typename RouterTraitsT::query_vecs_t;
     using nbr_arr_t = typename RouterTraitsT::nbr_arr_t;
+    using refining_graph_t = typename RouterTraitsT::dynamic::refining_graph_t;
     using candidate_queue_t = typename RouterTraitsT::candidate_queue_t;
     using visited_table_t = typename RouterTraitsT::visited_table_t;
     using visited_table_pool_t = typename RouterTraitsT::visited_table_pool_t;
@@ -56,12 +57,14 @@ class RefiningGraphRouter :
 public:
 
     RefiningGraphRouter(
-        const vector_array_t& vecs_data,
-        const dist_func_t& dist_func,
-        const uint32_t topk,
-        const vertex_num_t candidate_queue_size = 16,
-        const vertex_num_t extracted_nbr_size = 64
+        const vector_array_t&     vecs_data,
+        const dist_func_t&        dist_func,
+        const refining_graph_t&   refining_graph,
+        const uint32_t            topk,
+        const vertex_num_t        candidate_queue_size = 16,
+        const vertex_num_t        extracted_nbr_size   = 64
     ) : base_class_t(vecs_data, dist_func, topk),
+        _refining_graph(refining_graph),
         _candidate_queue_size(candidate_queue_size),
         _extracted_nbr_size(extracted_nbr_size),
         _visited_table_pool(vecs_data.get_num_vecs())
@@ -79,32 +82,24 @@ public:
     }
 
     /**
-     * @brief Query the top-k nearest vertices using the descent graph (build-time).
-     * @param query_vec Pointer to the query vector data.
-     * @param refining_graph The descent graph to search on.
-     * @return knn_results_t Flat array of topk result entries sorted by distance.
+     * @brief Query the top-k nearest vertices using the descent graph
+     *        bound at construction (entry point = vid 0).
      */
-    template <typename RefiningGraphT>
     __attribute__((always_inline))
-    auto query(const vec_ele_t* query_vec, const RefiningGraphT& refining_graph) const -> knn_results_t {
+    auto query(const vec_ele_t* query_vec) const -> knn_results_t {
         auto& visited_table = _visited_table_pool.acquire();
-        auto results = _beam_search(query_vec, visited_table, static_cast<vertex_id_t>(0), refining_graph);
+        auto results = _beam_search(query_vec, visited_table, static_cast<vertex_id_t>(0));
         visited_table.clear();
         return results;
     }
 
     /**
-     * @brief Query the top-k nearest vertices using the descent graph with an entry point.
-     * @param query_vec Pointer to the query vector data.
-     * @param entry_point Starting vertex ID for the search.
-     * @param refining_graph The descent graph to search on.
-     * @return knn_results_t Flat array of topk result entries sorted by distance.
+     * @brief Query the top-k nearest vertices with a caller-supplied entry point.
      */
-    template <typename RefiningGraphT>
     __attribute__((always_inline))
-    auto query(const vec_ele_t* query_vec, const vertex_id_t entry_point, const RefiningGraphT& refining_graph) const -> knn_results_t {
+    auto query(const vec_ele_t* query_vec, const vertex_id_t entry_point) const -> knn_results_t {
         auto& visited_table = _visited_table_pool.acquire();
-        auto results = _beam_search(query_vec, visited_table, entry_point, refining_graph);
+        auto results = _beam_search(query_vec, visited_table, entry_point);
         visited_table.clear();
         return results;
     }
@@ -118,35 +113,22 @@ public:
      *        @c dist_func call. Callers typically pass the pivot
      *        vertex's own neighbor slot (sorted ascending by distance
      *        after construction) to warm-start the search.
-     *
-     * @param query_vec      Pointer to the query vector data.
-     * @param seed_nbrs      Seed neighbors; (@c get_vid(), @c get_distance())
-     *                       pairs are pushed into the queue verbatim.
-     * @param refining_graph The descent graph to search on.
-     * @return knn_results_t Flat array of topk result entries sorted by distance.
      */
-    template <typename RefiningGraphT>
     __attribute__((always_inline))
     auto query(
-        const vec_ele_t*       query_vec,
-        const nbr_arr_t&       seed_nbrs,
-        const RefiningGraphT&  refining_graph
+        const vec_ele_t*  query_vec,
+        const nbr_arr_t&  seed_nbrs
     ) const -> knn_results_t {
         auto& visited_table = _visited_table_pool.acquire();
-        auto results = _beam_search_seeded(
-            query_vec, visited_table, seed_nbrs, refining_graph);
+        auto results = _beam_search_seeded(query_vec, visited_table, seed_nbrs);
         visited_table.clear();
         return results;
     }
 
     /**
      * @brief Perform batch queries to find the top-k nearest vertices for multiple vectors.
-     * @param query_vecs A VectorArray containing the query vectors.
-     * @param refining_graph The descent graph to search on.
-     * @return knn_results_t Flat array of num_queries * topk result entries in row-major order.
      */
-    template <typename RefiningGraphT>
-    auto batch_query(const query_vecs_t& query_vecs, const RefiningGraphT& refining_graph) const -> knn_results_t {
+    auto batch_query(const query_vecs_t& query_vecs) const -> knn_results_t {
         const vertex_num_t num_queries = query_vecs.get_num_vecs();
         const uint32_t K = this->_topk;
         knn_results_t results(num_queries * K);
@@ -157,7 +139,7 @@ public:
                 auto& visited = _visited_table_pool.acquire();
                 for (vertex_num_t i = r.begin(); i != r.end(); ++i) {
                     const vec_ele_t* q_vec = query_vecs.get(i);
-                    auto topk_results = _beam_search(q_vec, visited, static_cast<vertex_id_t>(0), refining_graph);
+                    auto topk_results = _beam_search(q_vec, visited, static_cast<vertex_id_t>(0));
                     std::copy(topk_results.begin(), topk_results.end(), results.begin() + i * K);
                     visited.clear();
                 }
@@ -170,19 +152,13 @@ public:
 private:
 
     /**
-     * @brief Perform beam search on the descent graph with a given entry point.
-     * @param query_vec Pointer to the query vector data.
-     * @param visited_table Reference to the visited table for tracking explored vertices.
-     * @param entry_point Starting vertex ID for the search.
-     * @param refining_graph The descent graph to search on.
-     * @return knn_results_t Flat array of topk result entries sorted by distance.
+     * @brief Perform beam search on the bound descent graph with a given
+     *        entry point.
      */
-    template <typename RefiningGraphT>
     auto _beam_search(
-        const vec_ele_t* query_vec,
-        visited_table_t& visited_table,
-        const vertex_id_t entry_point,
-        const RefiningGraphT& refining_graph
+        const vec_ele_t*  query_vec,
+        visited_table_t&  visited_table,
+        const vertex_id_t entry_point
     ) const -> knn_results_t {
         const vertex_num_t queue_capacity = std::max(this->_topk, _candidate_queue_size);
         candidate_queue_t candidate_queue(queue_capacity);
@@ -196,7 +172,7 @@ private:
             auto [current_id, current_dist] = candidate_queue.pop_best_unexplored();
             if (current_id == RouterTraitsT::invalid_vertex_id) { break; }
 
-            const nbr_arr_t& nbrs = refining_graph.fetch_nbrs(current_id);
+            const nbr_arr_t& nbrs = _refining_graph.fetch_nbrs(current_id);
             const vertex_num_t nbr_limit = std::min(static_cast<vertex_num_t>(nbrs.size()), _extracted_nbr_size);
             for (vertex_num_t i = 0; i < nbr_limit; ++i) {
                 const vertex_id_t nbr_id = nbrs[i].get_vid();
@@ -220,12 +196,10 @@ private:
      * main loop is byte-identical to @c _beam_search after the seeding
      * phase.
      */
-    template <typename RefiningGraphT>
     auto _beam_search_seeded(
-        const vec_ele_t*       query_vec,
-        visited_table_t&       visited_table,
-        const nbr_arr_t&       seed_nbrs,
-        const RefiningGraphT&  refining_graph
+        const vec_ele_t*  query_vec,
+        visited_table_t&  visited_table,
+        const nbr_arr_t&  seed_nbrs
     ) const -> knn_results_t {
         const vertex_num_t queue_capacity = std::max(this->_topk, _candidate_queue_size);
         candidate_queue_t candidate_queue(queue_capacity);
@@ -246,7 +220,7 @@ private:
             auto [current_id, current_dist] = candidate_queue.pop_best_unexplored();
             if (current_id == RouterTraitsT::invalid_vertex_id) { break; }
 
-            const nbr_arr_t& nbrs = refining_graph.fetch_nbrs(current_id);
+            const nbr_arr_t& nbrs = _refining_graph.fetch_nbrs(current_id);
             const vertex_num_t nbr_limit = std::min(static_cast<vertex_num_t>(nbrs.size()), _extracted_nbr_size);
             for (vertex_num_t i = 0; i < nbr_limit; ++i) {
                 const vertex_id_t nbr_id = nbrs[i].get_vid();
@@ -260,6 +234,9 @@ private:
 
         return candidate_queue.extract_results(this->_topk);
     }
+
+    /** @brief Bound descent graph for all queries on this router. */
+    const refining_graph_t& _refining_graph;
 
     /** @brief Candidate queue size for beam search. */
     vertex_num_t _candidate_queue_size = 0;

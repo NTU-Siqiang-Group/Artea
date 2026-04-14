@@ -92,7 +92,7 @@ public:
         ARTEA_INFO("Building symmetric KNN graph from scratch...");
         auto start_time = std::chrono::high_resolution_clock::now();
 
-        refining_graph_ = std::make_unique<symmetric_knn_graph::index_t>(
+        graph_index_ = std::make_unique<symmetric_knn_graph::index_t>(
             symmetric_knn_graph::factory_t::construct_graph(
                 base_vecs,
                 g_config.layer_config,
@@ -103,13 +103,13 @@ public:
         auto end_time = std::chrono::high_resolution_clock::now();
         auto duration = std::chrono::duration_cast<std::chrono::microseconds>(end_time - start_time);
         g_test_results.build_time_s = duration.count() / 1e6;
-        g_test_results.num_vertices = refining_graph_->get_num_vertices();
+        g_test_results.num_vertices = graph_index_->get_num_vertices();
 
         ARTEA_INFO(fmt::format("Graph built with {} vertices", g_test_results.num_vertices));
         ARTEA_INFO(fmt::format("Build time: {:.2f} s", g_test_results.build_time_s));
 
         // Compute average degree
-        g_test_results.avg_degree = compute_average_degree(*refining_graph_);
+        g_test_results.avg_degree = compute_average_degree(*graph_index_);
         ARTEA_INFO(fmt::format("Average degree: {:.2f}", g_test_results.avg_degree));
 
         // Convert to flat search graph
@@ -117,7 +117,7 @@ public:
         start_time = std::chrono::high_resolution_clock::now();
 
         compact_refining_graph_ = std::make_unique<compact::refining_graph_t>(
-            refining_graph_compactor_t::compact_graph(*refining_graph_, g_config.extracted_nbr_size)
+            refining_graph_compactor_t::compact_graph(*graph_index_, g_config.extracted_nbr_size)
         );
 
         end_time = std::chrono::high_resolution_clock::now();
@@ -139,7 +139,7 @@ private:
     DataProvider() = default;
     std::unique_ptr<vector_dataset_t> dataset_;
     std::unique_ptr<dist_func_t> dist_func_;
-    std::unique_ptr<symmetric_knn_graph::index_t> refining_graph_;
+    std::unique_ptr<symmetric_knn_graph::index_t> graph_index_;
     std::unique_ptr<compact::refining_graph_t> compact_refining_graph_;
 };
 

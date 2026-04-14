@@ -24,7 +24,6 @@
 #include <utility>
 #include <type_traits>
 #include <stdexcept>
-#include <bit>
 
 #include <tbb/parallel_for.h>
 #include <tbb/blocked_range.h>
@@ -34,7 +33,7 @@
 namespace artea {
 namespace cpu {
 
-template <typename RefinerTraitsT, typename RefiningGraphT, bool SelectiveSchedule>
+template <typename RefinerTraitsT>
 class PropagateEngine {
 
     using vertex_num_t = typename RefinerTraitsT::vertex_num_t;
@@ -47,181 +46,81 @@ class PropagateEngine {
     using log_buffer_t = typename RefinerTraitsT::log_buffer_t;
     using log_container_t = typename RefinerTraitsT::log_container_t;
     using log_table_t = typename RefinerTraitsT::log_table_t;
-    using word_aligned_bitmap_t = typename RefinerTraitsT::word_aligned_bitmap_t;
     using dist_func_t = typename RefinerTraitsT::dist_func_t;
+    using refining_graph_t = typename RefinerTraitsT::dynamic::refining_graph_t;
 
     template <typename DerivedClassT>
-    using neighbor_updater_t = typename RefinerTraitsT::template neighbor_updater_t<RefiningGraphT, DerivedClassT>;
+    using neighbor_updater_t = typename RefinerTraitsT::template neighbor_updater_t<DerivedClassT>;
 
-    static constexpr bool selective_schedule = SelectiveSchedule;
     static constexpr bool profiling_mode = RefinerTraitsT::profiling_mode;
 
 public:
-    PropagateEngine(const vertex_num_t num_vertices, const dist_func_t& dist_func) :
-        _log_table(num_vertices),
-        _executor_bitmap(num_vertices),
+    /**
+     * @brief Construct with only the distance function. @c _log_table is
+     *        default-constructed (empty) and sized on every @c set_graph
+     *        call to match the bound RefiningGraph's vertex count (N_local
+     *        for sparse layers, N_global for identity-mapped RGs).
+     */
+    PropagateEngine(const dist_func_t& dist_func) :
         _refining_graph(nullptr),
         _dist_func(dist_func)
     {}
 
     /** @brief Set the descent graph to operate on. */
     __attribute__((always_inline))
-    auto set_graph(RefiningGraphT& refining_graph) -> void {
+    auto set_graph(refining_graph_t& refining_graph) -> void {
         _refining_graph = &refining_graph;
-
-        // Initialize executor bitmap for selective scheduling
-        if constexpr (selective_schedule) {
-            _executor_bitmap.set_all();
-        }
+        _log_table.resize(refining_graph.get_num_vertices());
     }
 
+    /**
+     * @brief Run the updater on a single pivot. @p local_vid indexes the
+     *        log_table / RG row; the global vid is resolved via vid_at and
+     *        handed to the updater alongside so it can touch _vecs_data
+     *        (global-indexed) and write logs (local-indexed).
+     */
     template <typename UdfUpdaterT>
         requires std::derived_from<UdfUpdaterT, neighbor_updater_t<UdfUpdaterT>>
     auto propagate(
-        const vertex_id_t pivot_vid,
+        const vertex_id_t local_vid,
+        const vertex_id_t global_vid,
         UdfUpdaterT& udf_updater
     ) -> void {
-        nbr_arr_t& origin_nbrs = _refining_graph->fetch_nbrs(pivot_vid);
-        udf_updater(pivot_vid, origin_nbrs);
+        nbr_arr_t& origin_nbrs = _refining_graph->fetch_nbrs(global_vid);
+        udf_updater(local_vid, global_vid, origin_nbrs);
     }
 
     template <typename UdfUpdaterT>
         requires std::derived_from<UdfUpdaterT, neighbor_updater_t<UdfUpdaterT>>
     auto propagate(UdfUpdaterT& udf_updater) -> void {
-        // Dense Mode: Iterate all vertices via the RefiningGraph helper.
-        // It hands out global vids (identity in dense-RG, translated in
-        // sparse-RG), keeping every downstream fetch_nbrs / vecs_data.get
-        // call uniform.
-        if constexpr (not selective_schedule) {
-            _refining_graph->parallel_for_each_vertex(
-                [&](const vertex_id_t pivot_vid) {
-                    propagate<UdfUpdaterT>(pivot_vid, udf_updater);
-                });
-        }
-        // Sparse-bitmap Mode: Word Skipping + Bit Scanning. The bitmap is
-        // indexed by global vid in [0, _executor_bitmap.size()); this only
-        // makes sense when the RefiningGraph itself is identity-mapped.
-        else {
-            #ifndef NDEBUG
-            if (!_refining_graph->is_identity_mapped()) {
-                ARTEA_ERROR(
-                    "PropagateEngine selective_schedule mode requires an "
-                    "identity-mapped RefiningGraph (the executor bitmap is "
-                    "indexed by global vid).");
-            }
-            #endif
-            const vertex_num_t num_vertices = _refining_graph->get_num_vertices();
-            const size_t num_words = _executor_bitmap.get_num_words();
-
-            tbb::parallel_for(
-                tbb::blocked_range<size_t>(0, num_words),
-                [&](const tbb::blocked_range<size_t>& r) {
-                    for (size_t word_idx = r.begin(); word_idx != r.end(); ++word_idx) {
-                        uint64_t word_mask = _executor_bitmap.get_word_mask(word_idx);
-                        // Fast skip: If no bits are set, skip 64 vertices instantly
-                        if (word_mask == 0) continue;
-                        const vertex_id_t base_vid = word_idx << word_aligned_bitmap_t::WORD_SHIFT;
-                        // Bit Scanning: Iterate only set bits
-                        while (word_mask != 0) {
-                            // Fast Locating: Find index of the least significant bit (0-63)
-                            int offset = std::countr_zero(word_mask);
-
-                            vertex_id_t pivot_vid = base_vid + offset;
-
-                            // Boundary check for the very last word (rarely false)
-                            if (__builtin_expect(pivot_vid < num_vertices, 1)) {
-                                propagate<UdfUpdaterT>(pivot_vid, udf_updater);
-                            }
-
-                            // Clear the bit we just processed
-                            word_mask &= (word_mask - 1);
-                        }
-                    }
-                }
-            );  // end tbb::parallel_for
-        }
+        _refining_graph->parallel_for_each_vertex(
+            [&](const vertex_id_t local_vid, const vertex_id_t global_vid) {
+                propagate<UdfUpdaterT>(local_vid, global_vid, udf_updater);
+            });
     }
 
     /** @brief Merge the logged operations for a single vertex back to the descent graph.
-      * @param executor_vid The vertex id whose logged operations are to be merged.
+      * @param local_vid Local row index whose logged operations are to be merged.
       * @return Number of logs merged.
     */
     __attribute__((always_inline))
-    auto merge_logs(const vertex_id_t executor_vid) -> size_t {
-        // Logic decoupled to NbrLogTable
-        return _log_table.apply_logs(executor_vid, *_refining_graph);
+    auto merge_logs(const vertex_id_t local_vid) -> size_t {
+        return _log_table.apply_logs(local_vid, *_refining_graph);
     }
 
     /** @brief Merge the logged operations for all vertices back to the descent graph.
      *  @return Total number of logs merged in this call.
      */
     auto merge_logs() -> size_t {
-        // Dense Mode: Iterate all vertices via the RefiningGraph helper.
-        if constexpr (not selective_schedule) {
-            tbb::enumerable_thread_specific<size_t> local_counts;
+        tbb::enumerable_thread_specific<size_t> local_counts;
 
-            _refining_graph->parallel_for_each_vertex(
-                [&](const vertex_id_t executor_vid) {
-                    local_counts.local() += merge_logs(executor_vid);
-                });
-
-            if constexpr (profiling_mode) {
-                _merged_logs_count = local_counts.combine(std::plus<size_t>());
-            }
-        }
-        // Sparse-bitmap Mode: Word Skipping + Bit Scanning. Requires
-        // identity-mapped RefiningGraph (bitmap indexes global vids).
-        else {
-            #ifndef NDEBUG
-            if (!_refining_graph->is_identity_mapped()) {
-                ARTEA_ERROR(
-                    "PropagateEngine selective_schedule merge_logs requires "
-                    "an identity-mapped RefiningGraph.");
-            }
-            #endif
-            _executor_bitmap.clear();
-
-            const size_t num_words = _executor_bitmap.get_num_words();
-
-            // Thread-local counters for lock-free statistics
-            tbb::enumerable_thread_specific<size_t> local_counts;
-
-            #ifndef NDEBUG
-            if (num_words != _executor_bitmap.get_num_words()) {
-                ARTEA_ERROR("Inconsistent executor bitmap word counts between IN and OUT.");
-            }
-            #endif
-
-            // Parallel Dimension: Word Index (0 ... N/64)
-            tbb::parallel_for(
-                tbb::blocked_range<size_t>(0, num_words),
-                [&](const tbb::blocked_range<size_t>& r) {
-                    size_t& local_count = local_counts.local();
-                    for (size_t word_idx = r.begin(); word_idx != r.end(); ++word_idx) {
-                        uint64_t next_round_mask = 0;
-                        size_t start_vid, end_vid;
-                        _executor_bitmap.get_range_from_word(word_idx, start_vid, end_vid);
-                        // Check logs for each vertex in this word chunk
-                        for (vertex_id_t vid = start_vid; vid < end_vid; ++vid) {
-                            auto& log_container = _log_table.get_log_container(vid);
-                            if (!log_container.empty()) {
-                                local_count += merge_logs(vid);
-                                next_round_mask |= (1ULL << (vid & word_aligned_bitmap_t::WORD_MASK));
-                            }
-                        }
-                        if (next_round_mask != 0) {
-                            _executor_bitmap.set_word_mask(word_idx, next_round_mask);
-                        }
-                    }
-                }
-            );
-
-            if constexpr (profiling_mode) {
-                _merged_logs_count = local_counts.combine(std::plus<size_t>());
-            }
-        }
+        _refining_graph->parallel_for_each_vertex(
+            [&](const vertex_id_t local_vid, const vertex_id_t /*global_vid*/) {
+                local_counts.local() += merge_logs(local_vid);
+            });
 
         if constexpr (profiling_mode) {
+            _merged_logs_count = local_counts.combine(std::plus<size_t>());
             return _merged_logs_count;
         } else {
             return 0;
@@ -264,11 +163,6 @@ public:
         return _log_table;
     }
 
-    __attribute__((always_inline))
-    auto get_executor_bitmap() -> word_aligned_bitmap_t& {
-        return _executor_bitmap;
-    }
-
     /** @brief Get the total count of merged logs across all merge_logs() calls.
      *  @return Total number of logs merged.
      */
@@ -299,12 +193,12 @@ public:
       */
     template <typename UpdaterT, typename... Args>
     auto make_updater(Args&&... args) -> UpdaterT {
-        using triangle_updater_t = typename RefinerTraitsT::template triangle_updater_t<RefiningGraphT>;
-        using pruning_updater_t = typename RefinerTraitsT::template pruning_updater_t<RefiningGraphT>;
-        using reverse_updater_t = typename RefinerTraitsT::template reverse_updater_t<RefiningGraphT>;
-        using random_updater_t = typename RefinerTraitsT::template random_updater_t<RefiningGraphT>;
-        using routing_updater_t = typename RefinerTraitsT::template routing_updater_t<RefiningGraphT>;
-        using truncate_updater_t = typename RefinerTraitsT::template truncate_updater_t<RefiningGraphT>;
+        using triangle_updater_t = typename RefinerTraitsT::triangle_updater_t;
+        using pruning_updater_t  = typename RefinerTraitsT::pruning_updater_t;
+        using reverse_updater_t  = typename RefinerTraitsT::reverse_updater_t;
+        using random_updater_t   = typename RefinerTraitsT::random_updater_t;
+        using routing_updater_t  = typename RefinerTraitsT::routing_updater_t;
+        using truncate_updater_t = typename RefinerTraitsT::truncate_updater_t;
 
         const auto& vecs_arr = _refining_graph->get_vecs_data();
         auto& log_table = _log_table;
@@ -312,25 +206,16 @@ public:
         const auto num_vertices = _refining_graph->get_num_vertices();
 
         if constexpr (std::is_same_v<UpdaterT, triangle_updater_t>) {
-            // TriangleUpdater(dist_func, vecs_arr, log_table, refining_graph, scale_coeffs, shifted_coeffs)
             return UpdaterT(_dist_func, vecs_arr, log_table, *_refining_graph, std::forward<Args>(args)...);
         } else if constexpr (std::is_same_v<UpdaterT, pruning_updater_t>) {
-            // PruningUpdater(dist_func, vecs_arr, log_table, refining_graph, scale_coeffs, shifted_coeffs)
             return UpdaterT(_dist_func, vecs_arr, log_table, *_refining_graph, std::forward<Args>(args)...);
         } else if constexpr (std::is_same_v<UpdaterT, reverse_updater_t>) {
-            // ReverseUpdater constructor signature:
-            // ReverseUpdater(dist_func, vecs_arr, log_table, refining_graph)
             return UpdaterT(_dist_func, vecs_arr, log_table, *_refining_graph);
         } else if constexpr (std::is_same_v<UpdaterT, random_updater_t>) {
-            // RandomUpdater constructor signature:
-            // RandomUpdater(dist_func, vecs_arr, log_table, refining_graph, num_vertices, rand_gen_size)
             return UpdaterT(_dist_func, vecs_arr, log_table, *_refining_graph, num_vertices, std::forward<Args>(args)...);
         } else if constexpr (std::is_same_v<UpdaterT, routing_updater_t>) {
-            // RoutingUpdater constructor signature:
-            // RoutingUpdater(dist_func, vecs_arr, log_table, refining_graph, candidate_queue_size)
             return UpdaterT(_dist_func, vecs_arr, log_table, *_refining_graph, std::forward<Args>(args)...);
         } else if constexpr (std::is_same_v<UpdaterT, truncate_updater_t>) {
-            // TruncateUpdater(dist_func, vecs_arr, log_table, refining_graph, [truncate_size])
             return UpdaterT(_dist_func, vecs_arr, log_table, *_refining_graph, std::forward<Args>(args)...);
         } else {
             ARTEA_ERROR("Unsupported updater type");
@@ -342,11 +227,8 @@ private:
     /** @brief Operation log table for recording graph operations during propagation. */
     log_table_t _log_table;
 
-    /** @brief Bitmap to track which vertices have pending operations. */
-    word_aligned_bitmap_t _executor_bitmap;
-
     /** @brief Pointer to the descent graph being operated on. */
-    RefiningGraphT* _refining_graph;
+    refining_graph_t* _refining_graph;
 
     /** @brief Distance function reference. */
     const dist_func_t& _dist_func;

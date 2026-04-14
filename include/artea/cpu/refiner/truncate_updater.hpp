@@ -25,33 +25,35 @@
 namespace artea {
 namespace cpu {
 
-template <typename RefinerTraitsT, typename RefiningGraphT>
+template <typename RefinerTraitsT>
 class TruncateUpdater :
-    public RefinerTraitsT::template neighbor_updater_t<RefiningGraphT, TruncateUpdater<RefinerTraitsT, RefiningGraphT>> {
+    public RefinerTraitsT::template neighbor_updater_t<TruncateUpdater<RefinerTraitsT>> {
 
-    using vertex_id_t    = typename RefinerTraitsT::vertex_id_t;
-    using vertex_num_t   = typename RefinerTraitsT::vertex_num_t;
-    using nbr_arr_t      = typename RefinerTraitsT::nbr_arr_t;
-    using log_table_t    = typename RefinerTraitsT::log_table_t;
-    using dist_func_t    = typename RefinerTraitsT::dist_func_t;
-    using vector_array_t = typename RefinerTraitsT::vector_array_t;
-    using base_class_t   = typename RefinerTraitsT::template neighbor_updater_t<RefiningGraphT, TruncateUpdater<RefinerTraitsT, RefiningGraphT>>;
+    using vertex_id_t      = typename RefinerTraitsT::vertex_id_t;
+    using vertex_num_t     = typename RefinerTraitsT::vertex_num_t;
+    using nbr_arr_t        = typename RefinerTraitsT::nbr_arr_t;
+    using log_table_t      = typename RefinerTraitsT::log_table_t;
+    using dist_func_t      = typename RefinerTraitsT::dist_func_t;
+    using vector_array_t   = typename RefinerTraitsT::vector_array_t;
+    using refining_graph_t = typename RefinerTraitsT::dynamic::refining_graph_t;
+    using base_class_t     = typename RefinerTraitsT::template neighbor_updater_t<TruncateUpdater<RefinerTraitsT>>;
 
 public:
     static constexpr const char* updater_name = "truncate_updater";
 
     TruncateUpdater(
-        const dist_func_t& dist_func,
-        const vector_array_t& vecs_data,
-        log_table_t& log_table,
-        const RefiningGraphT& refining_graph,
-        vertex_num_t truncate_size = 0
+        const dist_func_t&        dist_func,
+        const vector_array_t&     vecs_data,
+        log_table_t&              log_table,
+        const refining_graph_t&   refining_graph,
+        vertex_num_t              truncate_size = 0
     ) : base_class_t(dist_func, vecs_data, log_table, refining_graph),
         _truncate_size(truncate_size) {}
 
     __attribute__((always_inline))
     auto update_impl(
-        const vertex_id_t /* pivot_vid */,
+        const vertex_id_t /* local_vid */,
+        const vertex_id_t /* global_vid */,
         nbr_arr_t& origin_nbrs
     ) -> void {
         const vertex_num_t max_sz = (_truncate_size > 0)

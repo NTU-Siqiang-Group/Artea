@@ -125,12 +125,12 @@ namespace dynamic {
 }   // namespace dynamic
 
 // Refiner types from RefinerTraits
-using triangle_updater_t = typename refiner_traits_t::template triangle_updater_t<typename index_traits_t::conv_graph::index_t>;
+using triangle_updater_t = typename refiner_traits_t::triangle_updater_t;
 using hierarchical_pruning_updater_t = typename refiner_traits_t::hierarchical_pruning_updater_t;
-using reverse_updater_t = typename refiner_traits_t::template reverse_updater_t<typename index_traits_t::conv_graph::index_t>;
-using random_updater_t = typename refiner_traits_t::template random_updater_t<typename index_traits_t::conv_graph::index_t>;
-using routing_updater_t = typename refiner_traits_t::template routing_updater_t<typename index_traits_t::conv_graph::index_t>;
-using truncate_updater_t = typename refiner_traits_t::template truncate_updater_t<typename index_traits_t::conv_graph::index_t>;
+using reverse_updater_t  = typename refiner_traits_t::reverse_updater_t;
+using random_updater_t   = typename refiner_traits_t::random_updater_t;
+using routing_updater_t  = typename refiner_traits_t::routing_updater_t;
+using truncate_updater_t = typename refiner_traits_t::truncate_updater_t;
 using random_eg_t = typename refiner_traits_t::random_eg_t;
 using ivf_partitions_t = typename refiner_traits_t::ivf_partitions_t;
 using ivf_construct_policy_t = typename refiner_traits_t::ivf_construct_policy_t;
@@ -161,10 +161,7 @@ using bruteforce_router_t = typename router_traits_t::bruteforce_router_t;
 using index_register_util_t = IndexRegisterUtil;
 
 // Propagate engine from RefinerTraits
-using propagate_engine_ss_t = typename refiner_traits_t::template propagate_engine_t<typename index_traits_t::conv_graph::index_t, true>;
-using propagate_engine_noss_t = typename refiner_traits_t::template propagate_engine_t<typename index_traits_t::conv_graph::index_t, false>;
-// Currently, NO SELECTIVE SCHEDULING is faster
-using propagate_engine_t = propagate_engine_noss_t;
+using propagate_engine_t = typename refiner_traits_t::propagate_engine_t;
 
 // Namespace-scoped types from GraphFactoryTraits (index_t, factory_t, config types)
 namespace conv_graph {

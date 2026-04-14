@@ -102,20 +102,20 @@ public:
 
         ARTEA_INFO("Building convergent graph...");
         auto t0 = std::chrono::high_resolution_clock::now();
-        refining_graph_ = std::make_unique<conv_graph::index_t>(
+        graph_index_ = std::make_unique<conv_graph::index_t>(
             conv_graph::factory_t::construct_graph(base_vecs, layer_cfg, pruning_cfg, propagate_cfg)
         );
         auto t1 = std::chrono::high_resolution_clock::now();
         g_results.build_time_s =
             std::chrono::duration_cast<std::chrono::microseconds>(t1 - t0).count() / 1e6;
         ARTEA_INFO(fmt::format("Graph built: {} vertices in {:.2f} s",
-            refining_graph_->get_num_vertices(), g_results.build_time_s));
+            graph_index_->get_num_vertices(), g_results.build_time_s));
 
         // Convert to flat search graph
         ARTEA_INFO("Converting to flat search graph...");
         auto tc0 = std::chrono::high_resolution_clock::now();
         compact_refining_graph_ = std::make_unique<compact::refining_graph_t>(
-            refining_graph_compactor_t::compact_graph(*refining_graph_, g_config.extracted_nbr_size)
+            refining_graph_compactor_t::compact_graph(*graph_index_, g_config.extracted_nbr_size)
         );
         auto tc1 = std::chrono::high_resolution_clock::now();
         g_results.conversion_time_ms =
@@ -127,7 +127,7 @@ public:
 
     vector_dataset_t&    get_dataset()           { return *dataset_; }
     dist_func_t&         get_dist_func()          { return *dist_func_; }
-    conv_graph::index_t&        get_refining_graph()          { return *refining_graph_; }
+    conv_graph::index_t&        get_graph_index()          { return *graph_index_; }
     compact::refining_graph_t& get_compact_refining_graph()  { return *compact_refining_graph_; }
     const idlist_array_t& get_gt()               { return dataset_->get_gt_vecs(); }
 
@@ -135,7 +135,7 @@ private:
     DataProvider() = default;
     std::unique_ptr<vector_dataset_t>    dataset_;
     std::unique_ptr<dist_func_t>         dist_func_;
-    std::unique_ptr<conv_graph::index_t>        refining_graph_;
+    std::unique_ptr<conv_graph::index_t>        graph_index_;
     std::unique_ptr<compact::refining_graph_t> compact_refining_graph_;
 };
 
@@ -156,12 +156,13 @@ TEST_F(RouterComparisonTest, ConstructModeRouter) {
 
     dynamic::refining_graph_router_t router(
         base_vecs, p.get_dist_func(),
+        p.get_graph_index().get_refining_graph(),
         g_config.topk, g_config.queue_size
     );
     router.initialize();
 
     auto t0 = std::chrono::high_resolution_clock::now();
-    knn_results_t results = router.batch_query(query_vecs, p.get_refining_graph());
+    knn_results_t results = router.batch_query(query_vecs);
     auto t1 = std::chrono::high_resolution_clock::now();
     double us = std::chrono::duration_cast<std::chrono::microseconds>(t1 - t0).count();
 

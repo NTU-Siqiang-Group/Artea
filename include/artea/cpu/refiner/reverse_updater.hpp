@@ -26,9 +26,9 @@
 namespace artea {
 namespace cpu {
 
-template <typename RefinerTraitsT, typename RefiningGraphT>
+template <typename RefinerTraitsT>
 class ReverseUpdater :
-    public RefinerTraitsT::template neighbor_updater_t<RefiningGraphT, ReverseUpdater<RefinerTraitsT, RefiningGraphT>> {
+    public RefinerTraitsT::template neighbor_updater_t<ReverseUpdater<RefinerTraitsT>> {
 
     using vertex_id_t = typename RefinerTraitsT::vertex_id_t;
     using vertex_num_t = typename RefinerTraitsT::vertex_num_t;
@@ -40,7 +40,8 @@ class ReverseUpdater :
     using nbr_arr_t = typename RefinerTraitsT::nbr_arr_t;
     using log_table_t = typename RefinerTraitsT::log_table_t;
     using dist_func_t = typename RefinerTraitsT::dist_func_t;
-    using base_class_t = typename RefinerTraitsT::template neighbor_updater_t<RefiningGraphT, ReverseUpdater<RefinerTraitsT, RefiningGraphT>>;
+    using refining_graph_t = typename RefinerTraitsT::dynamic::refining_graph_t;
+    using base_class_t = typename RefinerTraitsT::template neighbor_updater_t<ReverseUpdater<RefinerTraitsT>>;
 
 public:
     static constexpr const char* updater_name = "reverse_updater";
@@ -52,10 +53,10 @@ public:
      * @param log_table Log table for recording edge operations.
      */
     ReverseUpdater(
-        const dist_func_t& dist_func,
-        const vector_array_t& vecs_data,
-        log_table_t& log_table,
-        const RefiningGraphT& refining_graph
+        const dist_func_t&        dist_func,
+        const vector_array_t&     vecs_data,
+        log_table_t&              log_table,
+        const refining_graph_t&   refining_graph
     ) : base_class_t(dist_func, vecs_data, log_table, refining_graph) {}
 
     /**
@@ -69,10 +70,11 @@ public:
      * @param origin_nbrs The neighbor array of pivot_vid (not modified).
      */
     auto update_impl(
-        const vertex_id_t pivot_vid,
+        const vertex_id_t /*local_vid*/,
+        const vertex_id_t global_vid,
         nbr_arr_t& origin_nbrs
     ) -> void {
-        // For each neighbor in origin_nbrs, add a reverse edge from that neighbor to pivot_vid
+        // For each neighbor in origin_nbrs, add a reverse edge from that neighbor to global_vid
         const vertex_num_t max_sz = this->_refining_graph.layer_config().max_nbr_size();
         for (vertex_num_t i = 0; i < origin_nbrs.size(); ++i) {
             const nbr_t& nbr = origin_nbrs[i];
@@ -86,16 +88,15 @@ public:
             //     continue;
             // }
 
-            // Add reverse edge: from nbr_id to pivot_vid with the same distance
-            // This effectively adds pivot_vid as an incoming edge to nbr_id
+            // Add reverse edge: from nbr_id to global_vid with the same distance.
+            // Executor here is the neighbor (a global vid) — translate to
+            // local for the log_table row index.
             this->_log_table.write_log(
-                /* executor_vid = */nbr_id,
-                /* nbr_id = */pivot_vid,
+                /* executor_vid = */this->_refining_graph.local_id_of(nbr_id),
+                /* nbr_id = */global_vid,
                 /* new_edge_dist = */dist
             );
         }
-
-        // Note: origin_nbrs is not modified, as we only add reverse edges via log table
     }
 
 };  // class ReverseUpdater

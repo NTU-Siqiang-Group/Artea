@@ -598,7 +598,7 @@ public:
         const layer_id_t level_id
     ) const -> void {
         refining_graph.parallel_for_each_vertex(
-            [&](const vertex_id_t global_vid) {
+            [&](const vertex_id_t /*local_vid*/, const vertex_id_t global_vid) {
                 // Skip vids that were never assign_layer'd. Possible when
                 // the caller constructed a dense RG with a vector array
                 // larger than the assigned set (e.g. reusing the global
@@ -636,7 +636,7 @@ public:
         const layer_id_t level_id
     ) -> void {
         refining_graph.parallel_for_each_vertex(
-            [&](const vertex_id_t global_vid) {
+            [&](const vertex_id_t /*local_vid*/, const vertex_id_t global_vid) {
                 if (!is_vertex_assigned(global_vid)) {
                     ARTEA_WARN(fmt::format(
                         "writeback_layer_from_refining_graph: skipping "

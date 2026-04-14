@@ -184,19 +184,19 @@ public:
 
         layer_config_t layer_config(max_nbr_size, reserved_nbr_size);
 
-        // Construct descent graph from metadata using subclass hook
-        RefiningGraphT refining_graph = RefiningGraphT::from_metadata(meta, vecs_data, layer_config);
+        // Construct IndexStructure from metadata using subclass hook
+        RefiningGraphT graph_index = RefiningGraphT::from_metadata(meta, vecs_data, layer_config);
 
         // Check if the number of vertices matches
-        if (refining_graph.get_num_vertices() != num_vertices) {
+        if (graph_index.get_num_vertices() != num_vertices) {
             ARTEA_ERROR(fmt::format(
                 "Vertex count mismatch: vecs_data has {} vertices but file has {} vertices",
-                refining_graph.get_num_vertices(), num_vertices
+                graph_index.get_num_vertices(), num_vertices
             ));
         }
 
         // Read neighbor arrays
-        auto& nbrs_arr = refining_graph.get_nbrs_arr();
+        auto& nbrs_arr = graph_index.get_nbrs_arr();
         for (vertex_num_t i = 0; i < num_vertices; ++i) {
             vertex_num_t nbr_count = 0;
             ifs.read(reinterpret_cast<char*>(&nbr_count), sizeof(nbr_count));
@@ -214,7 +214,7 @@ public:
             ARTEA_ERROR(fmt::format("Failed to read descent graph data from file: {}", graph_bin_path));
         }
 
-        return refining_graph;
+        return graph_index;
     }
 
 private:

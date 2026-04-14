@@ -217,8 +217,8 @@ public:
     __attribute__((always_inline)) auto max_restrict_level() const -> layer_num_t  { return _max_restrict_level; }
     __attribute__((always_inline)) auto search_nn_qs()       const -> vertex_num_t { return _config.search_nn_qs(); }
     __attribute__((always_inline)) auto select_nbrs_qs()     const -> vertex_num_t { return _config.select_nbrs_qs(); }
-    __attribute__((always_inline)) auto layer_cap_decay_ratio() const -> ratio_t   { return _config.layer_cap_decay_ratio(); }
-    __attribute__((always_inline)) auto min_layer_cap()      const -> vertex_num_t { return _config.min_layer_cap(); }
+    static constexpr ratio_t      layer_cap_decay_ratio = rgraph_config_t::layer_cap_decay_ratio;
+    static constexpr vertex_num_t min_layer_cap         = rgraph_config_t::min_layer_cap;
 
     /**
      * @brief Covering radius for 1-indexed layer @p h (paper convention).

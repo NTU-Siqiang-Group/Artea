@@ -34,6 +34,14 @@ struct RGraphConfig {
     using distance_t   = typename BaseTraitsT::distance_t;
     using ratio_t      = typename BaseTraitsT::ratio_t;
 
+    /** @brief Geometric decay ratio for per-layer initial capacity;
+     *         capacity(layer_id) = base_capacity * decay^layer_id.
+     *         Each layer starts at half the capacity of the one below. */
+    static constexpr ratio_t      layer_cap_decay_ratio = ratio_t(0.5);
+
+    /** @brief Floor on per-layer capacity. */
+    static constexpr vertex_num_t min_layer_cap         = 1024;
+
     /**
      * @brief Construct a RGraphConfig.
      * @param rnet_beta        Radius growth factor: R_h = L1_rnet_radius * rnet_beta^(h-1). Must be > 1.
@@ -42,28 +50,19 @@ struct RGraphConfig {
      * @param select_nbrs_qs   Beam-search queue size for Phase 2 candidate gathering at
      *                         every level (L0..highest_insert_level). Must be >= 1. Default 100.
      * @param max_nbr_size     Per-vertex neighbor capacity for every layer (default: 32).
-     * @param layer_cap_decay_ratio  Geometric decay ratio for per-layer initial capacity;
-     *                               capacity(layer_id) = base_capacity * decay^layer_id.
-     *                               Must be in (0, 1]. Default 0.5 (each layer starts
-     *                               at half the capacity of the one below).
-     * @param min_layer_cap    Floor on per-layer capacity (default: 1024).
      */
     RGraphConfig(
         ratio_t rnet_beta,
         distance_t L1_rnet_radius,
         vertex_num_t search_nn_qs,
         vertex_num_t select_nbrs_qs = 100,
-        vertex_num_t max_nbr_size = 32,
-        ratio_t layer_cap_decay_ratio = ratio_t(0.5),
-        vertex_num_t min_layer_cap = 1024
+        vertex_num_t max_nbr_size = 32
     ) :
         _rnet_beta(rnet_beta),
         _L1_rnet_radius(L1_rnet_radius),
         _search_nn_qs(search_nn_qs),
         _select_nbrs_qs(select_nbrs_qs),
-        _max_nbr_size(max_nbr_size),
-        _layer_cap_decay_ratio(layer_cap_decay_ratio),
-        _min_layer_cap(min_layer_cap)
+        _max_nbr_size(max_nbr_size)
     {
         if (rnet_beta <= ratio_t(1)) {
             ARTEA_ERROR(fmt::format("rnet_beta ({}) must be > 1", rnet_beta));
@@ -77,9 +76,6 @@ struct RGraphConfig {
         if (select_nbrs_qs < 1) {
             ARTEA_ERROR(fmt::format("select_nbrs_qs ({}) must be >= 1", select_nbrs_qs));
         }
-        if (layer_cap_decay_ratio <= ratio_t(0) || layer_cap_decay_ratio > ratio_t(1)) {
-            ARTEA_ERROR(fmt::format("layer_cap_decay_ratio ({}) must be in (0, 1]", layer_cap_decay_ratio));
-        }
     }
 
     // Const getters
@@ -88,8 +84,6 @@ struct RGraphConfig {
     __attribute__((always_inline)) auto search_nn_qs()       const -> vertex_num_t { return _search_nn_qs; }
     __attribute__((always_inline)) auto select_nbrs_qs()     const -> vertex_num_t { return _select_nbrs_qs; }
     __attribute__((always_inline)) auto max_nbr_size()       const -> vertex_num_t { return _max_nbr_size; }
-    __attribute__((always_inline)) auto layer_cap_decay_ratio()    const -> ratio_t      { return _layer_cap_decay_ratio; }
-    __attribute__((always_inline)) auto min_layer_cap()      const -> vertex_num_t { return _min_layer_cap; }
 
     /**
      * @brief Covering radius for 1-indexed layer @p h: R_h = L1 * beta^(h-1).
@@ -109,11 +103,11 @@ struct RGraphConfig {
      */
     __attribute__((always_inline))
     auto capacity_for_layer(const vertex_num_t layer_id, const vertex_num_t base_capacity) const -> vertex_num_t {
-        if (_layer_cap_decay_ratio == ratio_t(1)) return base_capacity;
-        const double factor = std::pow(static_cast<double>(_layer_cap_decay_ratio), static_cast<double>(layer_id));
+        if constexpr (layer_cap_decay_ratio == ratio_t(1)) return base_capacity;
+        const double factor = std::pow(static_cast<double>(layer_cap_decay_ratio), static_cast<double>(layer_id));
         const double raw = static_cast<double>(base_capacity) * factor;
         const vertex_num_t cap = static_cast<vertex_num_t>(raw);
-        return std::max<vertex_num_t>(cap, _min_layer_cap);
+        return std::max<vertex_num_t>(cap, min_layer_cap);
     }
 
     /**
@@ -144,12 +138,6 @@ private:
 
     /** @brief Per-vertex neighbor capacity for every layer. */
     vertex_num_t _max_nbr_size;
-
-    /** @brief Geometric decay ratio for per-layer initial capacity; must be in (0, 1]. */
-    ratio_t      _layer_cap_decay_ratio;
-
-    /** @brief Floor on per-layer capacity. */
-    vertex_num_t _min_layer_cap;
 };
 
 }   // namespace stacked_rgraph

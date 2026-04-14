@@ -28,7 +28,7 @@
 namespace artea {
 namespace cpu {
 
-template <typename RefinerTraitsT, typename RefiningGraphT, typename DerivedClassT>
+template <typename RefinerTraitsT, typename DerivedClassT>
 class NeighborUpdater {
 
     using vertex_id_t = typename RefinerTraitsT::vertex_id_t;
@@ -41,14 +41,15 @@ class NeighborUpdater {
     using log_table_t = typename RefinerTraitsT::log_table_t;
     using dist_func_t = typename RefinerTraitsT::dist_func_t;
     using nbr_arr_checker_t = typename RefinerTraitsT::nbr_arr_checker_t;
+    using refining_graph_t = typename RefinerTraitsT::dynamic::refining_graph_t;
 
 public:
 
     NeighborUpdater(
-        const dist_func_t& dist_func,
-        const vector_array_t& vecs_data,
-        log_table_t& log_table,
-        const RefiningGraphT& refining_graph
+        const dist_func_t&        dist_func,
+        const vector_array_t&     vecs_data,
+        log_table_t&              log_table,
+        const refining_graph_t&   refining_graph
     ) : _dist_func(dist_func), _vecs_data(vecs_data), _log_table(log_table), _refining_graph(refining_graph) {}
 
     /**
@@ -59,17 +60,19 @@ public:
      */
     __attribute__((always_inline))
     auto operator()(
-        const vertex_id_t pivot_vid,
+        const vertex_id_t local_vid,
+        const vertex_id_t global_vid,
         nbr_arr_t& origin_nbrs
     ) -> void {
-        static_cast<DerivedClassT*>(this)->update_impl(pivot_vid, origin_nbrs);
+        static_cast<DerivedClassT*>(this)->update_impl(local_vid, global_vid, origin_nbrs);
 
         #ifndef NDEBUG
         if (!nbr_arr_checker_t::full_check(origin_nbrs)) {
             ARTEA_ERROR(fmt::format(
-                "Updater {} produced an invalid neighbor array for vertex {}.",
+                "Updater {} produced an invalid neighbor array for vertex "
+                "(local={}, global={}).",
                 DerivedClassT::updater_name,
-                pivot_vid
+                local_vid, global_vid
             ));
         }
         #endif
@@ -87,7 +90,7 @@ protected:
     log_table_t& _log_table;
 
     /** @brief Reference to the descent graph for neighbor overflow check. */
-    const RefiningGraphT& _refining_graph;
+    const refining_graph_t& _refining_graph;
 
 };  //  class NeighborUpdater
 

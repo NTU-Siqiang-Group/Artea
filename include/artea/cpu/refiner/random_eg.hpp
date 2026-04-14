@@ -46,6 +46,7 @@ class RandomEG {
     using nbr_comp_t = typename RefinerTraitsT::nbr_comp_t;
     using dist_func_t = typename RefinerTraitsT::dist_func_t;
     using random_seq_t = typename RefinerTraitsT::random_seq_t;
+    using refining_graph_t = typename RefinerTraitsT::dynamic::refining_graph_t;
 
     static constexpr nbr_comp_t nbr_comp {};
 
@@ -62,9 +63,8 @@ public:
      * @param refining_graph The graph to initialize with random edges.
      * @param init_nbr_size Number of random neighbors to generate for each vertex.
      */
-    template <typename RefiningGraphT>
     auto generate(
-        RefiningGraphT& refining_graph,
+        refining_graph_t& refining_graph,
         const vertex_num_t init_nbr_size
     ) -> void {
         const vertex_num_t num_vertices = refining_graph.get_num_vertices();
@@ -83,7 +83,7 @@ public:
             });
 
         refining_graph.parallel_for_each_vertex(
-            [&](const vertex_id_t pivot_vid) {
+            [&](const vertex_id_t /*local_vid*/, const vertex_id_t pivot_vid) {
                 auto& random_local_ids = tls_random_local_ids.local();
                 nbr_arr_t& nbrs = refining_graph.fetch_nbrs(pivot_vid);
                 const vec_ele_t* query_vec = vecs_data.get(pivot_vid);

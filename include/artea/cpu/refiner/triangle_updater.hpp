@@ -37,9 +37,9 @@ enum class PruningConditionT {
     origin_rng_ineq
 };
 
-template <typename RefinerTraitsT, typename RefiningGraphT>
+template <typename RefinerTraitsT>
 class TriangleUpdater :
-    public RefinerTraitsT::template neighbor_updater_t<RefiningGraphT, TriangleUpdater<RefinerTraitsT, RefiningGraphT>> {
+    public RefinerTraitsT::template neighbor_updater_t<TriangleUpdater<RefinerTraitsT>> {
 
     using vertex_id_t = typename RefinerTraitsT::vertex_id_t;
     using vertex_num_t = typename RefinerTraitsT::vertex_num_t;
@@ -51,7 +51,8 @@ class TriangleUpdater :
     using nbr_arr_t = typename RefinerTraitsT::nbr_arr_t;
     using log_table_t = typename RefinerTraitsT::log_table_t;
     using dist_func_t = typename RefinerTraitsT::dist_func_t;
-    using base_class_t = typename RefinerTraitsT::template neighbor_updater_t<RefiningGraphT, TriangleUpdater<RefinerTraitsT, RefiningGraphT>>;
+    using refining_graph_t = typename RefinerTraitsT::dynamic::refining_graph_t;
+    using base_class_t = typename RefinerTraitsT::template neighbor_updater_t<TriangleUpdater<RefinerTraitsT>>;
     static constexpr vertex_id_t invalid_vertex_id = RefinerTraitsT::invalid_vertex_id;
     static constexpr distance_t nan_distance = RefinerTraitsT::nan_distance;
     static constexpr distance_t max_distance = RefinerTraitsT::max_distance;
@@ -62,12 +63,12 @@ public:
     static constexpr const char* updater_name = "triangle_updater";
 
     TriangleUpdater(
-        const dist_func_t& dist_func,
-        const vector_array_t& vecs_data,
-        log_table_t& log_table,
-        const RefiningGraphT& refining_graph,
-        const ratio_t scale_coeffs,
-        const ratio_t shifted_coeffs = 0.0
+        const dist_func_t&        dist_func,
+        const vector_array_t&     vecs_data,
+        log_table_t&              log_table,
+        const refining_graph_t&   refining_graph,
+        const ratio_t             scale_coeffs,
+        const ratio_t             shifted_coeffs = 0.0
     ) : base_class_t(dist_func, vecs_data, log_table, refining_graph),
         _inv_scale_coeffs(static_cast<ratio_t>(1.0) / scale_coeffs),
         _shifted_coeffs(shifted_coeffs) {}
@@ -110,7 +111,8 @@ public:
      */
     template <PruningConditionT ConditionType = PruningConditionT::scaled_ineq>
     auto update_impl(
-        const vertex_id_t pivot_vid,
+        const vertex_id_t /*local_vid*/,
+        const vertex_id_t /*global_vid*/,
         nbr_arr_t& origin_nbrs
     ) -> void {
         #ifndef NDEBUG
@@ -139,7 +141,11 @@ public:
                 }
             }
             else {
-                this->_log_table.write_log(conflict_vid, ori_nbr.get_vid(), conflict_dist);
+                // conflict_vid is a global nbr vid; translate to local for
+                // the log_table (row index into the RG).
+                this->_log_table.write_log(
+                    this->_refining_graph.local_id_of(conflict_vid),
+                    ori_nbr.get_vid(), conflict_dist);
             }
         }
 

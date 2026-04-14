@@ -108,7 +108,7 @@ class IndexFactory {
     using propagate_config_t = typename GraphFactoryTraitsT::my_graph::propagate_config_t;
     using pruning_config_t   = typename GraphFactoryTraitsT::my_graph::pruning_config_t;
     // Parameterize edge generators on this_index_t
-    using propagate_engine_t = typename GraphFactoryTraitsT::template propagate_engine_t<this_index_t, false>;
+    using propagate_engine_t = typename GraphFactoryTraitsT::propagate_engine_t;
     using triangle_updater_t = typename GraphFactoryTraitsT::template triangle_updater_t<this_index_t>;
     using routing_updater_t  = typename GraphFactoryTraitsT::template routing_updater_t<this_index_t>;
     // ... other updater types ...

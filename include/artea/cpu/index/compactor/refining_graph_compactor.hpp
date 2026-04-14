@@ -106,8 +106,8 @@ public:
         const vector_array_t& vecs_data
     ) -> typename compact::refining_graph_t {
         using index_t = typename IndexTraitsT::conv_graph::index_t;
-        index_t refining_graph = index_t::restore(file_path, vecs_data);
-        return compact_graph(refining_graph, extracted_nbr_size);
+        index_t graph_index = index_t::restore(file_path, vecs_data);
+        return compact_graph(graph_index, extracted_nbr_size);
     }
 
 };  // class RefiningGraphCompactor

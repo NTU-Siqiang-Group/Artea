@@ -29,9 +29,9 @@
 namespace artea {
 namespace cpu {
 
-template <typename RefinerTraitsT, typename RefiningGraphT>
+template <typename RefinerTraitsT>
 class RandomUpdater :
-    public RefinerTraitsT::template neighbor_updater_t<RefiningGraphT, RandomUpdater<RefinerTraitsT, RefiningGraphT>>
+    public RefinerTraitsT::template neighbor_updater_t<RandomUpdater<RefinerTraitsT>>
 {
 
     using vertex_id_t = typename RefinerTraitsT::vertex_id_t;
@@ -44,7 +44,8 @@ class RandomUpdater :
     using nbr_arr_t = typename RefinerTraitsT::nbr_arr_t;
     using log_table_t = typename RefinerTraitsT::log_table_t;
     using dist_func_t = typename RefinerTraitsT::dist_func_t;
-    using base_class_t = typename RefinerTraitsT::template neighbor_updater_t<RefiningGraphT, RandomUpdater<RefinerTraitsT, RefiningGraphT>>;
+    using refining_graph_t = typename RefinerTraitsT::dynamic::refining_graph_t;
+    using base_class_t = typename RefinerTraitsT::template neighbor_updater_t<RandomUpdater<RefinerTraitsT>>;
     using random_seq_t = typename RefinerTraitsT::random_seq_t;
 
 public:
@@ -52,19 +53,14 @@ public:
 
     /**
      * @brief Constructor for RandomUpdater.
-     * @param dist_func Distance function reference.
-     * @param vecs_data Vector array containing all vertex data.
-     * @param log_table Log table for recording edge operations.
-     * @param num_vertices Total number of vertices in the graph (used as upper bound for random ID generation).
-     * @param rand_gen_size Number of random neighbors to generate for each vertex.
      */
     RandomUpdater(
-        const dist_func_t& dist_func,
-        const vector_array_t& vecs_data,
-        log_table_t& log_table,
-        const RefiningGraphT& refining_graph,
-        const vertex_num_t num_vertices,
-        const vertex_num_t rand_gen_size
+        const dist_func_t&        dist_func,
+        const vector_array_t&     vecs_data,
+        log_table_t&              log_table,
+        const refining_graph_t&   refining_graph,
+        const vertex_num_t        num_vertices,
+        const vertex_num_t        rand_gen_size
     ) : base_class_t(dist_func, vecs_data, log_table, refining_graph),
         _num_vertices(num_vertices),
         _rand_gen_size(rand_gen_size),
@@ -85,13 +81,16 @@ public:
      *       number generation.
      */
     auto update_impl(
-        const vertex_id_t pivot_vid,
+        const vertex_id_t local_vid,
+        const vertex_id_t global_vid,
         nbr_arr_t& origin_nbrs
     ) -> void {
+        // Random ids are drawn in [0, _num_vertices) = local-row space;
+        // translate each to a global vid for distance evaluation.
         std::vector<vertex_id_t> rand_ids_buffer(_rand_gen_size);
         _random_seq.generate(rand_ids_buffer, _num_vertices, _rand_gen_size);
 
-        const vec_ele_t* pivot_vec = this->_vecs_data.get(pivot_vid);
+        const vec_ele_t* pivot_vec = this->_vecs_data.get(global_vid);
         const vertex_num_t max_sz = this->_refining_graph.layer_config().max_nbr_size();
 
         std::vector<vertex_id_t> nbr_ids;
@@ -100,20 +99,20 @@ public:
         nbr_dists.reserve(_rand_gen_size);
 
         for (vertex_num_t i = 0; i < _rand_gen_size; ++i) {
-            const vertex_id_t rand_nbr_id = rand_ids_buffer[i];
-            if (rand_nbr_id == pivot_vid) { continue; }
-            const distance_t dist = this->_dist_func(pivot_vec, this->_vecs_data.get(rand_nbr_id));
+            const vertex_id_t rand_nbr_global = this->_refining_graph.vid_at(rand_ids_buffer[i]);
+            if (rand_nbr_global == global_vid) { continue; }
+            const distance_t dist = this->_dist_func(pivot_vec, this->_vecs_data.get(rand_nbr_global));
 
-            const nbr_arr_t& pivot_nbrs = this->_refining_graph.fetch_nbrs(pivot_vid);
+            const nbr_arr_t& pivot_nbrs = this->_refining_graph.fetch_nbrs(global_vid);
             if (pivot_nbrs.size() >= max_sz &&
                 pivot_nbrs[max_sz - 1].get_distance() <= dist) {
                 continue;
             }
-            nbr_ids.push_back(rand_nbr_id);
+            nbr_ids.push_back(rand_nbr_global);
             nbr_dists.push_back(dist);
         }
 
-        this->_log_table.write_logs(pivot_vid, nbr_ids, nbr_dists);
+        this->_log_table.write_logs(local_vid, nbr_ids, nbr_dists);
     }
 
 private:
