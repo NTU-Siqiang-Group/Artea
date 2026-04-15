@@ -53,6 +53,14 @@ public:
 
     /**
      * @brief Constructor for RandomUpdater.
+     *
+     * @param start_vid  Inclusive lower bound on the local row indices
+     *                   sampled by this updater. Generated ids satisfy
+     *                   @c start_vid <= id < end_vid. Defaults to 0 for
+     *                   backward compatibility with callers that want to
+     *                   sample the entire local-row range.
+     * @param end_vid    Exclusive upper bound. Must satisfy
+     *                   @c start_vid < end_vid <= num_vertices.
      */
     RandomUpdater(
         const dist_func_t&        dist_func,
@@ -60,10 +68,14 @@ public:
         log_table_t&              log_table,
         const refining_graph_t&   refining_graph,
         const vertex_num_t        num_vertices,
-        const vertex_num_t        rand_gen_size
+        const vertex_num_t        rand_gen_size,
+        const vertex_id_t         start_vid,
+        const vertex_id_t         end_vid
     ) : base_class_t(dist_func, vecs_data, log_table, refining_graph),
         _num_vertices(num_vertices),
         _rand_gen_size(rand_gen_size),
+        _start_vid(start_vid),
+        _end_vid(end_vid),
         _random_seq() {}
 
     /**
@@ -85,10 +97,14 @@ public:
         const vertex_id_t global_vid,
         nbr_arr_t& origin_nbrs
     ) -> void {
-        // Random ids are drawn in [0, _num_vertices) = local-row space;
-        // translate each to a global vid for distance evaluation.
+        // Random ids are drawn in [_start_vid, _end_vid) = caller-
+        // restricted local-row window; translate each to a global vid
+        // for distance evaluation. The range-form RandomSeq::generate
+        // passes the bounds straight into MKL's viRngUniform so no
+        // post-shift is needed.
         std::vector<vertex_id_t> rand_ids_buffer(_rand_gen_size);
-        _random_seq.generate(rand_ids_buffer, _num_vertices, _rand_gen_size);
+        _random_seq.generate(
+            rand_ids_buffer, _start_vid, _end_vid, _rand_gen_size);
 
         const vec_ele_t* pivot_vec = this->_vecs_data.get(global_vid);
         const vertex_num_t max_sz = this->_refining_graph.layer_config().max_nbr_size();
@@ -121,6 +137,12 @@ private:
 
     /** @brief Number of random neighbors to generate per vertex. */
     const vertex_num_t _rand_gen_size;
+
+    /** @brief Inclusive lower bound on the local row id range sampled. */
+    const vertex_id_t _start_vid;
+
+    /** @brief Exclusive upper bound on the local row id range sampled. */
+    const vertex_id_t _end_vid;
 
     /** @brief Thread-safe random sequence generator. */
     random_seq_t _random_seq;

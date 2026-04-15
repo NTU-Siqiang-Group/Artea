@@ -281,7 +281,8 @@ static void BM_RandomUpdater(benchmark::State& state) {
     propagate_engine.set_graph(graph_index.get_refining_graph());
 
     // Create RandomUpdater using the factory method
-    auto random_updater = propagate_engine.make_updater<random_updater_t>(g_config.rand_gen_size);
+    auto random_updater = propagate_engine.make_updater<random_updater_t>(
+        g_config.rand_gen_size, vertex_id_t{0}, num_vertices);
 
     for (auto _ : state) {
         // Reset graph to initial state before each benchmark iteration
@@ -318,7 +319,8 @@ static void BM_RandomUpdater_NoSS(benchmark::State& state) {
     propagate_engine.set_graph(graph_index.get_refining_graph());
 
     // Create RandomUpdater using the factory method
-    auto random_updater = propagate_engine.make_updater<random_updater_t>(g_config.rand_gen_size);
+    auto random_updater = propagate_engine.make_updater<random_updater_t>(
+        g_config.rand_gen_size, vertex_id_t{0}, num_vertices);
 
     for (auto _ : state) {
         // Reset graph to initial state before each benchmark iteration

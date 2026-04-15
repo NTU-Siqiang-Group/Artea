@@ -597,6 +597,13 @@ public:
         RefiningGraphT&  refining_graph,
         const layer_id_t level_id
     ) const -> void {
+        // Take min(src_capacity, dest_capacity), so callers can drive the
+        // refiner with an RG layer cap that differs from the hg slot cap
+        // in either direction. Symmetric with
+        // writeback_layer_from_refining_graph.
+        const vertex_num_t src_capacity = max_nbr_size(level_id);
+        const vertex_num_t dest_capacity = refining_graph.layer_config().max_nbr_size();
+        const vertex_num_t copy_capacity = std::min(src_capacity, dest_capacity);
         refining_graph.parallel_for_each_vertex(
             [&](const vertex_id_t /*local_vid*/, const vertex_id_t global_vid) {
                 // Skip vids that were never assign_layer'd. Possible when
@@ -614,9 +621,9 @@ public:
                 const auto src = fetch_layer_nbrs(global_vid, level_id);
                 auto& dst = refining_graph.fetch_nbrs(global_vid);
                 dst.clear();
-                for (const auto& nbr : src) {
-                    if (nbr.is_invalid()) break;
-                    dst.push_back(nbr);
+                for (vertex_num_t i = 0; i < copy_capacity && i < src.size(); ++i) {
+                    if (src[i].is_invalid()) break;
+                    dst.push_back(src[i]);
                 }
             });
     }

@@ -28,6 +28,7 @@
 #include <cstdint>
 #include <random>
 #include <span>
+#include <utility>
 #include <vector>
 
 #include <artea/common/logger.hpp>
@@ -143,6 +144,90 @@ public:
                 _dist_func(query_vec, _vecs_data.get(sampled_vid));
             candidate_queue.try_push(sampled_vid, dist);
         }
+    }
+
+    /**
+     * @brief Draw a single random entry from the top-occupied level's
+     *        apex bucket and compute its distance to @p query_vec.
+     *
+     * Always samples from @c hg.top_occupied_level_id() — the coarsest
+     * navigation layer — which is the canonical starting point for an
+     * HNSW-style greedy descent.
+     *
+     * @return @c (sampled_vid, distance).
+     */
+    template <typename HierarchicalGraphT>
+    auto sample_single_entry(
+        const HierarchicalGraphT& hg,
+        const vec_ele_t*          query_vec
+    ) const -> std::pair<vertex_id_t, distance_t> {
+        const layer_id_t top_level_id = hg.top_occupied_level_id();
+        if (top_level_id == HierarchicalGraphT::unassigned_highest_level_id) {
+            ARTEA_ERROR("sample_single_entry: hierarchy has no occupied levels");
+        }
+        const auto& bucket = hg.get_vids_with_highest_level(top_level_id);
+        if (bucket.empty()) {
+            ARTEA_ERROR("sample_single_entry: top-level bucket is empty");
+        }
+        const std::size_t random_idx = _draw_random_index(bucket.size());
+        const vertex_id_t sampled_vid = bucket[random_idx];
+        const distance_t  sampled_dist =
+            _dist_func(query_vec, _vecs_data.get(sampled_vid));
+        return {sampled_vid, sampled_dist};
+    }
+
+    /**
+     * @brief Greedy best-improvement walk on one level of @p hg. Maintains
+     *        no queue: at each step the single (vid, distance) cursor is
+     *        replaced by the closest neighbor if and only if that neighbor
+     *        is strictly closer to the query than the cursor itself; the
+     *        loop terminates when no neighbor improves on the cursor.
+     *
+     * Intended for the upper-layer descent portion of a hierarchical query
+     * when the caller wants HNSW-style cheap greedy routing. The result
+     * feeds the L0 beam search as a single seed.
+     *
+     * @param query_vec  Query vector.
+     * @param hg         Hierarchical graph.
+     * @param level_id   Layer to walk on.
+     * @param seed_vid   Starting vid (must participate at @p level_id).
+     * @param seed_dist  Precomputed distance from @p query_vec to
+     *                   @p seed_vid.
+     * @return @c (best_vid, best_dist) reached at this level.
+     */
+    template <typename HierarchicalGraphT>
+    auto greedy_search(
+        const vec_ele_t*          query_vec,
+        const HierarchicalGraphT& hg,
+        const layer_id_t          level_id,
+        vertex_id_t               seed_vid,
+        distance_t                seed_dist
+    ) const -> std::pair<vertex_id_t, distance_t> {
+        vertex_id_t best_vid  = seed_vid;
+        distance_t  best_dist = seed_dist;
+        while (true) {
+            const auto nbrs_span =
+                hg.fetch_layer_nbrs(best_vid, level_id);
+            const vertex_num_t cur_nbr_count =
+                hg.num_valid_nbrs(best_vid, level_id);
+
+            vertex_id_t next_vid  = best_vid;
+            distance_t  next_dist = best_dist;
+            for (vertex_num_t i = 0; i < cur_nbr_count; ++i) {
+                const vertex_id_t nbr_vid = nbrs_span[i];
+                if (nbr_vid == invalid_vertex_id) break;
+                const distance_t nbr_dist =
+                    _dist_func(query_vec, _vecs_data.get(nbr_vid));
+                if (nbr_dist < next_dist) {
+                    next_dist = nbr_dist;
+                    next_vid  = nbr_vid;
+                }
+            }
+            if (next_vid == best_vid) break;  // local optimum on this level
+            best_vid  = next_vid;
+            best_dist = next_dist;
+        }
+        return {best_vid, best_dist};
     }
 
     /**

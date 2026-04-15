@@ -192,5 +192,13 @@ namespace stacked_rgraph {
     using factory_t        = typename graph_factory_traits_t::stacked_rgraph::factory_t;
 }
 
+namespace artea_graph {
+    using rgraph_config_t    = typename graph_factory_traits_t::artea_graph::rgraph_config_t;
+    using propagate_config_t = typename graph_factory_traits_t::artea_graph::propagate_config_t;
+    using pruning_config_t   = typename graph_factory_traits_t::artea_graph::pruning_config_t;
+    using index_t            = typename graph_factory_traits_t::artea_graph::index_t;
+    using factory_t          = typename graph_factory_traits_t::artea_graph::factory_t;
+}
+
 }   // namespace cpu
 }   // namespace artea

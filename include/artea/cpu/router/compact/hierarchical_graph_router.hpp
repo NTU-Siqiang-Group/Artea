@@ -123,18 +123,23 @@ public:
     // ================================================================
 
     /**
-     * @brief Top-down beam search across every level.
+     * @brief Top-down hierarchical search.
      *
-     *   1. Locate the top occupied level.
-     *   2. Seed a fresh candidate queue with random vertices at that
-     *      level via @c sample_entries.
-     *   3. For @c cur_level = top .. 0, run
-     *      @c _single_layer_router.beam_search on the same queue.
-     *      No inter-level translation is needed because every vid is
-     *      valid at every level it participates in.
-     *   4. Trim the result set to @c topk.
+     * @tparam UpperLevelBeamSearch
+     *   - @c true (default): legacy path — allocate one candidate queue
+     *     of @c _candidate_queue_size, seed it at the top level via
+     *     @c sample_entries, then run @c beam_search on every level
+     *     from top down to L0 with the same queue.
+     *   - @c false: HNSW-style split. Upper levels (top..1) run
+     *     @c greedy_search with no queue at all, propagating a single
+     *     best (vid, distance) cursor. At L0 we allocate the candidate
+     *     queue, seed it with the L1 greedy-best cursor, and run
+     *     @c beam_search once.
+     *
+     * Either way the final top-k is extracted from the L0 candidate
+     * queue.
      */
-    template <typename HierarchicalGraphT>
+    template <bool UpperLevelBeamSearch = true, typename HierarchicalGraphT>
     auto query(
         const vec_ele_t*          query_vec,
         const HierarchicalGraphT& hg
@@ -145,31 +150,71 @@ public:
         }
 
         auto& visited = _visited_table_pool.acquire();
-        std_candidate_queue_t candidate_queue(
-            static_cast<std::size_t>(_candidate_queue_size));
 
-        _single_layer_router.sample_entries(
-            hg, top_level_id, query_vec, candidate_queue);
+        if constexpr (UpperLevelBeamSearch) {
+            // ---- Legacy: beam search at every level ----
+            std_candidate_queue_t candidate_queue(
+                static_cast<std::size_t>(_candidate_queue_size));
 
-        for (layer_id_t cur_level_id = top_level_id; ; --cur_level_id) {
+            _single_layer_router.sample_entries(
+                hg, top_level_id, query_vec, candidate_queue);
+
+            for (layer_id_t cur_level_id = top_level_id; ; --cur_level_id) {
+                _single_layer_router.beam_search(
+                    query_vec, hg, cur_level_id, candidate_queue, visited);
+                if (cur_level_id == 0) break;
+            }
+
+            const std::size_t k = std::min<std::size_t>(
+                static_cast<std::size_t>(this->_topk),
+                candidate_queue.get_result_size());
+            visited.clear();
+            if (k == 0) return knn_results_t{};
+            return candidate_queue.extract_results(k);
+        } else {
+            // ---- Greedy upper levels + beam at L0 ----
+            auto [cursor_vid, cursor_dist] =
+                _single_layer_router.sample_single_entry(hg, query_vec);
+
+            // Greedy descent from top_level_id down to L1 (no queues).
+            // If top_level_id == 0 this loop is skipped and the sampled
+            // seed is fed straight into the L0 beam below.
+            for (layer_id_t cur_level_id = top_level_id;
+                 cur_level_id >= 1;
+                 --cur_level_id)
+            {
+                std::tie(cursor_vid, cursor_dist) =
+                    _single_layer_router.greedy_search(
+                        query_vec, hg, cur_level_id,
+                        cursor_vid, cursor_dist);
+                if (cur_level_id == 1) break;
+            }
+
+            // L0: allocate the candidate queue, seed it with the L1
+            // greedy-best cursor, and run beam search once.
+            std_candidate_queue_t candidate_queue(
+                static_cast<std::size_t>(_candidate_queue_size));
+            candidate_queue.try_push(cursor_vid, cursor_dist);
             _single_layer_router.beam_search(
-                query_vec, hg, cur_level_id, candidate_queue, visited);
-            if (cur_level_id == 0) break;
-        }
+                query_vec, hg, /*level_id=*/layer_id_t{0},
+                candidate_queue, visited);
 
-        const std::size_t k = std::min<std::size_t>(
-            static_cast<std::size_t>(this->_topk),
-            candidate_queue.get_result_size());
-        visited.clear();
-        if (k == 0) return knn_results_t{};
-        return candidate_queue.extract_results(k);
+            const std::size_t k = std::min<std::size_t>(
+                static_cast<std::size_t>(this->_topk),
+                candidate_queue.get_result_size());
+            visited.clear();
+            if (k == 0) return knn_results_t{};
+            return candidate_queue.extract_results(k);
+        }
     }
 
     /**
      * @brief Parallel batch queries via TBB. Each worker acquires its
-     *        own visited table from the pool.
+     *        own visited table from the pool. The
+     *        @p UpperLevelBeamSearch template switch is forwarded to
+     *        @c query verbatim.
      */
-    template <typename HierarchicalGraphT>
+    template <bool UpperLevelBeamSearch = true, typename HierarchicalGraphT>
     auto batch_query(
         const query_vecs_t&       query_vecs,
         const HierarchicalGraphT& hg
@@ -184,7 +229,8 @@ public:
             [&](const tbb::blocked_range<vertex_num_t>& r) {
                 for (vertex_num_t i = r.begin(); i != r.end(); ++i) {
                     const vec_ele_t* q_vec = query_vecs.get(i);
-                    auto topk_results = this->query(q_vec, hg);
+                    auto topk_results =
+                        this->template query<UpperLevelBeamSearch>(q_vec, hg);
                     const std::size_t n = topk_results.size();
                     std::copy(topk_results.begin(), topk_results.end(),
                               results.begin() + i * k);

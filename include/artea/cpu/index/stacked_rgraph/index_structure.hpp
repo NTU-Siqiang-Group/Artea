@@ -69,6 +69,7 @@ class IndexStructure {
     using vector_array_t       = typename IndexTraitsT::vector_array_t;
     using vecs_storage_t       = typename IndexTraitsT::vecs_storage_t;
     using rgraph_config_t      = typename IndexTraitsT::stacked_rgraph::rgraph_config_t;
+    using pruning_config_t     = typename IndexTraitsT::stacked_rgraph::pruning_config_t;
 
     using hierarchical_graph_t = typename IndexTraitsT::dynamic::hierarchical_graph_t;
 
@@ -76,19 +77,21 @@ public:
     static constexpr layer_id_t unassigned_highest_level_id =
         hierarchical_graph_t::unassigned_highest_level_id;
 
-
     /**
      * @brief Construct an empty IndexStructure.
      *
      * @param total_vertices  Expected eventual size of the base dataset.
      *                        Used to derive the hierarchy's hard layer
      *                        cap via @c rgraph_config_t::compute_max_restrict_level.
-     * @param config          R-graph configuration (r-net geometry,
+     * @param rgraph_config   R-graph configuration (r-net geometry,
      *                        queue sizes, neighbor capacity).
+     * @param pruning_config  RNG pruning coefficients used by
+     *                        @c IndexFactory during edge insertion.
      */
     IndexStructure(
-        const vertex_num_t     total_vertices,
-        const rgraph_config_t& config
+        const vertex_num_t      total_vertices,
+        const rgraph_config_t&  rgraph_config,
+        const pruning_config_t& pruning_config
     ) :
         _max_restrict_level(
             rgraph_config_t::compute_max_restrict_level(total_vertices)),
@@ -103,9 +106,10 @@ public:
             // Level 0 capacity is 2 * max_nbr_size; upper levels use
             // exactly max_nbr_size.
             _max_restrict_level,
-            config.max_nbr_size(),
+            rgraph_config.max_nbr_size(),
             total_vertices)),
-        _config(config),
+        _rgraph_config(rgraph_config),
+        _pruning_config(pruning_config),
         _vecs_storage()
     {}
 
@@ -211,12 +215,13 @@ public:
     //   Config accessors
     // =================================================================
 
-    __attribute__((always_inline)) auto config()             const -> const rgraph_config_t& { return _config; }
-    __attribute__((always_inline)) auto rnet_beta()          const -> ratio_t      { return _config.rnet_beta(); }
-    __attribute__((always_inline)) auto L1_rnet_radius()     const -> distance_t   { return _config.L1_rnet_radius(); }
+    __attribute__((always_inline)) auto rgraph_config()      const -> const rgraph_config_t&  { return _rgraph_config; }
+    __attribute__((always_inline)) auto pruning_config()     const -> const pruning_config_t& { return _pruning_config; }
+    __attribute__((always_inline)) auto rnet_beta()          const -> ratio_t      { return _rgraph_config.rnet_beta(); }
+    __attribute__((always_inline)) auto L1_rnet_radius()     const -> distance_t   { return _rgraph_config.L1_rnet_radius(); }
     __attribute__((always_inline)) auto max_restrict_level() const -> layer_num_t  { return _max_restrict_level; }
-    __attribute__((always_inline)) auto search_nn_qs()       const -> vertex_num_t { return _config.search_nn_qs(); }
-    __attribute__((always_inline)) auto select_nbrs_qs()     const -> vertex_num_t { return _config.select_nbrs_qs(); }
+    __attribute__((always_inline)) auto search_nn_qs()       const -> vertex_num_t { return _rgraph_config.search_nn_qs(); }
+    __attribute__((always_inline)) auto select_nbrs_qs()     const -> vertex_num_t { return _rgraph_config.select_nbrs_qs(); }
     static constexpr ratio_t      layer_cap_decay_ratio = rgraph_config_t::layer_cap_decay_ratio;
     static constexpr vertex_num_t min_layer_cap         = rgraph_config_t::min_layer_cap;
 
@@ -226,7 +231,7 @@ public:
      */
     __attribute__((always_inline))
     auto radius_at(const layer_id_t h) const -> distance_t {
-        return _config.radius_at(h);
+        return _rgraph_config.radius_at(h);
     }
 
     // =================================================================
@@ -258,7 +263,10 @@ private:
     std::unique_ptr<hierarchical_graph_t> _hierarchical_graph;
 
     /// @brief R-graph configuration.
-    rgraph_config_t _config;
+    rgraph_config_t _rgraph_config;
+
+    /// @brief RNG pruning coefficients (consumed by IndexFactory).
+    pruning_config_t _pruning_config;
 
     /// @brief Owned vector storage. Grown in-place by append_vecs.
     vecs_storage_t _vecs_storage;

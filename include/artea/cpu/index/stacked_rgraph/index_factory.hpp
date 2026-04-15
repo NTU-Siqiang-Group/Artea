@@ -110,28 +110,30 @@ public:
      *         before switching to @c tbb::parallel_for. */
     static constexpr vertex_num_t startup_points = 0;
 
-    /** @brief Default PruningConfig used when the caller does not supply
-     *         one. */
-    static auto default_pruning_config() -> pruning_config_t {
-        return pruning_config_t(ratio_t(1.1), ratio_t(0.0));
-    }
-
     /**
      * @brief Append @p batch_vecs to @p index's owned storage, then
-     *        insert every newly-appended vector as a new vertex.
+     *        insert every newly-appended vector as a new vertex. The
+     *        RNG pruning coefficients are taken from
+     *        @c index.pruning_config().
      *
-     * @param index            The index whose hierarchy is being grown.
-     * @param batch_vecs       Batch to insert. Moved into @p index.
-     * @param dist_func        Distance functor (must outlive this call).
-     * @param pruning_config   RNG pruning coefficients. The factory
-     *        constructs its own @c hierarchical_pruning_updater_t from
-     *        these. Defaults to (scale=1.1, shifted=0.0).
+     * @param index         The index whose hierarchy is being grown.
+     * @param batch_vecs    Batch to insert. Moved into @p index.
+     * @param dist_func     Distance functor (must outlive this call).
+     * @param insert_on_L0  When true (default), each new vertex's L0
+     *                      neighbors are selected and written as usual.
+     *                      When false, L0 edge construction is skipped
+     *                      entirely (slot left empty, seed-from-L1 step
+     *                      elided). Upper levels still get their edges.
+     *                      Used by the artea_graph pipeline where L0 is
+     *                      rebuilt from scratch by per-layer refinement,
+     *                      so spending insertion-time on L0 neighbors
+     *                      would be wasted work.
      */
     static auto add_vertices(
-        this_index_t&            index,
-        vector_array_t&&         batch_vecs,
-        const dist_func_t&       dist_func,
-        const pruning_config_t&  pruning_config = default_pruning_config()
+        this_index_t&      index,
+        vector_array_t&&   batch_vecs,
+        const dist_func_t& dist_func,
+        const bool         insert_on_L0 = true
     ) -> void {
         const vertex_num_t batch_size = static_cast<vertex_num_t>(batch_vecs.get_num_vecs());
         if (batch_size == 0) return;
@@ -142,6 +144,12 @@ public:
         // Construct the pruning updater AFTER append_vecs so the storage
         // reference it captures already points at populated data (belt-
         // and-suspenders; vecs_storage_t is stable either way).
+        //
+        // Both scale and shift coefficients are captured here. The
+        // updater internally applies shift only at L0; upper layers
+        // ignore the stored shift and use the scale-only variant
+        // (see HierarchicalPruningUpdater::update_impl).
+        const pruning_config_t& pruning_config = index.pruning_config();
         hierarchical_pruning_updater_t pruning_updater(
             dist_func,
             index.get_vecs_storage(),
@@ -165,7 +173,8 @@ public:
         {   // serial insert phase
             auto& visited = visited_pool.local();
             for (vertex_id_t vid = first_new_vid; vid < serial_cutoff; ++vid) {
-                _insert_one(index, router, vid, dist_func, pruning_updater, visited);
+                _insert_one(index, router, vid, dist_func,
+                            pruning_updater, visited, insert_on_L0);
             }
         }
         if (serial_cutoff == first_new_vid + batch_size) return;
@@ -177,7 +186,7 @@ public:
                 auto& visited = visited_pool.local();
                 for (vertex_id_t vid = r.begin(); vid != r.end(); ++vid) {
                     _insert_one(index, router, vid, dist_func,
-                                pruning_updater, visited);
+                                pruning_updater, visited, insert_on_L0);
                 }
             }
         );
@@ -195,7 +204,8 @@ private:
         const vertex_id_t   new_vid,
         const dist_func_t&  /*dist_func*/,
         PruningUpdaterT&    pruning_updater,
-        visited_table_t&    visited
+        visited_table_t&    visited,
+        const bool          insert_on_L0
     ) -> void {
         const vec_ele_t* new_vec        = index.get_vecs_storage().get(new_vid);
         const vertex_num_t search_nn_qs   = index.search_nn_qs();
@@ -334,7 +344,12 @@ private:
         // First-vertex bootstrap (top_level_id == unassigned) leaves
         // descent_queue_per_level[1] empty; the seed call is then a
         // no-op and L0's run_select_at_level will safely no-op too.
-        if (descent_queue_per_level[1] &&
+        //
+        // When insert_on_L0 == false, L0 edge construction is skipped
+        // entirely (see Step D loop below), so the L1→L0 seed transfer
+        // is wasted work and we elide it here.
+        if (insert_on_L0 &&
+            descent_queue_per_level[1] &&
             descent_queue_per_level[1]->get_result_size() > 0)
         {
             descent_queue_per_level[0]->seed_from_queue(
@@ -379,7 +394,9 @@ private:
                     cand.get_vid(), cand.get_distance(), /*is_new=*/true);
             }
             pruning_updater.update_impl(
-                new_vid, pruned_results, index.max_nbr_size(target_level_id));
+                new_vid, pruned_results,
+                index.max_nbr_size(target_level_id),
+                target_level_id);
             return pruned_results;
         };
 
@@ -433,7 +450,7 @@ private:
                                 return a.get_distance() < b.get_distance();
                             });
                         pruning_updater.update_impl(
-                            nbr_vid, merged, slot_cap);
+                            nbr_vid, merged, slot_cap, target_level_id);
                         for (std::size_t k = 0;
                              k < merged.size() && k < slot_cap; ++k)
                         {
@@ -446,9 +463,15 @@ private:
             }
         };
 
-        // ---- cur_level_id in [0, highest_insert_level_id]:
+        // ---- cur_level_id in [start_level_id, highest_insert_level_id]:
         //      per-level select + forward + reverse ----
-        for (layer_id_t cur_level_id = 0;
+        //
+        // start_level_id = 1 when insert_on_L0 == false so the L0 slot is
+        // left untouched (refinement-time responsibility). Upper levels
+        // are always built regardless of the flag.
+        const layer_id_t start_level_id =
+            insert_on_L0 ? layer_id_t{0} : layer_id_t{1};
+        for (layer_id_t cur_level_id = start_level_id;
              cur_level_id <= highest_insert_level_id;
              ++cur_level_id)
         {

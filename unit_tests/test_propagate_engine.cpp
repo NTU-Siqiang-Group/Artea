@@ -246,7 +246,8 @@ TEST_F(PropagateEngineCorrectnessTest, IntegratedRandomAndReverseUpdater) {
 
     // Step 2: Apply RandomUpdater to generate asymmetric edges
     const vec_num_t rand_gen_size = 5;
-    auto random_updater = propagate_engine.make_updater<random_updater_t>(rand_gen_size);
+    auto random_updater = propagate_engine.make_updater<random_updater_t>(
+        rand_gen_size, vertex_id_t{0}, num_vertices_);
 
     propagate_engine.run(1, random_updater);
 
@@ -438,7 +439,8 @@ TEST_F(PropagateEngineCorrectnessTest, RandomUpdaterGeneratesEdges) {
 
     const vec_num_t rand_gen_size = 5;  // Generate 5 random neighbors per vertex
 
-    auto random_updater = propagate_engine.make_updater<random_updater_t>(rand_gen_size);
+    auto random_updater = propagate_engine.make_updater<random_updater_t>(
+        rand_gen_size, vertex_id_t{0}, num_vertices_);
 
     // Run one iteration of random edge generation
     propagate_engine.run(1, random_updater);
@@ -498,7 +500,8 @@ TEST_F(PropagateEngineCorrectnessTest, RandomUpdaterThreadSafety) {
 
     const vec_num_t rand_gen_size = 10;
 
-    auto random_updater = propagate_engine.make_updater<random_updater_t>(rand_gen_size);
+    auto random_updater = propagate_engine.make_updater<random_updater_t>(
+        rand_gen_size, vertex_id_t{0}, num_vertices_);
 
     // Run multiple iterations to stress test thread safety
     propagate_engine.run(3, random_updater);

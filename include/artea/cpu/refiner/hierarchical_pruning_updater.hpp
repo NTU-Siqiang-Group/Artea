@@ -59,6 +59,7 @@ class HierarchicalPruningUpdater {
 
     using vertex_id_t     = typename RefinerTraitsT::vertex_id_t;
     using vertex_num_t    = typename RefinerTraitsT::vertex_num_t;
+    using layer_id_t      = typename RefinerTraitsT::layer_id_t;
     using vec_ele_t       = typename RefinerTraitsT::vec_ele_t;
     using distance_t      = typename RefinerTraitsT::distance_t;
     using ratio_t         = typename RefinerTraitsT::ratio_t;
@@ -103,18 +104,27 @@ public:
      * configured scale/shift). Retained entries preserve their ascending
      * order and are marked as "old".
      *
-     * @param pivot_vid     The vid whose neighbor list is being pruned.
-     *                      Used only for the neighbor-to-pivot distance
-     *                      lookup (via @p origin_nbrs' recorded
-     *                      distances, not via @c _dist_func).
-     * @param origin_nbrs   Candidate list; pruned in place.
-     * @param max_nbr_size  Maximum number of retained neighbors.
+     * The @p target_level_id gates which pruning condition is applied:
+     *   - L0 (base layer): uses the stored @c _shifted_coeffs together
+     *     with @c _inv_scale_coeffs (paper's full scaled+shifted RNG).
+     *   - L1+ (upper layers): forces shift=0 and keeps only the scaled
+     *     term, so r-net upper-layer geometry is not further biased by
+     *     the bottom-layer shift.
+     *
+     * @param pivot_vid        The vid whose neighbor list is being pruned.
+     *                         Used only for the neighbor-to-pivot distance
+     *                         lookup (via @p origin_nbrs' recorded
+     *                         distances, not via @c _dist_func).
+     * @param origin_nbrs      Candidate list; pruned in place.
+     * @param max_nbr_size     Maximum number of retained neighbors.
+     * @param target_level_id  Hierarchy level the pruned edges will live
+     *                         at; selects the per-level RNG variant.
      */
-    template <PruningConditionT ConditionType = PruningConditionT::scaled_ineq>
     auto update_impl(
         const vertex_id_t   pivot_vid,
         std::vector<nbr_t>& origin_nbrs,
-        const vertex_num_t  max_nbr_size
+        const vertex_num_t  max_nbr_size,
+        const layer_id_t    target_level_id
     ) const -> void {
         (void)pivot_vid;   // reserved for future debug / diagnostics
         if (origin_nbrs.empty()) return;
@@ -126,9 +136,13 @@ public:
         // The closest candidate is always retained.
         retained_nbrs.push_back(origin_nbrs[0]);
 
+        // L0 applies the configured shift; upper layers force shift=0.
+        const ratio_t effective_shifted_coeffs =
+            (target_level_id == 0) ? _shifted_coeffs : ratio_t(0);
+
         for (vertex_num_t i = 1; i < origin_nbrs.size() && retained_nbrs.size() < max_nbr_size; ++i) {
             const nbr_t& ori_nbr = origin_nbrs[i];
-            if (_internal_check<ConditionType>(ori_nbr, retained_nbrs)) {
+            if (_internal_check(ori_nbr, retained_nbrs, effective_shifted_coeffs)) {
                 retained_nbrs.push_back(ori_nbr);
             }
         }
@@ -142,27 +156,22 @@ public:
     }
 
 private:
-    template <PruningConditionT ConditionType>
     __attribute__((always_inline))
-    constexpr auto _compute_threshold(const distance_t ori_dist) const -> distance_t {
-        if constexpr (ConditionType == PruningConditionT::scaled_ineq) {
-            return ori_dist * _inv_scale_coeffs;
-        } else if constexpr (ConditionType == PruningConditionT::scaled_shifted_ineq) {
-            return ori_dist * _inv_scale_coeffs - _shifted_coeffs;
-        } else if constexpr (ConditionType == PruningConditionT::shifted_ineq) {
-            return ori_dist - _shifted_coeffs;
-        } else if constexpr (ConditionType == PruningConditionT::origin_rng_ineq) {
-            return ori_dist;
-        }
+    auto _compute_threshold(
+        const distance_t ori_dist,
+        const ratio_t    effective_shifted_coeffs
+    ) const -> distance_t {
+        return ori_dist * _inv_scale_coeffs - effective_shifted_coeffs;
     }
 
-    template <PruningConditionT ConditionType>
     auto _internal_check(
         const nbr_t&              ori_nbr,
-        const std::vector<nbr_t>& retained_nbrs
+        const std::vector<nbr_t>& retained_nbrs,
+        const ratio_t             effective_shifted_coeffs
     ) const -> bool {
         const vec_ele_t* ori_vec = _vecs_data.get(ori_nbr.get_vid());
-        const distance_t threshold = _compute_threshold<ConditionType>(ori_nbr.get_distance());
+        const distance_t threshold = _compute_threshold(
+            ori_nbr.get_distance(), effective_shifted_coeffs);
 
         for (const nbr_t& retained_nbr : retained_nbrs) {
             // Matches PruningUpdater: if both candidate and retained are

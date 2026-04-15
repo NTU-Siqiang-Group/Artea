@@ -143,6 +143,69 @@ public:
         );
     }
 
+    /**
+     * @brief Generate uniformly random integers in @c [lower_bound, upper_bound)
+     *        in a thread-safe manner. MKL's @c viRngUniform natively accepts
+     *        a two-sided interval, so no post-shift is needed.
+     * @param rand_ids    Reference to the vector where the generated random
+     *                    numbers will be stored.
+     * @param lower_bound Inclusive lower bound for the generated values.
+     * @param upper_bound Exclusive upper bound for the generated values.
+     *                    Must satisfy @c lower_bound < upper_bound.
+     * @param num_rand_ids The total number of random numbers to generate.
+     * @note  Caller must ensure that the size of @p rand_ids is at least
+     *        @p num_rand_ids.
+     */
+    auto generate(std::vector<vec_id_t>& rand_ids,
+                  const vec_id_t lower_bound,
+                  const vec_id_t upper_bound,
+                  const vec_num_t num_rand_ids) -> void {
+        vec_id_t* rand_ids_ptr = rand_ids.data();
+        VSLStreamStatePtr& local_stream = _tl_streams.local();
+        viRngUniform(
+            VSL_RNG_METHOD_UNIFORM_STD,
+            local_stream, num_rand_ids,
+            reinterpret_cast<int*>(rand_ids_ptr),
+            static_cast<int>(lower_bound),
+            static_cast<int>(upper_bound)
+        );
+    }
+
+    /**
+     * @brief Pointer-form overload of the range-based @c generate above.
+     */
+    auto generate(vec_id_t* rand_ids_ptr,
+                  const vec_id_t lower_bound,
+                  const vec_id_t upper_bound,
+                  const vec_num_t num_rand_ids) -> void {
+        VSLStreamStatePtr& local_stream = _tl_streams.local();
+        viRngUniform(
+            VSL_RNG_METHOD_UNIFORM_STD,
+            local_stream, num_rand_ids,
+            reinterpret_cast<int*>(rand_ids_ptr),
+            static_cast<int>(lower_bound),
+            static_cast<int>(upper_bound)
+        );
+    }
+
+    /**
+     * @brief Cache-aligned-container overload of the range-based @c generate above.
+     */
+    auto generate(cache_aligned_container_t<vec_id_t>& rand_ids,
+                  const vec_id_t lower_bound,
+                  const vec_id_t upper_bound,
+                  const vec_num_t num_rand_ids) -> void {
+        vec_id_t* rand_ids_ptr = rand_ids.data();
+        VSLStreamStatePtr& local_stream = _tl_streams.local();
+        viRngUniform(
+            VSL_RNG_METHOD_UNIFORM_STD,
+            local_stream, num_rand_ids,
+            reinterpret_cast<int*>(rand_ids_ptr),
+            static_cast<int>(lower_bound),
+            static_cast<int>(upper_bound)
+        );
+    }
+
 private:
     /**
      * @brief Thread-local storage for MKL stream pointers.
