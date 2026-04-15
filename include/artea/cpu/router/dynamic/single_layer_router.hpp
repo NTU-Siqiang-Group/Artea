@@ -88,84 +88,48 @@ public:
      *        @c candidate_queue.capacity() evenly-spaced random vertices
      *        that participate at @p level_id.
      *
-     * A vertex participates at level @p level_id iff its
-     * @c highest_level_id >= @p level_id. In storage terms, the eligible
-     * vids are the union of @c hg.get_vids_with_highest_level(h) for
-     * every @c h in
-     * @c [level_id, hg.top_occupied_level_id()].
-     *
-     * The accumulated cross-bucket index range is sampled via one random
-     * starting offset plus a fixed stride, matching the old
-     * @c InternalGraphRouter::sample_entries pattern. Thread-safe via a
-     * thread-local RNG.
+     * Samples directly from the top-occupied level's apex bucket
+     * (@c hg.get_vids_with_highest_level(top_level_id)) — every
+     * hierarchical descent starts at the apex, so restricting the pool
+     * to that single bucket keeps the entry points coarse and skips any
+     * cross-bucket unioning. Thread-safe via a thread-local RNG.
      */
     template <typename HierarchicalGraphT>
     auto sample_entries(
         const HierarchicalGraphT& hg,
-        const layer_id_t          level_id,
         const vec_ele_t*          query_vec,
         std_candidate_queue_t&    candidate_queue
     ) const -> void {
         const layer_id_t top_level_id = hg.top_occupied_level_id();
         if (top_level_id == HierarchicalGraphT::unassigned_highest_level_id) {
-            return;
+            ARTEA_ERROR("sample_entries: hierarchy has no occupied levels");
         }
-        if (level_id > top_level_id) {
-            // Caller asked for a level nobody participates in. Leave
-            // the queue empty so beam_search becomes a no-op.
-            return;
+        const auto& bucket = hg.get_vids_with_highest_level(top_level_id);
+        if (bucket.empty()) {
+            ARTEA_ERROR("sample_entries: top-level bucket is empty");
         }
-
-        // Build a per-bucket offset table: bucket_sizes[h - level_id] =
-        // number of eligible vids whose highest_level_id == h.
-        const layer_id_t num_eligible_buckets =
-            static_cast<layer_id_t>(top_level_id - level_id + 1);
-        std::vector<std::size_t> bucket_sizes(num_eligible_buckets);
-        std::size_t pool_size = 0;
-        for (layer_id_t i = 0; i < num_eligible_buckets; ++i) {
-            const layer_id_t h = static_cast<layer_id_t>(level_id + i);
-            bucket_sizes[i] = hg.get_vids_with_highest_level(h).size();
-            pool_size      += bucket_sizes[i];
-        }
-        if (pool_size == 0) return;
 
         // Acquire-fence pair to the release fence in
-        // HierarchicalGraph::assign_layer: any vid we just observed in a
-        // bucket is paired with a fully-published _vertex_info_table entry
-        // before fetch_layer_nbrs dereferences it inside beam_search.
+        // HierarchicalGraph::assign_layer: any vid we just observed in
+        // the bucket is paired with a fully-published _vertex_info_table
+        // entry before fetch_layer_nbrs dereferences it inside
+        // beam_search.
         std::atomic_thread_fence(std::memory_order_acquire);
 
+        const std::size_t pool_size = bucket.size();
         const std::size_t queue_cap = candidate_queue.capacity();
-
-        auto take_vid_from_pool = [&](std::size_t pool_index) -> vertex_id_t {
-            // Map a flat pool_index in [0, pool_size) onto the right
-            // bucket + local index. Typically only 2-3 buckets, so a
-            // linear walk is fine.
-            for (layer_id_t i = 0; i < num_eligible_buckets; ++i) {
-                if (pool_index < bucket_sizes[i]) {
-                    const layer_id_t h =
-                        static_cast<layer_id_t>(level_id + i);
-                    return hg.get_vids_with_highest_level(h)[pool_index];
-                }
-                pool_index -= bucket_sizes[i];
-            }
-            ARTEA_ERROR("sample_entries: pool_index overran total pool size");
-            return invalid_vertex_id;
-        };
-
-        // Evenly spaced pick: random starting offset + fixed stride.
         const std::size_t start  = _draw_random_index(pool_size);
         const std::size_t stride =
             (pool_size <= queue_cap) ? 1 : (pool_size / queue_cap);
         const std::size_t take   = std::min(queue_cap, pool_size);
 
         for (std::size_t i = 0; i < take; ++i) {
-            const std::size_t pool_index =
+            const std::size_t random_idx =
                 (start + i * stride) % pool_size;
-            const vertex_id_t sampled_vid = take_vid_from_pool(pool_index);
-            const distance_t dist =
+            const vertex_id_t sampled_vid = bucket[random_idx];
+            const distance_t  sampled_dist =
                 _dist_func(query_vec, _vecs_data.get(sampled_vid));
-            candidate_queue.try_push(sampled_vid, dist);
+            candidate_queue.try_push(sampled_vid, sampled_dist);
         }
     }
 

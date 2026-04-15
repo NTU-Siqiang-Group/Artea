@@ -245,8 +245,7 @@ private:
         if (top_level_id != unassigned_highest_level_id && top_level_id >= 1) {
             // Top-layer seeds (one-shot sample from bucket[top]).
             std_candidate_queue_t cur_queue(search_nn_qs);
-            router.sample_entries(
-                index, top_level_id, new_vec, cur_queue);
+            router.sample_entries(index, new_vec, cur_queue);
 
             for (layer_id_t cur_level_id = top_level_id;
                  cur_level_id >= 1; --cur_level_id)

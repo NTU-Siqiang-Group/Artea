@@ -157,7 +157,7 @@ public:
                 static_cast<std::size_t>(_candidate_queue_size));
 
             _single_layer_router.sample_entries(
-                hg, top_level_id, query_vec, candidate_queue);
+                hg, query_vec, candidate_queue);
 
             for (layer_id_t cur_level_id = top_level_id; ; --cur_level_id) {
                 _single_layer_router.beam_search(

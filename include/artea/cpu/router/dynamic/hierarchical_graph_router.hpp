@@ -45,8 +45,8 @@ namespace dynamic {
  *
  * Provides:
  *   - **Build-time passthroughs** — @c beam_search(query, hg, level_id,
- *     queue, visited) and @c sample_entries(hg, level_id, query, queue)
- *     that simply delegate to the composed @c SingleLayerRouter. Used by
+ *     queue, visited) and @c sample_entries(hg, query, queue) that
+ *     simply delegate to the composed @c SingleLayerRouter. Used by
  *     @c stacked_rgraph::IndexFactory on the insertion hot path.
  *   - **Query path** — @c beam_search(query, hg) runs the full top-down
  *     descent. Because every vid is valid at every level it participates
@@ -140,12 +140,11 @@ public:
     __attribute__((always_inline))
     auto sample_entries(
         const HierarchicalGraphT& hg,
-        const layer_id_t          level_id,
         const vec_ele_t*          query_vec,
         std_candidate_queue_t&    candidate_queue
     ) const -> void {
         _single_layer_router.sample_entries(
-            hg, level_id, query_vec, candidate_queue);
+            hg, query_vec, candidate_queue);
     }
 
     // ================================================================
@@ -179,7 +178,7 @@ public:
             static_cast<std::size_t>(_candidate_queue_size));
 
         _single_layer_router.sample_entries(
-            hg, top_level_id, query_vec, candidate_queue);
+            hg, query_vec, candidate_queue);
 
         for (layer_id_t cur_level_id = top_level_id; ; --cur_level_id) {
             _single_layer_router.beam_search(
