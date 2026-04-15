@@ -113,8 +113,7 @@ public:
         _max_nbr_size(max_nbr_size),
         _num_vertices(num_vertices),
         _arenas(static_cast<std::size_t>(max_restrict_level) + 1),
-        _vids_by_highest_level(
-            static_cast<std::size_t>(max_restrict_level) + 1),
+        _vids_by_highest_level(static_cast<std::size_t>(max_restrict_level) + 1),
         _vertex_info_table(num_vertices)
     {
         for (std::size_t h = 0; h < _arenas.size(); ++h) {
@@ -176,18 +175,12 @@ public:
     ) const -> std::span<const vertex_id_t> {
         const auto& vinfo = _vertex_info_table[vid];
         const layer_id_t H = vinfo.highest_level_id;
-        const vertex_id_t* slot_base =
-            _arenas[H].data() + vinfo.slot_offset;
+        const vertex_id_t* slot_base = _arenas[H].data() + vinfo.slot_offset;
 
-        const std::size_t level_offset =
-            static_cast<std::size_t>(H - level_id) * _max_nbr_size;
-        const std::size_t level_nbrs_count =
-            static_cast<std::size_t>(_max_nbr_size) +
-            static_cast<std::size_t>(_max_nbr_size) *
-                static_cast<std::size_t>(level_id == 0);
-
-        return std::span<const vertex_id_t>(
-            slot_base + level_offset, level_nbrs_count);
+        const std::size_t level_offset = static_cast<std::size_t>(H - level_id) * _max_nbr_size;
+        const std::size_t level_nbrs_count = static_cast<std::size_t>(_max_nbr_size) +
+            static_cast<std::size_t>(_max_nbr_size) * static_cast<std::size_t>(level_id == 0);
+        return std::span<const vertex_id_t>(slot_base + level_offset, level_nbrs_count);
     }
 
     /**
@@ -224,14 +217,18 @@ public:
     /**
      * @brief Largest @c h with a non-empty bucket, or
      *        @c unassigned_highest_level_id if every bucket is empty.
+     *
+     * The compactor (@c HierarchicalGraphCompactor) trims the compact
+     * graph's @c _max_restrict_level down to exactly the source's
+     * top_occupied_level_id at construction time, so the invariant
+     * here is: any non-empty compact graph has
+     * @c top_occupied_level_id == _max_restrict_level. We therefore
+     * return that constant directly instead of scanning buckets.
      */
     auto top_occupied_level_id() const -> layer_id_t {
-        for (std::size_t h = _vids_by_highest_level.size(); h-- > 0; ) {
-            if (!_vids_by_highest_level[h].empty()) {
-                return static_cast<layer_id_t>(h);
-            }
-        }
-        return unassigned_highest_level_id;
+        return (_num_vertices == 0)
+            ? unassigned_highest_level_id
+            : _max_restrict_level;
     }
 
     // =================================================================

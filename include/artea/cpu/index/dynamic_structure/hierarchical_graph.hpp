@@ -309,6 +309,44 @@ public:
         // enumerate this group without linear-scanning the full info
         // table.
         _vids_by_highest_level[highest_level_id].push_back(vid);
+
+        // ORDERING IS LOAD-BEARING: the bucket push above must precede
+        // the _top_occupied_level_id bump below. Readers of
+        // top_occupied_level_id() do
+        //     top = _top_occupied_level_id.load();
+        //     bucket = _vids_by_highest_level[top];
+        //     ...sample from bucket
+        // If we bumped the top first, a reader could observe the new
+        // top but find the bucket still empty (the pusher not having
+        // reached push_back yet), producing a spurious "empty top
+        // bucket" error. By ordering push_back → CAS, every observer
+        // of an elevated top is guaranteed to see at least the vid
+        // that caused the bump already present in the bucket.
+        //
+        // Monotonic CAS fetch-max: only try to raise the cached top,
+        // never lower it. Release on success pairs with acquire in
+        // top_occupied_level_id()'s reader.
+        //
+        // unassigned_highest_level_id is layer_id_t::max() (the largest
+        // possible integer), so a naive `highest_level_id > prev_top`
+        // check would be FALSE when prev_top is still the sentinel —
+        // the cached top would stay at sentinel forever and every
+        // reader would see "empty hierarchy". Handle the sentinel
+        // explicitly as "smaller than any valid level".
+        layer_id_t prev_top =
+            _top_occupied_level_id.load(std::memory_order_relaxed);
+        while ((prev_top == unassigned_highest_level_id ||
+                highest_level_id > prev_top) &&
+               !_top_occupied_level_id.compare_exchange_weak(
+                   prev_top, highest_level_id,
+                   std::memory_order_release,
+                   std::memory_order_relaxed))
+        {
+            // CAS failed with prev_top refreshed; loop if we still see
+            // a sentinel or a smaller cached top, otherwise exit
+            // (another pusher already published an equal-or-higher
+            // valid top for us).
+        }
     }
 
     // =================================================================
@@ -476,16 +514,13 @@ public:
      *        bucket, or @c unassigned_highest_level_id if every bucket
      *        is empty (i.e. no vertex has been assigned yet).
      *
-     * Linear scan over (max_restrict_level + 1) buckets — typically
-     * ≤ 20 — so this is effectively O(1).
+     * Single atomic load of @c _top_occupied_level_id, maintained by
+     * @c assign_layer via a CAS fetch-max. The push_back → CAS ordering
+     * inside @c assign_layer guarantees that any observer of the
+     * returned top sees at least one vid in the corresponding bucket.
      */
     auto top_occupied_level_id() const -> layer_id_t {
-        for (std::size_t h = _vids_by_highest_level.size(); h-- > 0; ) {
-            if (!_vids_by_highest_level[h].empty()) {
-                return static_cast<layer_id_t>(h);
-            }
-        }
-        return unassigned_highest_level_id;
+        return _top_occupied_level_id.load(std::memory_order_acquire);
     }
 
     /** @brief Per-vertex slot offset inside its group's arena
@@ -751,6 +786,15 @@ private:
      *           (2) HierarchicalGraphCompactor — materializes the compact
      *               graph by walking each bucket in order. */
     std::vector<tbb::concurrent_vector<vertex_id_t>> _vids_by_highest_level;
+
+    /** @brief Cached monotonically non-decreasing top-occupied level.
+     *         Maintained by @c assign_layer via a CAS fetch-max AFTER the
+     *         new vid has been pushed into its bucket, so any reader that
+     *         observes an elevated top is guaranteed to also see at least
+     *         that one vid in the corresponding bucket. Read by
+     *         @c top_occupied_level_id() as a single atomic load instead
+     *         of scanning every bucket. */
+    std::atomic<layer_id_t> _top_occupied_level_id{unassigned_highest_level_id};
 
 };  // class HierarchicalGraph
 

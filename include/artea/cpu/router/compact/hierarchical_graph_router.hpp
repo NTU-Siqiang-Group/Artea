@@ -145,19 +145,18 @@ public:
         const HierarchicalGraphT& hg
     ) const -> knn_results_t {
         const layer_id_t top_level_id = hg.top_occupied_level_id();
-        if (top_level_id == HierarchicalGraphT::unassigned_highest_level_id) {
-            return knn_results_t{};
-        }
+        // This is impossible
+        // if (top_level_id == HierarchicalGraphT::unassigned_highest_level_id) {
+        //     return knn_results_t{};
+        // }
 
         auto& visited = _visited_table_pool.acquire();
 
         if constexpr (UpperLevelBeamSearch) {
             // ---- Legacy: beam search at every level ----
-            std_candidate_queue_t candidate_queue(
-                static_cast<std::size_t>(_candidate_queue_size));
+            std_candidate_queue_t candidate_queue(static_cast<std::size_t>(_candidate_queue_size));
 
-            _single_layer_router.sample_entries(
-                hg, query_vec, candidate_queue);
+            _single_layer_router.sample_entries(hg, query_vec, candidate_queue);
 
             for (layer_id_t cur_level_id = top_level_id; ; --cur_level_id) {
                 _single_layer_router.beam_search(
