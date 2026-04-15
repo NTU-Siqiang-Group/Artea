@@ -20,3 +20,4 @@ scratch/
 temp/
 backup_prefill/
 build-tsan/
+test_artea_graph.output

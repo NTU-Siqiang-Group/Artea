@@ -25,6 +25,8 @@
 #include <tbb/blocked_range.h>
 #include <tbb/enumerable_thread_specific.h>
 
+#include <artea/cpu/refiner/propagate_engine.hpp>
+
 namespace artea {
 namespace cpu {
 
@@ -82,7 +84,8 @@ public:
                 return std::vector<vertex_id_t>(init_nbr_size);
             });
 
-        refining_graph.parallel_for_each_vertex(
+        PropagateEngine<RefinerTraitsT>::parallel_for_each_vertex(
+            refining_graph,
             [&](const vertex_id_t /*local_vid*/, const vertex_id_t pivot_vid) {
                 auto& random_local_ids = tls_random_local_ids.local();
                 nbr_arr_t& nbrs = refining_graph.fetch_nbrs(pivot_vid);

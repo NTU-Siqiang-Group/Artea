@@ -134,6 +134,7 @@ using truncate_updater_t = typename refiner_traits_t::truncate_updater_t;
 using random_eg_t = typename refiner_traits_t::random_eg_t;
 using ivf_partitions_t = typename refiner_traits_t::ivf_partitions_t;
 using ivf_construct_policy_t = typename refiner_traits_t::ivf_construct_policy_t;
+using refiner_utils_t = typename refiner_traits_t::refiner_utils_t;
 
 // Vertex generator types from VertexGeneratorTraits
 using approx_rnet_t = typename vertex_generator_traits_t::approx_rnet_t;

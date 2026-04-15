@@ -30,6 +30,8 @@
 #include <tbb/enumerable_thread_specific.h>
 #include <tbb/task_arena.h>
 
+#include <artea/common/logger.hpp>
+
 namespace artea {
 namespace cpu {
 
@@ -55,6 +57,54 @@ class PropagateEngine {
     static constexpr bool profiling_mode = RefinerTraitsT::profiling_mode;
 
 public:
+    /**
+     * @brief Iterate every participating vertex of @p refining_graph in
+     *        parallel. The callback receives @c (local_vid, global_vid).
+     *        In identity mode both are equal; in sparse mode
+     *        @c local_vid is the row index in the RG and @c global_vid
+     *        is the resolved global id via @c refining_graph.vid_at.
+     *
+     * Templated on the RefiningGraph type so that HierarchicalGraph
+     * callers (which don't see RefinerTraits) can reuse the helper
+     * without coupling.
+     */
+    template <typename RefiningGraphT, typename CallbackT>
+    static auto parallel_for_each_vertex(
+        const RefiningGraphT& refining_graph,
+        CallbackT&&           callback
+    ) -> void {
+        using vn_t = decltype(refining_graph.get_num_vertices());
+        tbb::parallel_for(
+            tbb::blocked_range<vn_t>(0, refining_graph.get_num_vertices()),
+            [&](const tbb::blocked_range<vn_t>& range) {
+                for (vn_t i = range.begin(); i != range.end(); ++i) {
+                    callback(i, refining_graph.vid_at(i));
+                }
+            });
+    }
+
+    /**
+     * @brief Same as @c parallel_for_each_vertex but restricted to local
+     *        row indices in @c [local_start, local_end). Used by ranged
+     *        propagate overloads that only want to touch a sub-range of
+     *        vertices (e.g. incremental batch seeding).
+     */
+    template <typename RefiningGraphT, typename CallbackT>
+    static auto parallel_for_each_vertex_in_range(
+        const RefiningGraphT& refining_graph,
+        const vertex_num_t    local_start,
+        const vertex_num_t    local_end,
+        CallbackT&&           callback
+    ) -> void {
+        tbb::parallel_for(
+            tbb::blocked_range<vertex_num_t>(local_start, local_end),
+            [&](const tbb::blocked_range<vertex_num_t>& range) {
+                for (vertex_num_t i = range.begin(); i != range.end(); ++i) {
+                    callback(i, refining_graph.vid_at(i));
+                }
+            });
+    }
+
     /**
      * @brief Construct with only the distance function. @c _log_table is
      *        default-constructed (empty) and sized on every @c set_graph
@@ -93,7 +143,27 @@ public:
     template <typename UdfUpdaterT>
         requires std::derived_from<UdfUpdaterT, neighbor_updater_t<UdfUpdaterT>>
     auto propagate(UdfUpdaterT& udf_updater) -> void {
-        _refining_graph->parallel_for_each_vertex(
+        parallel_for_each_vertex(
+            *_refining_graph,
+            [&](const vertex_id_t local_vid, const vertex_id_t global_vid) {
+                propagate<UdfUpdaterT>(local_vid, global_vid, udf_updater);
+            });
+    }
+
+    /**
+     * @brief Ranged propagate: runs @p udf_updater only on local row ids
+     *        in @c [local_start, local_end). Used for incremental seeding
+     *        where the outer loop must be restricted to a vid window.
+     */
+    template <typename UdfUpdaterT>
+        requires std::derived_from<UdfUpdaterT, neighbor_updater_t<UdfUpdaterT>>
+    auto propagate_range(
+        UdfUpdaterT&       udf_updater,
+        const vertex_num_t local_start,
+        const vertex_num_t local_end
+    ) -> void {
+        parallel_for_each_vertex_in_range(
+            *_refining_graph, local_start, local_end,
             [&](const vertex_id_t local_vid, const vertex_id_t global_vid) {
                 propagate<UdfUpdaterT>(local_vid, global_vid, udf_updater);
             });
@@ -114,7 +184,8 @@ public:
     auto merge_logs() -> size_t {
         tbb::enumerable_thread_specific<size_t> local_counts;
 
-        _refining_graph->parallel_for_each_vertex(
+        parallel_for_each_vertex(
+            *_refining_graph,
             [&](const vertex_id_t local_vid, const vertex_id_t /*global_vid*/) {
                 local_counts.local() += merge_logs(local_vid);
             });
@@ -131,6 +202,25 @@ public:
         requires std::derived_from<UdfUpdaterT, neighbor_updater_t<UdfUpdaterT>>
     auto next(UdfUpdaterT& udf_updater) -> PropagateEngine& {
         propagate<UdfUpdaterT>(udf_updater);
+        merge_logs();
+        return *this;
+    }
+
+    /**
+     * @brief Ranged @c next: run @p udf_updater only on local row ids in
+     *        @c [local_start, local_end), then merge logs for all rows.
+     *        We still merge the full log_table because the updater's
+     *        writes may have landed on rows outside the iteration window
+     *        (e.g. reverse edges targeting other vids).
+     */
+    template <typename UdfUpdaterT>
+        requires std::derived_from<UdfUpdaterT, neighbor_updater_t<UdfUpdaterT>>
+    auto next_range(
+        UdfUpdaterT&       udf_updater,
+        const vertex_num_t local_start,
+        const vertex_num_t local_end
+    ) -> PropagateEngine& {
+        propagate_range<UdfUpdaterT>(udf_updater, local_start, local_end);
         merge_logs();
         return *this;
     }

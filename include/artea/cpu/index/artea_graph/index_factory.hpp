@@ -78,6 +78,7 @@ class IndexFactory : public stacked_rgraph::IndexFactory<GraphFactoryTraitsT> {
     using reverse_updater_t  = typename GraphFactoryTraitsT::reverse_updater_t;
     using routing_updater_t  = typename GraphFactoryTraitsT::routing_updater_t;
     using truncate_updater_t = typename GraphFactoryTraitsT::truncate_updater_t;
+    using refiner_utils_t    = typename GraphFactoryTraitsT::refiner_utils_t;
 
 public:
     /**
@@ -138,7 +139,7 @@ public:
      *      Empty for @p level_id == 0 (identity mode).
      *   2. Construct a @c refining_graph_t matching the mode: dense
      *      ctor for L0, sparse ctor for L1+. Fill it from the current
-     *      layer slot via @c hier_graph.fill_refining_graph_from_layer.
+     *      layer slot via @c refiner_utils_t::fill_refining_graph_from_layer.
      *   3. Drive @c propagate_engine with @c triangle_updater +
      *      @c reverse_updater + @c truncate_updater (+ optional routing
      *      loops) directly on the RefiningGraph. We cannot call
@@ -146,7 +147,7 @@ public:
      *      @c refining_graph_t&& overload dense-constructs its own inner
      *      RefiningGraph and then move-assigns only the nbrs array —
      *      losing the sparse vid mapping.
-     *   4. @c hier_graph.writeback_layer_from_refining_graph to push refined
+     *   4. @c refiner_utils_t::writeback_layer_from_refining_graph to push refined
      *      edges back.
      *
      * All refinement configs come from @p index's stored values (set at
@@ -203,7 +204,8 @@ public:
                 vecs_storage, layer_config,
                 std::move(local_to_global), std::move(global_to_local));
         }
-        hier_graph.fill_refining_graph_from_layer(*refining_graph, level_id);
+        refiner_utils_t::fill_refining_graph_from_layer(
+            hier_graph, *refining_graph, level_id);
 
         // ---- Step 3: run prune + reverse + truncate on the RG ----
         // The log_table inside propagate_engine is indexed by local_vid
@@ -225,6 +227,27 @@ public:
                 auto random_updater = propagate_engine.template make_updater<random_updater_t>(
                     rand_gen_size, new_vid_start, new_vid_end);
                 propagate_engine.next(random_updater);
+            }
+
+            // Incremental-batch only: after the old-window prefill (which
+            // seeds old vertices with edges into the new batch and thus
+            // feeds reverse edges to new vertices), additionally seed
+            // every new vertex with random edges into the full vid range
+            // [0, new_vid_end). This gives new vertices a direct random
+            // foothold on the old graph instead of relying solely on
+            // reverse edges. Skipped on the very first batch
+            // (new_vid_start == 0) — in that case the old-window prefill
+            // already samples the whole range.
+            if (rand_gen_size > 0 && new_vid_start > 0
+                && new_vid_end > new_vid_start)
+            {
+                auto new_vertex_seeder =
+                    propagate_engine.template make_updater<random_updater_t>(
+                        rand_gen_size,
+                        /*start_vid=*/vertex_id_t{0},
+                        /*end_vid  =*/new_vid_end);
+                propagate_engine.next_range(
+                    new_vertex_seeder, new_vid_start, new_vid_end);
             }
         }
 
@@ -261,7 +284,8 @@ public:
         }
 
         // ---- Step 4: write refined edges back ----
-        hier_graph.writeback_layer_from_refining_graph(*refining_graph, level_id);
+        refiner_utils_t::writeback_layer_from_refining_graph(
+            hier_graph, *refining_graph, level_id);
     }
 
 };  // class IndexFactory

@@ -10,8 +10,6 @@
 #include <vector>
 #include <nlohmann/json.hpp>
 
-#include <tbb/parallel_for.h>
-#include <tbb/blocked_range.h>
 
 namespace artea {
 namespace cpu {
@@ -194,26 +192,6 @@ public:
 
     __attribute__((always_inline))
     auto get_vecs_data() const -> const vector_array_t& { return _vecs_data; }
-
-    /**
-     * @brief Iterate over every participating vertex in parallel. The
-     *        callback receives @c (local_vid, global_vid). In identity
-     *        mode both are equal; in sparse mode @c local_vid is the
-     *        row index in @c _nbrs_arr and @c global_vid is the resolved
-     *        global id (via @c vid_at). Callers that only need one can
-     *        ignore the other with an unused-parameter lambda.
-     */
-    template <typename Fn>
-    auto parallel_for_each_vertex(Fn&& fn) const -> void {
-        tbb::parallel_for(
-            tbb::blocked_range<vertex_num_t>(0, _num_vertices),
-            [&](const tbb::blocked_range<vertex_num_t>& r) {
-                for (vertex_num_t i = r.begin(); i != r.end(); ++i) {
-                    const vertex_id_t local = static_cast<vertex_id_t>(i);
-                    fn(local, vid_at(i));
-                }
-            });
-    }
 
     auto get_base_metadata() const -> nlohmann::json {
         nlohmann::json meta;

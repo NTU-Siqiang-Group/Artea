@@ -85,8 +85,6 @@ public:
      * @param dist_func             Distance functor.
      * @param topk                  Top-k returned by @c query and
      *                              @c batch_query.
-     * @param search_nn_qs          Beam width used at every level during
-     *                              the top-down query descent.
      * @param candidate_queue_size  Candidate-queue capacity (should be
      *                              >= topk).
      */
@@ -94,18 +92,13 @@ public:
         const vector_array_t& base_vecs,
         const dist_func_t&    dist_func,
         const uint32_t        topk,
-        const vertex_num_t    search_nn_qs,
         const vertex_num_t    candidate_queue_size = 16
     ) :
         base_class_t(base_vecs, dist_func, topk),
         _single_layer_router(base_vecs, dist_func),
-        _search_nn_qs(search_nn_qs),
         _candidate_queue_size(candidate_queue_size),
         _visited_table_pool(base_vecs.get_num_vecs())
     {
-        if (search_nn_qs == 0) {
-            ARTEA_ERROR("search_nn_qs must be >= 1");
-        }
         if (candidate_queue_size < topk) {
             ARTEA_ERROR(fmt::format(
                 "candidate_queue_size ({}) must be >= topk ({})",
@@ -160,13 +153,11 @@ public:
         // centroid's nearest neighbor), precomputed by the compactor.
         // No runtime sampling.
         const vertex_id_t entry_vid = hg.entry_point_vid();
-        const distance_t  entry_dist =
-            this->_dist_func(query_vec, this->_vecs_data.get(entry_vid));
+        const distance_t  entry_dist = this->_dist_func(query_vec, this->_vecs_data.get(entry_vid));
 
         if constexpr (UpperLevelBeamSearch) {
             // ---- Legacy: beam search at every level ----
-            std_candidate_queue_t candidate_queue(
-                static_cast<std::size_t>(_candidate_queue_size));
+            std_candidate_queue_t candidate_queue(static_cast<std::size_t>(_candidate_queue_size));
             candidate_queue.try_push(entry_vid, entry_dist);
 
             for (layer_id_t cur_level_id = top_level_id; ; --cur_level_id) {
@@ -234,8 +225,7 @@ public:
         auto& visited = _visited_table_pool.acquire();
 
         const vertex_id_t entry_vid = hg.entry_point_vid();
-        const distance_t  entry_dist =
-            this->_dist_func(query_vec, this->_vecs_data.get(entry_vid));
+        const distance_t  entry_dist = this->_dist_func(query_vec, this->_vecs_data.get(entry_vid));
 
         std_candidate_queue_t candidate_queue(
             static_cast<std::size_t>(_candidate_queue_size));
@@ -325,7 +315,6 @@ public:
 
 private:
     single_layer_router_t        _single_layer_router;
-    vertex_num_t                 _search_nn_qs;
     vertex_num_t                 _candidate_queue_size;
     mutable visited_table_pool_t _visited_table_pool;
 

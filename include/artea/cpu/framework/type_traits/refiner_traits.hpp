@@ -43,6 +43,7 @@ template <typename RefinerTraitsT> class TruncateUpdater;
 template <typename RefinerTraitsT> class RandomEG;
 template <typename RefinerTraitsT> class PropagateEngine;
 template <typename RefinerTraitsT> class IVFPartitions;
+template <typename RefinerTraitsT> class RefinerUtils;
 
 template <typename ComputerTraitsT, typename BufferTraitsT, typename IndexTraitsT, typename RouterTraitsT>
 struct RefinerTraits :
@@ -96,6 +97,10 @@ struct RefinerTraits :
 
     /** @brief IVF partitions for partition-based operations. */
     using ivf_partitions_t = IVFPartitions<refiner_traits_t>;
+
+    /** @brief Bridge between dynamic::HierarchicalGraph and
+     *         dynamic::RefiningGraph (layer fill / writeback helpers). */
+    using refiner_utils_t = RefinerUtils<refiner_traits_t>;
 
 };  // struct RefinerTraits
 

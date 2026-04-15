@@ -162,7 +162,6 @@ public:
         hg_router_t router(
             vecs_storage, dist_func,
             /*topk=*/std::max(index.search_nn_qs(), index.select_nbrs_qs()),
-            /*search_nn_qs=*/index.search_nn_qs(),
             /*candidate_queue_size=*/index.select_nbrs_qs());
 
         tbb::enumerable_thread_specific<visited_table_t> visited_pool([total_vecs]() {

@@ -109,6 +109,7 @@
 #include <artea/cpu/refiner/ivf_partitions.hpp>
 #include <artea/cpu/refiner/routing_updater.hpp>
 #include <artea/cpu/refiner/truncate_updater.hpp>
+#include <artea/cpu/refiner/refiner_utils.hpp>
 
 #include <artea/cpu/utils/bit_ops.hpp>
 #include <artea/cpu/utils/centroid_computer.hpp>

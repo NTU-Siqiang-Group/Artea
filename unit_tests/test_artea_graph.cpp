@@ -333,14 +333,16 @@ TEST_F(ArteaGraphTest, SearchRecallAndThroughput) {
     recall_estimator_t re;
     struct Row {
         uint32_t queue_size;
-        // Hierarchical (upper-level beam + L0 beam) metrics.
-        double   h_batch_ms;
-        double   h_per_query_us;
-        double   h_qps;
-        float    h_recall;
-        // L0-only (flat beam on the base layer from entry_point) metrics.
+        // Static artea: compact hierarchical graph, greedy-upper + beam-L0.
+        double   s_batch_ms;
+        double   s_qps;
+        float    s_recall;
+        // Dynamic artea: dynamic hierarchical graph, same greedy-upper + beam-L0.
+        double   d_batch_ms;
+        double   d_qps;
+        float    d_recall;
+        // Static artea L0-only baseline: flat beam on compact L0 from entry_point.
         double   l0_batch_ms;
-        double   l0_per_query_us;
         double   l0_qps;
         float    l0_recall;
     };
@@ -380,77 +382,104 @@ TEST_F(ArteaGraphTest, SearchRecallAndThroughput) {
         const uint32_t effective_queue_size =
             std::max<uint32_t>(queue_size, topk);
 
-        compact::hierarchical_graph_router_t router(
+        compact::hierarchical_graph_router_t s_router(
             base_vecs, dist_func,
             /*topk=*/topk,
-            /*search_nn_qs=*/g_config.search_nn_qs,
             /*candidate_queue_size=*/effective_queue_size);
-        router.initialize();
+        s_router.initialize();
 
-        // --- Hierarchical (legacy beam-at-every-level) ---
-        auto [h_avg_us, h_recall, h_last] = time_batch(
-            [&]() { return router.batch_query(query_vecs, compact_hg); });
-        ASSERT_EQ(h_last.size(),
+        dynamic::hierarchical_graph_router_t d_router(
+            base_vecs, dist_func,
+            /*topk=*/topk,
+            /*candidate_queue_size=*/effective_queue_size);
+        d_router.initialize();
+
+        // --- Static artea: compact hg, greedy-upper + beam-L0 ---
+        auto [s_avg_us, s_recall, s_last] = time_batch(
+            [&]() {
+                return s_router.template batch_query</*UpperLevelBeamSearch=*/false>(
+                    query_vecs, compact_hg);
+            });
+        ASSERT_EQ(s_last.size(),
                   static_cast<std::size_t>(num_queries) * topk);
 
-        // --- L0-only (flat beam on base layer from entry_point) ---
+        // --- Dynamic artea: dynamic hg, greedy-upper + beam-L0 ---
+        auto [d_avg_us, d_recall, d_last] = time_batch(
+            [&]() {
+                return d_router.template batch_query</*UpperLevelBeamSearch=*/false>(
+                    query_vecs, dyn_hg);
+            });
+        ASSERT_EQ(d_last.size(),
+                  static_cast<std::size_t>(num_queries) * topk);
+
+        // --- Static artea L0-only (flat beam on compact L0 from entry_point) ---
         auto [l0_avg_us, l0_recall, l0_last] = time_batch(
-            [&]() { return router.batch_query_l0_only(query_vecs, compact_hg); });
+            [&]() { return s_router.batch_query_l0_only(query_vecs, compact_hg); });
         ASSERT_EQ(l0_last.size(),
                   static_cast<std::size_t>(num_queries) * topk);
 
         Row row;
-        row.queue_size      = effective_queue_size;
-        row.h_batch_ms      = h_avg_us / 1000.0;
-        row.h_per_query_us  = h_avg_us / num_queries;
-        row.h_qps           = num_queries * 1e6 / h_avg_us;
-        row.h_recall        = h_recall;
-        row.l0_batch_ms     = l0_avg_us / 1000.0;
-        row.l0_per_query_us = l0_avg_us / num_queries;
-        row.l0_qps          = num_queries * 1e6 / l0_avg_us;
-        row.l0_recall       = l0_recall;
+        row.queue_size  = effective_queue_size;
+        row.s_batch_ms  = s_avg_us  / 1000.0;
+        row.s_qps       = num_queries * 1e6 / s_avg_us;
+        row.s_recall    = s_recall;
+        row.d_batch_ms  = d_avg_us  / 1000.0;
+        row.d_qps       = num_queries * 1e6 / d_avg_us;
+        row.d_recall    = d_recall;
+        row.l0_batch_ms = l0_avg_us / 1000.0;
+        row.l0_qps      = num_queries * 1e6 / l0_avg_us;
+        row.l0_recall   = l0_recall;
         rows.push_back(row);
 
         ARTEA_INFO(fmt::format(
             "CandidateQueue={:4}: "
-            "artea_graph [Recall@{}={:.4f}, QPS={:8.1f}, batch={:.2f} ms] | "
-            "L0-only     [Recall@{}={:.4f}, QPS={:8.1f}, batch={:.2f} ms]",
+            "static  [R@{}={:.4f}, QPS={:8.1f}, batch={:.2f} ms] | "
+            "dynamic [R@{}={:.4f}, QPS={:8.1f}, batch={:.2f} ms] | "
+            "L0-only [R@{}={:.4f}, QPS={:8.1f}, batch={:.2f} ms]",
             effective_queue_size,
-            topk, row.h_recall,  row.h_qps,  row.h_batch_ms,
+            topk, row.s_recall,  row.s_qps,  row.s_batch_ms,
+            topk, row.d_recall,  row.d_qps,  row.d_batch_ms,
             topk, row.l0_recall, row.l0_qps, row.l0_batch_ms));
     }
 
-    ARTEA_INFO("=== artea_graph vs. L0-only summary ===");
+    ARTEA_INFO("=== static artea vs. dynamic artea vs. static artea L0 summary ===");
     ARTEA_INFO(fmt::format("  build_time    : {} ms", _build_ms));
     ARTEA_INFO(fmt::format("  compact_time  : {} ms", compact_ms));
     ARTEA_INFO(fmt::format("  num_queries   : {}", num_queries));
     ARTEA_INFO(fmt::format("  topk          : {}", topk));
     ARTEA_INFO(fmt::format(
-        "{:<8} | {:<10} {:<10} {:<10} | {:<10} {:<10} {:<10}",
+        "{:<8} | {:<10} {:<10} {:<10} | {:<10} {:<10} {:<10} | {:<10} {:<10} {:<10}",
         "Queue",
-        "H.Recall@k",  "H.QPS",  "H.batch(ms)",
+        "S.Recall@k",  "S.QPS",  "S.batch(ms)",
+        "D.Recall@k",  "D.QPS",  "D.batch(ms)",
         "L0.Recall@k", "L0.QPS", "L0.batch(ms)"));
-    ARTEA_INFO(std::string(8 + 3 + 10 + 10 + 10 + 3 + 10 + 10 + 10, '-'));
+    ARTEA_INFO(std::string(
+        8 + 3 + 10 + 10 + 10 + 3 + 10 + 10 + 10 + 3 + 10 + 10 + 10, '-'));
     for (const auto& row : rows) {
         ARTEA_INFO(fmt::format(
-            "{:<8} | {:<10.4f} {:<10.1f} {:<10.2f} | {:<10.4f} {:<10.1f} {:<10.2f}",
+            "{:<8} | {:<10.4f} {:<10.1f} {:<10.2f} | "
+            "{:<10.4f} {:<10.1f} {:<10.2f} | "
+            "{:<10.4f} {:<10.1f} {:<10.2f}",
             row.queue_size,
-            row.h_recall,  row.h_qps,  row.h_batch_ms,
+            row.s_recall,  row.s_qps,  row.s_batch_ms,
+            row.d_recall,  row.d_qps,  row.d_batch_ms,
             row.l0_recall, row.l0_qps, row.l0_batch_ms));
     }
 
-    bool has_any_hierarchical = false;
-    bool has_any_l0           = false;
+    bool has_any_static  = false;
+    bool has_any_dynamic = false;
+    bool has_any_l0      = false;
     for (const auto& row : rows) {
-        if (row.h_recall  > 0.0f) has_any_hierarchical = true;
-        if (row.l0_recall > 0.0f) has_any_l0           = true;
+        if (row.s_recall  > 0.0f) has_any_static  = true;
+        if (row.d_recall  > 0.0f) has_any_dynamic = true;
+        if (row.l0_recall > 0.0f) has_any_l0      = true;
     }
-    EXPECT_TRUE(has_any_hierarchical)
-        << "At least one queue-size configuration should return "
-           "hierarchical results";
+    EXPECT_TRUE(has_any_static)
+        << "At least one queue-size should return static artea results";
+    EXPECT_TRUE(has_any_dynamic)
+        << "At least one queue-size should return dynamic artea results";
     EXPECT_TRUE(has_any_l0)
-        << "At least one queue-size configuration should return "
-           "L0-only results";
+        << "At least one queue-size should return L0-only results";
 }
 
 // ============================================================

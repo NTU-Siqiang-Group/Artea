@@ -154,11 +154,6 @@ public:
         return _refining_graph->vid_at(local_idx);
     }
 
-    template <typename Fn>
-    auto parallel_for_each_vertex(Fn&& fn) const -> void {
-        _refining_graph->parallel_for_each_vertex(std::forward<Fn>(fn));
-    }
-
     auto get_base_metadata() const -> nlohmann::json {
         return _refining_graph->get_base_metadata();
     }

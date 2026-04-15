@@ -697,11 +697,11 @@ TEST_F(HierarchicalGraphTest, LayerRefiningGraphRoundTrip) {
     for (layer_id_t h = 0; h <= top_h; ++h) {
         // ---- Build the (l2g, g2l) maps and construct the matching RG. ----
         auto [l2g, g2l] = _graph->collect_layer_vids(h);
-        std::unique_ptr<TestRefiningGraph> rg;
+        std::unique_ptr<TestRefiningGraph> refining_graph;
         if (h == 0) {
             EXPECT_TRUE(l2g.empty()) << "L0 should be identity-mapped";
             EXPECT_TRUE(g2l.empty()) << "L0 should be identity-mapped";
-            rg = std::make_unique<TestRefiningGraph>(vecs, layer_cfg);
+            refining_graph = std::make_unique<TestRefiningGraph>(vecs, layer_cfg);
         } else {
             // Participating-vid count must equal Σ |bucket[h..]|.
             vertex_num_t expected = 0;
@@ -711,36 +711,40 @@ TEST_F(HierarchicalGraphTest, LayerRefiningGraphRoundTrip) {
             }
             EXPECT_EQ(l2g.size(), expected);
             EXPECT_EQ(g2l.size(), _num_vertices);
-            rg = std::make_unique<TestRefiningGraph>(
+            refining_graph = std::make_unique<TestRefiningGraph>(
                 vecs, layer_cfg, l2g, g2l);
-            EXPECT_FALSE(rg->is_identity_mapped());
+            EXPECT_FALSE(refining_graph->is_identity_mapped());
         }
 
         // ---- Fill from the layer. ----
-        _graph->fill_refining_graph_from_layer(*rg, h);
+        refiner_utils_t::fill_refining_graph_from_layer(
+            *_graph, *refining_graph, h);
 
         // For freshly-built indexes the slot is all-invalid (no edges
-        // written by the fixture), so num_valid_nbrs == 0 and rg rows are
-        // empty. Just sanity-check counts and identity round-trip.
-        rg->parallel_for_each_vertex([&](const vertex_id_t /*local_vid*/, const vertex_id_t global_vid) {
-            if (!_graph->is_vertex_assigned(global_vid)) return;
-            const vertex_num_t hg_cnt = _graph->num_valid_nbrs(global_vid, h);
-            const auto& rg_nbrs = rg->fetch_nbrs(global_vid);
-            EXPECT_EQ(rg_nbrs.size(), hg_cnt)
-                << "vid=" << global_vid << " h=" << h;
-        });
+        // written by the fixture), so num_valid_nbrs == 0 and refining_graph
+        // rows are empty. Just sanity-check counts and identity round-trip.
+        propagate_engine_t::parallel_for_each_vertex(
+            *refining_graph,
+            [&](const vertex_id_t /*local_vid*/, const vertex_id_t global_vid) {
+                if (!_graph->is_vertex_assigned(global_vid)) return;
+                const vertex_num_t hg_cnt = _graph->num_valid_nbrs(global_vid, h);
+                const auto& refining_nbrs = refining_graph->fetch_nbrs(global_vid);
+                EXPECT_EQ(refining_nbrs.size(), hg_cnt)
+                    << "vid=" << global_vid << " h=" << h;
+            });
 
         // ---- Mutate one row: pick the first local row, push a fake
         //      neighbor pair (vid_at(other), 1.0). Writeback, re-extract,
         //      assert the mutation survived. ----
-        if (rg->get_num_vertices() < 2) continue;
-        const vertex_id_t pivot_global = rg->vid_at(0);
-        const vertex_id_t other_global = rg->vid_at(1);
-        rg->fetch_nbrs(pivot_global).clear();
-        rg->fetch_nbrs(pivot_global).emplace_back(
+        if (refining_graph->get_num_vertices() < 2) continue;
+        const vertex_id_t pivot_global = refining_graph->vid_at(0);
+        const vertex_id_t other_global = refining_graph->vid_at(1);
+        refining_graph->fetch_nbrs(pivot_global).clear();
+        refining_graph->fetch_nbrs(pivot_global).emplace_back(
             other_global, distance_t{1}, /*is_new=*/true);
 
-        _graph->writeback_layer_from_refining_graph(*rg, h);
+        refiner_utils_t::writeback_layer_from_refining_graph(
+            *_graph, *refining_graph, h);
 
         // Re-read the slot directly from hg.
         const auto written = _graph->fetch_layer_nbrs(pivot_global, h);

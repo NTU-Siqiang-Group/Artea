@@ -112,7 +112,6 @@ public:
         distance_t  best_dist = seed_dist;
         while (true) {
             const auto nbrs_span = hg.fetch_layer_nbrs(best_vid, level_id);
-
             vertex_id_t next_vid  = best_vid;
             distance_t  next_dist = best_dist;
             // Walk the span until the first sentinel. Avoids the
