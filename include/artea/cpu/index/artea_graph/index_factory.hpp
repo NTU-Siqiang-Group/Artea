@@ -177,11 +177,16 @@ public:
     ) -> void {
         auto& hier_graph              = index.get_hierarchical_graph();
         auto& vecs_storage            = index.get_vecs_storage();
-        const auto& layer_config      = index.refining_layer_config();
+        auto& layer_config            = index.refining_layer_config();
         const auto& pruning_config    = index.pruning_config();
         const auto& propagate_config  = index.propagate_config();
 
         const vertex_num_t max_nbr_size = layer_config.max_nbr_size();
+
+        /** -------------------- Optimization ------------------------------------- ***/
+        /** @brief A sparse graph is efficient enough to search nearest neighbors     */
+        layer_config.max_nbr_size(max_nbr_size / 2);
+        /** ----------------------------------------------------------------------- ***/
 
         // ---- Step 1: build vid maps for the participating set ----
         auto [local_to_global, global_to_local] = hier_graph.collect_layer_vids(level_id);
@@ -226,10 +231,8 @@ public:
         auto triangle_updater = propagate_engine.template make_updater<triangle_updater_t>(
             pruning_config.scale_coeffs(), pruning_config.shifted_coeffs());
         auto reverse_updater  = propagate_engine.template make_updater<reverse_updater_t>();
-        const vertex_num_t routing_topk =
-            propagate_config.resolve_routing_topk(max_nbr_size);
-        const vertex_num_t routing_queue_size =
-            propagate_config.resolve_routing_queue_size(max_nbr_size);
+        const vertex_num_t routing_topk = propagate_config.resolve_routing_topk(max_nbr_size);
+        const vertex_num_t routing_queue_size = propagate_config.resolve_routing_queue_size(max_nbr_size);
         auto routing_updater  = propagate_engine.template make_updater<routing_updater_t>(
             routing_topk, routing_queue_size);
         auto truncate_updater = propagate_engine.template make_updater<truncate_updater_t>();
@@ -241,6 +244,11 @@ public:
             propagate_engine.run(propagate_config.num_triu_iters(), triangle_updater)
                             .next(reverse_updater).next(truncate_updater);
         }
+
+        /** -------------------- Optimization --------------------------------------- ***/
+        /** @brief Reconstructed as dense graph with original edge number requirements  */
+        layer_config.max_nbr_size(max_nbr_size);
+        /** ------------------------------------------------------------------------- ***/
 
         for (iter_t routing_loop = 0;
              routing_loop < propagate_config.num_routing_loops();

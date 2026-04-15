@@ -26,10 +26,8 @@
 #include <algorithm>
 #include <cstddef>
 #include <cstdint>
-#include <random>
 #include <span>
 #include <utility>
-#include <vector>
 
 #include <artea/common/logger.hpp>
 
@@ -46,13 +44,16 @@ namespace compact {
  * so the same router instance can service many graphs.
  *
  * Exposes two primitives:
- *   - @c sample_entries — seed a pre-constructed candidate queue with
- *     random vertices participating at a given level.
- *   - @c beam_search    — extend a pre-seeded candidate queue by running
+ *   - @c greedy_search — best-improvement walk on one level (no queue),
+ *     used by @c HierarchicalGraphRouter for queue-free upper-layer
+ *     descent.
+ *   - @c beam_search   — extend a pre-seeded candidate queue by running
  *     the standard beam-search loop on one level of the graph.
  *
- * Any cross-level composition lives in @c HierarchicalGraphRouter on top
- * of these two primitives.
+ * The compact router seeds searches from the compactor-precomputed
+ * @c entry_point_vid instead of any sampling API, so no sampling
+ * primitive is exposed here (unlike @c dynamic::SingleLayerRouter,
+ * which still needs it for the insertion hot path).
  *
  * @tparam RouterTraitsT The router traits type.
  */
@@ -79,78 +80,6 @@ public:
     ) :
         _vecs_data(base_vecs),
         _dist_func(dist_func) {}
-
-    /**
-     * @brief Seed @p candidate_queue with up to
-     *        @c candidate_queue.capacity() evenly-spaced random vertices
-     *        from the top-occupied level's apex bucket
-     *        (@c hg.get_vids_with_highest_level(top_level_id)).
-     *
-     * Hierarchical descent always starts at the apex, so restricting the
-     * pool to that single bucket keeps entry points coarse and skips
-     * cross-bucket unioning.
-     */
-    template <typename HierarchicalGraphT>
-    auto sample_entries(
-        const HierarchicalGraphT& hg,
-        const vec_ele_t*          query_vec,
-        std_candidate_queue_t&    candidate_queue
-    ) const -> void {
-        const layer_id_t top_level_id = hg.top_occupied_level_id();
-        if (top_level_id == HierarchicalGraphT::unassigned_highest_level_id) {
-            ARTEA_ERROR("sample_entries: hierarchy has no occupied levels");
-        }
-        const auto& bucket = hg.get_vids_with_highest_level(top_level_id);
-        if (bucket.empty()) {
-            ARTEA_ERROR("sample_entries: top-level bucket is empty");
-        }
-
-        const std::size_t pool_size = bucket.size();
-        const std::size_t queue_cap = candidate_queue.capacity();
-        const std::size_t start  = _draw_random_index(pool_size);
-        const std::size_t stride =
-            (pool_size <= queue_cap) ? 1 : (pool_size / queue_cap);
-        const std::size_t take   = std::min(queue_cap, pool_size);
-
-        for (std::size_t i = 0; i < take; ++i) {
-            const std::size_t random_idx =
-                (start + i * stride) % pool_size;
-            const vertex_id_t sampled_vid = bucket[random_idx];
-            const distance_t  sampled_dist =
-                _dist_func(query_vec, _vecs_data.get(sampled_vid));
-            candidate_queue.try_push(sampled_vid, sampled_dist);
-        }
-    }
-
-    /**
-     * @brief Draw a single random entry from the top-occupied level's
-     *        apex bucket and compute its distance to @p query_vec.
-     *
-     * Always samples from @c hg.top_occupied_level_id() — the coarsest
-     * navigation layer — which is the canonical starting point for an
-     * HNSW-style greedy descent.
-     *
-     * @return @c (sampled_vid, distance).
-     */
-    template <typename HierarchicalGraphT>
-    auto sample_single_entry(
-        const HierarchicalGraphT& hg,
-        const vec_ele_t*          query_vec
-    ) const -> std::pair<vertex_id_t, distance_t> {
-        const layer_id_t top_level_id = hg.top_occupied_level_id();
-        if (top_level_id == HierarchicalGraphT::unassigned_highest_level_id) {
-            ARTEA_ERROR("sample_single_entry: hierarchy has no occupied levels");
-        }
-        const auto& bucket = hg.get_vids_with_highest_level(top_level_id);
-        if (bucket.empty()) {
-            ARTEA_ERROR("sample_single_entry: top-level bucket is empty");
-        }
-        const std::size_t random_idx = _draw_random_index(bucket.size());
-        const vertex_id_t sampled_vid = bucket[random_idx];
-        const distance_t  sampled_dist =
-            _dist_func(query_vec, _vecs_data.get(sampled_vid));
-        return {sampled_vid, sampled_dist};
-    }
 
     /**
      * @brief Greedy best-improvement walk on one level of @p hg. Maintains
@@ -182,18 +111,15 @@ public:
         vertex_id_t best_vid  = seed_vid;
         distance_t  best_dist = seed_dist;
         while (true) {
-            const auto nbrs_span =
-                hg.fetch_layer_nbrs(best_vid, level_id);
-            const vertex_num_t cur_nbr_count =
-                hg.num_valid_nbrs(best_vid, level_id);
+            const auto nbrs_span = hg.fetch_layer_nbrs(best_vid, level_id);
 
             vertex_id_t next_vid  = best_vid;
             distance_t  next_dist = best_dist;
-            for (vertex_num_t i = 0; i < cur_nbr_count; ++i) {
-                const vertex_id_t nbr_vid = nbrs_span[i];
+            // Walk the span until the first sentinel. Avoids the
+            // double-scan of calling num_valid_nbrs() first.
+            for (const vertex_id_t nbr_vid : nbrs_span) {
                 if (nbr_vid == invalid_vertex_id) break;
-                const distance_t nbr_dist =
-                    _dist_func(query_vec, _vecs_data.get(nbr_vid));
+                const distance_t nbr_dist = _dist_func(query_vec, _vecs_data.get(nbr_vid));
                 if (nbr_dist < next_dist) {
                     next_dist = nbr_dist;
                     next_vid  = nbr_vid;
@@ -244,10 +170,10 @@ public:
 
             const vertex_id_t cur_vid = current.get_vid();
             const auto nbrs_span = hg.fetch_layer_nbrs(cur_vid, level_id);
-            const vertex_num_t cur_nbr_count = hg.num_valid_nbrs(cur_vid, level_id);
 
-            for (vertex_num_t i = 0; i < cur_nbr_count; ++i) {
-                const vertex_id_t nbr_vid = nbrs_span[i];
+            // Walk the span until the first sentinel. Avoids the
+            // double-scan of calling num_valid_nbrs() first.
+            for (const vertex_id_t nbr_vid : nbrs_span) {
                 if (nbr_vid == invalid_vertex_id) break;
                 if (visited.test_and_set(nbr_vid)) continue;
                 const distance_t dist = _dist_func(query_vec, _vecs_data.get(nbr_vid));
@@ -257,13 +183,6 @@ public:
     }
 
 private:
-    __attribute__((always_inline))
-    static auto _draw_random_index(const std::size_t upper_bound) -> std::size_t {
-        thread_local std::mt19937_64 rng(std::random_device{}());
-        std::uniform_int_distribution<std::size_t> dist(0, upper_bound - 1);
-        return dist(rng);
-    }
-
     const vector_array_t& _vecs_data;
     const dist_func_t&    _dist_func;
 

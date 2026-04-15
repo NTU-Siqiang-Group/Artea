@@ -31,6 +31,7 @@
 #include <sstream>
 #include <stdexcept>
 #include <string>
+#include <tuple>
 #include <utility>
 #include <vector>
 
@@ -309,7 +310,8 @@ TEST_F(ArteaGraphTest, SearchRecallAndThroughput) {
     // ---- Compact the dynamic hierarchical graph ----
     const auto& dyn_hg = _graph->get_hierarchical_graph();
     auto tc0 = std::chrono::high_resolution_clock::now();
-    auto compact_hg = hierarchical_graph_compactor_t::compact_graph(dyn_hg);
+    auto compact_hg = hierarchical_graph_compactor_t::compact_graph(
+        dyn_hg, base_vecs, dist_func);
     auto tc1 = std::chrono::high_resolution_clock::now();
     const int64_t compact_ms =
         std::chrono::duration_cast<std::chrono::milliseconds>(tc1 - tc0).count();
@@ -331,12 +333,45 @@ TEST_F(ArteaGraphTest, SearchRecallAndThroughput) {
     recall_estimator_t re;
     struct Row {
         uint32_t queue_size;
-        double   batch_ms;
-        double   per_query_us;
-        double   qps;
-        float    recall;
+        // Hierarchical (upper-level beam + L0 beam) metrics.
+        double   h_batch_ms;
+        double   h_per_query_us;
+        double   h_qps;
+        float    h_recall;
+        // L0-only (flat beam on the base layer from entry_point) metrics.
+        double   l0_batch_ms;
+        double   l0_per_query_us;
+        double   l0_qps;
+        float    l0_recall;
     };
     std::vector<Row> rows;
+
+    // Runs @p batch_call (a batch query closure) over warmup + test_runs
+    // iterations, averages latency/recall, and returns them.
+    auto time_batch = [&](auto&& batch_call)
+        -> std::tuple<double, float, knn_results_t>
+    {
+        for (uint32_t w = 0; w < g_config.warmup_runs; ++w) {
+            [[maybe_unused]] auto _ = batch_call();
+        }
+        double total_us = 0.0;
+        float  total_recall = 0.0f;
+        knn_results_t last_results;
+        for (uint32_t r = 0; r < g_config.test_runs; ++r) {
+            auto t0 = std::chrono::high_resolution_clock::now();
+            last_results = batch_call();
+            auto t1 = std::chrono::high_resolution_clock::now();
+            total_us += std::chrono::duration_cast<std::chrono::microseconds>(
+                t1 - t0).count();
+            total_recall += re.calculate_recall_at_k(
+                last_results, gt, topk, num_queries);
+        }
+        return {
+            total_us    / g_config.test_runs,
+            total_recall / g_config.test_runs,
+            std::move(last_results)
+        };
+    };
 
     for (uint32_t queue_size = g_config.queue_size_start;
          queue_size <= g_config.queue_size_end;
@@ -352,62 +387,70 @@ TEST_F(ArteaGraphTest, SearchRecallAndThroughput) {
             /*candidate_queue_size=*/effective_queue_size);
         router.initialize();
 
-        for (uint32_t w = 0; w < g_config.warmup_runs; ++w) {
-            [[maybe_unused]] auto _ =
-                router.batch_query(query_vecs, compact_hg);
-        }
-
-        double total_us = 0.0;
-        float  total_recall = 0.0f;
-        knn_results_t last_results;
-        for (uint32_t r = 0; r < g_config.test_runs; ++r) {
-            auto t0 = std::chrono::high_resolution_clock::now();
-            last_results = router.batch_query(query_vecs, compact_hg);
-            auto t1 = std::chrono::high_resolution_clock::now();
-            total_us += std::chrono::duration_cast<std::chrono::microseconds>(
-                t1 - t0).count();
-            total_recall += re.calculate_recall_at_k(
-                last_results, gt, topk, num_queries);
-        }
-        ASSERT_EQ(last_results.size(),
+        // --- Hierarchical (legacy beam-at-every-level) ---
+        auto [h_avg_us, h_recall, h_last] = time_batch(
+            [&]() { return router.batch_query(query_vecs, compact_hg); });
+        ASSERT_EQ(h_last.size(),
                   static_cast<std::size_t>(num_queries) * topk);
 
-        const double avg_us      = total_us / g_config.test_runs;
-        const float  recall      = total_recall / g_config.test_runs;
-        const double qps         = num_queries * 1e6 / avg_us;
-        const double per_query_us= avg_us / num_queries;
+        // --- L0-only (flat beam on base layer from entry_point) ---
+        auto [l0_avg_us, l0_recall, l0_last] = time_batch(
+            [&]() { return router.batch_query_l0_only(query_vecs, compact_hg); });
+        ASSERT_EQ(l0_last.size(),
+                  static_cast<std::size_t>(num_queries) * topk);
 
-        rows.push_back({effective_queue_size, avg_us / 1000.0,
-                        per_query_us, qps, recall});
+        Row row;
+        row.queue_size      = effective_queue_size;
+        row.h_batch_ms      = h_avg_us / 1000.0;
+        row.h_per_query_us  = h_avg_us / num_queries;
+        row.h_qps           = num_queries * 1e6 / h_avg_us;
+        row.h_recall        = h_recall;
+        row.l0_batch_ms     = l0_avg_us / 1000.0;
+        row.l0_per_query_us = l0_avg_us / num_queries;
+        row.l0_qps          = num_queries * 1e6 / l0_avg_us;
+        row.l0_recall       = l0_recall;
+        rows.push_back(row);
 
         ARTEA_INFO(fmt::format(
-            "CandidateQueue={:4}: Recall@{}={:.4f}, QPS={:8.1f}, "
-            "batch_latency={:.2f} ms, per-query={:.2f} us",
-            effective_queue_size, topk, recall, qps,
-            avg_us / 1000.0, per_query_us));
+            "CandidateQueue={:4}: "
+            "artea_graph [Recall@{}={:.4f}, QPS={:8.1f}, batch={:.2f} ms] | "
+            "L0-only     [Recall@{}={:.4f}, QPS={:8.1f}, batch={:.2f} ms]",
+            effective_queue_size,
+            topk, row.h_recall,  row.h_qps,  row.h_batch_ms,
+            topk, row.l0_recall, row.l0_qps, row.l0_batch_ms));
     }
 
-    ARTEA_INFO("=== artea_graph summary ===");
+    ARTEA_INFO("=== artea_graph vs. L0-only summary ===");
     ARTEA_INFO(fmt::format("  build_time    : {} ms", _build_ms));
     ARTEA_INFO(fmt::format("  compact_time  : {} ms", compact_ms));
     ARTEA_INFO(fmt::format("  num_queries   : {}", num_queries));
     ARTEA_INFO(fmt::format("  topk          : {}", topk));
     ARTEA_INFO(fmt::format(
-        "{:<15} {:<12} {:<12} {:<14} {:<12}",
-        "CandidateQueue", "Recall@k", "QPS", "batch(ms)", "per-query(us)"));
+        "{:<8} | {:<10} {:<10} {:<10} | {:<10} {:<10} {:<10}",
+        "Queue",
+        "H.Recall@k",  "H.QPS",  "H.batch(ms)",
+        "L0.Recall@k", "L0.QPS", "L0.batch(ms)"));
+    ARTEA_INFO(std::string(8 + 3 + 10 + 10 + 10 + 3 + 10 + 10 + 10, '-'));
     for (const auto& row : rows) {
         ARTEA_INFO(fmt::format(
-            "{:<15} {:<12.4f} {:<12.1f} {:<14.2f} {:<12.2f}",
-            row.queue_size, row.recall, row.qps,
-            row.batch_ms, row.per_query_us));
+            "{:<8} | {:<10.4f} {:<10.1f} {:<10.2f} | {:<10.4f} {:<10.1f} {:<10.2f}",
+            row.queue_size,
+            row.h_recall,  row.h_qps,  row.h_batch_ms,
+            row.l0_recall, row.l0_qps, row.l0_batch_ms));
     }
 
-    bool has_any = false;
+    bool has_any_hierarchical = false;
+    bool has_any_l0           = false;
     for (const auto& row : rows) {
-        if (row.recall > 0.0f) { has_any = true; break; }
+        if (row.h_recall  > 0.0f) has_any_hierarchical = true;
+        if (row.l0_recall > 0.0f) has_any_l0           = true;
     }
-    EXPECT_TRUE(has_any)
-        << "At least one queue-size configuration should return results";
+    EXPECT_TRUE(has_any_hierarchical)
+        << "At least one queue-size configuration should return "
+           "hierarchical results";
+    EXPECT_TRUE(has_any_l0)
+        << "At least one queue-size configuration should return "
+           "L0-only results";
 }
 
 // ============================================================

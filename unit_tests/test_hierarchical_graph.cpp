@@ -542,34 +542,70 @@ TEST_F(HierarchicalGraphTest, IndexFactoryLikeWorkload) {
 
 // ---- 9. Compactor fidelity: dynamic → compact preserves topology ----
 TEST_F(HierarchicalGraphTest, CompactorPreservesTopology) {
-    auto compact_graph = compactor_t::compact_graph(*_graph);
+    // Compactor now requires vecs_data + dist_func to compute the
+    // top-bucket centroid and entry point.
+    const auto&       base_vecs = DataProvider::instance().vectors();
+    const dist_func_t dist_func(base_vecs.get_vec_dim());
+    auto compact_graph = compactor_t::compact_graph(
+        *_graph, base_vecs, dist_func);
 
-    // Structural metadata matches. Compactor trims max_restrict_level
-    // to the source's top_occupied_level_id, so compare against that.
-    EXPECT_EQ(compact_graph.max_restrict_level(),
-              _graph->top_occupied_level_id());
-    EXPECT_EQ(compact_graph.max_nbr_size(),
-              _graph->max_nbr_size());
+    // The compactor also trims top buckets whose apex population is
+    // below its @c min_layer_cap threshold: every such vid is demoted
+    // to the new top. Recompute the expected new top from the source
+    // the same way the compactor does so the per-vertex assertions
+    // below can correctly predict the compact layout.
+    constexpr vertex_num_t min_layer_cap = compactor_t::min_layer_cap;
+    const layer_id_t src_top = _graph->top_occupied_level_id();
+    layer_id_t expected_new_top = 0;
+    for (layer_id_t h = src_top; ; --h) {
+        if (_graph->get_vids_with_highest_level(h).size() >= min_layer_cap) {
+            expected_new_top = h;
+            break;
+        }
+        if (h == 0) { expected_new_top = 0; break; }
+    }
+
+    // Structural metadata. max_restrict_level is pinned to the new
+    // (possibly trimmed) top by the compactor.
+    EXPECT_EQ(compact_graph.max_restrict_level(), expected_new_top);
+    EXPECT_EQ(compact_graph.top_occupied_level_id(), expected_new_top);
+    EXPECT_EQ(compact_graph.max_nbr_size(), _graph->max_nbr_size());
     EXPECT_EQ(compact_graph.get_num_vertices(),
               _graph->get_num_vertices());
-    EXPECT_EQ(compact_graph.top_occupied_level_id(),
-              _graph->top_occupied_level_id());
 
-    // Per-vertex highest_level_id matches.
+    // Pre-computed entry point: the vid closest to the top-bucket
+    // centroid. Must be one of the vids in the compact top bucket.
+    {
+        const auto compact_top_bucket =
+            compact_graph.get_vids_with_highest_level(expected_new_top);
+        const vertex_id_t entry_vid = compact_graph.entry_point_vid();
+        EXPECT_NE(entry_vid, hg_t::invalid_vertex_id);
+        const bool in_top_bucket =
+            std::find(compact_top_bucket.begin(),
+                      compact_top_bucket.end(),
+                      entry_vid) != compact_top_bucket.end();
+        EXPECT_TRUE(in_top_bucket)
+            << "entry_point_vid=" << entry_vid
+            << " is not in the compact top bucket";
+    }
+
+    // Per-vertex highest_level_id: non-demoted vids keep their src
+    // value; demoted vids (src apex > new_top) are clamped to
+    // new_top in compact.
     const vertex_num_t check_n =
         std::min<vertex_num_t>(_graph->get_num_vertices(), 2000);
     for (vertex_id_t vid = 0; vid < check_n; ++vid) {
-        EXPECT_EQ(compact_graph.get_highest_level_id(vid),
-                  _graph->get_highest_level_id(vid));
+        const layer_id_t src_h = _graph->get_highest_level_id(vid);
+        const layer_id_t expected =
+            (src_h > expected_new_top) ? expected_new_top : src_h;
+        EXPECT_EQ(compact_graph.get_highest_level_id(vid), expected)
+            << "vid=" << vid << " src_h=" << static_cast<int>(src_h);
     }
 
-    // Buckets match (elements as sets — dynamic source is a
-    // tbb::concurrent_vector, compact copy is a std::vector).
-    // Iterate up to compact's (trimmed) max — trailing dynamic arenas
-    // past top_occupied_level_id are empty by construction, so
-    // nothing is lost.
-    const layer_id_t compact_max_h = compact_graph.max_restrict_level();
-    for (layer_id_t h = 0; h <= compact_max_h; ++h) {
+    // Buckets: h < new_top matches src verbatim. bucket[new_top]
+    // is src's own top bucket unioned with every demoted vid
+    // (src apex > new_top).
+    for (layer_id_t h = 0; h < expected_new_top; ++h) {
         const auto& src_bucket =
             _graph->get_vids_with_highest_level(h);
         const auto dst_span =
@@ -584,16 +620,34 @@ TEST_F(HierarchicalGraphTest, CompactorPreservesTopology) {
                 << " not present in source";
         }
     }
+    {
+        std::unordered_set<vertex_id_t> expected_top_set;
+        for (layer_id_t h = expected_new_top; h <= src_top; ++h) {
+            const auto& src_bucket =
+                _graph->get_vids_with_highest_level(h);
+            expected_top_set.insert(src_bucket.begin(), src_bucket.end());
+        }
+        const auto dst_span =
+            compact_graph.get_vids_with_highest_level(expected_new_top);
+        ASSERT_EQ(dst_span.size(), expected_top_set.size())
+            << "compact top bucket size mismatch";
+        for (const vertex_id_t v : dst_span) {
+            EXPECT_TRUE(expected_top_set.count(v))
+                << "compact top bucket contains unexpected vid=" << v;
+        }
+    }
 
-    // Per-level neighbor vids match (nbr_t → vertex_id_t).
+    // Per-level neighbor vids match up to each vid's compact H_new.
     // Sample vids to keep the test bounded.
-    for (layer_id_t h = 0; h <= compact_max_h; ++h) {
-        const auto& bucket = _graph->get_vids_with_highest_level(h);
+    for (layer_id_t src_h = 0; src_h <= src_top; ++src_h) {
+        const auto& bucket = _graph->get_vids_with_highest_level(src_h);
         const std::size_t sample_n =
             std::min<std::size_t>(bucket.size(), 200);
         for (std::size_t k = 0; k < sample_n; ++k) {
             const vertex_id_t vid = bucket[k];
-            for (layer_id_t l = 0; l <= h; ++l) {
+            const layer_id_t compact_h =
+                (src_h > expected_new_top) ? expected_new_top : src_h;
+            for (layer_id_t l = 0; l <= compact_h; ++l) {
                 const auto dyn_span = _graph->fetch_layer_nbrs(vid, l);
                 const auto cmp_span = compact_graph.fetch_layer_nbrs(vid, l);
                 ASSERT_EQ(dyn_span.size(), cmp_span.size());

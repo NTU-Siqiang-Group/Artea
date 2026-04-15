@@ -112,6 +112,7 @@ public:
         _max_restrict_level(max_restrict_level),
         _max_nbr_size(max_nbr_size),
         _num_vertices(num_vertices),
+        _entry_point_vid(invalid_vertex_id),
         _arenas(static_cast<std::size_t>(max_restrict_level) + 1),
         _vids_by_highest_level(static_cast<std::size_t>(max_restrict_level) + 1),
         _vertex_info_table(num_vertices)
@@ -206,12 +207,9 @@ public:
      * @brief Vids whose @c highest_level_id == @p h.
      */
     __attribute__((always_inline))
-    auto get_vids_with_highest_level(const layer_id_t h) const
-        -> std::span<const vertex_id_t>
+    auto get_vids_with_highest_level(const layer_id_t h) const -> std::span<const vertex_id_t> 
     {
-        return std::span<const vertex_id_t>(
-            _vids_by_highest_level[h].data(),
-            _vids_by_highest_level[h].size());
+        return std::span<const vertex_id_t>(_vids_by_highest_level[h].data(), _vids_by_highest_level[h].size());
     }
 
     /**
@@ -231,9 +229,30 @@ public:
             : _max_restrict_level;
     }
 
+    /**
+     * @brief Pre-computed hierarchical entry-point vid. Set by
+     *        @c HierarchicalGraphCompactor to the top-bucket vid
+     *        closest to the centroid of the top bucket; consumed by
+     *        @c compact::HierarchicalGraphRouter in place of the
+     *        sampling-based seeding (@c sample_entries /
+     *        @c sample_single_entry). Returns @c invalid_vertex_id
+     *        when unset (empty graph).
+     */
+    __attribute__((always_inline))
+    auto entry_point_vid() const -> vertex_id_t {
+        return _entry_point_vid;
+    }
+
     // =================================================================
     //   Compactor-facing mutators
     // =================================================================
+
+    /** @brief Set the cached entry-point vid. Called by the compactor
+     *         after it has materialized the top bucket. */
+    __attribute__((always_inline))
+    auto set_entry_point_vid(const vertex_id_t vid) -> void {
+        _entry_point_vid = vid;
+    }
 
     /**
      * @brief Mutable access to the vertex-info table. Used by
@@ -267,6 +286,11 @@ private:
     layer_num_t  _max_restrict_level;
     vertex_num_t _max_nbr_size;
     vertex_num_t _num_vertices;
+
+    /** @brief Cached hierarchical entry point — the vid closest to the
+     *         top-bucket centroid. Populated by the compactor; consumed
+     *         by the router in place of random sampling. */
+    vertex_id_t  _entry_point_vid;
 
     /** @brief One arena per highest_level_id in
      *         @c [0, _max_restrict_level]. */

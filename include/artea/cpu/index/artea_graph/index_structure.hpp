@@ -92,6 +92,11 @@ public:
     }
 
     __attribute__((always_inline))
+    auto refining_layer_config() -> layer_config_t& {
+        return _refining_layer_config;
+    }
+
+    __attribute__((always_inline))
     auto propagate_config() const -> const propagate_config_t& {
         return _propagate_config;
     }

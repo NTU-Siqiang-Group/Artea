@@ -39,8 +39,10 @@ struct RGraphConfig {
      *         Each layer starts at half the capacity of the one below. */
     static constexpr ratio_t      layer_cap_decay_ratio = ratio_t(0.5);
 
-    /** @brief Floor on per-layer capacity. */
-    static constexpr vertex_num_t min_layer_cap         = 1024;
+    /** @brief Floor on per-layer capacity, also used by
+     *         @c HierarchicalGraphCompactor as the threshold below
+     *         which a top-level bucket is trimmed at compaction time. */
+    static constexpr vertex_num_t min_layer_cap         = 128;
 
     /**
      * @brief Construct a RGraphConfig.

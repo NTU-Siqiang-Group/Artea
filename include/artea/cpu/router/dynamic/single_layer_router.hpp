@@ -178,10 +178,11 @@ public:
 
             const vertex_id_t cur_vid = current.get_vid();
             const auto nbrs_span = hg.fetch_layer_nbrs(cur_vid, level_id);
-            const vertex_num_t cur_nbr_count = hg.num_valid_nbrs(cur_vid, level_id);
 
-            for (vertex_num_t i = 0; i < cur_nbr_count; ++i) {
-                const nbr_t nbr = nbrs_span[i];
+            // Walk the span until the first sentinel. Avoids the
+            // double-scan of calling num_valid_nbrs() followed by the
+            // same sentinel-break loop.
+            for (const nbr_t& nbr : nbrs_span) {
                 if (nbr.is_invalid()) break;
                 const vertex_id_t nbr_vid = nbr.get_vid();
                 if (visited.test_and_set(nbr_vid)) continue;
