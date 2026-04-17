@@ -161,7 +161,7 @@ static void BM_Set_Bitmap(benchmark::State& state) {
                     visited.clear();
                     const auto& indices = data.query_indices(q);
                     for (uint32_t i = 0; i < visit_count; ++i) {
-                        visited.set(indices[i]);
+                        visited.set(indices[i] % N);
                     }
                     benchmark::ClobberMemory();
                 }
@@ -190,7 +190,7 @@ static void BM_Set_VersionTag(benchmark::State& state) {
                     visited.clear();
                     const auto& indices = data.query_indices(q);
                     for (uint32_t i = 0; i < visit_count; ++i) {
-                        visited.set(indices[i]);
+                        visited.set(indices[i] % N);
                     }
                     benchmark::ClobberMemory();
                 }
@@ -225,7 +225,7 @@ static void BM_Test_Bitmap(benchmark::State& state) {
         test_indices[q].resize(visit_count * 2);
         // First half: re-test set indices (guaranteed hits)
         for (uint32_t i = 0; i < visit_count; ++i) {
-            test_indices[q][i] = set_idx[i];
+            test_indices[q][i] = set_idx[i] % N;
         }
         // Second half: random indices (likely misses)
         for (uint32_t i = visit_count; i < visit_count * 2; ++i) {
@@ -242,7 +242,7 @@ static void BM_Test_Bitmap(benchmark::State& state) {
                     visited.clear();
                     const auto& set_idx = data.query_indices(q);
                     for (uint32_t i = 0; i < visit_count; ++i) {
-                        visited.set(set_idx[i]);
+                        visited.set(set_idx[i] % N);
                     }
                     const auto& tst_idx = test_indices[q % num_queries];
                     bool sink = false;
@@ -274,7 +274,7 @@ static void BM_Test_VersionTag(benchmark::State& state) {
         const auto& set_idx = data.query_indices(q);
         test_indices[q].resize(visit_count * 2);
         for (uint32_t i = 0; i < visit_count; ++i) {
-            test_indices[q][i] = set_idx[i];
+            test_indices[q][i] = set_idx[i] % N;
         }
         for (uint32_t i = visit_count; i < visit_count * 2; ++i) {
             test_indices[q][i] = dist(rng);
@@ -290,7 +290,7 @@ static void BM_Test_VersionTag(benchmark::State& state) {
                     visited.clear();
                     const auto& set_idx = data.query_indices(q);
                     for (uint32_t i = 0; i < visit_count; ++i) {
-                        visited.set(set_idx[i]);
+                        visited.set(set_idx[i] % N);
                     }
                     const auto& tst_idx = test_indices[q % num_queries];
                     bool sink = false;
@@ -330,8 +330,8 @@ static void BM_Mixed_Bitmap(benchmark::State& state) {
                     const auto& indices = data.query_indices(q);
                     uint32_t new_visits = 0;
                     for (uint32_t i = 0; i < visit_count; ++i) {
-                        if (!visited.test(indices[i])) {
-                            visited.set(indices[i]);
+                        const vec_num_t idx = indices[i] % N;
+                        if (!visited.test_and_set(idx)) {
                             ++new_visits;
                         }
                     }
@@ -363,8 +363,8 @@ static void BM_Mixed_VersionTag(benchmark::State& state) {
                     const auto& indices = data.query_indices(q);
                     uint32_t new_visits = 0;
                     for (uint32_t i = 0; i < visit_count; ++i) {
-                        if (!visited.test(indices[i])) {
-                            visited.set(indices[i]);
+                        const vec_num_t idx = indices[i] % N;
+                        if (!visited.test_and_set(idx)) {
                             ++new_visits;
                         }
                     }

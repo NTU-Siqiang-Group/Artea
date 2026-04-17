@@ -29,12 +29,14 @@
 #include <algorithm>
 #include <cstddef>
 #include <cstdint>
+#include <vector>
 
 #include <tbb/blocked_range.h>
 #include <tbb/parallel_for.h>
 
 #include <artea/common/logger.hpp>
 #include <artea/cpu/router/compact/single_layer_router.hpp>
+#include <artea/cpu/utils/parallel.hpp>
 
 namespace artea {
 namespace cpu {
@@ -70,6 +72,7 @@ class HierarchicalGraphRouter :
     using visited_table_t         = typename RouterTraitsT::visited_table_t;
     using visited_table_pool_t    = typename RouterTraitsT::visited_table_pool_t;
     using knn_results_t           = typename RouterTraitsT::knn_results_t;
+    using random_seq_t            = typename RouterTraitsT::random_seq_t;
     using base_class_t            =
         typename RouterTraitsT::template vector_router_t<HierarchicalGraphRouter<RouterTraitsT>>;
 
@@ -106,9 +109,11 @@ public:
         }
     }
 
-    /** @brief Warm up the visited-table pool (query hot path only). */
+    /** @brief Warm up the visited-table pool and the random sequence
+     *         generator (lazy thread-local MKL streams). */
     auto initialize() -> void {
         _visited_table_pool.warmup();
+        _warmup_random_seq();
     }
 
     // ================================================================
@@ -118,52 +123,52 @@ public:
     /**
      * @brief Top-down hierarchical search.
      *
-     * Both branches start from the compactor-precomputed
-     * @c hg.entry_point_vid() (the top-bucket centroid's nearest
-     * neighbor) — no runtime sampling.
+     * @tparam RandomSeeding
+     *   - @c true (default): seed from a single random entry sampled
+     *     from the top-level apex bucket via @c sample_single_entry.
+     *   - @c false: seed from the compactor-precomputed
+     *     @c entry_point_vid.
      *
      * @tparam UpperLevelBeamSearch
-     *   - @c true (default): legacy path — allocate one candidate
-     *     queue of @c _candidate_queue_size, seed it with the entry
-     *     point, then run @c beam_search on every level from top
-     *     down to L0 with the same queue.
-     *   - @c false: HNSW-style split. Upper levels (top..1) run
-     *     @c greedy_search with no queue at all, propagating a single
-     *     best (vid, distance) cursor starting at the entry point.
-     *     At L0 we allocate the candidate queue, seed it with the
-     *     L1 greedy-best cursor, and run @c beam_search once.
-     *
-     * Either way the final top-k is extracted from the L0 candidate
-     * queue.
+     *   - @c true (default): beam search at every level with a
+     *     shared queue.
+     *   - @c false: HNSW-style greedy upper layers + beam at L0.
      */
-    template <bool UpperLevelBeamSearch = true, typename HierarchicalGraphT>
+    template <bool RandomSeeding = false, bool UpperLevelBeamSearch = false,
+              typename HierarchicalGraphT>
     auto query(
         const vec_ele_t*          query_vec,
         const HierarchicalGraphT& hg
     ) const -> knn_results_t {
         const layer_id_t top_level_id = hg.top_occupied_level_id();
-        // This is impossible
-        // if (top_level_id == HierarchicalGraphT::unassigned_highest_level_id) {
-        //     return knn_results_t{};
-        // }
-
         auto& visited = _visited_table_pool.acquire();
 
-        // Every query starts from the cached entry point (top-bucket
-        // centroid's nearest neighbor), precomputed by the compactor.
-        // No runtime sampling.
-        const vertex_id_t entry_vid = hg.entry_point_vid();
-        const distance_t  entry_dist = this->_dist_func(query_vec, this->_vecs_data.get(entry_vid));
+        // ---- Seeding: pick one entry point ----
+        vertex_id_t entry_vid;
+        distance_t  entry_dist;
+        if constexpr (RandomSeeding) {
+            std::tie(entry_vid, entry_dist) =
+                _single_layer_router.sample_single_entry(hg, query_vec);
+        } else {
+            entry_vid  = hg.entry_point_vid();
+            entry_dist = this->_dist_func(
+                query_vec, this->_vecs_data.get(entry_vid));
+        }
 
+        // ---- Search phase ----
         if constexpr (UpperLevelBeamSearch) {
-            // ---- Legacy: beam search at every level ----
-            std_candidate_queue_t candidate_queue(static_cast<std::size_t>(_candidate_queue_size));
+            std_candidate_queue_t candidate_queue(
+                static_cast<std::size_t>(_candidate_queue_size));
             candidate_queue.try_push(entry_vid, entry_dist);
 
             for (layer_id_t cur_level_id = top_level_id; ; --cur_level_id) {
                 _single_layer_router.beam_search(
                     query_vec, hg, cur_level_id, candidate_queue, visited);
                 if (cur_level_id == 0) break;
+                // Reset visited so the next layer starts with a clean
+                // set; otherwise vids marked by the upper layer would
+                // be skipped when walking the lower-layer neighbors.
+                visited.clear();
             }
 
             const std::size_t k = std::min<std::size_t>(
@@ -173,13 +178,9 @@ public:
             if (k == 0) return knn_results_t{};
             return candidate_queue.extract_results(k);
         } else {
-            // ---- Greedy upper levels + beam at L0 ----
             vertex_id_t cursor_vid  = entry_vid;
             distance_t  cursor_dist = entry_dist;
 
-            // Greedy descent from top_level_id down to L1 (no queues).
-            // If top_level_id == 0 this loop is skipped and the entry
-            // point is fed straight into the L0 beam below.
             for (layer_id_t cur_level_id = top_level_id;
                  cur_level_id >= 1;
                  --cur_level_id)
@@ -191,8 +192,6 @@ public:
                 if (cur_level_id == 1) break;
             }
 
-            // L0: allocate the candidate queue, seed it with the L1
-            // greedy-best cursor, and run beam search once.
             std_candidate_queue_t candidate_queue(
                 static_cast<std::size_t>(_candidate_queue_size));
             candidate_queue.try_push(cursor_vid, cursor_dist);
@@ -211,25 +210,37 @@ public:
 
     /**
      * @brief L0-only search baseline: skip the hierarchy entirely and
-     *        run a single beam search on the base layer starting from
-     *        the compactor-precomputed @c entry_point_vid. Provided
-     *        so callers can measure how much the hierarchical descent
-     *        actually buys them vs. flat-graph routing on the same
-     *        entry point.
+     *        run a single beam search on the base layer.
+     *
+     * @tparam RandomSeeding
+     *   - @c true: seed the candidate queue from @c _candidate_queue_size
+     *     uniformly random vids in @c [0, N) via
+     *     @c candidate_queue.random_initialize. L0 contains every vid,
+     *     so this is a safe "truly random" entry distribution.
+     *   - @c false (default): seed from the single compactor-precomputed
+     *     @c entry_point_vid.
      */
-    template <typename HierarchicalGraphT>
+    template <bool RandomSeeding = false, typename HierarchicalGraphT>
     auto query_l0_only(
         const vec_ele_t*          query_vec,
         const HierarchicalGraphT& hg
     ) const -> knn_results_t {
         auto& visited = _visited_table_pool.acquire();
 
-        const vertex_id_t entry_vid = hg.entry_point_vid();
-        const distance_t  entry_dist = this->_dist_func(query_vec, this->_vecs_data.get(entry_vid));
-
         std_candidate_queue_t candidate_queue(
             static_cast<std::size_t>(_candidate_queue_size));
-        candidate_queue.try_push(entry_vid, entry_dist);
+
+        if constexpr (RandomSeeding) {
+            candidate_queue.random_initialize(
+                _random_seq, this->_dist_func, query_vec,
+                this->_vecs_data, visited);
+        } else {
+            const vertex_id_t entry_vid = hg.entry_point_vid();
+            const distance_t  entry_dist = this->_dist_func(
+                query_vec, this->_vecs_data.get(entry_vid));
+            candidate_queue.try_push(entry_vid, entry_dist);
+        }
+
         _single_layer_router.beam_search(
             query_vec, hg, /*level_id=*/layer_id_t{0},
             candidate_queue, visited);
@@ -248,7 +259,8 @@ public:
      *        @p UpperLevelBeamSearch template switch is forwarded to
      *        @c query verbatim.
      */
-    template <bool UpperLevelBeamSearch = true, typename HierarchicalGraphT>
+    template <bool RandomSeeding = false, bool UpperLevelBeamSearch = false,
+              typename HierarchicalGraphT>
     auto batch_query(
         const query_vecs_t&       query_vecs,
         const HierarchicalGraphT& hg
@@ -264,7 +276,7 @@ public:
                 for (vertex_num_t i = r.begin(); i != r.end(); ++i) {
                     const vec_ele_t* q_vec = query_vecs.get(i);
                     auto topk_results =
-                        this->template query<UpperLevelBeamSearch>(q_vec, hg);
+                        this->template query<RandomSeeding, UpperLevelBeamSearch>(q_vec, hg);
                     const std::size_t n = topk_results.size();
                     std::copy(topk_results.begin(), topk_results.end(),
                               results.begin() + i * k);
@@ -283,7 +295,7 @@ public:
      * @brief Parallel batch form of @c query_l0_only. Same per-worker
      *        visited-table pooling as @c batch_query.
      */
-    template <typename HierarchicalGraphT>
+    template <bool RandomSeeding = false, typename HierarchicalGraphT>
     auto batch_query_l0_only(
         const query_vecs_t&       query_vecs,
         const HierarchicalGraphT& hg
@@ -298,7 +310,8 @@ public:
             [&](const tbb::blocked_range<vertex_num_t>& r) {
                 for (vertex_num_t i = r.begin(); i != r.end(); ++i) {
                     const vec_ele_t* q_vec = query_vecs.get(i);
-                    auto topk_results = this->query_l0_only(q_vec, hg);
+                    auto topk_results =
+                        this->template query_l0_only<RandomSeeding>(q_vec, hg);
                     const std::size_t n = topk_results.size();
                     std::copy(topk_results.begin(), topk_results.end(),
                               results.begin() + i * k);
@@ -314,9 +327,27 @@ public:
     }
 
 private:
+    /**
+     * @brief Trigger thread-local MKL stream creation for the random
+     *        sequence generator on every TBB worker, so the first real
+     *        query doesn't pay the init cost.
+     */
+    __attribute__((always_inline))
+    auto _warmup_random_seq() -> void {
+        const int num_threads = tbb_max_num_threads();
+        tbb::parallel_for(
+            tbb::blocked_range<int>(0, num_threads, 1),
+            [&](const tbb::blocked_range<int>&) {
+                std::vector<vertex_id_t> dummy(1);
+                _random_seq.generate(dummy, /*upper_bound=*/1, /*num=*/1);
+            }
+        );
+    }
+
     single_layer_router_t        _single_layer_router;
     vertex_num_t                 _candidate_queue_size;
     mutable visited_table_pool_t _visited_table_pool;
+    mutable random_seq_t         _random_seq;
 
 };  // class HierarchicalGraphRouter
 

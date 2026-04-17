@@ -71,8 +71,7 @@ public:
         const vertex_num_t        topk,
         const vertex_num_t        candidate_queue_size
     ) : base_class_t(dist_func, vecs_data, log_table, refining_graph),
-        _router(vecs_data, dist_func, refining_graph,
-                topk, candidate_queue_size),
+        _router(vecs_data, dist_func, refining_graph, topk, candidate_queue_size),
         _topk(topk)
     {   _router.initialize();   }
 

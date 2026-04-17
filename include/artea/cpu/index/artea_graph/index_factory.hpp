@@ -106,26 +106,22 @@ public:
         // Capture the vid window owned by this batch so L0 refinement
         // can draw random prefill neighbors from exactly the newly
         // inserted vertices (see refine_layer).
-        const vertex_id_t new_vid_start =
-            static_cast<vertex_id_t>(index.get_num_vertices());
+        const vertex_id_t new_vid_start = static_cast<vertex_id_t>(index.get_num_vertices());
 
         // Step 1: coarse stacked_rgraph insertion. L0 edge construction
         // is skipped (insert_on_L0 = false) because refine_layer rebuilds
         // L0 from scratch via random prefill + triangle propagate, so
         // spending r-net insertion time on L0 neighbors would be wasted.
-        base_t::add_vertices(index, std::move(batch_vecs), dist_func,
-                             /*insert_on_L0=*/false);
+        base_t::add_vertices(index, std::move(batch_vecs), dist_func, /*insert_on_L0=*/false);
 
-        const vertex_id_t new_vid_end =
-            static_cast<vertex_id_t>(index.get_num_vertices());
+        const vertex_id_t new_vid_end = static_cast<vertex_id_t>(index.get_num_vertices());
 
         // Step 2 + 3: refine every occupied layer (including L0) and
         // write back. top_occupied_level_id is 0 for the degenerate
         // single-layer case.
         const layer_id_t top_level_id = index.top_occupied_level_id();
         for (layer_id_t level_id = 0; level_id <= top_level_id; ++level_id) {
-            refine_layer(index, level_id, dist_func,
-                         new_vid_start, new_vid_end);
+            refine_layer(index, level_id, dist_func, new_vid_start, new_vid_end);
         }
     }
 
@@ -184,10 +180,10 @@ public:
 
         const vertex_num_t max_nbr_size = layer_config.max_nbr_size();
 
-        /** -------------------- Optimization ------------------------------------- ***/
-        /** @brief A sparse graph is efficient enough to search nearest neighbors     */
-        layer_config.max_nbr_size(max_nbr_size / 2);
-        /** ----------------------------------------------------------------------- ***/
+        // /** -------------------- Optimization ------------------------------------- ***/
+        // /** @brief A sparse graph is efficient enough to search nearest neighbors     */
+        // layer_config.max_nbr_size(max_nbr_size / 3);
+        // /** ----------------------------------------------------------------------- ***/
 
         // ---- Step 1: build vid maps for the participating set ----
         auto [local_to_global, global_to_local] = hier_graph.collect_layer_vids(level_id);
@@ -196,16 +192,14 @@ public:
         std::unique_ptr<refining_graph_t> refining_graph;
         if (local_to_global.empty()) {
             // L0 / identity mode: dense ctor, _nbrs_arr sized to N_global.
-            refining_graph = std::make_unique<refining_graph_t>(
-                vecs_storage, layer_config);
+            refining_graph = std::make_unique<refining_graph_t>(vecs_storage, layer_config);
         } else {
             // L1+ / sparse mode: pass moved maps to the sparse ctor.
             refining_graph = std::make_unique<refining_graph_t>(
                 vecs_storage, layer_config,
                 std::move(local_to_global), std::move(global_to_local));
         }
-        refiner_utils_t::fill_refining_graph_from_layer(
-            hier_graph, *refining_graph, level_id);
+        refiner_utils_t::fill_refining_graph_from_layer(hier_graph, *refining_graph, level_id);
 
         // ---- Step 3: run prune + reverse + truncate on the RG ----
         // The log_table inside propagate_engine is indexed by local_vid
@@ -238,16 +232,12 @@ public:
             // reverse edges. Skipped on the very first batch
             // (new_vid_start == 0) — in that case the old-window prefill
             // already samples the whole range.
-            if (rand_gen_size > 0 && new_vid_start > 0
-                && new_vid_end > new_vid_start)
-            {
-                auto new_vertex_seeder =
-                    propagate_engine.template make_updater<random_updater_t>(
-                        rand_gen_size,
-                        /*start_vid=*/vertex_id_t{0},
-                        /*end_vid  =*/new_vid_end);
-                propagate_engine.next_range(
-                    new_vertex_seeder, new_vid_start, new_vid_end);
+            if (rand_gen_size > 0 && new_vid_start > 0 && new_vid_end > new_vid_start) {
+                auto new_vertex_seeder = propagate_engine.template make_updater<random_updater_t>(
+                    rand_gen_size,
+                    /*start_vid=*/vertex_id_t{0},
+                    /*end_vid  =*/new_vid_end);
+                propagate_engine.next_range(new_vertex_seeder, new_vid_start, new_vid_end);
             }
         }
 
@@ -260,18 +250,15 @@ public:
             routing_topk, routing_queue_size);
         auto truncate_updater = propagate_engine.template make_updater<truncate_updater_t>();
 
-        for (iter_t build_loop = 0;
-             build_loop < propagate_config.num_build_loops();
-             ++build_loop)
-        {
+        for (iter_t build_loop = 0; build_loop < propagate_config.num_build_loops(); ++build_loop) {
             propagate_engine.run(propagate_config.num_triu_iters(), triangle_updater)
                             .next(reverse_updater).next(truncate_updater);
         }
 
-        /** -------------------- Optimization --------------------------------------- ***/
-        /** @brief Reconstructed as dense graph with original edge number requirements  */
-        layer_config.max_nbr_size(max_nbr_size);
-        /** ------------------------------------------------------------------------- ***/
+        // /** -------------------- Optimization --------------------------------------- ***/
+        // /** @brief Reconstructed as dense graph with original edge number requirements  */
+        // layer_config.max_nbr_size(max_nbr_size);
+        // /** ------------------------------------------------------------------------- ***/
 
         for (iter_t routing_loop = 0;
              routing_loop < propagate_config.num_routing_loops();
@@ -279,8 +266,14 @@ public:
         {
             auto pruning_updater = propagate_engine.template make_updater<pruning_updater_t>(
                 pruning_config.scale_coeffs(), pruning_config.shifted_coeffs());
-            propagate_engine.next(routing_updater).next(pruning_updater)
-                            .next(truncate_updater).next(reverse_updater).next(truncate_updater);
+            // Mirror backup conv_graph routing chain:
+            // routing → truncate → pruning (silent) → truncate → reverse → truncate.
+            // The truncate between routing and pruning reduces the working set
+            // before RNG pruning, so the subsequent pass sees a cleaner top-K
+            // and doesn't evict useful candidates when the final truncate runs.
+            propagate_engine.next(routing_updater)
+                            .next(pruning_updater).next(truncate_updater)
+                            .next(reverse_updater).next(truncate_updater);
         }
 
         // ---- Step 4: write refined edges back ----

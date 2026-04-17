@@ -227,10 +227,7 @@ public:
 
     template <typename UdfUpdaterT>
         requires std::derived_from<UdfUpdaterT, neighbor_updater_t<UdfUpdaterT>>
-    auto run(
-        const iter_t num_iters,
-        UdfUpdaterT& udf_updater
-    ) -> PropagateEngine& {
+    auto run(const iter_t num_iters, UdfUpdaterT& udf_updater) -> PropagateEngine& {
         for (iter_t iter = 0; iter < num_iters; ++iter) {
             propagate<UdfUpdaterT>(udf_updater);
             merge_logs();

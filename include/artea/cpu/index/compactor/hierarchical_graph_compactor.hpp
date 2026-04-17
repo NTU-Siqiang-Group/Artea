@@ -96,7 +96,7 @@ public:
     /** @brief Minimum apex population for a top layer to survive
      *         compaction. Top buckets thinner than this are trimmed
      *         and their vids demoted into the next-lower layer. */
-    static constexpr vertex_num_t min_layer_cap = 128;
+    static constexpr vertex_num_t min_layer_cap = 1024;
 
     /**
      * @brief Parallel-compact @p src into a fresh compact graph.

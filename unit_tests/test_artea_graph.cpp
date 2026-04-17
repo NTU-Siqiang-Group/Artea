@@ -395,13 +395,11 @@ TEST_F(ArteaGraphTest, SearchRecallAndThroughput) {
         d_router.initialize();
 
         // --- Static artea: compact hg, greedy-upper + beam-L0 ---
-        auto [s_avg_us, s_recall, s_last] = time_batch(
-            [&]() {
-                return s_router.template batch_query</*UpperLevelBeamSearch=*/false>(
-                    query_vecs, compact_hg);
-            });
-        ASSERT_EQ(s_last.size(),
-                  static_cast<std::size_t>(num_queries) * topk);
+        auto [s_avg_us, s_recall, s_last] = time_batch([&]() {
+            return s_router.template batch_query</*RandomSeeding=*/false, /*UpperLevelBeamSearch=*/false>(
+                query_vecs, compact_hg);
+        });
+        ASSERT_EQ(s_last.size(), static_cast<std::size_t>(num_queries) * topk);
 
         // --- Dynamic artea: dynamic hg, greedy-upper + beam-L0 ---
         auto [d_avg_us, d_recall, d_last] = time_batch(
@@ -414,7 +412,10 @@ TEST_F(ArteaGraphTest, SearchRecallAndThroughput) {
 
         // --- Static artea L0-only (flat beam on compact L0 from entry_point) ---
         auto [l0_avg_us, l0_recall, l0_last] = time_batch(
-            [&]() { return s_router.batch_query_l0_only(query_vecs, compact_hg); });
+            [&]() {
+                return s_router.template batch_query_l0_only</*RandomSeeding=*/false>(
+                    query_vecs, compact_hg);
+            });
         ASSERT_EQ(l0_last.size(),
                   static_cast<std::size_t>(num_queries) * topk);
 

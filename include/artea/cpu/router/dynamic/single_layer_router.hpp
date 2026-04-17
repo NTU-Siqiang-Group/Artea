@@ -120,16 +120,13 @@ public:
         const std::size_t pool_size = bucket.size();
         const std::size_t queue_cap = candidate_queue.capacity();
         const std::size_t start  = _draw_random_index(pool_size);
-        const std::size_t stride =
-            (pool_size <= queue_cap) ? 1 : (pool_size / queue_cap);
+        const std::size_t stride = (pool_size <= queue_cap) ? 1 : (pool_size / queue_cap);
         const std::size_t take   = std::min(queue_cap, pool_size);
 
         for (std::size_t i = 0; i < take; ++i) {
-            const std::size_t random_idx =
-                (start + i * stride) % pool_size;
+            const std::size_t random_idx = (start + i * stride) % pool_size;
             const vertex_id_t sampled_vid = bucket[random_idx];
-            const distance_t  sampled_dist =
-                _dist_func(query_vec, _vecs_data.get(sampled_vid));
+            const distance_t  sampled_dist = _dist_func(query_vec, _vecs_data.get(sampled_vid));
             candidate_queue.try_push(sampled_vid, sampled_dist);
         }
     }

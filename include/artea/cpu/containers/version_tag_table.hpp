@@ -120,6 +120,18 @@ public:
     }
 
     /**
+     * @brief Mark an element visited and return whether it was already visited.
+     *        Mirrors ThreadLocalBitmap::test_and_set semantics for callers
+     *        that use the visited-set idiom `if (test_and_set(id)) continue;`.
+     */
+    __attribute__((always_inline))
+    bool test_and_set(const size_t idx) {
+        const bool was_set = (_tags[idx] == _current_version);
+        _tags[idx] = _current_version;
+        return was_set;
+    }
+
+    /**
      * @brief Clear all visited marks by bumping the version counter.
      *
      * O(1) in the common case. When the version wraps around to 0,

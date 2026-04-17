@@ -181,6 +181,10 @@ public:
                 _single_layer_router.beam_search(
                     query_vec, hg, cur_level_id, candidate_queue, visited);
                 if (cur_level_id == 0) break;
+                // Reset visited so the next layer starts with a clean
+                // set; otherwise vids marked by the upper layer would
+                // be skipped when walking the lower-layer neighbors.
+                visited.clear();
             }
 
             const std::size_t k = std::min<std::size_t>(
