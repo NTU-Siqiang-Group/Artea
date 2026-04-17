@@ -15,11 +15,11 @@
 /*
  * @FilePath: /Artea/unit_tests/test_stacked_rgraph.cpp
  * @Author: Chandler (Weitang Ye) <weitang.ye@ntu.edu.sg>
- * @Description: Build-time benchmark for the stacked r-net backbone with
- *               @c insert_on_L0 = false. Measures the cost of constructing
- *               upper-level edges only (L0 is left untouched, as
- *               artea_graph refinement will rebuild it later) and reports
- *               the wall-clock time end-to-end.
+ * @Description: Build-time benchmark for the stacked r-net backbone.
+ *               Tests both insert_on_L0=false (upper-layer edges only,
+ *               as used by artea_graph refinement) and insert_on_L0=true
+ *               (all layers including L0). Reports wall-clock times for
+ *               both modes.
  */
 
 #include <chrono>
@@ -126,68 +126,60 @@ private:
 };
 
 // ============================================================
-//  Fixture: build the stacked r-net backbone once per suite
-//  with insert_on_L0 = false, i.e. upper-layer edges only.
+//  Fixture: build both insert_on_L0=false and =true graphs.
 // ============================================================
 
 class StackedRGraphTest : public ::testing::Test {
 protected:
-    static void SetUpTestSuite() {
+    static auto build_graph(bool insert_on_L0)
+        -> std::pair<std::unique_ptr<stacked_rgraph::index_t>, int64_t>
+    {
         auto& provider = DataProvider::instance();
         const auto& base_vecs = provider.get_dataset().get_base_vecs();
         auto& dist_func = provider.get_dist_func();
 
-        const float l1_radius = provider.get_l1_radius();
-        const float beta = g_config.rnet_beta;
-
-        ARTEA_INFO(fmt::format(
-            "Building StackedRGraph (insert_on_L0=false, upper-layer "
-            "edges only): beta={:.3f}, L1_radius={:.6f}, max_nbr={}, "
-            "search_nn_qs={}, select_nbrs_qs={}, "
-            "scale_coeffs={:.3f}, shifted_coeffs={:.3f}",
-            beta, l1_radius, g_config.max_nbr_size,
-            g_config.search_nn_qs, g_config.select_nbrs_qs,
-            g_config.scale_coeffs, g_config.shifted_coeffs));
-
         const vertex_num_t total_vertices =
             static_cast<vertex_num_t>(base_vecs.get_num_vecs());
         stacked_rgraph::rgraph_config_t rgraph_config(
-            beta, l1_radius,
+            g_config.rnet_beta, provider.get_l1_radius(),
             static_cast<vertex_num_t>(g_config.search_nn_qs),
             static_cast<vertex_num_t>(g_config.select_nbrs_qs),
             g_config.max_nbr_size);
         stacked_rgraph::pruning_config_t pruning_config(
             static_cast<ratio_t>(g_config.scale_coeffs),
             static_cast<ratio_t>(g_config.shifted_coeffs));
-        _graph = std::make_unique<stacked_rgraph::index_t>(
+        auto graph = std::make_unique<stacked_rgraph::index_t>(
             total_vertices, rgraph_config, pruning_config);
-
-        auto t0 = std::chrono::high_resolution_clock::now();
 
         vector_array_t owned_batch =
             base_vecs.extract_subset(0, total_vertices);
+
+        auto t0 = std::chrono::high_resolution_clock::now();
         stacked_rgraph::factory_t::add_vertices(
-            *_graph,
-            std::move(owned_batch),
-            dist_func,
-            /*insert_on_L0=*/false);
-
+            *graph, std::move(owned_batch), dist_func, insert_on_L0);
         auto t1 = std::chrono::high_resolution_clock::now();
-        _build_ms = std::chrono::duration_cast<std::chrono::milliseconds>(
-            t1 - t0).count();
+        const int64_t ms =
+            std::chrono::duration_cast<std::chrono::milliseconds>(t1 - t0).count();
 
-        const layer_id_t top_level_id = _graph->top_occupied_level_id();
+        return {std::move(graph), ms};
+    }
+
+    static void dump_graph_info(
+        const stacked_rgraph::index_t& graph,
+        const char* label, int64_t build_ms)
+    {
+        const auto& base_vecs =
+            DataProvider::instance().get_dataset().get_base_vecs();
+        const layer_id_t top_level_id = graph.top_occupied_level_id();
         ARTEA_INFO(fmt::format(
-            "Upper-layer edges built in {} ms: top_occupied_level={}, "
-            "max_restrict_level={}",
-            _build_ms,
+            "[{}] built in {} ms: top_occupied_level={}, max_restrict_level={}",
+            label, build_ms,
             (top_level_id == dynamic::hierarchical_graph_t
                 ::unassigned_highest_level_id)
                 ? -1 : static_cast<int>(top_level_id),
-            _graph->max_restrict_level()));
-
-        for (layer_id_t h = 0; h <= _graph->max_restrict_level(); ++h) {
-            const auto& bucket = _graph->get_vids_with_highest_level(h);
+            graph.max_restrict_level()));
+        for (layer_id_t h = 0; h <= graph.max_restrict_level(); ++h) {
+            const auto& bucket = graph.get_vids_with_highest_level(h);
             const float ratio = 100.0f * bucket.size() /
                 base_vecs.get_num_vecs();
             ARTEA_INFO(fmt::format(
@@ -196,36 +188,63 @@ protected:
         }
     }
 
-    static void TearDownTestSuite() { _graph.reset(); }
+    static void SetUpTestSuite() {
+        ARTEA_INFO(fmt::format(
+            "Building StackedRGraph: beta={:.3f}, L1_radius={:.6f}, "
+            "max_nbr={}, search_nn_qs={}, select_nbrs_qs={}, "
+            "scale_coeffs={:.3f}, shifted_coeffs={:.3f}",
+            g_config.rnet_beta,
+            DataProvider::instance().get_l1_radius(),
+            g_config.max_nbr_size,
+            g_config.search_nn_qs, g_config.select_nbrs_qs,
+            g_config.scale_coeffs, g_config.shifted_coeffs));
 
-    static std::unique_ptr<stacked_rgraph::index_t> _graph;
-    static int64_t                                  _build_ms;
+        ARTEA_INFO("--- Building with insert_on_L0=false ---");
+        std::tie(_graph_no_l0, _build_ms_no_l0) = build_graph(/*insert_on_L0=*/false);
+        dump_graph_info(*_graph_no_l0, "insert_on_L0=false", _build_ms_no_l0);
+
+        ARTEA_INFO("--- Building with insert_on_L0=true ---");
+        std::tie(_graph_with_l0, _build_ms_with_l0) = build_graph(/*insert_on_L0=*/true);
+        dump_graph_info(*_graph_with_l0, "insert_on_L0=true", _build_ms_with_l0);
+    }
+
+    static void TearDownTestSuite() {
+        _graph_no_l0.reset();
+        _graph_with_l0.reset();
+    }
+
+    static std::unique_ptr<stacked_rgraph::index_t> _graph_no_l0;
+    static std::unique_ptr<stacked_rgraph::index_t> _graph_with_l0;
+    static int64_t _build_ms_no_l0;
+    static int64_t _build_ms_with_l0;
 };
 
-std::unique_ptr<stacked_rgraph::index_t> StackedRGraphTest::_graph = nullptr;
-int64_t                                  StackedRGraphTest::_build_ms = 0;
+std::unique_ptr<stacked_rgraph::index_t> StackedRGraphTest::_graph_no_l0   = nullptr;
+std::unique_ptr<stacked_rgraph::index_t> StackedRGraphTest::_graph_with_l0 = nullptr;
+int64_t StackedRGraphTest::_build_ms_no_l0  = 0;
+int64_t StackedRGraphTest::_build_ms_with_l0 = 0;
 
 // ============================================================
-//  The single reported metric: upper-layer build time.
+//  Build time comparison.
 // ============================================================
 
-TEST_F(StackedRGraphTest, UpperLayerBuildTime) {
-    ASSERT_NE(_graph, nullptr);
-    EXPECT_GT(_build_ms, 0);
+TEST_F(StackedRGraphTest, BuildTime) {
+    ASSERT_NE(_graph_no_l0, nullptr);
+    ASSERT_NE(_graph_with_l0, nullptr);
+    EXPECT_GT(_build_ms_no_l0, 0);
+    EXPECT_GT(_build_ms_with_l0, 0);
 
-    ARTEA_INFO("=== Upper-layer build summary ===");
-    ARTEA_INFO(fmt::format(
-        "  dataset           : {}", g_config.dataset_name));
-    ARTEA_INFO(fmt::format(
-        "  num_vertices      : {}", _graph->get_num_vertices()));
-    ARTEA_INFO(fmt::format(
-        "  max_restrict_level: {}",
-        static_cast<int>(_graph->max_restrict_level())));
-    ARTEA_INFO(fmt::format(
-        "  top_occupied_level: {}",
-        static_cast<int>(_graph->top_occupied_level_id())));
-    ARTEA_INFO(fmt::format(
-        "  build_time        : {} ms", _build_ms));
+    ARTEA_INFO("=== Build summary ===");
+    ARTEA_INFO(fmt::format("  dataset           : {}", g_config.dataset_name));
+    ARTEA_INFO(fmt::format("  num_vertices      : {}", _graph_no_l0->get_num_vertices()));
+    ARTEA_INFO(fmt::format("  max_restrict_level: {}",
+        static_cast<int>(_graph_no_l0->max_restrict_level())));
+    ARTEA_INFO(fmt::format("  insert_on_L0=false: {} ms", _build_ms_no_l0));
+    ARTEA_INFO(fmt::format("  insert_on_L0=true : {} ms", _build_ms_with_l0));
+    ARTEA_INFO(fmt::format("  L0 overhead       : {} ms ({:.1f}%)",
+        _build_ms_with_l0 - _build_ms_no_l0,
+        100.0 * (_build_ms_with_l0 - _build_ms_no_l0) /
+            std::max<int64_t>(_build_ms_no_l0, 1)));
 }
 
 // ============================================================
@@ -292,7 +311,7 @@ int main(int argc, char** argv) {
     g_config.l1_radius_provided = (l1 >= 0.0f);
     g_config.l1_rnet_radius     = l1;
 
-    std::cout << "\n=== Test Configuration (upper-layer build only) ===\n";
+    std::cout << "\n=== Test Configuration ===\n";
     std::cout << "Dataset:        " << g_config.dataset_name   << "\n";
     std::cout << "rnet_beta:      " << g_config.rnet_beta      << "\n";
     if (g_config.l1_radius_provided) {
@@ -309,8 +328,8 @@ int main(int argc, char** argv) {
     std::cout << "select_nbrs_qs: " << g_config.select_nbrs_qs << "\n";
     std::cout << "scale_coeffs:   " << g_config.scale_coeffs   << "\n";
     std::cout << "shifted_coeffs: " << g_config.shifted_coeffs << "\n";
-    std::cout << "insert_on_L0:   false\n";
-    std::cout << "====================================================\n\n";
+    std::cout << "modes:          insert_on_L0={false, true}\n";
+    std::cout << "============================\n\n";
 
     DataProvider::instance().init();
     return RUN_ALL_TESTS();

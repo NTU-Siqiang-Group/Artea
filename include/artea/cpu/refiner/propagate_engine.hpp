@@ -59,10 +59,10 @@ class PropagateEngine {
 public:
     /**
      * @brief Iterate every participating vertex of @p refining_graph in
-     *        parallel. The callback receives @c (local_vid, global_vid).
+     *        parallel. The callback receives @c (layer_vid, storage_vid).
      *        In identity mode both are equal; in sparse mode
-     *        @c local_vid is the row index in the RG and @c global_vid
-     *        is the resolved global id via @c refining_graph.vid_at.
+     *        @c layer_vid is the row index in the RG and @c storage_vid
+     *        is the resolved global id via @c refining_graph.get_storage_vid.
      *
      * Templated on the RefiningGraph type so that HierarchicalGraph
      * callers (which don't see RefinerTraits) can reuse the helper
@@ -78,7 +78,7 @@ public:
             tbb::blocked_range<vn_t>(0, refining_graph.get_num_vertices()),
             [&](const tbb::blocked_range<vn_t>& range) {
                 for (vn_t i = range.begin(); i != range.end(); ++i) {
-                    callback(i, refining_graph.vid_at(i));
+                    callback(i, refining_graph.get_storage_vid(i));
                 }
             });
     }
@@ -100,7 +100,7 @@ public:
             tbb::blocked_range<vertex_num_t>(local_start, local_end),
             [&](const tbb::blocked_range<vertex_num_t>& range) {
                 for (vertex_num_t i = range.begin(); i != range.end(); ++i) {
-                    callback(i, refining_graph.vid_at(i));
+                    callback(i, refining_graph.get_storage_vid(i));
                 }
             });
     }
@@ -124,20 +124,19 @@ public:
     }
 
     /**
-     * @brief Run the updater on a single pivot. @p local_vid indexes the
-     *        log_table / RG row; the global vid is resolved via vid_at and
-     *        handed to the updater alongside so it can touch _vecs_data
-     *        (global-indexed) and write logs (local-indexed).
+     * @brief Run the updater on a single pivot. @p layer_vid indexes the
+     *        log_table / RG row; the global vid is resolved internally via
+     *        get_storage_vid to fetch the neighbor array.
      */
     template <typename UdfUpdaterT>
         requires std::derived_from<UdfUpdaterT, neighbor_updater_t<UdfUpdaterT>>
     auto propagate(
-        const vertex_id_t local_vid,
-        const vertex_id_t global_vid,
+        const vertex_id_t layer_vid,
         UdfUpdaterT& udf_updater
     ) -> void {
-        nbr_arr_t& origin_nbrs = _refining_graph->fetch_nbrs(global_vid);
-        udf_updater(local_vid, global_vid, origin_nbrs);
+        const vertex_id_t storage_vid = _refining_graph->get_storage_vid(layer_vid);
+        nbr_arr_t& origin_nbrs = _refining_graph->fetch_nbrs(storage_vid);
+        udf_updater(layer_vid, origin_nbrs);
     }
 
     template <typename UdfUpdaterT>
@@ -145,8 +144,8 @@ public:
     auto propagate(UdfUpdaterT& udf_updater) -> void {
         parallel_for_each_vertex(
             *_refining_graph,
-            [&](const vertex_id_t local_vid, const vertex_id_t global_vid) {
-                propagate<UdfUpdaterT>(local_vid, global_vid, udf_updater);
+            [&](const vertex_id_t layer_vid, const vertex_id_t /*storage_vid*/) {
+                propagate<UdfUpdaterT>(layer_vid, udf_updater);
             });
     }
 
@@ -164,18 +163,18 @@ public:
     ) -> void {
         parallel_for_each_vertex_in_range(
             *_refining_graph, local_start, local_end,
-            [&](const vertex_id_t local_vid, const vertex_id_t global_vid) {
-                propagate<UdfUpdaterT>(local_vid, global_vid, udf_updater);
+            [&](const vertex_id_t layer_vid, const vertex_id_t /*storage_vid*/) {
+                propagate<UdfUpdaterT>(layer_vid, udf_updater);
             });
     }
 
     /** @brief Merge the logged operations for a single vertex back to the descent graph.
-      * @param local_vid Local row index whose logged operations are to be merged.
+      * @param layer_vid Local row index whose logged operations are to be merged.
       * @return Number of logs merged.
     */
     __attribute__((always_inline))
-    auto merge_logs(const vertex_id_t local_vid) -> size_t {
-        return _log_table.apply_logs(local_vid, *_refining_graph);
+    auto merge_logs(const vertex_id_t layer_vid) -> size_t {
+        return _log_table.apply_logs(layer_vid, *_refining_graph);
     }
 
     /** @brief Merge the logged operations for all vertices back to the descent graph.
@@ -186,8 +185,8 @@ public:
 
         parallel_for_each_vertex(
             *_refining_graph,
-            [&](const vertex_id_t local_vid, const vertex_id_t /*global_vid*/) {
-                local_counts.local() += merge_logs(local_vid);
+            [&](const vertex_id_t layer_vid, const vertex_id_t /*storage_vid*/) {
+                local_counts.local() += merge_logs(layer_vid);
             });
 
         if constexpr (profiling_mode) {

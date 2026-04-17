@@ -132,7 +132,7 @@ public:
         const size_t num_logs = log_container.size();
 
         // executor_vid is local; translate to global for the RG row fetch.
-        auto& cur_nbrs = graph.fetch_nbrs(graph.vid_at(executor_vid));
+        auto& cur_nbrs = graph.fetch_nbrs(graph.get_storage_vid(executor_vid));
 
         #ifndef NDEBUG
         if (!nbr_arr_checker_t::full_check(cur_nbrs)) {

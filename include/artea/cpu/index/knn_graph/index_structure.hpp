@@ -121,8 +121,8 @@ public:
     }
 
     __attribute__((always_inline))
-    auto vid_at(const vertex_num_t local_idx) const -> vertex_id_t {
-        return _refining_graph->vid_at(local_idx);
+    auto get_storage_vid(const vertex_num_t local_idx) const -> vertex_id_t {
+        return _refining_graph->get_storage_vid(local_idx);
     }
 
     auto get_base_metadata() const -> nlohmann::json {

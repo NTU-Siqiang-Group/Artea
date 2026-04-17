@@ -70,11 +70,11 @@ public:
      * @param origin_nbrs The neighbor array of pivot_vid (not modified).
      */
     auto update_impl(
-        const vertex_id_t /*local_vid*/,
-        const vertex_id_t global_vid,
+        const vertex_id_t layer_vid,
         nbr_arr_t& origin_nbrs
     ) -> void {
-        // For each neighbor in origin_nbrs, add a reverse edge from that neighbor to global_vid
+        const vertex_id_t storage_vid = this->_refining_graph.get_storage_vid(layer_vid);
+        // For each neighbor in origin_nbrs, add a reverse edge from that neighbor to storage_vid
         const vertex_num_t max_sz = this->_refining_graph.layer_config().max_nbr_size();
         for (vertex_num_t i = 0; i < origin_nbrs.size(); ++i) {
             const nbr_t& nbr = origin_nbrs[i];
@@ -88,12 +88,12 @@ public:
             //     continue;
             // }
 
-            // Add reverse edge: from nbr_id to global_vid with the same distance.
+            // Add reverse edge: from nbr_id to storage_vid with the same distance.
             // Executor here is the neighbor (a global vid) — translate to
             // local for the log_table row index.
             this->_log_table.write_log(
                 /* executor_vid = */this->_refining_graph.local_id_of(nbr_id),
-                /* nbr_id = */global_vid,
+                /* nbr_id = */storage_vid,
                 /* new_edge_dist = */dist
             );
         }

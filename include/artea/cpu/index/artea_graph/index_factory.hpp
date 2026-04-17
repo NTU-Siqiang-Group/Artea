@@ -182,7 +182,7 @@ public:
 
         // /** -------------------- Optimization ------------------------------------- ***/
         // /** @brief A sparse graph is efficient enough to search nearest neighbors     */
-        // layer_config.max_nbr_size(max_nbr_size / 3);
+        // layer_config.max_nbr_size(max_nbr_size / 2);
         // /** ----------------------------------------------------------------------- ***/
 
         // ---- Step 1: build vid maps for the participating set ----
@@ -202,7 +202,7 @@ public:
         refiner_utils_t::fill_refining_graph_from_layer(hier_graph, *refining_graph, level_id);
 
         // ---- Step 3: run prune + reverse + truncate on the RG ----
-        // The log_table inside propagate_engine is indexed by local_vid
+        // The log_table inside propagate_engine is indexed by layer_vid
         // (N_local for sparse upper layers, N_global in identity mode);
         // set_graph sizes it from the bound RG.
         propagate_engine_t propagate_engine(dist_func);

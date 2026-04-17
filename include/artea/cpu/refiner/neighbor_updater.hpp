@@ -60,19 +60,18 @@ public:
      */
     __attribute__((always_inline))
     auto operator()(
-        const vertex_id_t local_vid,
-        const vertex_id_t global_vid,
+        const vertex_id_t layer_vid,
         nbr_arr_t& origin_nbrs
     ) -> void {
-        static_cast<DerivedClassT*>(this)->update_impl(local_vid, global_vid, origin_nbrs);
+        static_cast<DerivedClassT*>(this)->update_impl(layer_vid, origin_nbrs);
 
         #ifndef NDEBUG
         if (!nbr_arr_checker_t::full_check(origin_nbrs)) {
             ARTEA_ERROR(fmt::format(
                 "Updater {} produced an invalid neighbor array for vertex "
-                "(local={}, global={}).",
+                "(local={}).",
                 DerivedClassT::updater_name,
-                local_vid, global_vid
+                layer_vid
             ));
         }
         #endif

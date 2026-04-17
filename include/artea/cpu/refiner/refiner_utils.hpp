@@ -82,21 +82,21 @@ public:
 
         propagate_engine_t::parallel_for_each_vertex(
             refining_graph,
-            [&](const vertex_id_t /*local_vid*/, const vertex_id_t global_vid) {
+            [&](const vertex_id_t /*layer_vid*/, const vertex_id_t storage_vid) {
                 // Skip vids that were never assign_layer'd. Possible when
                 // the caller constructed a dense RG with a vector array
                 // larger than the assigned set (e.g. reusing the global
                 // dataset for a partial fixture). Not produced by the
                 // standard add_vertices → assign_layer flow, so warn.
-                if (!hier_graph.is_vertex_assigned(global_vid)) {
+                if (!hier_graph.is_vertex_assigned(storage_vid)) {
                     ARTEA_WARN(fmt::format(
                         "fill_refining_graph_from_layer: skipping "
                         "unassigned vid={} (level_id={})",
-                        global_vid, level_id));
+                        storage_vid, level_id));
                     return;
                 }
-                const auto src = hier_graph.fetch_layer_nbrs(global_vid, level_id);
-                auto& dst = refining_graph.fetch_nbrs(global_vid);
+                const auto src = hier_graph.fetch_layer_nbrs(storage_vid, level_id);
+                auto& dst = refining_graph.fetch_nbrs(storage_vid);
                 dst.clear();
                 for (vertex_num_t i = 0; i < copy_capacity && i < src.size(); ++i) {
                     if (src[i].is_invalid()) break;
@@ -123,16 +123,16 @@ public:
     ) -> void {
         propagate_engine_t::parallel_for_each_vertex(
             refining_graph,
-            [&](const vertex_id_t /*local_vid*/, const vertex_id_t global_vid) {
-                if (!hier_graph.is_vertex_assigned(global_vid)) {
+            [&](const vertex_id_t /*layer_vid*/, const vertex_id_t storage_vid) {
+                if (!hier_graph.is_vertex_assigned(storage_vid)) {
                     ARTEA_WARN(fmt::format(
                         "writeback_layer_from_refining_graph: skipping "
                         "unassigned vid={} (level_id={})",
-                        global_vid, level_id));
+                        storage_vid, level_id));
                     return;
                 }
-                const auto& src = refining_graph.fetch_nbrs(global_vid);
-                hier_graph.with_locked_nbrs(global_vid, level_id,
+                const auto& src = refining_graph.fetch_nbrs(storage_vid);
+                hier_graph.with_locked_nbrs(storage_vid, level_id,
                     [&](std::span<nbr_t> dst, vertex_num_t /*old_cnt*/) {
                         const std::size_t copy_n =
                             std::min(src.size(), dst.size());

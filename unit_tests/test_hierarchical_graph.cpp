@@ -725,20 +725,20 @@ TEST_F(HierarchicalGraphTest, LayerRefiningGraphRoundTrip) {
         // rows are empty. Just sanity-check counts and identity round-trip.
         propagate_engine_t::parallel_for_each_vertex(
             *refining_graph,
-            [&](const vertex_id_t /*local_vid*/, const vertex_id_t global_vid) {
-                if (!_graph->is_vertex_assigned(global_vid)) return;
-                const vertex_num_t hg_cnt = _graph->num_valid_nbrs(global_vid, h);
-                const auto& refining_nbrs = refining_graph->fetch_nbrs(global_vid);
+            [&](const vertex_id_t /*layer_vid*/, const vertex_id_t storage_vid) {
+                if (!_graph->is_vertex_assigned(storage_vid)) return;
+                const vertex_num_t hg_cnt = _graph->num_valid_nbrs(storage_vid, h);
+                const auto& refining_nbrs = refining_graph->fetch_nbrs(storage_vid);
                 EXPECT_EQ(refining_nbrs.size(), hg_cnt)
-                    << "vid=" << global_vid << " h=" << h;
+                    << "vid=" << storage_vid << " h=" << h;
             });
 
         // ---- Mutate one row: pick the first local row, push a fake
-        //      neighbor pair (vid_at(other), 1.0). Writeback, re-extract,
+        //      neighbor pair (get_storage_vid(other), 1.0). Writeback, re-extract,
         //      assert the mutation survived. ----
         if (refining_graph->get_num_vertices() < 2) continue;
-        const vertex_id_t pivot_global = refining_graph->vid_at(0);
-        const vertex_id_t other_global = refining_graph->vid_at(1);
+        const vertex_id_t pivot_global = refining_graph->get_storage_vid(0);
+        const vertex_id_t other_global = refining_graph->get_storage_vid(1);
         refining_graph->fetch_nbrs(pivot_global).clear();
         refining_graph->fetch_nbrs(pivot_global).emplace_back(
             other_global, distance_t{1}, /*is_new=*/true);

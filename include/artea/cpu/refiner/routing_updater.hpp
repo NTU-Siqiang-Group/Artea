@@ -83,15 +83,15 @@ public:
      * @param origin_nbrs  Unused; present only to satisfy NeighborUpdater interface.
      */
     auto update_impl(
-        const vertex_id_t local_vid,
-        const vertex_id_t global_vid,
+        const vertex_id_t layer_vid,
         nbr_arr_t& origin_nbrs
     ) -> void {
-        const vec_ele_t* pivot_vec = this->_vecs_data.get(global_vid);
+        const vertex_id_t storage_vid = this->_refining_graph.get_storage_vid(layer_vid);
+        const vec_ele_t* pivot_vec = this->_vecs_data.get(storage_vid);
         // Warm-start beam search with the pivot's own (sorted, distance-
         // cached) neighbor slot so the first few iterations don't have
         // to re-explore from scratch.
-        const nbr_arr_t& pivot_nbrs = this->_refining_graph.fetch_nbrs(global_vid);
+        const nbr_arr_t& pivot_nbrs = this->_refining_graph.fetch_nbrs(storage_vid);
         auto knn_results = _router.query(pivot_vec, pivot_nbrs);
 
         std::vector<vertex_id_t> knn_ids;
@@ -101,8 +101,8 @@ public:
         const vertex_num_t max_sz = this->_refining_graph.layer_config().max_nbr_size();
         for (const auto& entry : knn_results) {
             if (entry.is_invalid()) { continue; }
-            if (entry.get_vid() == global_vid) { continue; }
-            const nbr_arr_t& target_nbrs = this->_refining_graph.fetch_nbrs(global_vid);
+            if (entry.get_vid() == storage_vid) { continue; }
+            const nbr_arr_t& target_nbrs = this->_refining_graph.fetch_nbrs(storage_vid);
             if (target_nbrs.size() >= max_sz &&
                 target_nbrs[max_sz - 1].get_distance() <= entry.get_distance()) {
                 continue;
@@ -111,7 +111,7 @@ public:
             knn_dists.push_back(entry.get_distance());
         }
 
-        this->_log_table.write_logs(local_vid, knn_ids, knn_dists);
+        this->_log_table.write_logs(layer_vid, knn_ids, knn_dists);
     }
 
 private:

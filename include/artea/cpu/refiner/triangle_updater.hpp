@@ -111,8 +111,7 @@ public:
      */
     template <PruningConditionT ConditionType = PruningConditionT::scaled_ineq>
     auto update_impl(
-        const vertex_id_t /*local_vid*/,
-        const vertex_id_t /*global_vid*/,
+        const vertex_id_t /*layer_vid*/,
         nbr_arr_t& origin_nbrs
     ) -> void {
         #ifndef NDEBUG

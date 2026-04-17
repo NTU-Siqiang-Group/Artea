@@ -52,8 +52,7 @@ public:
 
     __attribute__((always_inline))
     auto update_impl(
-        const vertex_id_t /* local_vid */,
-        const vertex_id_t /* global_vid */,
+        const vertex_id_t /* layer_vid */,
         nbr_arr_t& origin_nbrs
     ) -> void {
         const vertex_num_t max_sz = (_truncate_size > 0)

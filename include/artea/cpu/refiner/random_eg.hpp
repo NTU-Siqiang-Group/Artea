@@ -78,7 +78,7 @@ public:
         // Per-thread reusable buffer for random local indices. Indices are
         // drawn in [0, num_vertices) (i.e. local row space when sparse,
         // identical to global vid space when identity-mapped) and then
-        // translated to global vids via refining_graph.vid_at(...).
+        // translated to global vids via refining_graph.get_storage_vid(...).
         tbb::enumerable_thread_specific<std::vector<vertex_id_t>>
             tls_random_local_ids([init_nbr_size]{
                 return std::vector<vertex_id_t>(init_nbr_size);
@@ -86,7 +86,7 @@ public:
 
         PropagateEngine<RefinerTraitsT>::parallel_for_each_vertex(
             refining_graph,
-            [&](const vertex_id_t /*local_vid*/, const vertex_id_t pivot_vid) {
+            [&](const vertex_id_t /*layer_vid*/, const vertex_id_t pivot_vid) {
                 auto& random_local_ids = tls_random_local_ids.local();
                 nbr_arr_t& nbrs = refining_graph.fetch_nbrs(pivot_vid);
                 const vec_ele_t* query_vec = vecs_data.get(pivot_vid);
@@ -97,7 +97,7 @@ public:
 
                 for (vertex_num_t i = 0; i < init_nbr_size; ++i) {
                     const vertex_id_t nbr_vid =
-                        refining_graph.vid_at(random_local_ids[i]);
+                        refining_graph.get_storage_vid(random_local_ids[i]);
 
                     if (nbr_vid == pivot_vid) {
                         continue;

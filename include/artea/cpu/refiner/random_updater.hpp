@@ -93,10 +93,10 @@ public:
      *       number generation.
      */
     auto update_impl(
-        const vertex_id_t local_vid,
-        const vertex_id_t global_vid,
+        const vertex_id_t layer_vid,
         nbr_arr_t& origin_nbrs
     ) -> void {
+        const vertex_id_t storage_vid = this->_refining_graph.get_storage_vid(layer_vid);
         // Random ids are drawn in [_start_vid, _end_vid) = caller-
         // restricted local-row window; translate each to a global vid
         // for distance evaluation. The range-form RandomSeq::generate
@@ -106,7 +106,7 @@ public:
         _random_seq.generate(
             rand_ids_buffer, _start_vid, _end_vid, _rand_gen_size);
 
-        const vec_ele_t* pivot_vec = this->_vecs_data.get(global_vid);
+        const vec_ele_t* pivot_vec = this->_vecs_data.get(storage_vid);
         const vertex_num_t max_sz = this->_refining_graph.layer_config().max_nbr_size();
 
         std::vector<vertex_id_t> nbr_ids;
@@ -115,11 +115,11 @@ public:
         nbr_dists.reserve(_rand_gen_size);
 
         for (vertex_num_t i = 0; i < _rand_gen_size; ++i) {
-            const vertex_id_t rand_nbr_global = this->_refining_graph.vid_at(rand_ids_buffer[i]);
-            if (rand_nbr_global == global_vid) { continue; }
+            const vertex_id_t rand_nbr_global = this->_refining_graph.get_storage_vid(rand_ids_buffer[i]);
+            if (rand_nbr_global == storage_vid) { continue; }
             const distance_t dist = this->_dist_func(pivot_vec, this->_vecs_data.get(rand_nbr_global));
 
-            const nbr_arr_t& pivot_nbrs = this->_refining_graph.fetch_nbrs(global_vid);
+            const nbr_arr_t& pivot_nbrs = this->_refining_graph.fetch_nbrs(storage_vid);
             if (pivot_nbrs.size() >= max_sz &&
                 pivot_nbrs[max_sz - 1].get_distance() <= dist) {
                 continue;
@@ -128,7 +128,7 @@ public:
             nbr_dists.push_back(dist);
         }
 
-        this->_log_table.write_logs(local_vid, nbr_ids, nbr_dists);
+        this->_log_table.write_logs(layer_vid, nbr_ids, nbr_dists);
     }
 
 private:

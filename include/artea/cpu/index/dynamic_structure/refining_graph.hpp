@@ -66,7 +66,7 @@ public:
     /**
      * @brief Sparse constructor for a subset of @p global_vecs. Only the
      *        vids in @p local_to_global have rows in @c _nbrs_arr (one
-     *        row per local index); @c fetch_nbrs(global_vid) translates
+     *        row per local index); @c fetch_nbrs(storage_vid) translates
      *        through @c _global_to_local on the hot path.
      *
      * @param global_vecs     Borrowed reference to the global vector array.
@@ -151,14 +151,14 @@ public:
     /** @brief Translate a single global vid to its local row index
      *         (identity passthrough in dense mode). */
     __attribute__((always_inline))
-    auto local_id_of(const vertex_id_t global_vid) const -> vertex_id_t {
-        return _global_to_local.empty() ? global_vid : _global_to_local[global_vid];
+    auto local_id_of(const vertex_id_t storage_vid) const -> vertex_id_t {
+        return _global_to_local.empty() ? storage_vid : _global_to_local[storage_vid];
     }
 
     /** @brief Translate a local row index to its global vid (identity
      *         passthrough in dense mode). */
     __attribute__((always_inline))
-    auto vid_at(const vertex_num_t local_idx) const -> vertex_id_t {
+    auto get_storage_vid(const vertex_num_t local_idx) const -> vertex_id_t {
         return _local_to_global.empty()
             ? static_cast<vertex_id_t>(local_idx)
             : _local_to_global[local_idx];
@@ -177,17 +177,17 @@ public:
     auto get_nbrs_arr() const -> const std::vector<nbr_arr_t>& { return _nbrs_arr; }
 
     __attribute__((always_inline))
-    auto fetch_nbrs(const vertex_id_t global_vid) const -> const nbr_arr_t& {
+    auto fetch_nbrs(const vertex_id_t storage_vid) const -> const nbr_arr_t& {
         return _global_to_local.empty()
-            ? _nbrs_arr[global_vid]
-            : _nbrs_arr[_global_to_local[global_vid]];
+            ? _nbrs_arr[storage_vid]
+            : _nbrs_arr[_global_to_local[storage_vid]];
     }
 
     __attribute__((always_inline))
-    auto fetch_nbrs(const vertex_id_t global_vid) -> nbr_arr_t& {
+    auto fetch_nbrs(const vertex_id_t storage_vid) -> nbr_arr_t& {
         return _global_to_local.empty()
-            ? _nbrs_arr[global_vid]
-            : _nbrs_arr[_global_to_local[global_vid]];
+            ? _nbrs_arr[storage_vid]
+            : _nbrs_arr[_global_to_local[storage_vid]];
     }
 
     __attribute__((always_inline))
