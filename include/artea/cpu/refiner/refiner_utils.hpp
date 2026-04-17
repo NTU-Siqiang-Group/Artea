@@ -73,7 +73,7 @@ public:
         const layer_id_t          level_id
     ) -> void {
         // Take min(src_capacity, dest_capacity), so callers can drive the
-        // refiner with an RG layer cap that differs from the hg slot cap
+        // refiner with an RG layer cap that differs from the hier_graph slot cap
         // in either direction. Symmetric with
         // writeback_layer_from_refining_graph.
         const vertex_num_t src_capacity  = hier_graph.max_nbr_size(level_id);

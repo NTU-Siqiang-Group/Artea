@@ -83,6 +83,7 @@
 #include <artea/cpu/router/data_structures/candidate_queue_concept.hpp>
 #include <artea/cpu/router/visited_table_concept.hpp>
 #include <artea/cpu/router/data_structures/visited_table_pool.hpp>
+#include <artea/cpu/router/candidate_sample_utils.hpp>
 #include <artea/cpu/router/data_structures/std_candidate_queue.hpp>
 #include <artea/cpu/router/data_structures/fh_candidate_queue.hpp>
 #include <artea/cpu/router/data_structures/linear_candidate_queue.hpp>

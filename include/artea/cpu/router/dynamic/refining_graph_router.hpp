@@ -88,9 +88,7 @@ public:
     __attribute__((always_inline))
     auto query(const vec_ele_t* query_vec) const -> knn_results_t {
         auto& visited_table = _visited_table_pool.acquire();
-        auto results = _beam_search(query_vec, visited_table, static_cast<vertex_id_t>(0));
-        visited_table.clear();
-        return results;
+        return _beam_search(query_vec, visited_table, static_cast<vertex_id_t>(0));
     }
 
     /**
@@ -99,9 +97,7 @@ public:
     __attribute__((always_inline))
     auto query(const vec_ele_t* query_vec, const vertex_id_t entry_point) const -> knn_results_t {
         auto& visited_table = _visited_table_pool.acquire();
-        auto results = _beam_search(query_vec, visited_table, entry_point);
-        visited_table.clear();
-        return results;
+        return _beam_search(query_vec, visited_table, entry_point);
     }
 
     /**
@@ -120,9 +116,7 @@ public:
         const nbr_arr_t&  seed_nbrs
     ) const -> knn_results_t {
         auto& visited_table = _visited_table_pool.acquire();
-        auto results = _beam_search_seeded(query_vec, visited_table, seed_nbrs);
-        visited_table.clear();
-        return results;
+        return _beam_search_seeded(query_vec, visited_table, seed_nbrs);
     }
 
     /**
@@ -136,12 +130,13 @@ public:
         tbb::parallel_for(
             tbb::blocked_range<vertex_num_t>(0, num_queries),
             [&](const tbb::blocked_range<vertex_num_t>& r) {
-                auto& visited = _visited_table_pool.acquire();
                 for (vertex_num_t i = r.begin(); i != r.end(); ++i) {
+                    // acquire() clears each time, so it lives inside the
+                    // inner loop to get a fresh table per query.
+                    auto& visited = _visited_table_pool.acquire();
                     const vec_ele_t* q_vec = query_vecs.get(i);
                     auto topk_results = _beam_search(q_vec, visited, static_cast<vertex_id_t>(0));
                     std::copy(topk_results.begin(), topk_results.end(), results.begin() + i * K);
-                    visited.clear();
                 }
             }
         );

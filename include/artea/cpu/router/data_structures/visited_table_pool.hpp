@@ -59,12 +59,19 @@ public:
     {}
 
     /**
-     * @brief Acquire this thread's visited table.
-     * @return Reference to the calling thread's VisitedTableT.
+     * @brief Acquire this thread's visited table in a clean state.
+     *
+     * Clears the table before returning, so every caller can treat the
+     * returned reference as a fresh session start. This absorbs the
+     * previously-scattered post-clear calls into one place and keeps
+     * clear counts at exactly one per acquire.
+     *
+     * @return Reference to the calling thread's VisitedTableT (empty).
      */
     __attribute__((always_inline))
     auto acquire() -> visited_table_t& {
         auto& table = _pool.local();
+        table.clear();
         return table;
     }
 
@@ -81,8 +88,7 @@ public:
         tbb::parallel_for(
             tbb::blocked_range<int>(0, num_threads, 1),
             [&](const tbb::blocked_range<int>&) {
-                auto& table = _pool.local();
-                table.clear();
+                (void)_pool.local();   // trigger lazy per-thread construction
             }
         );
     }

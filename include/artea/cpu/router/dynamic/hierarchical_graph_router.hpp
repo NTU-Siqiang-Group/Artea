@@ -46,11 +46,11 @@ namespace dynamic {
  *        @c dynamic::HierarchicalGraph.
  *
  * Provides:
- *   - **Build-time passthroughs** — @c beam_search(query, hg, level_id,
- *     queue, visited) and @c sample_entries(hg, query, queue) that
+ *   - **Build-time passthroughs** — @c beam_search(query, hier_graph, level_id,
+ *     queue, visited) and @c sample_entries(hier_graph, query, queue) that
  *     simply delegate to the composed @c SingleLayerRouter. Used by
  *     @c stacked_rgraph::IndexFactory on the insertion hot path.
- *   - **Query path** — @c beam_search(query, hg) runs the full top-down
+ *   - **Query path** — @c beam_search(query, hier_graph) runs the full top-down
  *     descent. Because every vid is valid at every level it participates
  *     in, the candidate queue carries through each level unchanged.
  *
@@ -73,6 +73,7 @@ class HierarchicalGraphRouter :
     using visited_table_t         = typename RouterTraitsT::visited_table_t;
     using visited_table_pool_t    = typename RouterTraitsT::visited_table_pool_t;
     using knn_results_t           = typename RouterTraitsT::knn_results_t;
+    using candidate_sample_utils_t = typename RouterTraitsT::candidate_sample_utils_t;
     using base_class_t            =
         typename RouterTraitsT::template vector_router_t<HierarchicalGraphRouter<RouterTraitsT>>;
 
@@ -115,31 +116,21 @@ public:
     }
 
     // ================================================================
-    //   Build-time passthroughs
+    //   Build-time passthrough (beam_search only; apex sampling now
+    //   flows through CandidateSampleUtils directly at the call site).
     // ================================================================
 
     template <typename HierarchicalGraphT>
     __attribute__((always_inline))
     auto beam_search(
         const vec_ele_t*          query_vec,
-        const HierarchicalGraphT& hg,
+        const HierarchicalGraphT& hier_graph,
         const layer_id_t          level_id,
         std_candidate_queue_t&    candidate_queue,
         visited_table_t&          visited
     ) const -> void {
         _single_layer_router.beam_search(
-            query_vec, hg, level_id, candidate_queue, visited);
-    }
-
-    template <typename HierarchicalGraphT>
-    __attribute__((always_inline))
-    auto sample_entries(
-        const HierarchicalGraphT& hg,
-        const vec_ele_t*          query_vec,
-        std_candidate_queue_t&    candidate_queue
-    ) const -> void {
-        _single_layer_router.sample_entries(
-            hg, query_vec, candidate_queue);
+            query_vec, hier_graph, level_id, candidate_queue, visited);
     }
 
     // ================================================================
@@ -161,9 +152,9 @@ public:
     template <bool UpperLevelBeamSearch = true, typename HierarchicalGraphT>
     auto query(
         const vec_ele_t*          query_vec,
-        const HierarchicalGraphT& hg
+        const HierarchicalGraphT& hier_graph
     ) const -> knn_results_t {
-        const layer_id_t top_level_id = hg.top_occupied_level_id();
+        const layer_id_t top_level_id = hier_graph.top_occupied_level_id();
         if (top_level_id == HierarchicalGraphT::unassigned_highest_level_id) {
             return knn_results_t{};
         }
@@ -172,31 +163,32 @@ public:
 
         if constexpr (UpperLevelBeamSearch) {
             // ---- Legacy: beam search at every level ----
-            std_candidate_queue_t candidate_queue(
-                static_cast<std::size_t>(_candidate_queue_size));
-            _single_layer_router.sample_entries(
-                hg, query_vec, candidate_queue);
+            std_candidate_queue_t candidate_queue(static_cast<std::size_t>(_candidate_queue_size));
+            candidate_sample_utils_t::sample_entries(
+                this->_vecs_data, this->_dist_func, hier_graph, query_vec, candidate_queue);
 
             for (layer_id_t cur_level_id = top_level_id; ; --cur_level_id) {
-                _single_layer_router.beam_search(
-                    query_vec, hg, cur_level_id, candidate_queue, visited);
+                _single_layer_router.beam_search(query_vec, hier_graph, cur_level_id, candidate_queue, visited);
                 if (cur_level_id == 0) break;
-                // Reset visited so the next layer starts with a clean
-                // set; otherwise vids marked by the upper layer would
-                // be skipped when walking the lower-layer neighbors.
-                visited.clear();
+                // Visited intentionally carries across layers — by the
+                // monotone-distance argument (a rejected vid had dist >
+                // the current top-k worst, and top-k only tightens),
+                // skipping already-visited vids at lower layers cannot
+                // miss a true NN.
             }
 
             const std::size_t k = std::min<std::size_t>(
                 static_cast<std::size_t>(this->_topk),
                 candidate_queue.get_result_size());
-            visited.clear();
             if (k == 0) return knn_results_t{};
             return candidate_queue.extract_results(k);
         } else {
             // ---- Greedy upper levels + beam at L0 ----
+            // `visited` is guaranteed clean — VisitedTablePool::acquire()
+            // clears on every call, so each query gets a fresh table.
             auto [cursor_vid, cursor_dist] =
-                _single_layer_router.sample_single_entry(hg, query_vec);
+                candidate_sample_utils_t::sample_single_entry(
+                    this->_vecs_data, this->_dist_func, hier_graph, query_vec);
 
             for (layer_id_t cur_level_id = top_level_id;
                  cur_level_id >= 1;
@@ -204,8 +196,8 @@ public:
             {
                 std::tie(cursor_vid, cursor_dist) =
                     _single_layer_router.greedy_search(
-                        query_vec, hg, cur_level_id,
-                        cursor_vid, cursor_dist);
+                        query_vec, hier_graph, cur_level_id,
+                        cursor_vid, cursor_dist, visited);
                 if (cur_level_id == 1) break;
             }
 
@@ -213,13 +205,12 @@ public:
                 static_cast<std::size_t>(_candidate_queue_size));
             candidate_queue.try_push(cursor_vid, cursor_dist);
             _single_layer_router.beam_search(
-                query_vec, hg, /*level_id=*/layer_id_t{0},
+                query_vec, hier_graph, /*level_id=*/layer_id_t{0},
                 candidate_queue, visited);
 
             const std::size_t k = std::min<std::size_t>(
                 static_cast<std::size_t>(this->_topk),
                 candidate_queue.get_result_size());
-            visited.clear();
             if (k == 0) return knn_results_t{};
             return candidate_queue.extract_results(k);
         }
@@ -233,7 +224,7 @@ public:
     template <bool UpperLevelBeamSearch = true, typename HierarchicalGraphT>
     auto batch_query(
         const query_vecs_t&       query_vecs,
-        const HierarchicalGraphT& hg
+        const HierarchicalGraphT& hier_graph
     ) const -> knn_results_t {
         const vertex_num_t num_queries = query_vecs.get_num_vecs();
         const uint32_t     k           = this->_topk;
@@ -246,7 +237,7 @@ public:
                 for (vertex_num_t i = r.begin(); i != r.end(); ++i) {
                     const vec_ele_t* q_vec = query_vecs.get(i);
                     auto topk_results =
-                        this->template query<UpperLevelBeamSearch>(q_vec, hg);
+                        this->template query<UpperLevelBeamSearch>(q_vec, hier_graph);
                     const std::size_t n = topk_results.size();
                     std::copy(topk_results.begin(), topk_results.end(),
                               results.begin() + i * k);

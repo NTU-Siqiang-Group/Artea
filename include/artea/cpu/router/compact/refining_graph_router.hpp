@@ -92,9 +92,7 @@ public:
     __attribute__((always_inline))
     auto query(const vec_ele_t* query_vec) const -> knn_results_t {
         auto& visited_table = _visited_table_pool.acquire();
-        auto results = _beam_search(query_vec, visited_table, _random_seq);
-        visited_table.clear();
-        return results;
+        return _beam_search(query_vec, visited_table, _random_seq);
     }
 
     /**
@@ -106,9 +104,7 @@ public:
     __attribute__((always_inline))
     auto query(const vec_ele_t* query_vec, const vertex_id_t entry_point) const -> knn_results_t {
         auto& visited_table = _visited_table_pool.acquire();
-        auto results = _beam_search(query_vec, visited_table, entry_point);
-        visited_table.clear();
-        return results;
+        return _beam_search(query_vec, visited_table, entry_point);
     }
 
     /**
@@ -127,19 +123,15 @@ public:
         knn_results_t results(num_queries * K);
 
         tbb::parallel_for(
-            // Range: Iterate over all query vectors
             tbb::blocked_range<vertex_num_t>(0, num_queries),
-
-            // Processor for a sub-range of queries
             [&](const tbb::blocked_range<vertex_num_t>& r) {
-                auto& visited = _visited_table_pool.acquire();
+                // acquire per-query via this->query() internally; no
+                // outer acquire needed since each inner query() already
+                // refreshes the visited table.
                 for (vertex_num_t i = r.begin(); i != r.end(); ++i) {
                     const vec_ele_t* q_vec = query_vecs.get(i);
-                    // Call query to get top-k results
                     auto topk_results = this->query(q_vec);
-                    // Store results into flat array at row i
                     std::copy(topk_results.begin(), topk_results.end(), results.begin() + i * K);
-                    visited.clear();
                 }
             }
         );
@@ -164,19 +156,15 @@ public:
         knn_results_t results(num_queries * K);
 
         tbb::parallel_for(
-            // Range: Iterate over all query vectors
             tbb::blocked_range<vertex_num_t>(0, num_queries),
-
-            // Processor for a sub-range of queries
             [&](const tbb::blocked_range<vertex_num_t>& r) {
-                auto& visited = _visited_table_pool.acquire();
                 for (vertex_num_t i = r.begin(); i != r.end(); ++i) {
+                    // acquire() clears each time, so move it inside the
+                    // loop to get a fresh table per query.
+                    auto& visited = _visited_table_pool.acquire();
                     const vec_ele_t* q_vec = query_vecs.get(i);
-                    // Call beam_search with shared entry point
                     auto topk_results = _beam_search(q_vec, visited, entry_point);
-                    // Store results into flat array at row i
                     std::copy(topk_results.begin(), topk_results.end(), results.begin() + i * K);
-                    visited.clear();
                 }
             }
         );

@@ -156,6 +156,7 @@ using fh_candidate_queue_t = typename router_traits_t::fh_candidate_queue_t;
 using boost_candidate_queue_t = typename router_traits_t::boost_candidate_queue_t;
 using candidate_queue_t = typename router_traits_t::candidate_queue_t;
 using visited_table_pool_t = typename router_traits_t::visited_table_pool_t;
+using candidate_sample_utils_t = typename router_traits_t::candidate_sample_utils_t;
 using bruteforce_router_t = typename router_traits_t::bruteforce_router_t;
 
 // Utility types

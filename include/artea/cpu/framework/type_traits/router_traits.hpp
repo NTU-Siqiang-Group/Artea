@@ -41,6 +41,7 @@ template <typename RouterTraitsT, typename EntryT> class LinearCandidateQueue;
 template <typename RouterTraitsT, typename EntryT> class FHCandidateQueue;
 template <typename RouterTraitsT, typename EntryT> class BoostCandidateQueue;
 template <typename RouterTraitsT, VisitedTable VisitedTableT> class VisitedTablePool;
+template <typename RouterTraitsT> class CandidateSampleUtils;
 
 /** @brief Traits for routing to queried vectors */
 template <typename ComputerTraitsT, typename IndexTraitsT, bool IntraQueryParallel = false>
@@ -103,6 +104,9 @@ struct RouterTraits : virtual public ComputerTraitsT, virtual public IndexTraits
 
     /** @brief Type for visited table pool (default uses thread_local_bitmap_t). */
     using visited_table_pool_t = VisitedTablePool<router_traits_t, visited_table_t>;
+
+    /** @brief Stateless apex-bucket samplers shared by all routers. */
+    using candidate_sample_utils_t = CandidateSampleUtils<router_traits_t>;
 
     /** @brief Router + graph types grouped by mode. Inherits graph types from IndexTraits. */
     struct compact : IndexTraitsT::compact {

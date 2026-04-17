@@ -746,7 +746,7 @@ TEST_F(HierarchicalGraphTest, LayerRefiningGraphRoundTrip) {
         refiner_utils_t::writeback_layer_from_refining_graph(
             *_graph, *refining_graph, h);
 
-        // Re-read the slot directly from hg.
+        // Re-read the slot directly from hier_graph.
         const auto written = _graph->fetch_layer_nbrs(pivot_global, h);
         ASSERT_GE(written.size(), 1u);
         EXPECT_FALSE(written[0].is_invalid());

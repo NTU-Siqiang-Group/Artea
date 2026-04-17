@@ -15,18 +15,16 @@
 /*
  * @FilePath: /Artea/include/artea/cpu/router/compact/single_layer_router.hpp
  * @Author: Chandler (Weitang Ye) <weitang.ye@ntu.edu.sg>
- * @Description: Single-level atom for beam-searching within one level of a
- *               compact::HierarchicalGraph. Mirrors dynamic::SingleLayerRouter
- *               but iterates plain vertex_id_t arrays (no nbr_t, no locks,
- *               no memory fences: the compact graph is frozen post-compaction).
+ * @Description: Single-level beam/greedy atom over compact::HierarchicalGraph.
+ *               Mirrors dynamic::SingleLayerRouter but iterates plain
+ *               vertex_id_t arrays (frozen post-compaction, no locks /
+ *               fences). Apex sampling lives in CandidateSampleUtils.
  */
 
 #pragma once
 
-#include <algorithm>
 #include <cstddef>
 #include <cstdint>
-#include <random>
 #include <span>
 #include <utility>
 
@@ -38,23 +36,9 @@ namespace compact {
 
 /**
  * @brief Single-level beam-search primitive for
- *        @c compact::HierarchicalGraph.
- *
- * Holds only what the atom needs: the base-vector array and the distance
- * functor. Each call takes the graph as a template-parameterized argument,
- * so the same router instance can service many graphs.
- *
- * Exposes two primitives:
- *   - @c greedy_search — best-improvement walk on one level (no queue),
- *     used by @c HierarchicalGraphRouter for queue-free upper-layer
- *     descent.
- *   - @c beam_search   — extend a pre-seeded candidate queue by running
- *     the standard beam-search loop on one level of the graph.
- *
- * The compact router seeds searches from the compactor-precomputed
- * @c entry_point_vid instead of any sampling API, so no sampling
- * primitive is exposed here (unlike @c dynamic::SingleLayerRouter,
- * which still needs it for the insertion hot path).
+ *        @c compact::HierarchicalGraph. Exposes @c beam_search and
+ *        @c greedy_search only; apex sampling is provided by
+ *        @c CandidateSampleUtils.
  *
  * @tparam RouterTraitsT The router traits type.
  */
@@ -83,42 +67,47 @@ public:
         _dist_func(dist_func) {}
 
     /**
-     * @brief Greedy best-improvement walk on one level of @p hg. Maintains
-     *        no queue: at each step the single (vid, distance) cursor is
-     *        replaced by the closest neighbor if and only if that neighbor
-     *        is strictly closer to the query than the cursor itself; the
-     *        loop terminates when no neighbor improves on the cursor.
+     * @brief Greedy best-improvement walk on one level of @p hier_graph.
+     *        Uses @p visited to skip distance computation for vids that
+     *        were already evaluated earlier on the same walk. The caller
+     *        owns the clear/reset policy; this method only seeds
+     *        @p visited with @p seed_vid before the walk.
      *
      * Intended for the upper-layer descent portion of a hierarchical query
-     * when the caller wants HNSW-style cheap greedy routing. The result
+     * when the caller wants HNSW-style cheap greedy routing; the result
      * feeds the L0 beam search as a single seed.
      *
-     * @param query_vec  Query vector.
-     * @param hg         Hierarchical graph.
-     * @param level_id   Layer to walk on.
-     * @param seed_vid   Starting vid (must participate at @p level_id).
-     * @param seed_dist  Precomputed distance from @p query_vec to
-     *                   @p seed_vid.
+     * @param query_vec   Query vector.
+     * @param hier_graph  Hierarchical graph.
+     * @param level_id    Layer to walk on.
+     * @param seed_vid    Starting vid (must participate at @p level_id).
+     * @param seed_dist   Precomputed distance from @p query_vec to @p seed_vid.
+     * @param visited     Visited table (seeded on entry; caller resets).
      * @return @c (best_vid, best_dist) reached at this level.
      */
     template <typename HierarchicalGraphT>
+    __attribute__((always_inline))
     auto greedy_search(
         const vec_ele_t*          query_vec,
-        const HierarchicalGraphT& hg,
+        const HierarchicalGraphT& hier_graph,
         const layer_id_t          level_id,
         vertex_id_t               seed_vid,
-        distance_t                seed_dist
+        distance_t                seed_dist,
+        visited_table_t&          visited
     ) const -> std::pair<vertex_id_t, distance_t> {
+        visited.set(seed_vid);
+
         vertex_id_t best_vid  = seed_vid;
         distance_t  best_dist = seed_dist;
         while (true) {
-            const auto nbrs_span = hg.fetch_layer_nbrs(best_vid, level_id);
+            const auto nbrs_span = hier_graph.fetch_layer_nbrs(best_vid, level_id);
             vertex_id_t next_vid  = best_vid;
             distance_t  next_dist = best_dist;
             // Walk the span until the first sentinel. Avoids the
             // double-scan of calling num_valid_nbrs() first.
             for (const vertex_id_t nbr_vid : nbrs_span) {
                 if (nbr_vid == invalid_vertex_id) break;
+                if (visited.test_and_set(nbr_vid)) continue;
                 const distance_t nbr_dist = _dist_func(query_vec, _vecs_data.get(nbr_vid));
                 if (nbr_dist < next_dist) {
                     next_dist = nbr_dist;
@@ -133,18 +122,17 @@ public:
     }
 
     /**
-     * @brief Beam search on one level of @p hg, operating in-place on a
-     *        pre-seeded candidate queue.
-     *
-     *   1. Clears @p visited.
-     *   2. Marks every seed already in the queue as visited.
-     *   3. Runs the standard beam-search loop until
-     *      @c candidate_queue.should_terminate().
+     * @brief Beam search on one level of @p hier_graph, operating in-place on a
+     *        pre-seeded candidate queue. Does NOT clear @p visited —
+     *        caller owns clear lifecycle so visited can be shared
+     *        across hierarchical layers. Only marks the current queue
+     *        seeds, which is idempotent for carry-over seeds.
      */
     template <typename HierarchicalGraphT>
+    __attribute__((always_inline))
     auto beam_search(
         const vec_ele_t*          query_vec,
-        const HierarchicalGraphT& hg,
+        const HierarchicalGraphT& hier_graph,
         const layer_id_t          level_id,
         std_candidate_queue_t&    candidate_queue,
         visited_table_t&          visited
@@ -158,7 +146,6 @@ public:
         candidate_queue.reset_exploration();
         if (candidate_queue.empty()) return;
 
-        visited.clear();
         for (const auto& seed : candidate_queue) {
             visited.set(seed.get_vid());
         }
@@ -169,7 +156,7 @@ public:
             if (current.is_invalid()) break;
 
             const vertex_id_t cur_vid = current.get_vid();
-            const auto nbrs_span = hg.fetch_layer_nbrs(cur_vid, level_id);
+            const auto nbrs_span = hier_graph.fetch_layer_nbrs(cur_vid, level_id);
 
             // Walk the span until the first sentinel. Avoids the
             // double-scan of calling num_valid_nbrs() first.
@@ -182,60 +169,7 @@ public:
         }
     }
 
-    /**
-     * @brief Seed a candidate queue with random entries drawn from the
-     *        top-level apex bucket of @p hg. Mirrors
-     *        @c dynamic::SingleLayerRouter::sample_entries.
-     */
-    template <typename HierarchicalGraphT>
-    auto sample_entries(
-        const HierarchicalGraphT& hg,
-        const vec_ele_t*          query_vec,
-        std_candidate_queue_t&    candidate_queue
-    ) const -> void {
-        const layer_id_t top_level_id = hg.top_occupied_level_id();
-        const auto bucket = hg.get_vids_with_highest_level(top_level_id);
-        if (bucket.empty()) return;
-
-        const std::size_t pool_size = bucket.size();
-        const std::size_t queue_cap = candidate_queue.capacity();
-        const std::size_t start  = _draw_random_index(pool_size);
-        const std::size_t stride = (pool_size <= queue_cap) ? 1 : (pool_size / queue_cap);
-        const std::size_t take   = std::min(queue_cap, pool_size);
-
-        for (std::size_t i = 0; i < take; ++i) {
-            const std::size_t random_idx = (start + i * stride) % pool_size;
-            const vertex_id_t sampled_vid = bucket[random_idx];
-            const distance_t  sampled_dist = _dist_func(query_vec, _vecs_data.get(sampled_vid));
-            candidate_queue.try_push(sampled_vid, sampled_dist);
-        }
-    }
-
-    /**
-     * @brief Draw a single (vid, distance) seed uniformly at random from
-     *        the top-level apex bucket. Mirrors
-     *        @c dynamic::SingleLayerRouter::sample_single_entry.
-     */
-    template <typename HierarchicalGraphT>
-    auto sample_single_entry(
-        const HierarchicalGraphT& hg,
-        const vec_ele_t*          query_vec
-    ) const -> std::pair<vertex_id_t, distance_t> {
-        const layer_id_t top_level_id = hg.top_occupied_level_id();
-        const auto bucket = hg.get_vids_with_highest_level(top_level_id);
-        const std::size_t random_idx = _draw_random_index(bucket.size());
-        const vertex_id_t vid  = bucket[random_idx];
-        const distance_t  dist = _dist_func(query_vec, _vecs_data.get(vid));
-        return {vid, dist};
-    }
-
 private:
-    static auto _draw_random_index(const std::size_t upper_bound) -> std::size_t {
-        thread_local std::mt19937_64 rng(std::random_device{}());
-        std::uniform_int_distribution<std::size_t> dist(0, upper_bound - 1);
-        return dist(rng);
-    }
-
     const vector_array_t& _vecs_data;
     const dist_func_t&    _dist_func;
 

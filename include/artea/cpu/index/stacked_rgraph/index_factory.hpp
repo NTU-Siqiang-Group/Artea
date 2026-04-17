@@ -93,11 +93,14 @@ class IndexFactory {
         typename GraphFactoryTraitsT::dynamic::hierarchical_graph_t;
 
     using visited_table_t         = typename GraphFactoryTraitsT::visited_table_t;
+    using visited_table_pool_t    = typename GraphFactoryTraitsT::visited_table_pool_t;
     using candidate_entry_t       = typename GraphFactoryTraitsT::candidate_entry_t;
     using std_candidate_queue_t   = typename GraphFactoryTraitsT::std_candidate_queue_t;
     using knn_results_t           = typename GraphFactoryTraitsT::knn_results_t;
     using hg_router_t             =
         typename GraphFactoryTraitsT::dynamic::hierarchical_graph_router_t;
+    using candidate_sample_utils_t =
+        typename GraphFactoryTraitsT::candidate_sample_utils_t;
 
     static constexpr vertex_id_t invalid_vertex_id = GraphFactoryTraitsT::invalid_vertex_id;
     static constexpr distance_t  max_distance      = GraphFactoryTraitsT::max_distance;
@@ -164,17 +167,13 @@ public:
             /*topk=*/std::max(index.search_nn_qs(), index.select_nbrs_qs()),
             /*candidate_queue_size=*/index.select_nbrs_qs());
 
-        tbb::enumerable_thread_specific<visited_table_t> visited_pool([total_vecs]() {
-            return visited_table_t(static_cast<std::size_t>(total_vecs));
-        });
+        visited_table_pool_t visited_pool(total_vecs);
 
         const vertex_id_t serial_cutoff = first_new_vid + std::min<vertex_num_t>(startup_points, batch_size);
-        {   // serial insert phase
-            auto& visited = visited_pool.local();
-            for (vertex_id_t vid = first_new_vid; vid < serial_cutoff; ++vid) {
-                _insert_one(index, router, vid, dist_func,
-                            pruning_updater, visited, insert_on_L0);
-            }
+        for (vertex_id_t vid = first_new_vid; vid < serial_cutoff; ++vid) {
+            auto& visited = visited_pool.acquire();
+            _insert_one(index, router, vid, dist_func,
+                        pruning_updater, visited, insert_on_L0);
         }
         if (serial_cutoff == first_new_vid + batch_size) return;
 
@@ -182,8 +181,11 @@ public:
             tbb::blocked_range<vertex_id_t>(
                 serial_cutoff, first_new_vid + batch_size),
             [&](const tbb::blocked_range<vertex_id_t>& r) {
-                auto& visited = visited_pool.local();
                 for (vertex_id_t vid = r.begin(); vid != r.end(); ++vid) {
+                    // acquire() per-vertex: each insertion starts with a
+                    // fresh visited table, shared across its descent +
+                    // select phases.
+                    auto& visited = visited_pool.acquire();
                     _insert_one(index, router, vid, dist_func,
                                 pruning_updater, visited, insert_on_L0);
                 }
@@ -201,7 +203,7 @@ private:
         this_index_t&       index,
         const hg_router_t&  router,
         const vertex_id_t   new_vid,
-        const dist_func_t&  /*dist_func*/,
+        const dist_func_t&  dist_func,
         PruningUpdaterT&    pruning_updater,
         visited_table_t&    visited,
         const bool          insert_on_L0
@@ -232,23 +234,17 @@ private:
         // only participant is new_vid) — safely no-op inside
         // run_select_at_level (beam_search early-exits on empty queue,
         // yielding an empty pruned_results that Step D skips).
-        const std::size_t cache_size =
-            static_cast<std::size_t>(max_restrict_level) + 1;
-        std::vector<distance_t> min_dist_per_level(cache_size, max_distance);
-        std::vector<std::optional<std_candidate_queue_t>>
-            descent_queue_per_level(cache_size);
-        for (auto& slot : descent_queue_per_level) {
-            slot.emplace(search_nn_qs);
-        }
+        const std::size_t num_cached_queues = static_cast<std::size_t>(max_restrict_level) + 1;
+        std::vector<distance_t> min_dist_per_level(num_cached_queues, max_distance);
+        std::vector<std::optional<std_candidate_queue_t>> descent_queue_per_level(num_cached_queues);
+        for (auto& slot : descent_queue_per_level) { slot.emplace(search_nn_qs); }
 
         if (top_level_id != unassigned_highest_level_id && top_level_id >= 1) {
-            // Top-layer seeds (one-shot sample from bucket[top]).
             std_candidate_queue_t cur_queue(search_nn_qs);
-            router.sample_entries(index, new_vec, cur_queue);
+            candidate_sample_utils_t::sample_single_entry(
+                index.get_vecs_storage(), dist_func, index, new_vec, cur_queue);
 
-            for (layer_id_t cur_level_id = top_level_id;
-                 cur_level_id >= 1; --cur_level_id)
-            {
+            for (layer_id_t cur_level_id = top_level_id; cur_level_id >= 1; --cur_level_id) {
                 router.beam_search(
                     new_vec, index, cur_level_id, cur_queue, visited);
 
