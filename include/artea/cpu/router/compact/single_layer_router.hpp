@@ -29,6 +29,8 @@
 #include <utility>
 
 #include <artea/common/logger.hpp>
+#include <artea/cpu/router/detail/beam_loop.hpp>
+#include <artea/cpu/router/detail/compact_layer_range.hpp>
 
 namespace artea {
 namespace cpu {
@@ -96,29 +98,10 @@ public:
         visited_table_t&          visited
     ) const -> std::pair<vertex_id_t, distance_t> {
         visited.set(seed_vid);
-
-        vertex_id_t best_vid  = seed_vid;
-        distance_t  best_dist = seed_dist;
-        while (true) {
-            const auto nbrs_span = hier_graph.fetch_layer_nbrs(best_vid, level_id);
-            vertex_id_t next_vid  = best_vid;
-            distance_t  next_dist = best_dist;
-            // Walk the span until the first sentinel. Avoids the
-            // double-scan of calling num_valid_nbrs() first.
-            for (const vertex_id_t nbr_vid : nbrs_span) {
-                if (nbr_vid == invalid_vertex_id) break;
-                if (visited.test_and_set(nbr_vid)) continue;
-                const distance_t nbr_dist = _dist_func(query_vec, _vecs_data.get(nbr_vid));
-                if (nbr_dist < next_dist) {
-                    next_dist = nbr_dist;
-                    next_vid  = nbr_vid;
-                }
-            }
-            if (next_vid == best_vid) break;  // local optimum on this level
-            best_vid  = next_vid;
-            best_dist = next_dist;
-        }
-        return {best_vid, best_dist};
+        const detail::CompactLayerRange<HierarchicalGraphT> nbrs_range(hier_graph, level_id);
+        return detail::greedy_loop_body<RouterTraitsT>(
+            query_vec, nbrs_range, seed_vid, seed_dist,
+            visited, _dist_func, _vecs_data);
     }
 
     /**
@@ -150,23 +133,10 @@ public:
             visited.set(seed.get_vid());
         }
 
-        while (!candidate_queue.empty()) {
-            if (candidate_queue.should_terminate()) break;
-            const candidate_entry_t current = candidate_queue.pop_best_unexplored_entry();
-            if (current.is_invalid()) break;
-
-            const vertex_id_t cur_vid = current.get_vid();
-            const auto nbrs_span = hier_graph.fetch_layer_nbrs(cur_vid, level_id);
-
-            // Walk the span until the first sentinel. Avoids the
-            // double-scan of calling num_valid_nbrs() first.
-            for (const vertex_id_t nbr_vid : nbrs_span) {
-                if (nbr_vid == invalid_vertex_id) break;
-                if (visited.test_and_set(nbr_vid)) continue;
-                const distance_t dist = _dist_func(query_vec, _vecs_data.get(nbr_vid));
-                candidate_queue.try_push(nbr_vid, dist);
-            }
-        }
+        const detail::CompactLayerRange<HierarchicalGraphT> nbrs_range(hier_graph, level_id);
+        detail::beam_loop_body<RouterTraitsT>(
+            query_vec, nbrs_range, candidate_queue,
+            visited, _dist_func, _vecs_data);
     }
 
 private:

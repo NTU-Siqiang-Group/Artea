@@ -46,14 +46,15 @@ namespace detail {
  * and pushes them into the queue. Terminates when the queue's
  * @c should_terminate() trips or the unexplored heap drains.
  */
-template <typename RouterTraitsT, NeighborRange NeighborRangeT>
-    requires CandidateQueue<typename RouterTraitsT::std_candidate_queue_t> &&
-             VisitedTable  <typename RouterTraitsT::visited_table_t>
+template <typename RouterTraitsT,
+          NeighborRange   NeighborRangeT,
+          CandidateQueue  CandidateQueueT>
+    requires VisitedTable<typename RouterTraitsT::visited_table_t>
 __attribute__((always_inline))
 inline auto beam_loop_body(
     const typename RouterTraitsT::vec_ele_t*           query_vec,
     const NeighborRangeT&                              nbrs_range,
-    typename RouterTraitsT::std_candidate_queue_t&     candidate_queue,
+    CandidateQueueT&                                   candidate_queue,
     typename RouterTraitsT::visited_table_t&           visited,
     const typename RouterTraitsT::dist_func_t&         dist_func,
     const typename RouterTraitsT::vector_array_t&      vecs_data

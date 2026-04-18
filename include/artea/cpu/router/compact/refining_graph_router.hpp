@@ -32,6 +32,8 @@
 #include <artea/cpu/utils/parallel.hpp>
 #include <artea/cpu/router/data_structures/candidate_queue_concept.hpp>
 #include <artea/cpu/router/visited_table_concept.hpp>
+#include <artea/cpu/router/detail/beam_loop.hpp>
+#include <artea/cpu/router/detail/compact_flat_range.hpp>
 
 namespace artea {
 namespace cpu {
@@ -196,32 +198,11 @@ private:
         candidate_queue.try_push(entry_point, entry_dist);
         visited_table.set(entry_point);
 
-        // Beam search loop
-        while (!candidate_queue.empty()) {
-            // Termination check: if current vertex distance > lower bound and queue is full
-            if (candidate_queue.should_terminate()) { break; }
-            // Get the best unexplored candidate
-            auto [current_id, current_dist] = candidate_queue.pop_best_unexplored();
-            // Check for invalid entry or early termination
-            if (current_id == RouterTraitsT::invalid_vertex_id) { break; }
-            // Explore neighbors of current vertex
-            const vertex_id_t* neighbors = _compact_refining_graph.get_neighbors(current_id);
-            const vertex_num_t nbr_count = _compact_refining_graph.get_extracted_nbr_size();
-
-            for (vertex_num_t i = 0; i < nbr_count; ++i) {
-                const vertex_id_t nbr_id = neighbors[i];
-                // Stop at invalid suffix neighbors
-                if (nbr_id == RouterTraitsT::invalid_vertex_id) { break; }
-                // Skip already visited neighbors
-                if (visited_table.test(nbr_id)) { continue; }
-                // Mark as visited
-                visited_table.set(nbr_id);
-                // Compute distance to neighbor
-                const distance_t nbr_dist = this->_dist_func(query_vec, this->_vecs_data.get(nbr_id));
-                // Try to add neighbor to candidate queue
-                candidate_queue.try_push(nbr_id, nbr_dist);
-            }
-        }
+        const detail::CompactFlatRange<typename RouterTraitsT::compact::refining_graph_t>
+            nbrs_range(_compact_refining_graph);
+        detail::beam_loop_body<RouterTraitsT>(
+            query_vec, nbrs_range, candidate_queue,
+            visited_table, this->_dist_func, this->_vecs_data);
 
         // Extract top-k result IDs from candidate queue
         return candidate_queue.extract_results(this->_topk);
@@ -247,6 +228,8 @@ private:
         candidate_queue_t candidate_queue(queue_capacity);
 
         // Initialize candidate queue with random vertices
+        // (random_initialize → seeded_initialize already marks every seed
+        // as visited, so the beam loop body can start without re-marking.)
         candidate_queue.random_initialize(
             random_seq,
             this->_dist_func,
@@ -255,36 +238,11 @@ private:
             visited_table
         );
 
-        // Beam search loop
-        while (!candidate_queue.empty()) {
-            // Termination check: if current vertex distance > lower bound and queue is full
-            if (candidate_queue.should_terminate()) { break; }
-            // Get the best unexplored candidate
-            auto [current_id, current_dist] = candidate_queue.pop_best_unexplored();
-            // Check for invalid entry or early termination
-            if (current_id == RouterTraitsT::invalid_vertex_id) { break; }
-
-            // Mark as visited
-            visited_table.set(current_id);
-
-            // Explore neighbors of current vertex
-            const vertex_id_t* neighbors = _compact_refining_graph.get_neighbors(current_id);
-            const vertex_num_t nbr_count = _compact_refining_graph.get_extracted_nbr_size();
-
-            for (vertex_num_t i = 0; i < nbr_count; ++i) {
-                const vertex_id_t nbr_id = neighbors[i];
-                // Stop at invalid suffix neighbors
-                if (nbr_id == RouterTraitsT::invalid_vertex_id) { break; }
-                // Skip already visited neighbors
-                if (visited_table.test(nbr_id)) { continue; }
-                // Mark as visited
-                visited_table.set(nbr_id);
-                // Compute distance to neighbor
-                const distance_t nbr_dist = this->_dist_func(query_vec, this->_vecs_data.get(nbr_id));
-                // Try to add neighbor to candidate queue
-                candidate_queue.try_push(nbr_id, nbr_dist);
-            }
-        }
+        const detail::CompactFlatRange<typename RouterTraitsT::compact::refining_graph_t>
+            nbrs_range(_compact_refining_graph);
+        detail::beam_loop_body<RouterTraitsT>(
+            query_vec, nbrs_range, candidate_queue,
+            visited_table, this->_dist_func, this->_vecs_data);
 
         // Extract top-k result IDs from candidate queue
         return candidate_queue.extract_results(this->_topk);

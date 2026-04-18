@@ -59,6 +59,10 @@ namespace stacked_rgraph {
 template <typename IndexTraitsT>
 class IndexStructure {
 
+public:
+    // Public so the dynamic_layer_range adapter (and any other code that
+    // treats IndexStructure as a hierarchical-graph forwarder) can read
+    // these typedefs without being a friend.
     using vertex_num_t         = typename IndexTraitsT::vertex_num_t;
     using vertex_id_t          = typename IndexTraitsT::vertex_id_t;
     using layer_num_t          = typename IndexTraitsT::layer_num_t;
@@ -73,7 +77,7 @@ class IndexStructure {
 
     using hierarchical_graph_t = typename IndexTraitsT::dynamic::hierarchical_graph_t;
 
-public:
+
     static constexpr layer_id_t unassigned_highest_level_id =
         hierarchical_graph_t::unassigned_highest_level_id;
 

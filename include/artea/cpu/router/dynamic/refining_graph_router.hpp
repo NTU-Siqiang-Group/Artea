@@ -30,6 +30,8 @@
 #include <artea/cpu/utils/parallel.hpp>
 #include <artea/cpu/router/data_structures/candidate_queue_concept.hpp>
 #include <artea/cpu/router/visited_table_concept.hpp>
+#include <artea/cpu/router/detail/beam_loop.hpp>
+#include <artea/cpu/router/detail/dynamic_flat_range.hpp>
 
 namespace artea {
 namespace cpu {
@@ -162,22 +164,11 @@ private:
         candidate_queue.try_push(entry_point, entry_dist);
         visited_table.set(entry_point);
 
-        while (!candidate_queue.empty()) {
-            if (candidate_queue.should_terminate()) { break; }
-            auto [current_id, current_dist] = candidate_queue.pop_best_unexplored();
-            if (current_id == RouterTraitsT::invalid_vertex_id) { break; }
-
-            const nbr_arr_t& nbrs = _refining_graph.fetch_nbrs(current_id);
-            const vertex_num_t nbr_limit = std::min(static_cast<vertex_num_t>(nbrs.size()), _extracted_nbr_size);
-            for (vertex_num_t i = 0; i < nbr_limit; ++i) {
-                const vertex_id_t nbr_id = nbrs[i].get_vid();
-                if (nbr_id == RouterTraitsT::invalid_vertex_id) { break; }
-                if (visited_table.test(nbr_id)) { continue; }
-                visited_table.set(nbr_id);
-                const distance_t nbr_dist = this->_dist_func(query_vec, this->_vecs_data.get(nbr_id));
-                candidate_queue.try_push(nbr_id, nbr_dist);
-            }
-        }
+        const detail::DynamicFlatRange<refining_graph_t>
+            nbrs_range(_refining_graph, _extracted_nbr_size);
+        detail::beam_loop_body<RouterTraitsT>(
+            query_vec, nbrs_range, candidate_queue,
+            visited_table, this->_dist_func, this->_vecs_data);
 
         return candidate_queue.extract_results(this->_topk);
     }
@@ -199,33 +190,23 @@ private:
         const vertex_num_t queue_capacity = std::max(this->_topk, _candidate_queue_size);
         candidate_queue_t candidate_queue(queue_capacity);
 
+        // Seeding loop is intentionally uncapped (walks full seed_nbrs);
+        // the per-step cap only applies to neighbor expansion below.
         for (vertex_num_t i = 0;
              i < static_cast<vertex_num_t>(seed_nbrs.size());
              ++i)
         {
             const vertex_id_t seed_vid = seed_nbrs[i].get_vid();
             if (seed_vid == RouterTraitsT::invalid_vertex_id) break;
-            if (visited_table.test(seed_vid)) continue;
-            visited_table.set(seed_vid);
+            if (visited_table.test_and_set(seed_vid)) continue;
             candidate_queue.try_push(seed_vid, seed_nbrs[i].get_distance());
         }
 
-        while (!candidate_queue.empty()) {
-            if (candidate_queue.should_terminate()) { break; }
-            auto [current_id, current_dist] = candidate_queue.pop_best_unexplored();
-            if (current_id == RouterTraitsT::invalid_vertex_id) { break; }
-
-            const nbr_arr_t& nbrs = _refining_graph.fetch_nbrs(current_id);
-            const vertex_num_t nbr_limit = std::min(static_cast<vertex_num_t>(nbrs.size()), _extracted_nbr_size);
-            for (vertex_num_t i = 0; i < nbr_limit; ++i) {
-                const vertex_id_t nbr_id = nbrs[i].get_vid();
-                if (nbr_id == RouterTraitsT::invalid_vertex_id) { break; }
-                if (visited_table.test(nbr_id)) { continue; }
-                visited_table.set(nbr_id);
-                const distance_t nbr_dist = this->_dist_func(query_vec, this->_vecs_data.get(nbr_id));
-                candidate_queue.try_push(nbr_id, nbr_dist);
-            }
-        }
+        const detail::DynamicFlatRange<refining_graph_t>
+            nbrs_range(_refining_graph, _extracted_nbr_size);
+        detail::beam_loop_body<RouterTraitsT>(
+            query_vec, nbrs_range, candidate_queue,
+            visited_table, this->_dist_func, this->_vecs_data);
 
         return candidate_queue.extract_results(this->_topk);
     }
