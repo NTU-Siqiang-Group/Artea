@@ -29,7 +29,9 @@ namespace dynamic {
 template <typename IndexTraitsT>
 class RefiningGraph {
 
-protected:
+public:
+    // Public so router-side adapters can read nbr_t / nbr_arr_t / etc.
+    // without re-deriving them from IndexTraits.
     using vertex_num_t = typename IndexTraitsT::vertex_num_t;
     using vertex_id_t = typename IndexTraitsT::vertex_id_t;
     using distance_t = typename IndexTraitsT::distance_t;
@@ -38,7 +40,6 @@ protected:
     using vector_array_t = typename IndexTraitsT::vector_array_t;
     using layer_config_t = typename IndexTraitsT::layer_config_t;
 
-public:
     /**
      * @brief Construct a new Descent Graph object.
      * @param vecs_data Reference to the vector data for this layer.

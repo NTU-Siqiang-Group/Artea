@@ -22,13 +22,21 @@ namespace compact {
 template <typename IndexTraitsT>
 class RefiningGraph {
 
+public:
+    // Public so router-side adapters can read these typedefs without
+    // re-deriving them from IndexTraits.
     using vertex_num_t = typename IndexTraitsT::vertex_num_t;
     using vertex_id_t = typename IndexTraitsT::vertex_id_t;
     using distance_t = typename IndexTraitsT::distance_t;
     using vector_array_t = typename IndexTraitsT::vector_array_t;
     using csr_vids_t = typename IndexTraitsT::csr_vids_t;
 
-public:
+    /** @brief Sentinel value used to terminate neighbor lists. Mirrors
+     *         the constant exposed by @c compact::HierarchicalGraph so
+     *         router adapters can stop iteration without consulting
+     *         IndexTraits separately. */
+    static constexpr vertex_id_t invalid_vertex_id = IndexTraitsT::invalid_vertex_id;
+
     /**
      * @brief Construct a new Flat Search Graph object.
      * @param vecs_data Reference to the vector data for this graph.

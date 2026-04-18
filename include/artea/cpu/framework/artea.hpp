@@ -84,6 +84,12 @@
 #include <artea/cpu/router/visited_table_concept.hpp>
 #include <artea/cpu/router/data_structures/visited_table_pool.hpp>
 #include <artea/cpu/router/candidate_sample_utils.hpp>
+#include <artea/cpu/router/neighbor_range_concept.hpp>
+#include <artea/cpu/router/detail/beam_loop.hpp>
+#include <artea/cpu/router/detail/compact_layer_range.hpp>
+#include <artea/cpu/router/detail/dynamic_layer_range.hpp>
+#include <artea/cpu/router/detail/compact_flat_range.hpp>
+#include <artea/cpu/router/detail/dynamic_flat_range.hpp>
 #include <artea/cpu/router/data_structures/std_candidate_queue.hpp>
 #include <artea/cpu/router/data_structures/fh_candidate_queue.hpp>
 #include <artea/cpu/router/data_structures/linear_candidate_queue.hpp>

@@ -60,11 +60,15 @@ namespace compact {
 template <typename IndexTraitsT>
 class HierarchicalGraph {
 
+public:
+    // Public so router-side adapters can read these typedefs without
+    // re-deriving them from IndexTraits.
     using vertex_num_t = typename IndexTraitsT::vertex_num_t;
     using vertex_id_t  = typename IndexTraitsT::vertex_id_t;
     using layer_num_t  = typename IndexTraitsT::layer_num_t;
     using layer_id_t   = typename IndexTraitsT::layer_id_t;
 
+private:
     using vid_arena_container_t = cache_aligned_container_t<vertex_id_t>;
 
 public:
