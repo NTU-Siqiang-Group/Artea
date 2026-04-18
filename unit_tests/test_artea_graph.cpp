@@ -382,29 +382,32 @@ TEST_F(ArteaGraphTest, SearchRecallAndThroughput) {
         const uint32_t effective_queue_size =
             std::max<uint32_t>(queue_size, topk);
 
-        compact::hierarchical_graph_router_t s_router(
+        hierarchical_graph_router_t s_router(
             base_vecs, dist_func,
             /*topk=*/topk,
             /*candidate_queue_size=*/effective_queue_size);
         s_router.initialize();
 
-        dynamic::hierarchical_graph_router_t d_router(
+        hierarchical_graph_router_t d_router(
             base_vecs, dist_func,
             /*topk=*/topk,
             /*candidate_queue_size=*/effective_queue_size);
         d_router.initialize();
 
-        // --- Static artea: compact hier_graph, greedy-upper + beam-L0 ---
+        // --- Static artea: compact hier_graph, greedy-upper + beam-L0
+        //     (RandomSeeding=false uses compact_hg.entry_point_vid()) ---
         auto [s_avg_us, s_recall, s_last] = time_batch([&]() {
             return s_router.template batch_query</*RandomSeeding=*/false, /*UpperLevelBeamSearch=*/false>(
                 query_vecs, compact_hg);
         });
         ASSERT_EQ(s_last.size(), static_cast<std::size_t>(num_queries) * topk);
 
-        // --- Dynamic artea: dynamic hier_graph, greedy-upper + beam-L0 ---
+        // --- Dynamic artea: dynamic hier_graph, greedy-upper + beam-L0
+        //     (dynamic graphs auto-fall-back to sample_single_entry
+        //      since they have no precomputed entry point) ---
         auto [d_avg_us, d_recall, d_last] = time_batch(
             [&]() {
-                return d_router.template batch_query</*UpperLevelBeamSearch=*/false>(
+                return d_router.template batch_query</*RandomSeeding=*/false, /*UpperLevelBeamSearch=*/false>(
                     query_vecs, dyn_hg);
             });
         ASSERT_EQ(d_last.size(),

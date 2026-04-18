@@ -13,15 +13,15 @@
 // limitations under the License.
 
 /*
- * @FilePath: /Artea/include/artea/cpu/router/compact/hierarchical_graph_router.hpp
+ * @FilePath: /Artea/include/artea/cpu/router/hierarchical_graph_router.hpp
  * @Author: Chandler (Weitang Ye) <weitang.ye@ntu.edu.sg>
- * @Description: Multi-level query router over compact::HierarchicalGraph.
- *               Composes a compact::SingleLayerRouter for the per-level
- *               atom; cross-level composition is a straight top-down
- *               descent (no inter-layer candidate translation because
- *               every vertex has one global vid that is valid at every
- *               level it participates in). Exposes query / batch_query
- *               for the read-only query path.
+ * @Description: Unified multi-level router. Graph-storage-agnostic at the
+ *               class level: the graph type enters as a per-method
+ *               template parameter, and the right NeighborRange adapter
+ *               is selected via @c detail::make_layer_range based on the
+ *               graph's @c is_compacted flag. Replaces the per-mode
+ *               compact::HierarchicalGraphRouter and
+ *               dynamic::HierarchicalGraphRouter.
  */
 
 #pragma once
@@ -29,29 +29,33 @@
 #include <algorithm>
 #include <cstddef>
 #include <cstdint>
+#include <tuple>
+#include <utility>
 #include <vector>
 
 #include <tbb/blocked_range.h>
 #include <tbb/parallel_for.h>
 
 #include <artea/common/logger.hpp>
-#include <artea/cpu/router/compact/single_layer_router.hpp>
+#include <artea/cpu/router/detail/make_layer_range.hpp>
+#include <artea/cpu/router/single_layer_router.hpp>
 #include <artea/cpu/utils/parallel.hpp>
 
 namespace artea {
 namespace cpu {
-namespace compact {
 
 /**
- * @brief Multi-level query-only router over @c compact::HierarchicalGraph.
+ * @brief Multi-level proximity-graph router. Composes a
+ *        @c SingleLayerRouter for the per-level atom; cross-level
+ *        composition is a straight top-down descent (no inter-layer
+ *        candidate translation because every vertex has one global vid
+ *        that is valid at every level it participates in).
  *
- * Exposes:
- *   - @c query(query_vec, hier_graph) — top-down beam search, returns top-k.
- *   - @c batch_query(query_vecs, hier_graph) — parallel version via TBB.
- *
- * Because compact::HierarchicalGraph is read-only post-compaction there
- * is no build-time passthrough (unlike the dynamic counterpart used by
- * @c stacked_rgraph::IndexFactory).
+ * Provides both:
+ *   - **Build-time passthrough** — @c beam_search(query, graph, level_id,
+ *     queue, visited) used by @c stacked_rgraph::IndexFactory on the
+ *     insertion hot path.
+ *   - **Query path** — @c query / @c batch_query / @c query_l0_only.
  *
  * @tparam RouterTraitsT The router traits type.
  */
@@ -59,39 +63,29 @@ template <typename RouterTraitsT>
 class HierarchicalGraphRouter :
     public RouterTraitsT::template vector_router_t<HierarchicalGraphRouter<RouterTraitsT>>
 {
-    using vertex_num_t            = typename RouterTraitsT::vertex_num_t;
-    using vertex_id_t             = typename RouterTraitsT::vertex_id_t;
-    using layer_id_t              = typename RouterTraitsT::layer_id_t;
-    using vec_ele_t               = typename RouterTraitsT::vec_ele_t;
-    using distance_t              = typename RouterTraitsT::distance_t;
-    using dist_func_t             = typename RouterTraitsT::dist_func_t;
-    using vector_array_t          = typename RouterTraitsT::vector_array_t;
-    using query_vecs_t            = typename RouterTraitsT::query_vecs_t;
-    using candidate_entry_t       = typename RouterTraitsT::candidate_entry_t;
-    using std_candidate_queue_t   = typename RouterTraitsT::std_candidate_queue_t;
-    using visited_table_t         = typename RouterTraitsT::visited_table_t;
-    using visited_table_pool_t    = typename RouterTraitsT::visited_table_pool_t;
-    using knn_results_t           = typename RouterTraitsT::knn_results_t;
-    using random_seq_t            = typename RouterTraitsT::random_seq_t;
+    using vertex_num_t             = typename RouterTraitsT::vertex_num_t;
+    using vertex_id_t              = typename RouterTraitsT::vertex_id_t;
+    using layer_id_t               = typename RouterTraitsT::layer_id_t;
+    using vec_ele_t                = typename RouterTraitsT::vec_ele_t;
+    using distance_t               = typename RouterTraitsT::distance_t;
+    using dist_func_t              = typename RouterTraitsT::dist_func_t;
+    using vector_array_t           = typename RouterTraitsT::vector_array_t;
+    using query_vecs_t             = typename RouterTraitsT::query_vecs_t;
+    using candidate_entry_t        = typename RouterTraitsT::candidate_entry_t;
+    using std_candidate_queue_t    = typename RouterTraitsT::std_candidate_queue_t;
+    using visited_table_t          = typename RouterTraitsT::visited_table_t;
+    using visited_table_pool_t     = typename RouterTraitsT::visited_table_pool_t;
+    using knn_results_t            = typename RouterTraitsT::knn_results_t;
+    using random_seq_t             = typename RouterTraitsT::random_seq_t;
     using candidate_sample_utils_t = typename RouterTraitsT::candidate_sample_utils_t;
-    using base_class_t            =
+    using base_class_t             =
         typename RouterTraitsT::template vector_router_t<HierarchicalGraphRouter<RouterTraitsT>>;
 
-    using single_layer_router_t   = SingleLayerRouter<RouterTraitsT>;
+    using single_layer_router_t    = SingleLayerRouter<RouterTraitsT>;
 
     static constexpr vertex_id_t invalid_vertex_id = RouterTraitsT::invalid_vertex_id;
 
 public:
-    /**
-     * @brief Construct a compact HierarchicalGraphRouter.
-     *
-     * @param base_vecs             Base dataset (indexed by vid).
-     * @param dist_func             Distance functor.
-     * @param topk                  Top-k returned by @c query and
-     *                              @c batch_query.
-     * @param candidate_queue_size  Candidate-queue capacity (should be
-     *                              >= topk).
-     */
     HierarchicalGraphRouter(
         const vector_array_t& base_vecs,
         const dist_func_t&    dist_func,
@@ -110,11 +104,35 @@ public:
         }
     }
 
-    /** @brief Warm up the visited-table pool and the random sequence
-     *         generator (lazy thread-local MKL streams). */
+    /** @brief Warm up the visited-table pool and (for query paths that
+     *         use random init) the random sequence generator. Cheap on
+     *         dynamic-only callers — they just never touch _random_seq. */
     auto initialize() -> void {
         _visited_table_pool.warmup();
         _warmup_random_seq();
+    }
+
+    // ================================================================
+    //   Build-time passthrough
+    // ================================================================
+
+    /** @brief Single-level beam search at @p level_id. Constructs the
+     *         right NeighborRange adapter for @p hier_graph and forwards
+     *         to the per-level atom. Used by
+     *         @c stacked_rgraph::IndexFactory on the insertion path. */
+    template <typename HierarchicalGraphT>
+    __attribute__((always_inline))
+    auto beam_search(
+        const vec_ele_t*          query_vec,
+        const HierarchicalGraphT& hier_graph,
+        const layer_id_t          level_id,
+        std_candidate_queue_t&    candidate_queue,
+        visited_table_t&          visited
+    ) const -> void {
+        _single_layer_router.beam_search(
+            query_vec,
+            detail::make_layer_range(hier_graph, level_id),
+            candidate_queue, visited);
     }
 
     // ================================================================
@@ -125,15 +143,19 @@ public:
      * @brief Top-down hierarchical search.
      *
      * @tparam RandomSeeding
-     *   - @c true (default): seed from a single random entry sampled
-     *     from the top-level apex bucket via @c sample_single_entry.
-     *   - @c false: seed from the compactor-precomputed
-     *     @c entry_point_vid.
+     *   - @c false (default): seed from the graph's precomputed
+     *     @c entry_point_vid (compact graphs). Dynamic graphs have no
+     *     precomputed entry point, so this falls back to
+     *     @c sample_single_entry automatically.
+     *   - @c true: always seed via @c sample_single_entry from the apex
+     *     bucket.
      *
      * @tparam UpperLevelBeamSearch
-     *   - @c true (default): beam search at every level with a
-     *     shared queue.
-     *   - @c false: HNSW-style greedy upper layers + beam at L0.
+     *   - @c false (default): HNSW-style cheap @c greedy_search on
+     *     levels @c top..1 with a single cursor, then @c beam_search at
+     *     L0 for the actual top-K result.
+     *   - @c true: shared-queue @c beam_search at every level from
+     *     @c top..0.
      */
     template <bool RandomSeeding = false, bool UpperLevelBeamSearch = false,
               typename HierarchicalGraphT>
@@ -142,26 +164,37 @@ public:
         const HierarchicalGraphT& hier_graph
     ) const -> knn_results_t {
         const layer_id_t top_level_id = hier_graph.top_occupied_level_id();
+        if (top_level_id == HierarchicalGraphT::unassigned_highest_level_id) {
+            return knn_results_t{};
+        }
+
         auto& visited = _visited_table_pool.acquire();
 
-        // ---- Seeding: pick one entry point ----
+        // ---- Pick the entry point ----
         vertex_id_t entry_vid;
         distance_t  entry_dist;
-        if constexpr (RandomSeeding) {
-            std::tie(entry_vid, entry_dist) = candidate_sample_utils_t::sample_single_entry(
-                    this->_vecs_data, this->_dist_func, hier_graph, query_vec);
-        } else {
+        if constexpr (!RandomSeeding && HierarchicalGraphT::is_compacted) {
             entry_vid  = hier_graph.entry_point_vid();
             entry_dist = this->_dist_func(query_vec, this->_vecs_data.get(entry_vid));
+        } else {
+            // Either RandomSeeding=true, or the graph is dynamic (no
+            // precomputed entry point) — sample one fresh from the apex.
+            std::tie(entry_vid, entry_dist) =
+                candidate_sample_utils_t::sample_single_entry(
+                    this->_vecs_data, this->_dist_func, hier_graph, query_vec);
         }
 
         // ---- Search phase ----
         if constexpr (UpperLevelBeamSearch) {
-            std_candidate_queue_t candidate_queue(static_cast<std::size_t>(_candidate_queue_size));
+            std_candidate_queue_t candidate_queue(
+                static_cast<std::size_t>(_candidate_queue_size));
             candidate_queue.try_push(entry_vid, entry_dist);
 
             for (layer_id_t cur_level_id = top_level_id; ; --cur_level_id) {
-                _single_layer_router.beam_search(query_vec, hier_graph, cur_level_id, candidate_queue, visited);
+                _single_layer_router.beam_search(
+                    query_vec,
+                    detail::make_layer_range(hier_graph, cur_level_id),
+                    candidate_queue, visited);
                 if (cur_level_id == 0) break;
                 // Reset visited between layers — each level walks a
                 // different neighborhood graph; cheap with VersionTagTable.
@@ -176,45 +209,55 @@ public:
         } else {
             vertex_id_t cursor_vid  = entry_vid;
             distance_t  cursor_dist = entry_dist;
-            // Clear after every greedy level (L1 included) so the next
-            // iteration / the L0 beam below always starts clean. The L0
+            // Clear after every greedy level (L1 included) so the L0
+            // beam below always starts with a clean visited. The L0
             // clear is mandatory: greedy tracks a single best cursor,
             // while L0 beam targets top-K; some L1-rejected vids could
-            // legitimately enter L0 top-K. O(1) with VersionTagTable.
-            for (layer_id_t cur_level_id = top_level_id; cur_level_id >= 1; --cur_level_id) {
-                std::tie(cursor_vid, cursor_dist) = _single_layer_router.greedy_search(
-                    query_vec, hier_graph, cur_level_id, cursor_vid, cursor_dist, visited);
+            // legitimately enter L0 top-K. O(1) per clear with
+            // VersionTagTable.
+            for (layer_id_t cur_level_id = top_level_id;
+                 cur_level_id >= 1;
+                 --cur_level_id)
+            {
+                std::tie(cursor_vid, cursor_dist) =
+                    _single_layer_router.greedy_search(
+                        query_vec,
+                        detail::make_layer_range(hier_graph, cur_level_id),
+                        cursor_vid, cursor_dist, visited);
                 visited.clear();
             }
-            // bottom level search
-            std_candidate_queue_t candidate_queue(static_cast<std::size_t>(_candidate_queue_size));
+
+            std_candidate_queue_t candidate_queue(
+                static_cast<std::size_t>(_candidate_queue_size));
             candidate_queue.try_push(cursor_vid, cursor_dist);
-            _single_layer_router.beam_search(query_vec, hier_graph, /*level_id=*/layer_id_t{0}, candidate_queue, visited);
+            _single_layer_router.beam_search(
+                query_vec,
+                detail::make_layer_range(hier_graph, layer_id_t{0}),
+                candidate_queue, visited);
 
             const std::size_t k = std::min<std::size_t>(
-                static_cast<std::size_t>(this->_topk), candidate_queue.get_result_size());
+                static_cast<std::size_t>(this->_topk),
+                candidate_queue.get_result_size());
             if (k == 0) return knn_results_t{};
             return candidate_queue.extract_results(k);
         }
     }
 
     /**
-     * @brief L0-only search baseline: skip the hierarchy entirely and
-     *        run a single beam search on the base layer.
-     *
-     * @tparam RandomSeeding
-     *   - @c true: seed the candidate queue from @c _candidate_queue_size
-     *     uniformly random vids in @c [0, N) via
-     *     @c candidate_queue.random_initialize. L0 contains every vid,
-     *     so this is a safe "truly random" entry distribution.
-     *   - @c false (default): seed from the single compactor-precomputed
-     *     @c entry_point_vid.
+     * @brief L0-only baseline: skip the hierarchy entirely and run a
+     *        single beam search on the base layer. Compact-only —
+     *        seeding requires either the precomputed @c entry_point_vid
+     *        or @c random_initialize on the candidate queue, neither of
+     *        which makes sense for the dynamic mid-build state.
      */
     template <bool RandomSeeding = false, typename HierarchicalGraphT>
     auto query_l0_only(
         const vec_ele_t*          query_vec,
         const HierarchicalGraphT& hier_graph
     ) const -> knn_results_t {
+        static_assert(HierarchicalGraphT::is_compacted,
+                      "query_l0_only is only defined for compact graphs.");
+
         auto& visited = _visited_table_pool.acquire();
 
         std_candidate_queue_t candidate_queue(
@@ -225,14 +268,15 @@ public:
                 _random_seq, this->_dist_func, query_vec,
                 this->_vecs_data, visited);
         } else {
-            const vertex_id_t entry_vid = hier_graph.entry_point_vid();
+            const vertex_id_t entry_vid  = hier_graph.entry_point_vid();
             const distance_t  entry_dist = this->_dist_func(
                 query_vec, this->_vecs_data.get(entry_vid));
             candidate_queue.try_push(entry_vid, entry_dist);
         }
 
         _single_layer_router.beam_search(
-            query_vec, hier_graph, /*level_id=*/layer_id_t{0},
+            query_vec,
+            detail::make_layer_range(hier_graph, layer_id_t{0}),
             candidate_queue, visited);
 
         const std::size_t k = std::min<std::size_t>(
@@ -244,9 +288,8 @@ public:
 
     /**
      * @brief Parallel batch queries via TBB. Each worker acquires its
-     *        own visited table from the pool. The
-     *        @p UpperLevelBeamSearch template switch is forwarded to
-     *        @c query verbatim.
+     *        own visited table from the pool. The template switches are
+     *        forwarded to @c query verbatim.
      */
     template <bool RandomSeeding = false, bool UpperLevelBeamSearch = false,
               typename HierarchicalGraphT>
@@ -265,7 +308,8 @@ public:
                 for (vertex_num_t i = r.begin(); i != r.end(); ++i) {
                     const vec_ele_t* q_vec = query_vecs.get(i);
                     auto topk_results =
-                        this->template query<RandomSeeding, UpperLevelBeamSearch>(q_vec, hier_graph);
+                        this->template query<RandomSeeding, UpperLevelBeamSearch>(
+                            q_vec, hier_graph);
                     const std::size_t n = topk_results.size();
                     std::copy(topk_results.begin(), topk_results.end(),
                               results.begin() + i * k);
@@ -280,15 +324,15 @@ public:
         return results;
     }
 
-    /**
-     * @brief Parallel batch form of @c query_l0_only. Same per-worker
-     *        visited-table pooling as @c batch_query.
-     */
+    /** @brief Parallel batch form of @c query_l0_only. Compact-only. */
     template <bool RandomSeeding = false, typename HierarchicalGraphT>
     auto batch_query_l0_only(
         const query_vecs_t&       query_vecs,
         const HierarchicalGraphT& hier_graph
     ) const -> knn_results_t {
+        static_assert(HierarchicalGraphT::is_compacted,
+                      "batch_query_l0_only is only defined for compact graphs.");
+
         const vertex_num_t num_queries = query_vecs.get_num_vecs();
         const uint32_t     k           = this->_topk;
 
@@ -316,11 +360,9 @@ public:
     }
 
 private:
-    /**
-     * @brief Trigger thread-local MKL stream creation for the random
-     *        sequence generator on every TBB worker, so the first real
-     *        query doesn't pay the init cost.
-     */
+    /** @brief Trigger thread-local MKL stream creation for the random
+     *         sequence generator on every TBB worker, so the first real
+     *         query doesn't pay the init cost. */
     __attribute__((always_inline))
     auto _warmup_random_seq() -> void {
         const int num_threads = tbb_max_num_threads();
@@ -340,6 +382,5 @@ private:
 
 };  // class HierarchicalGraphRouter
 
-}   // namespace compact
 }   // namespace cpu
 }   // namespace artea

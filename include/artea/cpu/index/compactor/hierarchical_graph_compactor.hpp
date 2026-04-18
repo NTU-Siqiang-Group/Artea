@@ -70,8 +70,7 @@ namespace cpu {
  *      computed via @c tbb::parallel_reduce; the vid closest to that
  *      centroid is stashed in the compact graph via
  *      @c set_entry_point_vid and consumed by
- *      @c compact::HierarchicalGraphRouter in place of the sampling
- *      seed path.
+ *      @c HierarchicalGraphRouter in place of the sampling seed path.
  *
  * @tparam IndexTraitsT The index traits type.
  */

@@ -30,11 +30,9 @@ namespace cpu {
 template <typename RouterTraitsT, typename DerivedClassT> class VectorRouter;
 template <typename RouterTraitsT> class BruteforceRouter;
 namespace compact { template <typename RouterTraitsT> class RefiningGraphRouter; }
-namespace compact { template <typename RouterTraitsT> class SingleLayerRouter; }
-namespace compact { template <typename RouterTraitsT> class HierarchicalGraphRouter; }
 namespace dynamic { template <typename RouterTraitsT> class RefiningGraphRouter; }
-namespace dynamic { template <typename RouterTraitsT> class SingleLayerRouter; }
-namespace dynamic { template <typename RouterTraitsT> class HierarchicalGraphRouter; }
+template <typename RouterTraitsT> class SingleLayerRouter;
+template <typename RouterTraitsT> class HierarchicalGraphRouter;
 template <typename RouterTraitsT> struct CandidateEntry;
 template <typename RouterTraitsT, typename EntryT> class StdCandidateQueue;
 template <typename RouterTraitsT, typename EntryT> class LinearCandidateQueue;
@@ -110,16 +108,29 @@ struct RouterTraits : virtual public ComputerTraitsT, virtual public IndexTraits
     /** @brief Stateless apex-bucket samplers shared by all routers. */
     using candidate_sample_utils_t = CandidateSampleUtils<router_traits_t>;
 
-    /** @brief Router + graph types grouped by mode. Inherits graph types from IndexTraits. */
+    /** @brief Unified single-level router. Graph-storage-agnostic at the
+     *         class level — the graph type enters as a per-method
+     *         template parameter. */
+    using single_layer_router_t = cpu::SingleLayerRouter<router_traits_t>;
+
+    /** @brief Unified multi-level router. Same graph-agnostic design. */
+    using hierarchical_graph_router_t =
+        cpu::HierarchicalGraphRouter<router_traits_t>;
+
+    /** @brief Router + graph types grouped by mode. Inherits graph types
+     *         from IndexTraits. The SLR / HG router aliases are
+     *         transitional — they point to the unified top-level
+     *         classes. RefiningGraphRouter is still mode-specialized
+     *         (PR4 will absorb it into SingleLayerRouter). */
     struct compact : IndexTraitsT::compact {
         using refining_graph_router_t     = cpu::compact::RefiningGraphRouter<router_traits_t>;
-        using single_layer_router_t       = cpu::compact::SingleLayerRouter<router_traits_t>;
-        using hierarchical_graph_router_t = cpu::compact::HierarchicalGraphRouter<router_traits_t>;
+        using single_layer_router_t       = cpu::SingleLayerRouter<router_traits_t>;
+        using hierarchical_graph_router_t = cpu::HierarchicalGraphRouter<router_traits_t>;
     };
     struct dynamic : IndexTraitsT::dynamic {
         using refining_graph_router_t     = cpu::dynamic::RefiningGraphRouter<router_traits_t>;
-        using single_layer_router_t       = cpu::dynamic::SingleLayerRouter<router_traits_t>;
-        using hierarchical_graph_router_t = cpu::dynamic::HierarchicalGraphRouter<router_traits_t>;
+        using single_layer_router_t       = cpu::SingleLayerRouter<router_traits_t>;
+        using hierarchical_graph_router_t = cpu::HierarchicalGraphRouter<router_traits_t>;
     };
 
     /** @brief Indicates whether to enable intra-query parallelism. */

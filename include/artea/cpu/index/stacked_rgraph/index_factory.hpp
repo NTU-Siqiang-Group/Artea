@@ -98,7 +98,7 @@ class IndexFactory {
     using std_candidate_queue_t   = typename GraphFactoryTraitsT::std_candidate_queue_t;
     using knn_results_t           = typename GraphFactoryTraitsT::knn_results_t;
     using hg_router_t             =
-        typename GraphFactoryTraitsT::dynamic::hierarchical_graph_router_t;
+        typename GraphFactoryTraitsT::hierarchical_graph_router_t;
     using candidate_sample_utils_t =
         typename GraphFactoryTraitsT::candidate_sample_utils_t;
 

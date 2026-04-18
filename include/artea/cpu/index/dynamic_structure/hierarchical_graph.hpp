@@ -127,6 +127,11 @@ private:
     using level_group_arena_t = LevelGroupArena<IndexTraitsT>;
 
 public:
+    /** @brief Marks this graph as the dynamic (concurrently mutated)
+     *         storage. Routers branch on this in @c detail::make_layer_range
+     *         to pick the right NeighborRange adapter. */
+    static constexpr bool is_compacted = false;
+
     static constexpr vertex_id_t invalid_vertex_id = IndexTraitsT::invalid_vertex_id;
 
     /** @brief Sentinel @c highest_level_id for rows that have not yet

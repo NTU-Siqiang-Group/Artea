@@ -31,6 +31,11 @@ public:
     using vector_array_t = typename IndexTraitsT::vector_array_t;
     using csr_vids_t = typename IndexTraitsT::csr_vids_t;
 
+    /** @brief Marks this graph as a compact (read-only, post-compaction)
+     *         storage. Routers branch on this in @c detail::make_flat_range
+     *         to pick the right NeighborRange adapter. */
+    static constexpr bool is_compacted = true;
+
     /** @brief Sentinel value used to terminate neighbor lists. Mirrors
      *         the constant exposed by @c compact::HierarchicalGraph so
      *         router adapters can stop iteration without consulting

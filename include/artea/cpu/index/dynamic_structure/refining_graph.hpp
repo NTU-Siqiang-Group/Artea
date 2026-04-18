@@ -30,6 +30,11 @@ template <typename IndexTraitsT>
 class RefiningGraph {
 
 public:
+    /** @brief Marks this graph as the dynamic (concurrently mutated)
+     *         storage. Routers branch on this in @c detail::make_flat_range
+     *         to pick the right NeighborRange adapter. */
+    static constexpr bool is_compacted = false;
+
     // Public so router-side adapters can read nbr_t / nbr_arr_t / etc.
     // without re-deriving them from IndexTraits.
     using vertex_num_t = typename IndexTraitsT::vertex_num_t;

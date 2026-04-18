@@ -72,6 +72,11 @@ private:
     using vid_arena_container_t = cache_aligned_container_t<vertex_id_t>;
 
 public:
+    /** @brief Marks this graph as a compact (read-only, post-compaction)
+     *         storage. Routers branch on this in @c detail::make_layer_range
+     *         to pick the right NeighborRange adapter. */
+    static constexpr bool is_compacted = true;
+
     static constexpr vertex_id_t invalid_vertex_id = IndexTraitsT::invalid_vertex_id;
 
     /** @brief Sentinel for vertices that have not been assigned to any
@@ -237,10 +242,9 @@ public:
      * @brief Pre-computed hierarchical entry-point vid. Set by
      *        @c HierarchicalGraphCompactor to the top-bucket vid
      *        closest to the centroid of the top bucket; consumed by
-     *        @c compact::HierarchicalGraphRouter in place of the
-     *        sampling-based seeding (@c sample_entries /
-     *        @c sample_single_entry). Returns @c invalid_vertex_id
-     *        when unset (empty graph).
+     *        @c HierarchicalGraphRouter in place of the sampling-based
+     *        seeding (@c sample_entries / @c sample_single_entry).
+     *        Returns @c invalid_vertex_id when unset (empty graph).
      */
     __attribute__((always_inline))
     auto entry_point_vid() const -> vertex_id_t {

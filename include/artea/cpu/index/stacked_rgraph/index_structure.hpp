@@ -77,6 +77,12 @@ public:
 
     using hierarchical_graph_t = typename IndexTraitsT::dynamic::hierarchical_graph_t;
 
+    /** @brief Forwards the dynamic-mode flag from the composed graph so
+     *         router-side @c detail::make_layer_range can pick the right
+     *         NeighborRange adapter when handed an IndexStructure
+     *         directly (as @c stacked_rgraph::IndexFactory does on the
+     *         insertion hot path). */
+    static constexpr bool is_compacted = hierarchical_graph_t::is_compacted;
 
     static constexpr layer_id_t unassigned_highest_level_id =
         hierarchical_graph_t::unassigned_highest_level_id;
