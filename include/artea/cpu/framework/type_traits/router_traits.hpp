@@ -99,10 +99,12 @@ struct RouterTraits : virtual public ComputerTraitsT, virtual public IndexTraits
     /** @brief Default candidate queue type. */
     using candidate_queue_t = typename router_traits_t::linear_candidate_queue_t;
 
-    /** @brief Default visited table type (used by candidate queues and routers). */
-    using visited_table_t = typename router_traits_t::thread_local_bitmap_t;
+    /** @brief Default visited table type (used by candidate queues and routers).
+     *  VersionTagTable's clear() is O(1) (version bump), so callers can
+     *  clear freely between hierarchical layers without a memset cost. */
+    using visited_table_t = typename router_traits_t::version_tag_table_t;
 
-    /** @brief Type for visited table pool (default uses thread_local_bitmap_t). */
+    /** @brief Type for visited table pool. */
     using visited_table_pool_t = VisitedTablePool<router_traits_t, visited_table_t>;
 
     /** @brief Stateless apex-bucket samplers shared by all routers. */

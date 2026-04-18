@@ -163,9 +163,9 @@ public:
             for (layer_id_t cur_level_id = top_level_id; ; --cur_level_id) {
                 _single_layer_router.beam_search(query_vec, hier_graph, cur_level_id, candidate_queue, visited);
                 if (cur_level_id == 0) break;
-                // Visited intentionally carries across layers (monotone-
-                // distance argument: a rejected vid had dist > current
-                // top-k worst, and top-k only tightens).
+                // Reset visited between layers — each level walks a
+                // different neighborhood graph; cheap with VersionTagTable.
+                visited.clear();
             }
 
             const std::size_t k = std::min<std::size_t>(
@@ -176,11 +176,15 @@ public:
         } else {
             vertex_id_t cursor_vid  = entry_vid;
             distance_t  cursor_dist = entry_dist;
-            // uppper level search
+            // Clear after every greedy level (L1 included) so the next
+            // iteration / the L0 beam below always starts clean. The L0
+            // clear is mandatory: greedy tracks a single best cursor,
+            // while L0 beam targets top-K; some L1-rejected vids could
+            // legitimately enter L0 top-K. O(1) with VersionTagTable.
             for (layer_id_t cur_level_id = top_level_id; cur_level_id >= 1; --cur_level_id) {
                 std::tie(cursor_vid, cursor_dist) = _single_layer_router.greedy_search(
                     query_vec, hier_graph, cur_level_id, cursor_vid, cursor_dist, visited);
-                if (cur_level_id == 1) break;
+                visited.clear();
             }
             // bottom level search
             std_candidate_queue_t candidate_queue(static_cast<std::size_t>(_candidate_queue_size));

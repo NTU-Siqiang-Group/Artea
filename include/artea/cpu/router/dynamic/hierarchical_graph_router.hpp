@@ -170,11 +170,12 @@ public:
             for (layer_id_t cur_level_id = top_level_id; ; --cur_level_id) {
                 _single_layer_router.beam_search(query_vec, hier_graph, cur_level_id, candidate_queue, visited);
                 if (cur_level_id == 0) break;
-                // Visited intentionally carries across layers — by the
-                // monotone-distance argument (a rejected vid had dist >
-                // the current top-k worst, and top-k only tightens),
-                // skipping already-visited vids at lower layers cannot
-                // miss a true NN.
+                // Reset visited between layers: each level walks a
+                // different neighborhood graph, and reusing upper-layer
+                // marks could skip vids whose lower-layer neighbors
+                // would have been productive. VersionTagTable::clear()
+                // is O(1), so this costs nothing.
+                visited.clear();
             }
 
             const std::size_t k = std::min<std::size_t>(
@@ -190,6 +191,12 @@ public:
                 candidate_sample_utils_t::sample_single_entry(
                     this->_vecs_data, this->_dist_func, hier_graph, query_vec);
 
+            // Clear after every greedy level (L1 included) so the next
+            // iteration / the L0 beam below always starts with a clean
+            // visited. The L0 clear is mandatory: greedy tracks a single
+            // best cursor, while L0 beam targets top-K; some L1-rejected
+            // vids could legitimately enter L0 top-K and thus must be
+            // re-evaluable. O(1) per clear with VersionTagTable.
             for (layer_id_t cur_level_id = top_level_id;
                  cur_level_id >= 1;
                  --cur_level_id)
@@ -198,7 +205,7 @@ public:
                     _single_layer_router.greedy_search(
                         query_vec, hier_graph, cur_level_id,
                         cursor_vid, cursor_dist, visited);
-                if (cur_level_id == 1) break;
+                visited.clear();
             }
 
             std_candidate_queue_t candidate_queue(
