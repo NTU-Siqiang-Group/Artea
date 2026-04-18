@@ -76,6 +76,14 @@ public:
         return _num_vertices;
     }
 
+    /** @brief Identity passthrough to mirror @c dynamic::RefiningGraph's
+     *         API. Compact graphs are always dense, so the local row
+     *         index is the storage vid. */
+    __attribute__((always_inline))
+    auto get_storage_vid(const vertex_num_t local_idx) const -> vertex_id_t {
+        return static_cast<vertex_id_t>(local_idx);
+    }
+
     __attribute__((always_inline))
     auto get_extracted_nbr_size() const -> vertex_num_t {
         return _extracted_nbr_size;

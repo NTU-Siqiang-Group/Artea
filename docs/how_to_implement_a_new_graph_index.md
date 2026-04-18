@@ -246,12 +246,11 @@ auto search_graph = refining_graph_compactor_t::from_refining_graph(refining_gra
 
 // 3. Grid-search QPS vs Recall
 for (uint32_t qs = start; qs <= end; qs += step) {
-    refining_graph_router_t<graph_mode_t::compact_mode> router(
-        base_vecs, dist_func, search_graph, topk, qs);
+    single_layer_router_t router(base_vecs, dist_func, topk, qs);
     router.initialize();
 
     auto t0 = std::chrono::high_resolution_clock::now();
-    auto results = router.batch_query(query_vecs);
+    auto results = router.batch_query(query_vecs, search_graph);
     auto t1 = std::chrono::high_resolution_clock::now();
 
     double qps   = num_queries * 1e6 / duration_us(t1 - t0);

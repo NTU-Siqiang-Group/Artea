@@ -15,64 +15,106 @@
 /*
  * @FilePath: /Artea/include/artea/cpu/router/single_layer_router.hpp
  * @Author: Chandler (Weitang Ye) <weitang.ye@ntu.edu.sg>
- * @Description: Unified single-level beam/greedy atom. Graph-storage-
- *               agnostic: callers pass a NeighborRange adapter that
- *               yields vertex_id_t and stops at a sentinel. Replaces
- *               the per-mode compact::SingleLayerRouter and
- *               dynamic::SingleLayerRouter.
+ * @Description: Single-level router. Atom layer takes a NeighborRange;
+ *               convenience layer queries a flat single-layer graph.
  */
 
 #pragma once
 
+#include <algorithm>
 #include <cstddef>
 #include <cstdint>
 #include <utility>
+#include <vector>
+
+#include <tbb/blocked_range.h>
+#include <tbb/parallel_for.h>
 
 #include <artea/common/logger.hpp>
 #include <artea/cpu/router/detail/beam_loop.hpp>
+#include <artea/cpu/router/detail/make_flat_range.hpp>
 #include <artea/cpu/router/neighbor_range_concept.hpp>
+#include <artea/cpu/utils/parallel.hpp>
 
 namespace artea {
 namespace cpu {
 
 /**
- * @brief Single-level beam-search primitive parameterized on a
- *        @c NeighborRange adapter. Apex sampling lives in
- *        @c CandidateSampleUtils so callers can swap policies without
- *        dragging RNG state into the router.
+ * @brief Single-level beam-search primitive plus a convenience query
+ *        layer over flat single-layer graphs.
+ *
+ * Atom layer: @c beam_search / @c greedy_search take a @c NeighborRange
+ * adapter — graph-storage-agnostic, used by @c HierarchicalGraphRouter.
+ *
+ * Convenience layer: @c query / @c batch_query own a visited-table pool +
+ * candidate-queue size + random sequence; flat adapter selected via
+ * @c detail::make_flat_range based on the graph's @c is_compacted flag.
  *
  * @tparam RouterTraitsT The router traits type.
  */
 template <typename RouterTraitsT>
-class SingleLayerRouter {
+class SingleLayerRouter :
+    public RouterTraitsT::template vector_router_t<SingleLayerRouter<RouterTraitsT>>
+{
 
     using vertex_num_t          = typename RouterTraitsT::vertex_num_t;
     using vertex_id_t           = typename RouterTraitsT::vertex_id_t;
+    using vec_id_t              = typename RouterTraitsT::vec_id_t;
     using vec_ele_t             = typename RouterTraitsT::vec_ele_t;
     using distance_t            = typename RouterTraitsT::distance_t;
     using dist_func_t           = typename RouterTraitsT::dist_func_t;
     using vector_array_t        = typename RouterTraitsT::vector_array_t;
+    using query_vecs_t          = typename RouterTraitsT::query_vecs_t;
+    using nbr_arr_t             = typename RouterTraitsT::nbr_arr_t;
     using std_candidate_queue_t = typename RouterTraitsT::std_candidate_queue_t;
+    using candidate_queue_t     = typename RouterTraitsT::candidate_queue_t;
     using visited_table_t       = typename RouterTraitsT::visited_table_t;
+    using visited_table_pool_t  = typename RouterTraitsT::visited_table_pool_t;
+    using random_seq_t          = typename RouterTraitsT::random_seq_t;
+    using knn_results_t         = typename RouterTraitsT::knn_results_t;
+    using base_class_t          =
+        typename RouterTraitsT::template vector_router_t<SingleLayerRouter<RouterTraitsT>>;
 
 public:
+    /**
+     * @brief Construct a SingleLayerRouter.
+     *
+     * @param topk                  Top-k for the convenience layer
+     *                              (0 if only the atom API will be used).
+     * @param candidate_queue_size  Beam width for the convenience layer
+     *                              (must be >= @p topk if @p topk > 0).
+     */
     SingleLayerRouter(
         const vector_array_t& base_vecs,
-        const dist_func_t&    dist_func
+        const dist_func_t&    dist_func,
+        const uint32_t        topk = 0,
+        const vertex_num_t    candidate_queue_size = 0
     ) :
-        _vecs_data(base_vecs),
-        _dist_func(dist_func) {}
+        base_class_t(base_vecs, dist_func, topk),
+        _candidate_queue_size(candidate_queue_size),
+        _visited_table_pool(base_vecs.get_num_vecs())
+    {
+        if (topk > 0 && _candidate_queue_size < topk) {
+            ARTEA_ERROR(fmt::format(
+                "candidate_queue_size ({}) must be >= topk ({})",
+                _candidate_queue_size, topk));
+        }
+    }
 
-    /**
-     * @brief Greedy best-improvement walk over @p nbrs_range. Uses
-     *        @p visited to skip distance computation for vids already
-     *        evaluated on this walk. The caller owns the clear/reset
-     *        policy; this method only seeds @p visited with @p seed_vid.
-     *
-     * Intended for the upper-layer descent portion of a hierarchical
-     * query when the caller wants HNSW-style cheap greedy routing; the
-     * result feeds the L0 beam search as a single seed.
-     */
+    /** @brief Warm visited-table pool and the random sequence generator's
+     *         per-thread MKL streams. Atom-only callers
+     *         (@c HierarchicalGraphRouter) don't need to call this. */
+    auto initialize() -> void {
+        _visited_table_pool.warmup();
+        _warmup_random_seq();
+    }
+
+    // ================================================================
+    //   Atom layer (caller owns queue + visited lifecycle).
+    // ================================================================
+
+    /** @brief Greedy walk over @p nbrs_range starting from @p seed_vid;
+     *         marks the seed in @p visited and returns the local optimum. */
     template <NeighborRange NeighborRangeT>
     __attribute__((always_inline))
     auto greedy_search(
@@ -85,21 +127,18 @@ public:
         visited.set(seed_vid);
         return detail::greedy_loop_body<RouterTraitsT>(
             query_vec, nbrs_range, seed_vid, seed_dist,
-            visited, _dist_func, _vecs_data);
+            visited, this->_dist_func, this->_vecs_data);
     }
 
     /**
-     * @brief Beam search over @p nbrs_range, operating in-place on a
-     *        pre-seeded candidate queue. Does NOT clear @p visited —
-     *        caller owns clear lifecycle so visited can be shared
-     *        across hierarchical layers (and across the insert descent
-     *        + select phases). Only marks the current queue seeds,
-     *        which is idempotent for carry-over seeds.
+     * @brief Beam search over @p nbrs_range, in-place on a pre-seeded
+     *        @p candidate_queue. Marks current queue seeds in
+     *        @p visited; does NOT clear @p visited (caller owns).
      *
      * @c reset_exploration() MUST run BEFORE the @c empty() check:
-     * @c empty() inspects the unexplored heap, which is fully drained
-     * after the previous level's beam loop; checking it first would
-     * skip this level entirely under shared-queue hierarchical descent.
+     * the unexplored heap drains across each call, so checking
+     * @c empty() first would skip the level under shared-queue
+     * hierarchical descent.
      */
     template <NeighborRange NeighborRangeT>
     __attribute__((always_inline))
@@ -118,12 +157,205 @@ public:
 
         detail::beam_loop_body<RouterTraitsT>(
             query_vec, nbrs_range, candidate_queue,
-            visited, _dist_func, _vecs_data);
+            visited, this->_dist_func, this->_vecs_data);
+    }
+
+    // ================================================================
+    //   Convenience layer (flat single-layer graphs only).
+    // ================================================================
+
+    /**
+     * @brief Query top-k. Picks a uniformly random vid that participates
+     *        in @p single_layer_graph as the entry point — works for
+     *        both dense and sparse upper-layer graphs via
+     *        @c get_storage_vid.
+     */
+    template <typename SingleLayerGraphT>
+    __attribute__((always_inline))
+    auto query(
+        const vec_ele_t*         query_vec,
+        const SingleLayerGraphT& single_layer_graph
+    ) const -> knn_results_t {
+        auto& visited = _visited_table_pool.acquire();
+        return _query_impl(query_vec, single_layer_graph,
+                           _pick_random_entry(single_layer_graph), visited);
+    }
+
+    /** @brief Query top-k starting from a single explicit @p entry_point. */
+    template <typename SingleLayerGraphT>
+    __attribute__((always_inline))
+    auto query(
+        const vec_ele_t*         query_vec,
+        const SingleLayerGraphT& single_layer_graph,
+        const vertex_id_t        entry_point
+    ) const -> knn_results_t {
+        auto& visited = _visited_table_pool.acquire();
+        return _query_impl(query_vec, single_layer_graph, entry_point, visited);
+    }
+
+    /**
+     * @brief Query top-k with the candidate queue pre-seeded from a
+     *        sorted, distance-bearing neighbor list. Skips the per-seed
+     *        @c dist_func call. Dynamic graphs only — compact graphs
+     *        store raw vids without distances.
+     */
+    template <typename SingleLayerGraphT>
+    __attribute__((always_inline))
+    auto query(
+        const vec_ele_t*         query_vec,
+        const SingleLayerGraphT& single_layer_graph,
+        const nbr_arr_t&         seed_nbrs
+    ) const -> knn_results_t {
+        static_assert(!SingleLayerGraphT::is_compacted,
+                      "warm-start query(seed_nbrs) requires distance-bearing "
+                      "neighbor entries — only valid for dynamic graphs.");
+        auto& visited = _visited_table_pool.acquire();
+        return _query_impl(query_vec, single_layer_graph, seed_nbrs, visited);
+    }
+
+    /** @brief Parallel batch form of @c query(vec, graph) — each query
+     *         picks its own random participating entry. */
+    template <typename SingleLayerGraphT>
+    auto batch_query(
+        const query_vecs_t&      query_vecs,
+        const SingleLayerGraphT& single_layer_graph
+    ) const -> knn_results_t {
+        const vertex_num_t num_queries = query_vecs.get_num_vecs();
+        const uint32_t     k           = this->_topk;
+        knn_results_t results(num_queries * k);
+
+        tbb::parallel_for(
+            tbb::blocked_range<vertex_num_t>(0, num_queries),
+            [&](const tbb::blocked_range<vertex_num_t>& r) {
+                for (vertex_num_t i = r.begin(); i != r.end(); ++i) {
+                    auto& visited = _visited_table_pool.acquire();
+                    auto topk_results = _query_impl(
+                        query_vecs.get(i), single_layer_graph,
+                        _pick_random_entry(single_layer_graph), visited);
+                    std::copy(topk_results.begin(), topk_results.end(),
+                              results.begin() + i * k);
+                }
+            }
+        );
+        return results;
+    }
+
+    /** @brief Parallel batch form of @c query(vec, graph, entry_point). */
+    template <typename SingleLayerGraphT>
+    auto batch_query(
+        const query_vecs_t&      query_vecs,
+        const SingleLayerGraphT& single_layer_graph,
+        const vertex_id_t        entry_point
+    ) const -> knn_results_t {
+        const vertex_num_t num_queries = query_vecs.get_num_vecs();
+        const uint32_t     k           = this->_topk;
+        knn_results_t results(num_queries * k);
+
+        tbb::parallel_for(
+            tbb::blocked_range<vertex_num_t>(0, num_queries),
+            [&](const tbb::blocked_range<vertex_num_t>& r) {
+                for (vertex_num_t i = r.begin(); i != r.end(); ++i) {
+                    auto& visited = _visited_table_pool.acquire();
+                    auto topk_results = _query_impl(
+                        query_vecs.get(i), single_layer_graph,
+                        entry_point, visited);
+                    std::copy(topk_results.begin(), topk_results.end(),
+                              results.begin() + i * k);
+                }
+            }
+        );
+        return results;
     }
 
 private:
-    const vector_array_t& _vecs_data;
-    const dist_func_t&    _dist_func;
+    /** @brief Single-entry beam search on a freshly-acquired visited. */
+    template <typename SingleLayerGraphT>
+    __attribute__((always_inline))
+    auto _query_impl(
+        const vec_ele_t*         query_vec,
+        const SingleLayerGraphT& single_layer_graph,
+        const vertex_id_t        entry_point,
+        visited_table_t&         visited
+    ) const -> knn_results_t {
+        const vertex_num_t queue_capacity = std::max(this->_topk, _candidate_queue_size);
+        candidate_queue_t candidate_queue(queue_capacity);
+
+        const distance_t entry_dist = this->_dist_func(
+            query_vec, this->_vecs_data.get(entry_point));
+        candidate_queue.try_push(entry_point, entry_dist);
+        visited.set(entry_point);
+
+        detail::beam_loop_body<RouterTraitsT>(
+            query_vec,
+            detail::make_flat_range(single_layer_graph),
+            candidate_queue, visited, this->_dist_func, this->_vecs_data);
+
+        return candidate_queue.extract_results(this->_topk);
+    }
+
+    /** @brief Warm-start beam search seeded from a sorted, distance-
+     *         bearing neighbor list. Seeding loop walks the full
+     *         @p seed_nbrs (uncapped). */
+    template <typename SingleLayerGraphT>
+    __attribute__((always_inline))
+    auto _query_impl(
+        const vec_ele_t*         query_vec,
+        const SingleLayerGraphT& single_layer_graph,
+        const nbr_arr_t&         seed_nbrs,
+        visited_table_t&         visited
+    ) const -> knn_results_t {
+        const vertex_num_t queue_capacity = std::max(this->_topk, _candidate_queue_size);
+        candidate_queue_t candidate_queue(queue_capacity);
+
+        for (vertex_num_t i = 0;
+             i < static_cast<vertex_num_t>(seed_nbrs.size());
+             ++i)
+        {
+            const vertex_id_t seed_vid = seed_nbrs[i].get_vid();
+            if (seed_vid == RouterTraitsT::invalid_vertex_id) break;
+            if (visited.test_and_set(seed_vid)) continue;
+            candidate_queue.try_push(seed_vid, seed_nbrs[i].get_distance());
+        }
+
+        detail::beam_loop_body<RouterTraitsT>(
+            query_vec,
+            detail::make_flat_range(single_layer_graph),
+            candidate_queue, visited, this->_dist_func, this->_vecs_data);
+
+        return candidate_queue.extract_results(this->_topk);
+    }
+
+    /** @brief Pick a uniformly random vid that participates in
+     *         @p single_layer_graph. Works for both dense and sparse
+     *         (upper-layer) graphs because @c get_storage_vid
+     *         translates a local row index to a participating storage vid. */
+    template <typename SingleLayerGraphT>
+    __attribute__((always_inline))
+    auto _pick_random_entry(const SingleLayerGraphT& single_layer_graph) const -> vertex_id_t {
+        vec_id_t local_idx = 0;
+        _random_seq.generate(&local_idx,
+                             single_layer_graph.get_num_vertices(),
+                             /*num=*/static_cast<vertex_num_t>(1));
+        return single_layer_graph.get_storage_vid(static_cast<vertex_num_t>(local_idx));
+    }
+
+    /** @brief Trigger thread-local MKL stream creation on every TBB
+     *         worker so the first real query doesn't pay the init cost. */
+    __attribute__((always_inline))
+    auto _warmup_random_seq() -> void {
+        const int num_threads = tbb_max_num_threads();
+        tbb::parallel_for(
+            tbb::blocked_range<int>(0, num_threads, 1),
+            [&](const tbb::blocked_range<int>&) {
+                std::vector<vertex_id_t> dummy(1);
+                _random_seq.generate(dummy, /*upper_bound=*/1, /*num=*/1);
+            }
+        );
+    }
+
+    vertex_num_t                 _candidate_queue_size;
+    mutable visited_table_pool_t _visited_table_pool;
+    mutable random_seq_t         _random_seq;
 
 };  // class SingleLayerRouter
 

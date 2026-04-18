@@ -16,11 +16,8 @@
  * @FilePath: /Artea/include/artea/cpu/router/detail/dynamic_flat_range.hpp
  * @Author: Chandler (Weitang Ye) <weitang.ye@ntu.edu.sg>
  * @Description: NeighborRange adapter binding a dynamic::RefiningGraph.
- *               Projects nbr_t -> vertex_id_t, sentinel-stops on
- *               nbr.is_invalid(), and applies a per-call neighbor cap
- *               (extracted_nbr_size) — compact storage bakes the cap
- *               into the array length, but dynamic storage holds the
- *               full max_nbr_size and the search caps at construction.
+ *               Projects nbr_t -> vertex_id_t and sentinel-stops on
+ *               nbr.is_invalid() (or the storage end, whichever is first).
  */
 
 #pragma once
@@ -34,28 +31,22 @@ namespace detail {
 template <typename RefiningGraphT>
 class DynamicFlatRange {
 public:
-    using vertex_id_t  = typename RefiningGraphT::vertex_id_t;
-    using vertex_num_t = typename RefiningGraphT::vertex_num_t;
-    using nbr_t        = typename RefiningGraphT::nbr_t;
+    using vertex_id_t = typename RefiningGraphT::vertex_id_t;
+    using nbr_t       = typename RefiningGraphT::nbr_t;
 
     __attribute__((always_inline))
-    DynamicFlatRange(const RefiningGraphT& refining_graph,
-                     const vertex_num_t    extracted_nbr_size) :
-        _refining_graph(refining_graph),
-        _extracted_nbr_size(static_cast<std::size_t>(extracted_nbr_size)) {}
+    explicit DynamicFlatRange(const RefiningGraphT& refining_graph) :
+        _refining_graph(refining_graph) {}
 
     __attribute__((always_inline))
     auto of(const vertex_id_t vid) const {
-        const auto& nbrs = _refining_graph.fetch_nbrs(vid);
-        return std::ranges::subrange(nbrs.begin(), nbrs.end())
-             | std::views::take(_extracted_nbr_size)
+        return _refining_graph.fetch_nbrs(vid)
              | std::views::take_while([](const nbr_t& nbr) { return !nbr.is_invalid(); })
              | std::views::transform([](const nbr_t& nbr) { return nbr.get_vid(); });
     }
 
 private:
     const RefiningGraphT& _refining_graph;
-    std::size_t           _extracted_nbr_size;
 
 };  // class DynamicFlatRange
 

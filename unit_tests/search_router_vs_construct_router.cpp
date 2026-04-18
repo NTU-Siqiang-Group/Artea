@@ -15,9 +15,9 @@
 /*
  * @FilePath: /Artea/unit_tests/search_router_vs_construct_router.cpp
  * @Author: Chandler (Weitang Ye) <weitang.ye@ntu.edu.sg>
- * @Description: Compares dynamic_mode vs compact_mode RefiningGraphRouter on a
- *               ConvGraph. Measures construct-mode query time, search-graph conversion
- *               time, and search-mode query time.
+ * @Description: Compares SingleLayerRouter on a dynamic vs compact RefiningGraph
+ *               of a ConvGraph. Measures construct-mode query time, search-graph
+ *               conversion time, and search-mode query time.
  */
 
 #include <iostream>
@@ -154,15 +154,15 @@ TEST_F(RouterComparisonTest, ConstructModeRouter) {
     const auto& base_vecs  = p.get_dataset().get_base_vecs();
     const auto& query_vecs = p.get_dataset().get_query_vecs();
 
-    dynamic::refining_graph_router_t router(
+    single_layer_router_t router(
         base_vecs, p.get_dist_func(),
-        p.get_graph_index().get_refining_graph(),
         g_config.topk, g_config.queue_size
     );
     router.initialize();
 
     auto t0 = std::chrono::high_resolution_clock::now();
-    knn_results_t results = router.batch_query(query_vecs);
+    knn_results_t results = router.batch_query(
+        query_vecs, p.get_graph_index().get_refining_graph());
     auto t1 = std::chrono::high_resolution_clock::now();
     double us = std::chrono::duration_cast<std::chrono::microseconds>(t1 - t0).count();
 
@@ -185,14 +185,15 @@ TEST_F(RouterComparisonTest, SearchModeRouter) {
     const auto& base_vecs  = p.get_dataset().get_base_vecs();
     const auto& query_vecs = p.get_dataset().get_query_vecs();
 
-    compact::refining_graph_router_t router(
-        base_vecs, p.get_dist_func(), p.get_compact_refining_graph(),
+    single_layer_router_t router(
+        base_vecs, p.get_dist_func(),
         g_config.topk, g_config.queue_size
     );
     router.initialize();
 
     auto t0 = std::chrono::high_resolution_clock::now();
-    knn_results_t results = router.batch_query(query_vecs);
+    knn_results_t results = router.batch_query(
+        query_vecs, p.get_compact_refining_graph());
     auto t1 = std::chrono::high_resolution_clock::now();
     double us = std::chrono::duration_cast<std::chrono::microseconds>(t1 - t0).count();
 

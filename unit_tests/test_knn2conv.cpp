@@ -154,11 +154,11 @@ TEST_F(Knn2ConvTest, QueryRecall) {
         g_config.queue_start, g_config.queue_end, g_config.queue_step));
 
     for (uint32_t queue_size = g_config.queue_start; queue_size <= g_config.queue_end; queue_size += g_config.queue_step) {
-        compact::refining_graph_router_t router(base_vecs, dist_func, compact_refining_graph, g_config.topk, queue_size);
+        single_layer_router_t router(base_vecs, dist_func, g_config.topk, queue_size);
         router.initialize();
 
         auto t0 = std::chrono::high_resolution_clock::now();
-        knn_results_t results = router.batch_query(query_vecs);
+        knn_results_t results = router.batch_query(query_vecs, compact_refining_graph);
         auto t1 = std::chrono::high_resolution_clock::now();
         auto us = std::chrono::duration_cast<std::chrono::microseconds>(t1 - t0).count();
 

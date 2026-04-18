@@ -117,11 +117,9 @@ using hierarchical_graph_router_t = router_traits_t::hierarchical_graph_router_t
 namespace compact {
     using refining_graph_t            = index_traits_t::compact::refining_graph_t;
     using hierarchical_graph_t        = index_traits_t::compact::hierarchical_graph_t;
-    using refining_graph_router_t     = router_traits_t::compact::refining_graph_router_t;
 }   // namespace compact
 namespace dynamic {
     using hierarchical_graph_t        = index_traits_t::dynamic::hierarchical_graph_t;
-    using refining_graph_router_t     = router_traits_t::dynamic::refining_graph_router_t;
 }   // namespace dynamic
 
 // Refiner types from RefinerTraits

@@ -165,11 +165,10 @@ TEST_F(ConvGraphTest, QueryRecall) {
     recall_estimator_t recall_estimator;
 
     for (uint32_t queue_size = g_config.queue_start; queue_size <= g_config.queue_end; queue_size += g_config.queue_step) {
-        // Create router with current queue size
-        compact::refining_graph_router_t router(
+        // Create single-layer router with current queue size
+        single_layer_router_t router(
             base_vecs,
             dist_func,
-            compact_refining_graph,
             g_config.topk,
             queue_size
         );
@@ -177,7 +176,7 @@ TEST_F(ConvGraphTest, QueryRecall) {
 
         // Warmup runs
         for (uint32_t w = 0; w < g_config.warmup_runs; ++w) {
-            [[maybe_unused]] auto _ = router.batch_query(query_vecs);
+            [[maybe_unused]] auto _ = router.batch_query(query_vecs, compact_refining_graph);
         }
 
         // Test runs with averaging
@@ -185,7 +184,7 @@ TEST_F(ConvGraphTest, QueryRecall) {
         float total_recall = 0.0f;
         for (uint32_t r = 0; r < g_config.test_runs; ++r) {
             auto start_time = std::chrono::high_resolution_clock::now();
-            knn_results_t results = router.batch_query(query_vecs);
+            knn_results_t results = router.batch_query(query_vecs, compact_refining_graph);
             auto end_time = std::chrono::high_resolution_clock::now();
             total_time_us += std::chrono::duration_cast<std::chrono::microseconds>(end_time - start_time).count();
             total_recall += recall_estimator.calculate_recall_at_k(results, groundtruth, g_config.topk, query_vecs.get_num_vecs());

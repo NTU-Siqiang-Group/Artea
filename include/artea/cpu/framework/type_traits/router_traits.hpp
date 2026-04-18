@@ -29,8 +29,6 @@ namespace cpu {
 /** ------ Forward Declaration  ------ **/
 template <typename RouterTraitsT, typename DerivedClassT> class VectorRouter;
 template <typename RouterTraitsT> class BruteforceRouter;
-namespace compact { template <typename RouterTraitsT> class RefiningGraphRouter; }
-namespace dynamic { template <typename RouterTraitsT> class RefiningGraphRouter; }
 template <typename RouterTraitsT> class SingleLayerRouter;
 template <typename RouterTraitsT> class HierarchicalGraphRouter;
 template <typename RouterTraitsT> struct CandidateEntry;
@@ -117,21 +115,10 @@ struct RouterTraits : virtual public ComputerTraitsT, virtual public IndexTraits
     using hierarchical_graph_router_t =
         cpu::HierarchicalGraphRouter<router_traits_t>;
 
-    /** @brief Router + graph types grouped by mode. Inherits graph types
-     *         from IndexTraits. The SLR / HG router aliases are
-     *         transitional — they point to the unified top-level
-     *         classes. RefiningGraphRouter is still mode-specialized
-     *         (PR4 will absorb it into SingleLayerRouter). */
-    struct compact : IndexTraitsT::compact {
-        using refining_graph_router_t     = cpu::compact::RefiningGraphRouter<router_traits_t>;
-        using single_layer_router_t       = cpu::SingleLayerRouter<router_traits_t>;
-        using hierarchical_graph_router_t = cpu::HierarchicalGraphRouter<router_traits_t>;
-    };
-    struct dynamic : IndexTraitsT::dynamic {
-        using refining_graph_router_t     = cpu::dynamic::RefiningGraphRouter<router_traits_t>;
-        using single_layer_router_t       = cpu::SingleLayerRouter<router_traits_t>;
-        using hierarchical_graph_router_t = cpu::HierarchicalGraphRouter<router_traits_t>;
-    };
+    /** @brief Pass-through of the per-mode graph types from IndexTraits;
+     *         router types are no longer per-mode (lifted to top-level). */
+    struct compact : IndexTraitsT::compact {};
+    struct dynamic : IndexTraitsT::dynamic {};
 
     /** @brief Indicates whether to enable intra-query parallelism. */
     static constexpr bool intra_query_parallel = IntraQueryParallel;

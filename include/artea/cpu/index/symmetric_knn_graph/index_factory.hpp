@@ -48,7 +48,7 @@ class IndexFactory {
     using query_vecs_t = typename GraphFactoryTraitsT::query_vecs_t;
     using ground_truth_t = typename GraphFactoryTraitsT::ground_truth_t;
     using recall_estimator_t = typename GraphFactoryTraitsT::recall_estimator_t;
-    using refining_graph_router_t = typename GraphFactoryTraitsT::dynamic::refining_graph_router_t;
+    using single_layer_router_t = typename GraphFactoryTraitsT::single_layer_router_t;
     using knn_graph = typename GraphFactoryTraitsT::knn_graph;
 
 public:
@@ -108,16 +108,14 @@ public:
         recall_estimator_t recall_estimator;
         const vertex_num_t topk = 20;
         const vertex_num_t candidate_queue_size = 40;
-        refining_graph_router_t router(
-            base_vecs, dist_func,
-            graph_index.get_refining_graph(),
-            topk, candidate_queue_size);
+        single_layer_router_t router(
+            base_vecs, dist_func, topk, candidate_queue_size);
         router.initialize();
 
         _build_loop(graph_index, dist_func, propagate_config,
             [&](iter_t build_loop) {
                 auto t0 = std::chrono::high_resolution_clock::now();
-                auto results = router.batch_query(query_vecs);
+                auto results = router.batch_query(query_vecs, graph_index.get_refining_graph());
                 auto t1 = std::chrono::high_resolution_clock::now();
                 double qps = query_vecs.get_num_vecs() * 1e6 /
                     std::chrono::duration_cast<std::chrono::microseconds>(t1 - t0).count();

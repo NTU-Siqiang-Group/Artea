@@ -28,11 +28,10 @@ namespace artea {
 namespace cpu {
 
 /**
- * @brief RoutingUpdater uses a dynamic-mode RefiningGraphRouter to find
- *        candidate nearest neighbors for each pivot vertex and logs them.
+ * @brief RoutingUpdater uses a SingleLayerRouter to find candidate nearest
+ *        neighbors for each pivot vertex and logs them.
  *
- * @tparam GraphFactoryTraitsT Must expose both RefinerTraits and RouterTraits
- *         (i.e. GraphFactoryTraits or any traits that inherits both).
+ * @tparam RefinerTraitsT The refiner traits type.
  */
 template <typename RefinerTraitsT>
 class RoutingUpdater :
@@ -47,7 +46,7 @@ class RoutingUpdater :
     using nbr_arr_t = typename RefinerTraitsT::nbr_arr_t;
     using log_table_t = typename RefinerTraitsT::log_table_t;
     using dist_func_t = typename RefinerTraitsT::dist_func_t;
-    using router_t = typename RefinerTraitsT::dynamic::refining_graph_router_t;
+    using router_t = typename RefinerTraitsT::single_layer_router_t;
     using refining_graph_t = typename RefinerTraitsT::dynamic::refining_graph_t;
     using base_class_t = typename RefinerTraitsT::template neighbor_updater_t<RoutingUpdater<RefinerTraitsT>>;
 
@@ -71,7 +70,7 @@ public:
         const vertex_num_t        topk,
         const vertex_num_t        candidate_queue_size
     ) : base_class_t(dist_func, vecs_data, log_table, refining_graph),
-        _router(vecs_data, dist_func, refining_graph, topk, candidate_queue_size),
+        _router(vecs_data, dist_func, topk, candidate_queue_size),
         _topk(topk)
     {   _router.initialize();   }
 
@@ -92,7 +91,7 @@ public:
         // cached) neighbor slot so the first few iterations don't have
         // to re-explore from scratch.
         const nbr_arr_t& pivot_nbrs = this->_refining_graph.fetch_nbrs(storage_vid);
-        auto knn_results = _router.query(pivot_vec, pivot_nbrs);
+        auto knn_results = _router.query(pivot_vec, this->_refining_graph, pivot_nbrs);
 
         std::vector<vertex_id_t> knn_ids;
         std::vector<distance_t> knn_dists;

@@ -66,7 +66,8 @@ auto find_latest_index(const std::string& base_dir, const std::string& dataset_n
 }
 
 auto run_benchmark(
-    compact::refining_graph_router_t& router,
+    single_layer_router_t& router,
+    const compact::refining_graph_t& compact_refining_graph,
     const vector_array_t& query_vecs,
     const idlist_array_t& groundtruth,
     const vector_array_t& base_vecs,
@@ -75,7 +76,7 @@ auto run_benchmark(
 ) -> BenchmarkResult {
     auto start_time = std::chrono::high_resolution_clock::now();
 
-    knn_results_t results = router.batch_query(query_vecs);
+    knn_results_t results = router.batch_query(query_vecs, compact_refining_graph);
 
     auto end_time = std::chrono::high_resolution_clock::now();
     auto duration = std::chrono::duration_cast<std::chrono::microseconds>(end_time - start_time);
@@ -209,11 +210,10 @@ int main(int argc, char** argv) {
         extracted_nbr_size
     );
 
-    // Create router
-    compact::refining_graph_router_t router(
+    // Create single-layer router
+    single_layer_router_t router(
         base_vecs,
         dist_func,
-        compact_refining_graph,
         topk,
         candidate_queue_size
     );
@@ -228,7 +228,7 @@ int main(int argc, char** argv) {
     std::vector<BenchmarkResult> results;
 
     for (uint32_t i = 0; i < total_iterations; ++i) {
-        auto result = run_benchmark(router, query_vecs, groundtruth, base_vecs, dist_func, topk);
+        auto result = run_benchmark(router, compact_refining_graph, query_vecs, groundtruth, base_vecs, dist_func, topk);
 
         ARTEA_INFO(fmt::format("Iter {}: {:.2f} ms, {:.2f} QPS, Recall@{}={:.4f}",
             i + 1, result.query_time_ms, result.throughput_qps, topk, result.recall));
