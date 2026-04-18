@@ -44,7 +44,9 @@
 #include <cstdint>
 #include <limits>
 #include <memory>
+#include <numeric>
 #include <optional>
+#include <random>
 #include <utility>
 #include <vector>
 
@@ -131,18 +133,39 @@ public:
      *                      rebuilt from scratch by per-layer refinement,
      *                      so spending insertion-time on L0 neighbors
      *                      would be wasted work.
+     * @param shuffle_insertion_order When true, the order in which new
+     *                      vids are fed into @c _insert_one is a
+     *                      deterministic shuffle of the batch (storage
+     *                      layout / vid assignment unchanged). This
+     *                      breaks the coupling between dataset ordering
+     *                      and time-locality of insertions, which
+     *                      otherwise biases the hierarchy on
+     *                      cluster-sorted datasets. Default false
+     *                      preserves the legacy dataset-order build.
      */
     static auto add_vertices(
         this_index_t&      index,
         vector_array_t&&   batch_vecs,
         const dist_func_t& dist_func,
-        const bool         insert_on_L0 = true
+        const bool         insert_on_L0 = true,
+        const bool         shuffle_insertion_order = false
     ) -> void {
         const vertex_num_t batch_size = static_cast<vertex_num_t>(batch_vecs.get_num_vecs());
         if (batch_size == 0) return;
 
         index.append_vecs(std::move(batch_vecs));
         const vertex_id_t first_new_vid = index.add_vertices(batch_size);
+
+        // Permutation of the new-vid range. Walked in its natural order
+        // (identity) when shuffle is off; Fisher-Yates-shuffled with a
+        // fixed seed when on, so two runs on the same dataset produce
+        // the same graph.
+        std::vector<vertex_id_t> insert_order(batch_size);
+        std::iota(insert_order.begin(), insert_order.end(), first_new_vid);
+        if (shuffle_insertion_order) {
+            std::mt19937_64 rng(/*seed=*/0xA17EA5EEDULL);
+            std::shuffle(insert_order.begin(), insert_order.end(), rng);
+        }
 
         // Construct the pruning updater AFTER append_vecs so the storage
         // reference it captures already points at populated data (belt-
@@ -169,19 +192,24 @@ public:
 
         visited_table_pool_t visited_pool(total_vecs);
 
-        const vertex_id_t serial_cutoff = first_new_vid + std::min<vertex_num_t>(startup_points, batch_size);
-        for (vertex_id_t vid = first_new_vid; vid < serial_cutoff; ++vid) {
+        // Serial bootstrap iterates the permutation prefix; parallel
+        // phase iterates the suffix. Both dereference insert_order[i]
+        // to get the actual vid.
+        const vertex_num_t serial_count =
+            std::min<vertex_num_t>(startup_points, batch_size);
+        for (vertex_num_t i = 0; i < serial_count; ++i) {
+            const vertex_id_t vid = insert_order[i];
             auto& visited = visited_pool.acquire();
             _insert_one(index, router, vid, dist_func,
                         pruning_updater, visited, insert_on_L0);
         }
-        if (serial_cutoff == first_new_vid + batch_size) return;
+        if (serial_count == batch_size) return;
 
         tbb::parallel_for(
-            tbb::blocked_range<vertex_id_t>(
-                serial_cutoff, first_new_vid + batch_size),
-            [&](const tbb::blocked_range<vertex_id_t>& r) {
-                for (vertex_id_t vid = r.begin(); vid != r.end(); ++vid) {
+            tbb::blocked_range<vertex_num_t>(serial_count, batch_size),
+            [&](const tbb::blocked_range<vertex_num_t>& r) {
+                for (vertex_num_t i = r.begin(); i != r.end(); ++i) {
+                    const vertex_id_t vid = insert_order[i];
                     // acquire() per-vertex: each insertion starts with a
                     // fresh visited table, shared across its descent +
                     // select phases.

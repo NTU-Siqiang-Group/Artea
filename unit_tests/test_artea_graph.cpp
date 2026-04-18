@@ -76,6 +76,9 @@ struct TestConfig {
     uint32_t routing_topk;
     uint32_t routing_queue_size;
 
+    // Insertion-order randomization (see stacked_rgraph::IndexFactory).
+    bool     shuffle_insertion_order;
+
     // Search-time params
     uint32_t query_topk;
     uint32_t queue_size_start;
@@ -121,6 +124,8 @@ auto dump_config(const char* banner) -> void {
        << "num_routing_loops:          " << g_config.num_routing_loops << "\n"
        << "routing_topk:               " << g_config.routing_topk << "\n"
        << "routing_queue_size:         " << g_config.routing_queue_size << "\n"
+       << "shuffle_insertion_order:    "
+       << (g_config.shuffle_insertion_order ? "true" : "false") << "\n"
        << "--- Search ---\n"
        << "query_topk:                 " << g_config.query_topk << "\n"
        << "candidate-queue-config:     "
@@ -249,7 +254,8 @@ protected:
         vector_array_t owned_batch =
             base_vecs.extract_subset(0, total_vertices);
         artea_graph::factory_t::add_vertices(
-            *_graph, std::move(owned_batch), dist_func);
+            *_graph, std::move(owned_batch), dist_func,
+            g_config.shuffle_insertion_order);
 
         auto t1 = std::chrono::high_resolution_clock::now();
         _build_ms = std::chrono::duration_cast<std::chrono::milliseconds>(
@@ -542,6 +548,12 @@ int main(int argc, char** argv) {
     program.add_argument("--routing-queue-size")
         .default_value(96u).scan<'u', uint32_t>();
 
+    program.add_argument("--shuffle")
+        .default_value(false).implicit_value(true)
+        .help("If present, shuffle the order in which new vids are "
+              "inserted into the hierarchy (storage layout unchanged). "
+              "Absent by default.");
+
     // Search
     program.add_argument("--query-topk")
         .default_value(10u).scan<'u', uint32_t>();
@@ -578,6 +590,7 @@ int main(int argc, char** argv) {
     g_config.num_routing_loops         = program.get<uint32_t>("--num-routing-loops");
     g_config.routing_topk              = program.get<uint32_t>("--routing-topk");
     g_config.routing_queue_size        = program.get<uint32_t>("--routing-queue-size");
+    g_config.shuffle_insertion_order   = program.get<bool>("--shuffle");
     g_config.query_topk                = program.get<uint32_t>("--query-topk");
     g_config.warmup_runs               = program.get<uint32_t>("--warmup-runs");
     g_config.test_runs                 = program.get<uint32_t>("--test-runs");

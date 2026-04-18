@@ -94,21 +94,26 @@ public:
      * Refinement configs (@c refining_layer_config / @c propagate_config /
      * @c pruning_config) are pulled from @p index (set at construction).
      *
-     * @param index       The artea_graph index to grow.
-     * @param batch_vecs  Batch to insert (moved into @p index).
-     * @param dist_func   Distance functor (must outlive this call).
+     * @param index                    The artea_graph index to grow.
+     * @param batch_vecs               Batch to insert (moved into @p index).
+     * @param dist_func                Distance functor (must outlive this call).
+     * @param shuffle_insertion_order  Forwarded to the inherited
+     *                                 @c stacked_rgraph::IndexFactory::add_vertices;
+     *                                 see that overload for semantics.
      */
     static auto add_vertices(
         this_index_t&      index,
         vector_array_t&&   batch_vecs,
-        const dist_func_t& dist_func
+        const dist_func_t& dist_func,
+        const bool         shuffle_insertion_order = false
     ) -> void {
         // Step 1: coarse stacked_rgraph insertion across every layer
         // (L0 included). Each layer's slot is seeded with the r-net
         // candidates produced by Phase 1/2 so refine_layer has real
         // edges to prune rather than empty rows.
         base_t::add_vertices(index, std::move(batch_vecs), dist_func,
-                             /*insert_on_L0=*/true);
+                             /*insert_on_L0=*/true,
+                             shuffle_insertion_order);
 
         // Step 2 + 3: refine every occupied layer (including L0) and
         // write back. top_occupied_level_id is 0 for the degenerate
