@@ -237,25 +237,8 @@ private:
         const layer_id_t   top_level_id = index.top_occupied_level_id();
 
         // ==============================================================
-        //   Step A — Descent: top_level_id → level 1 (never level 0)
+        //   Step A — Descent: top_level_id → level 1 (not including level 0)
         // ==============================================================
-        //
-        // Legacy-style descent: a FRESH queue per level, seeded from the
-        // prior level's sorted candidates. Using a single shared queue
-        // across levels was attractive but caused a subtle quality bug:
-        // the shared queue's _lower_bound (= worst of top-K) carries
-        // over from upper levels, so a "medium distance" candidate found
-        // via L_h edges can be rejected by try_push even though
-        // expanding IT would have reached the true NN. Fresh queues
-        // avoid that gating entirely.
-        // Sized to cover every level Step D could reach
-        // (highest_insert_level_id is capped at max_restrict_level).
-        // Each slot is pre-emplaced with an empty queue so the two
-        // uncached cases — first-vertex bootstrap (descent skipped
-        // entirely) and lazy-growth top_level_id+1 (new top layer whose
-        // only participant is new_vid) — safely no-op inside
-        // run_select_at_level (beam_search early-exits on empty queue,
-        // yielding an empty pruned_results that Step D skips).
         const std::size_t num_cached_queues = static_cast<std::size_t>(max_restrict_level) + 1;
         std::vector<distance_t> min_dist_per_level(num_cached_queues, max_distance);
         std::vector<std::optional<std_candidate_queue_t>> descent_queue_per_level(num_cached_queues);
@@ -263,22 +246,18 @@ private:
 
         if (top_level_id != unassigned_highest_level_id && top_level_id >= 1) {
             std_candidate_queue_t cur_queue(search_nn_qs);
-            candidate_sample_utils_t::sample_single_entry(
-                index.get_vecs_storage(), dist_func, index, new_vec, cur_queue);
+            candidate_sample_utils_t::sample_single_entry(index.get_vecs_storage(), dist_func, index, new_vec, cur_queue);
 
             for (layer_id_t cur_level_id = top_level_id; cur_level_id >= 1; --cur_level_id) {
-                router.beam_search(
-                    new_vec, index, cur_level_id, cur_queue, visited);
+                router.beam_search(new_vec, index, cur_level_id, cur_queue, visited);
 
                 if (cur_queue.get_result_size() > 0) {
-                    min_dist_per_level[cur_level_id] =
-                        cur_queue.best_result_distance();
+                    min_dist_per_level[cur_level_id] = cur_queue.best_result_distance();
                 }
 
                 if (cur_level_id == 1) {
                     // Last level: just stash for Step D.
-                    descent_queue_per_level[cur_level_id].emplace(
-                        std::move(cur_queue));
+                    descent_queue_per_level[cur_level_id].emplace(std::move(cur_queue));
                     break;
                 }
 
@@ -286,12 +265,10 @@ private:
                 // handing ownership of cur_queue to the per-level slot.
                 // seed_from_queue copies this layer's top_candidates into
                 // the new queue in one O(L) pass with a clean
-                // _lower_bound (no cross-layer gating), replacing the
-                // extract_results + try_push round-trip.
+                // _lower_bound (no cross-layer gating).
                 std_candidate_queue_t next_queue(search_nn_qs);
                 next_queue.seed_from_queue(cur_queue);
-                descent_queue_per_level[cur_level_id].emplace(
-                    std::move(cur_queue));
+                descent_queue_per_level[cur_level_id].emplace(std::move(cur_queue));
                 cur_queue = std::move(next_queue);
             }
         }
@@ -299,47 +276,23 @@ private:
         // ==============================================================
         //   Step B — Compute highest_insert_level_id (match legacy)
         // ==============================================================
-        //
-        // Legacy rule (paper r-net with lazy hierarchy growth):
-        //   1. Default: grow hierarchy by ONE level. If all existing
-        //      layers fail to absorb q, q joins L_1..L_{top_occupied+1}
-        //      (capped at max_restrict_level).
-        //   2. Walk the existing paper layers h = 1..top_occupied.
-        //      The SMALLEST h such that NN_{L_h} <= R_h means q is
-        //      absorbed at L_h → q joins only L_1..L_{h-1}
-        //      (so highest_insert_level_id = h - 1). Break.
-        //
-        // Why the default / walk direction matter:
-        //   - `nn_at_h` for h > top_occupied is UNDEFINED (no
-        //     participants → we haven't measured it). Our previous
-        //     code treated this as "not absorbed" (nn = max_distance
-        //     always >= R_h) and therefore ALWAYS pushed q to
-        //     growth_cap, even when q was absorbed at L_1. That
-        //     spurious promotion is what polluted L_1 / L_2 with
-        //     vertices that should have been base-only, driving the
-        //     21% / 50% separation violations. Legacy's explicit
-        //     break-on-first-absorbed avoids that entirely.
         layer_id_t highest_insert_level_id;
         if (top_level_id == unassigned_highest_level_id) {
             // Empty hierarchy: first vertex seeds L_1.
             highest_insert_level_id = 1;
         } else {
+            // Default: grow hierarchy by ONE level (capped at
+            // max_restrict_level).
             highest_insert_level_id = std::min<layer_id_t>(
                 static_cast<layer_id_t>(top_level_id) + 1,
                 static_cast<layer_id_t>(max_restrict_level));
-        }
-
-        for (layer_id_t h = 1;
-             h <= static_cast<layer_id_t>(
-                 top_level_id == unassigned_highest_level_id
-                     ? 0 : top_level_id) &&
-             static_cast<std::size_t>(h) < min_dist_per_level.size();
-             ++h)
-        {
-            if (min_dist_per_level[h] <= index.radius_at(h)) {
-                highest_insert_level_id =
-                    (h == 1) ? layer_id_t{0} : static_cast<layer_id_t>(h - 1);
-                break;
+            // Override: smallest h where q is absorbed at L_h means
+            // q joins only L_0..L_{h-1}.
+            for (layer_id_t h = 1; h <= top_level_id; ++h) {
+                if (min_dist_per_level[h] <= index.radius_at(h)) {
+                    highest_insert_level_id = static_cast<layer_id_t>(h - 1);
+                    break;
+                }
             }
         }
 

@@ -216,8 +216,7 @@ public:
             auto arena = std::make_unique<level_group_arena_t>(
                 /*highest_level_id=*/layer,
                 /*slot_nbrs_count=*/_compute_slots_nbr_count(layer));
-            arena->ensure_slot_capacity(
-                _default_slot_capacity_for_arena(layer, total_vertices));
+            arena->ensure_slot_capacity(_default_slot_capacity_for_arena(layer, total_vertices));
             _arenas.emplace_back(std::move(arena));
         }
         _vids_by_highest_level.resize(num_arenas);
@@ -284,8 +283,7 @@ public:
     ) -> void {
         if (highest_level_id > _max_restrict_level) {
             ARTEA_ERROR(fmt::format(
-                "assign_layer: highest_level_id ({}) exceeds "
-                "max_restrict_level ({})",
+                "assign_layer: highest_level_id ({}) exceeds max_restrict_level ({})",
                 highest_level_id, _max_restrict_level));
         }
 
