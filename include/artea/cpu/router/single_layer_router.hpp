@@ -229,11 +229,9 @@ public:
             [&](const tbb::blocked_range<vertex_num_t>& r) {
                 for (vertex_num_t i = r.begin(); i != r.end(); ++i) {
                     auto& visited = _visited_table_pool.acquire();
-                    auto topk_results = _query_impl(
-                        query_vecs.get(i), single_layer_graph,
+                    auto topk_results = _query_impl(query_vecs.get(i), single_layer_graph,
                         _pick_random_entry(single_layer_graph), visited);
-                    std::copy(topk_results.begin(), topk_results.end(),
-                              results.begin() + i * k);
+                    std::copy(topk_results.begin(), topk_results.end(), results.begin() + i * k);
                 }
             }
         );
@@ -256,11 +254,9 @@ public:
             [&](const tbb::blocked_range<vertex_num_t>& r) {
                 for (vertex_num_t i = r.begin(); i != r.end(); ++i) {
                     auto& visited = _visited_table_pool.acquire();
-                    auto topk_results = _query_impl(
-                        query_vecs.get(i), single_layer_graph,
+                    auto topk_results = _query_impl(query_vecs.get(i), single_layer_graph,
                         entry_point, visited);
-                    std::copy(topk_results.begin(), topk_results.end(),
-                              results.begin() + i * k);
+                    std::copy(topk_results.begin(), topk_results.end(), results.begin() + i * k);
                 }
             }
         );
