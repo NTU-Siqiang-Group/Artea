@@ -37,7 +37,6 @@ class IndexFactory {
     using layer_config_t = typename GraphFactoryTraitsT::layer_config_t;
     using this_index_t = typename GraphFactoryTraitsT::symmetric_knn_graph::index_t;
     using propagate_config_t = typename GraphFactoryTraitsT::symmetric_knn_graph::propagate_config_t;
-    using pruning_config_t = typename GraphFactoryTraitsT::symmetric_knn_graph::pruning_config_t;
     using random_eg_t = typename GraphFactoryTraitsT::random_eg_t;
     using propagate_engine_t = typename GraphFactoryTraitsT::propagate_engine_t;
     using triangle_updater_t = typename GraphFactoryTraitsT::triangle_updater_t;
@@ -156,9 +155,7 @@ private:
         propagate_engine_t propagate_engine(dist_func);
         propagate_engine.set_graph(graph_index.get_refining_graph());
 
-        const auto& pruning_config = graph_index.pruning_config();
-        auto triangle_updater  = propagate_engine.template make_updater<triangle_updater_t>(
-            pruning_config.scale_coeffs(), pruning_config.shifted_coeffs());
+        auto triangle_updater  = propagate_engine.template make_updater<triangle_updater_t>();
         auto reverse_updater   = propagate_engine.template make_updater<reverse_updater_t>();
         const vertex_num_t routing_topk = propagate_config.resolve_routing_topk(max_nbr_size);
         const vertex_num_t routing_queue_size = propagate_config.resolve_routing_queue_size(max_nbr_size);

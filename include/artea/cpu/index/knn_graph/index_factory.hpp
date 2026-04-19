@@ -52,7 +52,6 @@ class IndexFactory {
     using layer_config_t = typename GraphFactoryTraitsT::layer_config_t;
     using this_index_t = typename GraphFactoryTraitsT::knn_graph::index_t;
     using propagate_config_t = typename GraphFactoryTraitsT::knn_graph::propagate_config_t;
-    using pruning_config_t = typename GraphFactoryTraitsT::knn_graph::pruning_config_t;
     using random_eg_t        = typename GraphFactoryTraitsT::random_eg_t;
     using propagate_engine_t = typename GraphFactoryTraitsT::propagate_engine_t;
     using triangle_updater_t = typename GraphFactoryTraitsT::triangle_updater_t;
@@ -126,7 +125,6 @@ private:
      *
      * @param graph_index       The graph being constructed (modified in-place).
      * @param dist_func        Distance function for this graph.
-     * @param pruning_config   Pruning configuration (scale_coeffs, shifted_coeffs).
      * @param propagate_config Propagation configuration (num_build_loops, num_triangle_updater_iters, prefill_ratio).
      * @param on_iter_end      Optional callback called after each build loop with
      *                         the current build loop index. Pass nullptr to skip.
@@ -152,9 +150,7 @@ private:
         propagate_engine_t propagate_engine(dist_func);
         propagate_engine.set_graph(graph_index.get_refining_graph());
 
-        const auto& pruning_config = graph_index.pruning_config();
-        auto triangle_updater  = propagate_engine.template make_updater<triangle_updater_t>(
-            pruning_config.scale_coeffs(), pruning_config.shifted_coeffs());
+        auto triangle_updater  = propagate_engine.template make_updater<triangle_updater_t>();
         auto reverse_updater   = propagate_engine.template make_updater<reverse_updater_t>();
         const vertex_num_t routing_topk = propagate_config.resolve_routing_topk(max_nbr_size);
         const vertex_num_t routing_queue_size = propagate_config.resolve_routing_queue_size(max_nbr_size);

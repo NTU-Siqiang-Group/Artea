@@ -15,15 +15,11 @@
 /*
  * @FilePath: /Artea/include/artea/cpu/refiner/hierarchical_pruning_updater.hpp
  * @Author: Chandler (Weitang Ye) <weitang.ye@ntu.edu.sg>
- * @Description: RNG triangle-inequality pruning over nbr_t, decoupled
- *               from any RefiningGraph / layer_config. Used by
+ * @Description: Pure-RNG neighbor pruning over nbr_t, decoupled from any
+ *               RefiningGraph / layer_config. Used by
  *               stacked_rgraph::IndexFactory for both forward-edge
  *               pruning (new vertex's candidate list) and reverse-edge
  *               pruning (existing neighbors' lists under overflow).
- *
- *               TODO: the RNG logic is duplicated from PruningUpdater.
- *                     Once both hierarchical and bottom updaters have
- *                     stabilized, unify them on a common kernel.
  */
 
 #pragma once
@@ -33,65 +29,54 @@
 #include <vector>
 
 #include <artea/common/logger.hpp>
-#include <artea/cpu/refiner/triangle_updater.hpp>   // for PruningConditionT
 
 namespace artea {
 namespace cpu {
 
 /**
- * @brief In-place RNG-style neighbor pruning over @c nbr_t.
+ * @brief In-place pure-RNG neighbor pruning over @c nbr_t.
  *
  * Accepts a distance-ascending sorted list of candidates and retains at
- * most @c max_nbr_size entries that pass the scaled triangle-inequality
- * check against already-retained entries.
+ * most @c max_nbr_size entries that pass the plain triangle-inequality
+ * check (threshold = ori_dist, no scale/shift) against already-retained
+ * entries.
  *
- * Unlike the RefiningGraph-centric @c PruningUpdater, this class is stateless
- * except for the pruning coefficients and the references to
- * @c vecs_data + @c dist_func needed to compute neighbor-to-neighbor
- * distances. @c max_nbr_size is a per-call parameter because the
- * hierarchical graph uses different capacities per level
- * (level 0 has 2 * max_nbr_size, upper levels have max_nbr_size).
+ * Unlike the RefiningGraph-centric @c PruningUpdater, this class is
+ * stateless except for the references to @c vecs_data + @c dist_func
+ * needed to compute neighbor-to-neighbor distances. @c max_nbr_size is a
+ * per-call parameter because the hierarchical graph uses different
+ * capacities per level (level 0 has 2 * max_nbr_size, upper levels have
+ * max_nbr_size).
  *
  * @tparam RefinerTraitsT The refiner traits type.
  */
 template <typename RefinerTraitsT>
 class HierarchicalPruningUpdater {
 
-    using vertex_id_t     = typename RefinerTraitsT::vertex_id_t;
     using vertex_num_t    = typename RefinerTraitsT::vertex_num_t;
-    using layer_id_t      = typename RefinerTraitsT::layer_id_t;
     using vec_ele_t       = typename RefinerTraitsT::vec_ele_t;
     using distance_t      = typename RefinerTraitsT::distance_t;
-    using ratio_t         = typename RefinerTraitsT::ratio_t;
     using vector_array_t  = typename RefinerTraitsT::vector_array_t;
     using dist_func_t     = typename RefinerTraitsT::dist_func_t;
     using nbr_t           = typename RefinerTraitsT::nbr_t;
-
-    static constexpr bool accepted = true;
-    static constexpr bool rejected = false;
 
 public:
     static constexpr const char* updater_name = "hierarchical_pruning_updater";
 
     /**
      * @brief Construct an updater bound to a vector array + distance
-     *        functor + RNG coefficients.
+     *        functor. Pruning uses the plain RNG rule (threshold =
+     *        ori_dist) — no scale/shift coefficients are consumed here.
      *
-     * @param dist_func        Distance functor.
-     * @param vecs_data        Base vector storage (coordinate lookup).
-     * @param scale_coeffs     RNG scale; threshold = ori_dist / scale.
-     * @param shifted_coeffs   RNG shift; used only by shifted variants.
+     * @param dist_func  Distance functor.
+     * @param vecs_data  Base vector storage (coordinate lookup).
      */
     HierarchicalPruningUpdater(
         const dist_func_t&    dist_func,
-        const vector_array_t& vecs_data,
-        const ratio_t         scale_coeffs,
-        const ratio_t         shifted_coeffs = ratio_t(0)
+        const vector_array_t& vecs_data
     ) :
         _dist_func(dist_func),
-        _vecs_data(vecs_data),
-        _inv_scale_coeffs(static_cast<ratio_t>(1.0) / scale_coeffs),
-        _shifted_coeffs(shifted_coeffs) {}
+        _vecs_data(vecs_data) {}
 
     /**
      * @brief Prune @p origin_nbrs in place, keeping at most
@@ -99,34 +84,18 @@ public:
      *
      * @p origin_nbrs must be sorted ascending by distance on entry. The
      * first entry is always retained (it is the closest); each
-     * subsequent entry is retained iff it is strictly farther from every
-     * already-retained entry than it is from the pivot (up to the
-     * configured scale/shift). Retained entries preserve their ascending
-     * order and are marked as "old".
+     * subsequent entry is retained iff every already-retained entry is
+     * strictly farther from it than the pivot is from it — i.e. the
+     * plain RNG rule with no scale/shift. Retained entries preserve
+     * their ascending order and are marked as "old".
      *
-     * The @p target_level_id gates which pruning condition is applied:
-     *   - L0 (base layer): uses the stored @c _shifted_coeffs together
-     *     with @c _inv_scale_coeffs (paper's full scaled+shifted RNG).
-     *   - L1+ (upper layers): forces shift=0 and keeps only the scaled
-     *     term, so r-net upper-layer geometry is not further biased by
-     *     the bottom-layer shift.
-     *
-     * @param pivot_vid        The vid whose neighbor list is being pruned.
-     *                         Used only for the neighbor-to-pivot distance
-     *                         lookup (via @p origin_nbrs' recorded
-     *                         distances, not via @c _dist_func).
-     * @param origin_nbrs      Candidate list; pruned in place.
-     * @param max_nbr_size     Maximum number of retained neighbors.
-     * @param target_level_id  Hierarchy level the pruned edges will live
-     *                         at; selects the per-level RNG variant.
+     * @param origin_nbrs   Candidate list; pruned in place.
+     * @param max_nbr_size  Maximum number of retained neighbors.
      */
     auto update_impl(
-        const vertex_id_t   pivot_vid,
         std::vector<nbr_t>& origin_nbrs,
-        const vertex_num_t  max_nbr_size,
-        const layer_id_t    target_level_id
+        const vertex_num_t  max_nbr_size
     ) const -> void {
-        (void)pivot_vid;   // reserved for future debug / diagnostics
         if (origin_nbrs.empty()) return;
 
         std::vector<nbr_t> retained_nbrs;
@@ -136,15 +105,28 @@ public:
         // The closest candidate is always retained.
         retained_nbrs.push_back(origin_nbrs[0]);
 
-        // L0 applies the configured shift; upper layers force shift=0.
-        const ratio_t effective_shifted_coeffs =
-            (target_level_id == 0) ? _shifted_coeffs : ratio_t(0);
-
-        for (vertex_num_t i = 1; i < origin_nbrs.size() && retained_nbrs.size() < max_nbr_size; ++i) {
+        for (vertex_num_t i = 1;
+             i < origin_nbrs.size() && retained_nbrs.size() < max_nbr_size;
+             ++i)
+        {
             const nbr_t& ori_nbr = origin_nbrs[i];
-            if (_internal_check(ori_nbr, retained_nbrs, effective_shifted_coeffs)) {
-                retained_nbrs.push_back(ori_nbr);
+            const distance_t threshold = ori_nbr.get_distance();
+            const vec_ele_t* ori_vec   = _vecs_data.get(ori_nbr.get_vid());
+
+            bool accepted = true;
+            for (const nbr_t& retained_nbr : retained_nbrs) {
+                // Old/old pairs can skip the triangle check: neither
+                // changed since the last refinement round, so their
+                // prior decision still holds.
+                if (ori_nbr.is_old() && retained_nbr.is_old()) continue;
+
+                const vec_ele_t* retained_vec =
+                    _vecs_data.get(retained_nbr.get_vid());
+                const distance_t dist_to_retained =
+                    _dist_func(ori_vec, retained_vec);
+                if (dist_to_retained < threshold) { accepted = false; break; }
             }
+            if (accepted) retained_nbrs.push_back(ori_nbr);
         }
 
         // Mark retained as "old" — matches PruningUpdater convention.
@@ -156,41 +138,8 @@ public:
     }
 
 private:
-    __attribute__((always_inline))
-    auto _compute_threshold(
-        const distance_t ori_dist,
-        const ratio_t    effective_shifted_coeffs
-    ) const -> distance_t {
-        return ori_dist * _inv_scale_coeffs - effective_shifted_coeffs;
-    }
-
-    auto _internal_check(
-        const nbr_t&              ori_nbr,
-        const std::vector<nbr_t>& retained_nbrs,
-        const ratio_t             effective_shifted_coeffs
-    ) const -> bool {
-        const vec_ele_t* ori_vec = _vecs_data.get(ori_nbr.get_vid());
-        const distance_t threshold = _compute_threshold(
-            ori_nbr.get_distance(), effective_shifted_coeffs);
-
-        for (const nbr_t& retained_nbr : retained_nbrs) {
-            // Matches PruningUpdater: if both candidate and retained are
-            // marked as "old" (i.e. unchanged since last refinement
-            // round), skip the triangle check to save work.
-            if (ori_nbr.is_old() && retained_nbr.is_old()) continue;
-
-            const vec_ele_t* retained_vec = _vecs_data.get(retained_nbr.get_vid());
-            const distance_t dist_to_retained = _dist_func(ori_vec, retained_vec);
-            if (dist_to_retained < threshold) return rejected;
-        }
-
-        return accepted;
-    }
-
     const dist_func_t&    _dist_func;
     const vector_array_t& _vecs_data;
-    const ratio_t         _inv_scale_coeffs;
-    const ratio_t         _shifted_coeffs;
 
 };  // class HierarchicalPruningUpdater
 

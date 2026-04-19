@@ -175,19 +175,16 @@ namespace knn_graph {
     using index_t = typename graph_factory_traits_t::knn_graph::index_t;
     using factory_t = typename graph_factory_traits_t::knn_graph::factory_t;
     using propagate_config_t = typename graph_factory_traits_t::knn_graph::propagate_config_t;
-    using pruning_config_t = typename graph_factory_traits_t::knn_graph::pruning_config_t;
 }
 
 namespace symmetric_knn_graph {
     using index_t = typename graph_factory_traits_t::symmetric_knn_graph::index_t;
     using factory_t = typename graph_factory_traits_t::symmetric_knn_graph::factory_t;
     using propagate_config_t = typename graph_factory_traits_t::symmetric_knn_graph::propagate_config_t;
-    using pruning_config_t = typename graph_factory_traits_t::symmetric_knn_graph::pruning_config_t;
 }
 
 namespace stacked_rgraph {
     using rgraph_config_t  = typename graph_factory_traits_t::stacked_rgraph::rgraph_config_t;
-    using pruning_config_t = typename graph_factory_traits_t::stacked_rgraph::pruning_config_t;
     using index_t          = typename graph_factory_traits_t::stacked_rgraph::index_t;
     using factory_t        = typename graph_factory_traits_t::stacked_rgraph::factory_t;
 }

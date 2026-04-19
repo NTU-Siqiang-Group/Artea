@@ -87,7 +87,6 @@ class IndexFactory {
     using dist_func_t      = typename GraphFactoryTraitsT::dist_func_t;
     using ratio_t          = typename GraphFactoryTraitsT::ratio_t;
 
-    using pruning_config_t = typename GraphFactoryTraitsT::stacked_rgraph::pruning_config_t;
     using hierarchical_pruning_updater_t =
         typename GraphFactoryTraitsT::hierarchical_pruning_updater_t;
 
@@ -169,18 +168,13 @@ public:
 
         // Construct the pruning updater AFTER append_vecs so the storage
         // reference it captures already points at populated data (belt-
-        // and-suspenders; vecs_storage_t is stable either way).
-        //
-        // Both scale and shift coefficients are captured here. The
-        // updater internally applies shift only at L0; upper layers
-        // ignore the stored shift and use the scale-only variant
-        // (see HierarchicalPruningUpdater::update_impl).
-        const pruning_config_t& pruning_config = index.pruning_config();
+        // and-suspenders; vecs_storage_t is stable either way). This
+        // build-time pruner applies the plain RNG rule (threshold =
+        // ori_dist) at every level — scale/shift are a post-refining-
+        // only concern now.
         hierarchical_pruning_updater_t pruning_updater(
             dist_func,
-            index.get_vecs_storage(),
-            pruning_config.scale_coeffs(),
-            pruning_config.shifted_coeffs());
+            index.get_vecs_storage());
 
         const auto& vecs_storage = index.get_vecs_storage();
         const vertex_num_t total_vecs = static_cast<vertex_num_t>(vecs_storage.get_num_vecs());
@@ -416,9 +410,8 @@ private:
                     cand.get_vid(), cand.get_distance(), /*is_new=*/true);
             }
             pruning_updater.update_impl(
-                new_vid, pruned_results,
-                index.max_nbr_size(target_level_id),
-                target_level_id);
+                pruned_results,
+                index.max_nbr_size(target_level_id));
             return pruned_results;
         };
 
@@ -471,8 +464,7 @@ private:
                             [](const nbr_t& a, const nbr_t& b) {
                                 return a.get_distance() < b.get_distance();
                             });
-                        pruning_updater.update_impl(
-                            nbr_vid, merged, slot_cap, target_level_id);
+                        pruning_updater.update_impl(merged, slot_cap);
                         for (std::size_t k = 0;
                              k < merged.size() && k < slot_cap; ++k)
                         {

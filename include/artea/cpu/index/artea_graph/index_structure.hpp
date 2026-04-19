@@ -68,10 +68,11 @@ public:
         const propagate_config_t  propagate_config,
         const pruning_config_t    pruning_config
     ) :
-        // artea_graph / stacked_rgraph PruningConfig alias to the same
-        // underlying type, so the refinement pruning_config can also seed
-        // the base's r-net insertion pruning_config.
-        base_t(total_vertices, rgraph_config, pruning_config),
+        // Stacked-rgraph backbone no longer carries pruning_config — the
+        // build-time hierarchical pruner uses plain RNG. pruning_config
+        // is kept here because the per-layer refinement pipeline still
+        // consumes scale/shift in its PruningUpdater routing loop.
+        base_t(total_vertices, rgraph_config),
         _refining_layer_config(refining_layer_config),
         _propagate_config(propagate_config),
         _pruning_config(pruning_config)

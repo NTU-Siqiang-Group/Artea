@@ -15,27 +15,23 @@
 /*
  * @FilePath: /Artea/include/artea/cpu/refiner/triangle_updater.hpp
  * @Author: Chandler (Weitang Ye) <weitang.ye@ntu.edu.sg>
- * @Description: Triangle-based neighbor updater for edge generation.
+ * @Description: Pure-RNG triangle-based neighbor updater for edge
+ *               generation. Threshold is always @c ori_dist — no
+ *               scale/shift coefficients are consumed. Conflicts write
+ *               reverse-edge entries to the log table.
  */
 
 #pragma once
 
 #include <cstddef>
 #include <cstdint>
+#include <tuple>
 #include <vector>
 #include <stdexcept>
 #include <artea/cpu/utils/nbr_arr_checker.hpp>
 
 namespace artea {
 namespace cpu {
-
-/* ------ Pruning Condition Enumeration ------ */
-enum class PruningConditionT {
-    scaled_ineq,
-    scaled_shifted_ineq,
-    shifted_ineq,
-    origin_rng_ineq
-};
 
 template <typename RefinerTraitsT>
 class TriangleUpdater :
@@ -45,7 +41,6 @@ class TriangleUpdater :
     using vertex_num_t = typename RefinerTraitsT::vertex_num_t;
     using vec_ele_t = typename RefinerTraitsT::vec_ele_t;
     using distance_t = typename RefinerTraitsT::distance_t;
-    using ratio_t = typename RefinerTraitsT::ratio_t;
     using vector_array_t = typename RefinerTraitsT::vector_array_t;
     using nbr_t = typename RefinerTraitsT::nbr_t;
     using nbr_arr_t = typename RefinerTraitsT::nbr_arr_t;
@@ -66,12 +61,8 @@ public:
         const dist_func_t&        dist_func,
         const vector_array_t&     vecs_data,
         log_table_t&              log_table,
-        const refining_graph_t&   refining_graph,
-        const ratio_t             scale_coeffs,
-        const ratio_t             shifted_coeffs = 0.0
-    ) : base_class_t(dist_func, vecs_data, log_table, refining_graph),
-        _inv_scale_coeffs(static_cast<ratio_t>(1.0) / scale_coeffs),
-        _shifted_coeffs(shifted_coeffs) {}
+        const refining_graph_t&   refining_graph
+    ) : base_class_t(dist_func, vecs_data, log_table, refining_graph) {}
 
     __attribute__((always_inline))
     auto get_max_nbr_size() const -> vertex_num_t {
@@ -79,37 +70,31 @@ public:
     }
 
     /**
-     * @brief Apply triangle inequality pruning to the neighbor array of a pivot vertex.
+     * @brief Apply pure-RNG triangle-inequality pruning to the neighbor
+     *        array of a pivot vertex.
      *
-     * This operator implements the RNG (Relative Neighborhood Graph) pruning algorithm based on
-     * the triangle inequality. For each neighbor candidate, it checks whether there exists a
-     * "shortcut" through already-retained neighbors. If such a shortcut exists (RNG conflict),
-     * the candidate is rejected and a reverse edge is logged instead.
+     * For each candidate, the threshold is simply its own distance to
+     * the pivot (@c ori_dist): a candidate is rejected iff some already-
+     * retained neighbor is closer to it than the pivot is. Rejected
+     * candidates log a reverse-edge entry rather than being silently
+     * discarded.
      *
-     * @tparam ConditionType The pruning condition type (default: scaled_ineq).
-     *         - scaled_ineq: threshold = d_ori / scale_coeffs
-     *         - scaled_shifted_ineq: threshold = d_ori / scale_coeffs - shifted_coeffs
-     *         - shifted_ineq: threshold = d_ori - shifted_coeffs
-     *         - origin_rng_ineq: threshold = d_ori
+     * @param pivot_vid   Unused; retained only for the updater interface.
+     * @param origin_nbrs The neighbor array to be pruned. On return it
+     *                    contains only retained neighbors, sorted by
+     *                    distance and marked as old.
      *
-     * @param pivot_vid The vertex ID whose neighbor array is being pruned.
-     * @param origin_nbrs The neighbor array to be pruned. After pruning, this array will contain
-     *                    only the retained neighbors, sorted by distance and marked as old.
-     *
-     * @warning origin_nbrs MUST NOT be empty before calling this operator. An empty neighbor array
-     *          will cause undefined behavior in release builds and trigger an error in debug builds.
-     *          The first neighbor is always retained as it represents the closest neighbor and
-     *          cannot conflict with any other neighbor.
+     * @warning origin_nbrs MUST NOT be empty before calling this
+     *          operator. Debug builds assert; release builds have UB.
      *
      * Algorithm:
-     * 1. The first (closest) neighbor is always retained without checking.
-     * 2. For each subsequent neighbor, check if it conflicts with any already-retained neighbor
-     *    based on the triangle inequality threshold.
-     * 3. If no conflict is found, retain the neighbor; otherwise, log a reverse edge and reject it.
-     * 4. Stop early if max_nbr_size is reached.
-     * 5. Mark all retained neighbors as old and replace origin_nbrs with the pruned array.
+     * 1. The first (closest) neighbor is always retained.
+     * 2. For each subsequent neighbor, check if it conflicts with any
+     *    already-retained neighbor under the plain RNG rule.
+     * 3. Retain on success; otherwise log a reverse edge and reject.
+     * 4. Stop early once max_nbr_size is reached.
+     * 5. Mark retained as old and swap into origin_nbrs.
      */
-    template <PruningConditionT ConditionType = PruningConditionT::scaled_ineq>
     auto update_impl(
         const vertex_id_t /*layer_vid*/,
         nbr_arr_t& origin_nbrs
@@ -129,7 +114,7 @@ public:
 
         for (vertex_num_t i = 1; i < origin_nbrs.size(); ++i) {
             const nbr_t& ori_nbr = origin_nbrs[i];
-            auto [passed, conflict_vid, conflict_dist] = _internal_check<ConditionType>(ori_nbr, retained_nbrs);
+            auto [passed, conflict_vid, conflict_dist] = _internal_check(ori_nbr, retained_nbrs);
 
             if (passed) {
                 retained_nbrs.push_back(ori_nbr);
@@ -158,36 +143,12 @@ public:
 
 private:
 
-    /** @brief Inverse of scale coefficient for RNG Triangle Inequality, used to accelerate division. */
-    const ratio_t _inv_scale_coeffs;
-
-    /** @brief Shifted coefficient for RNG Triangle Inequality. */
-    const ratio_t _shifted_coeffs;
-
-    /**
-     * @brief Compute the pruning threshold based on the pruning condition type.
-     */
-    template <PruningConditionT ConditionType>
-    __attribute__((always_inline))
-    constexpr auto _compute_threshold(const distance_t ori_dist) const -> distance_t {
-        if constexpr (ConditionType == PruningConditionT::scaled_ineq) {
-            return ori_dist * _inv_scale_coeffs;
-        } else if constexpr (ConditionType == PruningConditionT::scaled_shifted_ineq) {
-            return ori_dist * _inv_scale_coeffs - _shifted_coeffs;
-        } else if constexpr (ConditionType == PruningConditionT::shifted_ineq) {
-            return ori_dist - _shifted_coeffs;
-        } else if constexpr (ConditionType == PruningConditionT::origin_rng_ineq) {
-            return ori_dist;
-        }
-    }
-
-    template <PruningConditionT ConditionType>
     auto _internal_check(
         const nbr_t& ori_nbr,
         const nbr_arr_t& retained_nbrs
     ) -> std::tuple<bool, vertex_id_t, distance_t> {
         const vec_ele_t* ori_vec = this->_vecs_data.get(ori_nbr.get_vid());
-        const distance_t threshold = _compute_threshold<ConditionType>(ori_nbr.get_distance());
+        const distance_t threshold = ori_nbr.get_distance();
 
         // Check conflict with all retained neighbors
         for (vertex_num_t i = 0; i < retained_nbrs.size(); ++i) {

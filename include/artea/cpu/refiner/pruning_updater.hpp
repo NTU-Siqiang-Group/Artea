@@ -15,7 +15,9 @@
 /*
  * @FilePath: /Artea/include/artea/cpu/refiner/pruning_updater.hpp
  * @Author: Chandler (Weitang Ye) <weitang.ye@ntu.edu.sg>
- * @Description: Pruning-based neighbor updater (no log writes).
+ * @Description: Pruning-based neighbor updater (no log writes). This is
+ *               the only post-refining component that still consumes
+ *               RNG scale/shift coefficients.
  */
 
 #pragma once
@@ -28,6 +30,20 @@
 
 namespace artea {
 namespace cpu {
+
+/* ------ Pruning Condition Enumeration ------ *
+ *
+ * Only PruningUpdater consumes this enum now: the post-refining routing
+ * loop uses it to pick between plain RNG and the scaled/shifted RNG
+ * variants. TriangleUpdater / HierarchicalPruningUpdater hard-code the
+ * plain RNG rule and ignore scale/shift entirely.
+ */
+enum class PruningConditionT {
+    scaled_ineq,
+    scaled_shifted_ineq,
+    shifted_ineq,
+    origin_rng_ineq
+};
 
 template <typename RefinerTraitsT>
 class PruningUpdater :

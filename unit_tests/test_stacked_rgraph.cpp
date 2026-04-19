@@ -62,10 +62,6 @@ struct TestConfig {
     // Beam-search queue sizes
     uint32_t search_nn_qs;
     uint32_t select_nbrs_qs;
-
-    // RNG pruning coefficients (forwarded to stacked_rgraph::pruning_config_t)
-    float    scale_coeffs;
-    float    shifted_coeffs;
 } g_config;
 
 // ============================================================
@@ -145,11 +141,8 @@ protected:
             static_cast<vertex_num_t>(g_config.search_nn_qs),
             static_cast<vertex_num_t>(g_config.select_nbrs_qs),
             g_config.max_nbr_size);
-        stacked_rgraph::pruning_config_t pruning_config(
-            static_cast<ratio_t>(g_config.scale_coeffs),
-            static_cast<ratio_t>(g_config.shifted_coeffs));
         auto graph = std::make_unique<stacked_rgraph::index_t>(
-            total_vertices, rgraph_config, pruning_config);
+            total_vertices, rgraph_config);
 
         vector_array_t owned_batch =
             base_vecs.extract_subset(0, total_vertices);
@@ -191,13 +184,11 @@ protected:
     static void SetUpTestSuite() {
         ARTEA_INFO(fmt::format(
             "Building StackedRGraph: beta={:.3f}, L1_radius={:.6f}, "
-            "max_nbr={}, search_nn_qs={}, select_nbrs_qs={}, "
-            "scale_coeffs={:.3f}, shifted_coeffs={:.3f}",
+            "max_nbr={}, search_nn_qs={}, select_nbrs_qs={}",
             g_config.rnet_beta,
             DataProvider::instance().get_l1_radius(),
             g_config.max_nbr_size,
-            g_config.search_nn_qs, g_config.select_nbrs_qs,
-            g_config.scale_coeffs, g_config.shifted_coeffs));
+            g_config.search_nn_qs, g_config.select_nbrs_qs));
 
         ARTEA_INFO("--- Building with insert_on_L0=false ---");
         std::tie(_graph_no_l0, _build_ms_no_l0) = build_graph(/*insert_on_L0=*/false);
@@ -282,13 +273,6 @@ int main(int argc, char** argv) {
     program.add_argument("--select-nbrs-qs")
         .default_value(100u).scan<'u', uint32_t>();
 
-    program.add_argument("--scale-coeffs")
-        .default_value(1.1f).scan<'g', float>()
-        .help("RNG pruning scale coefficient (stacked_rgraph::pruning_config_t)");
-    program.add_argument("--shifted-coeffs")
-        .default_value(0.0f).scan<'g', float>()
-        .help("RNG pruning shifted coefficient (stacked_rgraph::pruning_config_t)");
-
     try {
         program.parse_args(argc, argv);
     } catch (const std::exception& err) {
@@ -304,8 +288,6 @@ int main(int argc, char** argv) {
     g_config.probe_quantile     = program.get<float>("--probe-quantile");
     g_config.search_nn_qs       = program.get<uint32_t>("--search-nn-qs");
     g_config.select_nbrs_qs     = program.get<uint32_t>("--select-nbrs-qs");
-    g_config.scale_coeffs       = program.get<float>("--scale-coeffs");
-    g_config.shifted_coeffs     = program.get<float>("--shifted-coeffs");
 
     const float l1 = program.get<float>("--l1-radius");
     g_config.l1_radius_provided = (l1 >= 0.0f);
@@ -326,8 +308,6 @@ int main(int argc, char** argv) {
     std::cout << "max_nbr_size:   " << g_config.max_nbr_size   << "\n";
     std::cout << "search_nn_qs:   " << g_config.search_nn_qs   << "\n";
     std::cout << "select_nbrs_qs: " << g_config.select_nbrs_qs << "\n";
-    std::cout << "scale_coeffs:   " << g_config.scale_coeffs   << "\n";
-    std::cout << "shifted_coeffs: " << g_config.shifted_coeffs << "\n";
     std::cout << "modes:          insert_on_L0={false, true}\n";
     std::cout << "============================\n\n";
 

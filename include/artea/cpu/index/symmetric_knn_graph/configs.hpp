@@ -16,10 +16,6 @@ namespace symmetric_knn_graph {
 template <typename BaseTraitsT>
 using PropagateConfig = conv_graph::PropagateConfig<BaseTraitsT>;
 
-/** @brief Symmetric KNN graph uses the same PruningConfig as conv_graph. */
-template <typename BaseTraitsT>
-using PruningConfig = conv_graph::PruningConfig<BaseTraitsT>;
-
 }   // namespace symmetric_knn_graph
 }   // namespace cpu
 }   // namespace artea

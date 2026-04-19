@@ -172,8 +172,6 @@ TEST_F(PropagateEngineCorrectnessTest, TrianglePruningWithPropagateEngine) {
     const size_t initial_edges = num_vertices_ * (num_vertices_ - 1);
 
     // Create PropagateEngine and TriangleUpdater
-    const ratio_t scale_coeffs = 1.0;
-    const ratio_t shifted_coeffs = 0.0;
     const vec_num_t max_nbr_size = 6;
 
     graph_index_->layer_config().max_nbr_size(max_nbr_size);
@@ -181,7 +179,7 @@ TEST_F(PropagateEngineCorrectnessTest, TrianglePruningWithPropagateEngine) {
     propagate_engine_t propagate_engine(*dist_func_);
     propagate_engine.set_graph(graph_index_->get_refining_graph());
 
-    auto triangle_updater = propagate_engine.make_updater<triangle_updater_t>(scale_coeffs, shifted_coeffs);
+    auto triangle_updater = propagate_engine.make_updater<triangle_updater_t>();
 
     // Apply triangle pruning for 5 iterations
     propagate_engine.run(5, triangle_updater);
@@ -200,8 +198,8 @@ TEST_F(PropagateEngineCorrectnessTest, TrianglePruningWithPropagateEngine) {
         ARTEA_INFO("  ... (showing first 5 vertices)");
     }
 
-    // Verify RNG property
-    EXPECT_TRUE(verify_rng_property(nbrs_arr, scale_coeffs, shifted_coeffs))
+    // Verify RNG property (plain, no scale/shift)
+    EXPECT_TRUE(verify_rng_property(nbrs_arr))
         << "Graph does not satisfy RNG property after triangle pruning";
 
     // Verify that pruning reduced edges
@@ -321,68 +319,6 @@ TEST_F(PropagateEngineCorrectnessTest, IntegratedRandomAndReverseUpdater) {
         << "Forward and reverse edge distances should match";
 }
 
-TEST_F(PropagateEngineCorrectnessTest, ScaledTrianglePruning) {
-    // Test with scale_coeffs > 1.0 for more conservative pruning (keeping more edges)
-    auto& nbrs_arr = graph_index_->get_nbrs_arr();
-
-    for (vertex_id_t u = 0; u < num_vertices_; ++u) {
-        nbr_arr_t& nbrs = nbrs_arr[u];
-        for (vertex_id_t v = 0; v < num_vertices_; ++v) {
-            if (v != u) {
-                distance_t dist = compute_distance(u, v);
-                nbrs.push_back(nbr_t(v, dist, true));
-            }
-        }
-        std::sort(nbrs.begin(), nbrs.end(),
-            [](const nbr_t& a, const nbr_t& b) {
-                return a.get_distance() < b.get_distance();
-            });
-    }
-
-    // Use scale_coeffs = 1.2: threshold = d / 1.2 ≈ 0.83*d (smaller, more conservative)
-    const ratio_t scale_coeffs = 1.2;
-    const ratio_t shifted_coeffs = 0.0;
-    const vec_num_t max_nbr_size = 6;
-
-    graph_index_->layer_config().max_nbr_size(max_nbr_size);
-
-    propagate_engine_t propagate_engine(*dist_func_);
-    propagate_engine.set_graph(graph_index_->get_refining_graph());
-
-    auto triangle_updater = propagate_engine.make_updater<triangle_updater_t>(scale_coeffs, shifted_coeffs);
-
-    propagate_engine.run(5, triangle_updater);
-
-    ARTEA_INFO("Testing with scale_coeffs = 1.2 (conservative pruning, more edges):");
-    for (vertex_id_t u = 0; u < std::min(num_vertices_, static_cast<vec_num_t>(5)); ++u) {
-        const auto& nbrs = nbrs_arr[u];
-        std::string nbr_list;
-        for (size_t i = 0; i < nbrs.size(); ++i) {
-            nbr_list += fmt::format("({}, {:.3f})", nbrs[i].get_vid(), nbrs[i].get_distance());
-            if (i < nbrs.size() - 1) nbr_list += ", ";
-        }
-        ARTEA_INFO(fmt::format("  v{} -> [{}]", u, nbr_list));
-    }
-    if (num_vertices_ > 5) {
-        ARTEA_INFO("  ... (showing first 5 vertices)");
-    }
-
-    // Verify scaled RNG property
-    EXPECT_TRUE(verify_rng_property(nbrs_arr, scale_coeffs, shifted_coeffs))
-        << "Graph does not satisfy scaled RNG property";
-
-    size_t total_edges = 0;
-    for (vertex_id_t u = 0; u < num_vertices_; ++u) {
-        total_edges += nbrs_arr[u].size();
-    }
-
-    ARTEA_INFO(fmt::format("Total edges with scale_coeffs=1.2: {}", total_edges));
-
-    // With scale_coeffs > 1.0, pruning is more conservative
-    // Still less than complete graph, but verification is that RNG property holds
-    EXPECT_LT(total_edges, num_vertices_ * (num_vertices_ - 1));
-}
-
 TEST_F(PropagateEngineCorrectnessTest, NeighborsSortedAfterPruning) {
     // Verify neighbors remain sorted by distance after pruning
     auto& nbrs_arr = graph_index_->get_nbrs_arr();
@@ -407,7 +343,7 @@ TEST_F(PropagateEngineCorrectnessTest, NeighborsSortedAfterPruning) {
     propagate_engine_t propagate_engine(*dist_func_);
     propagate_engine.set_graph(graph_index_->get_refining_graph());
 
-    auto triangle_updater = propagate_engine.make_updater<triangle_updater_t>(1.0, 0.0);
+    auto triangle_updater = propagate_engine.make_updater<triangle_updater_t>();
 
     propagate_engine.run(5, triangle_updater);
 
@@ -543,8 +479,6 @@ TEST_F(PropagateEngineCorrectnessTest, TrianglePruningWithoutSelectiveScheduling
             });
     }
 
-    const ratio_t scale_coeffs = 1.0;
-    const ratio_t shifted_coeffs = 0.0;
     const vec_num_t max_nbr_size = 6;
 
     graph_index_->layer_config().max_nbr_size(max_nbr_size);
@@ -552,7 +486,7 @@ TEST_F(PropagateEngineCorrectnessTest, TrianglePruningWithoutSelectiveScheduling
     propagate_engine_t propagate_engine(*dist_func_);
     propagate_engine.set_graph(graph_index_->get_refining_graph());
 
-    auto triangle_updater = propagate_engine.make_updater<triangle_updater_t>(scale_coeffs, shifted_coeffs);
+    auto triangle_updater = propagate_engine.make_updater<triangle_updater_t>();
 
     propagate_engine.run(5, triangle_updater);
 
@@ -567,7 +501,7 @@ TEST_F(PropagateEngineCorrectnessTest, TrianglePruningWithoutSelectiveScheduling
         ARTEA_INFO(fmt::format("  v{} -> [{}]", u, nbr_list));
     }
 
-    EXPECT_TRUE(verify_rng_property(nbrs_arr, scale_coeffs, shifted_coeffs))
+    EXPECT_TRUE(verify_rng_property(nbrs_arr))
         << "Graph does not satisfy RNG property without selective scheduling";
 }
 

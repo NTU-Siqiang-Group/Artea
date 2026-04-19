@@ -2,9 +2,8 @@
  * @FilePath: /Artea/include/artea/cpu/index/knn_graph/index_structure.hpp
  * @Author: Chandler (Weitang Ye) <weitang.ye@ntu.edu.sg>
  * @Description: KNN graph index structure. Composes a RefiningGraph plus
- *               propagation config. Pruning is hardcoded to identity
- *               (scale_coeffs=1.0, shifted_coeffs=0.0) since a KNN graph
- *               does not use RNG-style pruning.
+ *               propagation config. No RNG pruning config is stored —
+ *               the KNN build pipeline does not invoke PruningUpdater.
  */
 
 #pragma once
@@ -20,13 +19,12 @@ namespace cpu {
 namespace knn_graph {
 
 /**
- * @brief KNN graph index. Composes a @c RefiningGraph with a fixed
- *        identity pruning config and a caller-supplied propagation config.
+ * @brief KNN graph index. Composes a @c RefiningGraph with a
+ *        caller-supplied propagation config.
  *
- * Unlike @c conv_graph::IndexStructure, the pruning configuration is NOT
- * a constructor parameter — it is always @c {1.0, 0.0} (no RNG pruning).
- * This makes the API cleaner for KNN-graph callers who should never have
- * to think about pruning coefficients.
+ * The KNN build pipeline (random init + triangle + reverse + truncate +
+ * routing) does not consume any RNG pruning coefficients, so no
+ * @c PruningConfig is stored.
  *
  * @tparam IndexTraitsT The index traits type.
  */
@@ -40,8 +38,6 @@ class IndexStructure {
     using vector_array_t     = typename IndexTraitsT::vector_array_t;
     using layer_config_t     = typename IndexTraitsT::layer_config_t;
     using propagate_config_t = typename IndexTraitsT::knn_graph::propagate_config_t;
-    using pruning_config_t   = typename IndexTraitsT::knn_graph::pruning_config_t;
-    using ratio_t            = typename IndexTraitsT::ratio_t;
 
 public:
     /**
@@ -55,7 +51,6 @@ public:
         const layer_config_t layer_config,
         const propagate_config_t propagate_config
     ) : _refining_graph(std::make_unique<refining_graph_t>(vecs_data, layer_config)),
-        _pruning_config(ratio_t(1.0), ratio_t(0.0)),
         _propagate_config(propagate_config)
     {}
 
@@ -132,9 +127,6 @@ public:
     // --- Config accessors ---
 
     __attribute__((always_inline))
-    auto pruning_config() const -> const pruning_config_t& { return _pruning_config; }
-
-    __attribute__((always_inline))
     auto propagate_config() const -> const propagate_config_t& { return _propagate_config; }
 
     __attribute__((always_inline))
@@ -142,7 +134,6 @@ public:
 
 private:
     std::unique_ptr<refining_graph_t> _refining_graph;
-    pruning_config_t   _pruning_config;
     propagate_config_t _propagate_config;
 };
 
