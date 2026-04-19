@@ -273,6 +273,23 @@ private:
             }
         }
 
+        // Descent's L0 tail: L0 has no beam_search pass of its own, so
+        // seed descent_queue_per_level[0] from descent_queue_per_level[1]
+        // — those L1 NNs are the closest seeds available without paying
+        // the cost of a full L0 beam search during descent.
+        //
+        // First-vertex bootstrap (top_level_id == unassigned) leaves
+        // descent_queue_per_level[1] empty; the seed call is then a
+        // no-op and L0's run_select_at_level will safely no-op too.
+        //
+        // When insert_on_L0 == false, L0 edge construction is skipped
+        // entirely (see Step D loop), so the L1→L0 seed transfer is
+        // wasted work and we elide it here.
+        if (insert_on_L0 && descent_queue_per_level[1] &&
+            descent_queue_per_level[1]->get_result_size() > 0) {
+            descent_queue_per_level[0]->seed_from_queue(*descent_queue_per_level[1]);
+        }
+
         // ==============================================================
         //   Step B — Compute highest_insert_level_id (match legacy)
         // ==============================================================
@@ -304,33 +321,9 @@ private:
         // ==============================================================
         //   Step D — Edge insertion (now includes L0)
         // ==============================================================
-        //
-        // L0 has no descent pass of its own, so seed
-        // descent_queue_per_level[0] from descent_queue_per_level[1] —
-        // those L1 NNs are the closest seeds available without paying
-        // the cost of a full L0 beam search during descent.
-        //
-        // First-vertex bootstrap (top_level_id == unassigned) leaves
-        // descent_queue_per_level[1] empty; the seed call is then a
-        // no-op and L0's run_select_at_level will safely no-op too.
-        //
-        // When insert_on_L0 == false, L0 edge construction is skipped
-        // entirely (see Step D loop below), so the L1→L0 seed transfer
-        // is wasted work and we elide it here.
-        if (insert_on_L0 &&
-            descent_queue_per_level[1] &&
-            descent_queue_per_level[1]->get_result_size() > 0)
-        {
-            descent_queue_per_level[0]->seed_from_queue(
-                *descent_queue_per_level[1]);
-        }
-
-        // For cur_level_id in [0, highest_insert_level_id], run
-        // per-level select + forward + reverse.
-
-        auto run_select_at_level = [&](const layer_id_t target_level_id)
-            -> std::vector<nbr_t>
-        {
+        // For cur_level_id in [start_level_id, highest_insert_level_id],
+        // run per-level select + forward + reverse.
+        auto run_select_at_level = [&](const layer_id_t target_level_id) -> std::vector<nbr_t> {
             // descent_queue_per_level is pre-sized to max_restrict_level+1
             // with empty queues in every slot (see Step A). Uncached
             // levels therefore present an empty queue here, which makes
@@ -344,90 +337,24 @@ private:
             // candidates that were filtered by the narrower descent pass.
             select_queue.set_capacity(select_nbrs_qs);
             select_queue.reset_lower_bound();
-            router.beam_search(
-                new_vec, index, target_level_id, select_queue, visited);
+            router.beam_search(new_vec, index, target_level_id, select_queue, visited);
 
             std::vector<nbr_t> pruned_results;
             const std::size_t result_size = select_queue.get_result_size();
             if (result_size == 0) return pruned_results;
 
-            auto sorted = select_queue.extract_results(result_size);
-            pruned_results.reserve(sorted.size());
-            for (const auto& cand : sorted) {
+            auto sorted_results = select_queue.extract_results(result_size);
+            pruned_results.reserve(sorted_results.size());
+            for (const auto& cand : sorted_results) {
                 // Skip self: assign_layer already placed new_vid in its
                 // bucket, so sample_entries / beam_search may have
                 // picked it as a seed with distance 0. Including it
                 // here would produce a forward self-loop.
                 if (cand.get_vid() == new_vid) continue;
-                pruned_results.emplace_back(
-                    cand.get_vid(), cand.get_distance(), /*is_new=*/true);
+                pruned_results.emplace_back(cand.get_vid(), cand.get_distance(), /*is_new=*/true);
             }
-            pruning_updater.update_impl(
-                pruned_results,
-                index.max_nbr_size(target_level_id));
+            pruning_updater.update_impl(pruned_results, index.max_nbr_size(target_level_id));
             return pruned_results;
-        };
-
-        auto write_forward_edges = [&](const layer_id_t target_level_id,
-                                       const std::vector<nbr_t>& pruned_results,
-                                       const std::size_t max_write_count)
-        {
-            index.with_locked_nbrs(new_vid, target_level_id,
-                [&](std::span<nbr_t> slot, vertex_num_t /*cnt == 0*/) {
-                    const std::size_t write_count = std::min(
-                        std::min(pruned_results.size(), slot.size()),
-                        max_write_count);
-                    for (std::size_t i = 0; i < write_count; ++i) {
-                        slot[i] = pruned_results[i];
-                    }
-                    if (write_count < slot.size()) {
-                        slot[write_count] = nbr_t::make_invalid_nbr();
-                    }
-                });
-        };
-
-        auto write_reverse_edges = [&](const layer_id_t target_level_id,
-                                       const std::vector<nbr_t>& pruned_results)
-        {
-            for (std::size_t i = 0; i < pruned_results.size(); ++i) {
-                const vertex_id_t nbr_vid  = pruned_results[i].get_vid();
-                const distance_t  nbr_dist = pruned_results[i].get_distance();
-                const nbr_t new_reverse_nbr = nbr_t::make_new_nbr(new_vid, nbr_dist);
-
-                index.with_locked_nbrs(nbr_vid, target_level_id,
-                    [&](std::span<nbr_t> slot, vertex_num_t cnt) {
-                        const vertex_num_t slot_cap =
-                            static_cast<vertex_num_t>(slot.size());
-                        if (cnt < slot_cap) {
-                            slot[cnt] = new_reverse_nbr;
-                            if (cnt + 1 < slot_cap) {
-                                slot[cnt + 1] = nbr_t::make_invalid_nbr();
-                            }
-                            return;
-                        }
-                        // Slot is full — re-run RNG pruning on
-                        // existing slot ∪ {new_reverse_nbr}.
-                        std::vector<nbr_t> merged;
-                        merged.reserve(slot_cap + 1);
-                        for (vertex_num_t k = 0; k < slot_cap; ++k) {
-                            merged.push_back(slot[k]);
-                        }
-                        merged.push_back(new_reverse_nbr);
-                        std::sort(merged.begin(), merged.end(),
-                            [](const nbr_t& a, const nbr_t& b) {
-                                return a.get_distance() < b.get_distance();
-                            });
-                        pruning_updater.update_impl(merged, slot_cap);
-                        for (std::size_t k = 0;
-                             k < merged.size() && k < slot_cap; ++k)
-                        {
-                            slot[k] = merged[k];
-                        }
-                        if (merged.size() < slot_cap) {
-                            slot[merged.size()] = nbr_t::make_invalid_nbr();
-                        }
-                    });
-            }
         };
 
         // ---- cur_level_id in [start_level_id, highest_insert_level_id]:
@@ -436,19 +363,107 @@ private:
         // start_level_id = 1 when insert_on_L0 == false so the L0 slot is
         // left untouched (refinement-time responsibility). Upper levels
         // are always built regardless of the flag.
-        const layer_id_t start_level_id =
-            insert_on_L0 ? layer_id_t{0} : layer_id_t{1};
-        for (layer_id_t cur_level_id = start_level_id;
-             cur_level_id <= highest_insert_level_id;
-             ++cur_level_id)
-        {
-            const std::vector<nbr_t> pruned_results =
-                run_select_at_level(cur_level_id);
+        const layer_id_t start_level_id = insert_on_L0 ? layer_id_t{0} : layer_id_t{1};
+        for (layer_id_t cur_level_id = start_level_id; cur_level_id <= highest_insert_level_id; ++cur_level_id) {
+            const std::vector<nbr_t> pruned_results = run_select_at_level(cur_level_id);
             if (pruned_results.empty()) continue;
-            write_forward_edges(
-                cur_level_id, pruned_results,
+            _write_forward_edges(
+                index, new_vid, cur_level_id, pruned_results,
                 /*max_write_count=*/index.max_nbr_size(cur_level_id));
-            write_reverse_edges(cur_level_id, pruned_results);
+            _write_reverse_edges(
+                index, new_vid, cur_level_id, pruned_results,
+                pruning_updater);
+        }
+    }
+
+    // -----------------------------------------------------------------
+    //   Per-level edge writers
+    // -----------------------------------------------------------------
+
+    /**
+     * @brief Write forward edges for @p new_vid at @p target_level_id.
+     *
+     * Precondition: the slot for @p new_vid at this level is empty
+     * (freshly claimed by @c assign_layer, initialized to invalid
+     * sentinels). Writes up to
+     * @c min(pruned_results.size(), slot.size(), max_write_count)
+     * entries and terminates with an invalid sentinel if any tail
+     * remains.
+     */
+    __attribute__((always_inline))
+    static auto _write_forward_edges(
+        this_index_t&              index,
+        const vertex_id_t          new_vid,
+        const layer_id_t           target_level_id,
+        const std::vector<nbr_t>&  pruned_results,
+        const std::size_t          max_write_count
+    ) -> void {
+        index.with_locked_nbrs(new_vid, target_level_id,
+            [&](std::span<nbr_t> slot, vertex_num_t /*cnt == 0*/) {
+                const std::size_t write_count = std::min(
+                    std::min(pruned_results.size(), slot.size()),
+                    max_write_count);
+                for (std::size_t i = 0; i < write_count; ++i) {
+                    slot[i] = pruned_results[i];
+                }
+                if (write_count < slot.size()) {
+                    slot[write_count] = nbr_t::make_invalid_nbr();
+                }
+            });
+    }
+
+    /**
+     * @brief For each neighbor in @p pruned_results, append @p new_vid
+     *        to that neighbor's own slot at @p target_level_id.
+     *
+     * If the neighbor's slot is not yet full, the new back-edge is
+     * appended (with a trailing invalid sentinel if space remains).
+     * If the slot is full, existing entries plus the new back-edge are
+     * re-pruned via @p pruning_updater and rewritten.
+     */
+    template <typename PruningUpdaterT>
+    __attribute__((always_inline))
+    static auto _write_reverse_edges(
+        this_index_t&              index,
+        const vertex_id_t          new_vid,
+        const layer_id_t           target_level_id,
+        const std::vector<nbr_t>&  pruned_results,
+        PruningUpdaterT&           pruning_updater
+    ) -> void {
+        for (std::size_t i = 0; i < pruned_results.size(); ++i) {
+            const vertex_id_t nbr_vid  = pruned_results[i].get_vid();
+            const distance_t  nbr_dist = pruned_results[i].get_distance();
+            const nbr_t new_reverse_nbr = nbr_t::make_new_nbr(new_vid, nbr_dist);
+
+            index.with_locked_nbrs(nbr_vid, target_level_id, [&](std::span<nbr_t> slot, vertex_num_t cnt) {
+                const vertex_num_t slot_cap = static_cast<vertex_num_t>(slot.size());
+                if (cnt < slot_cap) {
+                    slot[cnt] = new_reverse_nbr;
+                    if (cnt + 1 < slot_cap) {
+                        slot[cnt + 1] = nbr_t::make_invalid_nbr();
+                    }
+                    return;
+                }
+                // Slot is full — re-run RNG pruning on
+                // existing slot ∪ {new_reverse_nbr}.
+                std::vector<nbr_t> merged;
+                merged.reserve(slot_cap + 1);
+                for (vertex_num_t k = 0; k < slot_cap; ++k) {
+                    merged.push_back(slot[k]);
+                }
+                merged.push_back(new_reverse_nbr);
+                std::sort(merged.begin(), merged.end(),
+                    [](const nbr_t& a, const nbr_t& b) {
+                        return a.get_distance() < b.get_distance();
+                    });
+                pruning_updater.update_impl(merged, slot_cap);
+                for (std::size_t k = 0; k < merged.size() && k < slot_cap; ++k) {
+                    slot[k] = merged[k];
+                }
+                if (merged.size() < slot_cap) {
+                    slot[merged.size()] = nbr_t::make_invalid_nbr();
+                }
+            });
         }
     }
 
