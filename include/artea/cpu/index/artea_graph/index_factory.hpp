@@ -28,6 +28,7 @@
 
 #pragma once
 
+#include <chrono>
 #include <memory>
 #include <utility>
 
@@ -57,6 +58,7 @@ class IndexFactory : public stacked_rgraph::IndexFactory<GraphFactoryTraitsT> {
     using vertex_id_t     = typename GraphFactoryTraitsT::vertex_id_t;
     using layer_id_t      = typename GraphFactoryTraitsT::layer_id_t;
     using iter_t          = typename GraphFactoryTraitsT::iter_t;
+    using ratio_t         = typename GraphFactoryTraitsT::ratio_t;
     using vector_array_t  = typename GraphFactoryTraitsT::vector_array_t;
     using dist_func_t     = typename GraphFactoryTraitsT::dist_func_t;
 
@@ -77,6 +79,7 @@ class IndexFactory : public stacked_rgraph::IndexFactory<GraphFactoryTraitsT> {
     using pruning_updater_t  = typename GraphFactoryTraitsT::pruning_updater_t;
     using reverse_updater_t  = typename GraphFactoryTraitsT::reverse_updater_t;
     using routing_updater_t  = typename GraphFactoryTraitsT::routing_updater_t;
+    using random_updater_t   = typename GraphFactoryTraitsT::random_updater_t;
     using truncate_updater_t = typename GraphFactoryTraitsT::truncate_updater_t;
     using refiner_utils_t    = typename GraphFactoryTraitsT::refiner_utils_t;
 
@@ -85,7 +88,10 @@ public:
      * @brief Append a vector batch to the index and build the artea_graph
      *        end-to-end:
      *          1. Run the inherited r-net insertion engine to grow the
-     *             hierarchical backbone, including L0 neighbors.
+     *             hierarchical backbone. L0 neighbors are built by the
+     *             parent factory only when @p insert_on_L0 is true;
+     *             otherwise L0 slots are left empty and @c refine_layer
+     *             rebuilds them via a random prefill + propagate pipeline.
      *          2. Refine every occupied layer in place by running a
      *             conv_graph-style prune + reverse + truncate pipeline
      *             over it.
@@ -97,6 +103,15 @@ public:
      * @param index                    The artea_graph index to grow.
      * @param batch_vecs               Batch to insert (moved into @p index).
      * @param dist_func                Distance functor (must outlive this call).
+     * @param insert_on_L0             When true (default), the parent r-net
+     *                                 factory builds L0 edges for each new
+     *                                 vertex before refinement. When false,
+     *                                 L0 is left empty by the parent and
+     *                                 @c refine_layer seeds L0 with random
+     *                                 neighbors (prefill density =
+     *                                 @c refining_max_nbr_size *
+     *                                 @c prefill_ratio) over the newly
+     *                                 inserted vid window.
      * @param shuffle_insertion_order  Forwarded to the inherited
      *                                 @c stacked_rgraph::IndexFactory::add_vertices;
      *                                 see that overload for semantics.
@@ -105,23 +120,51 @@ public:
         this_index_t&      index,
         vector_array_t&&   batch_vecs,
         const dist_func_t& dist_func,
+        const bool         insert_on_L0 = true,
         const bool         shuffle_insertion_order = false
     ) -> void {
-        // Step 1: coarse stacked_rgraph insertion across every layer
-        // (L0 included). Each layer's slot is seeded with the r-net
-        // candidates produced by Phase 1/2 so refine_layer has real
-        // edges to prune rather than empty rows.
-        base_t::add_vertices(index, std::move(batch_vecs), dist_func,
-                             /*insert_on_L0=*/true,
-                             shuffle_insertion_order);
+        // Capture the vid window owned by this batch so L0 refinement
+        // can draw random prefill neighbors from exactly the newly
+        // inserted vertices (see refine_layer). Only meaningful when
+        // insert_on_L0 == false; when true, L0 slots already carry the
+        // r-net candidates and no prefill is needed.
+        const vertex_id_t new_vid_start =
+            static_cast<vertex_id_t>(index.get_num_vertices());
+
+        // Step 1: coarse stacked_rgraph insertion. L0 edge construction
+        // is governed by @p insert_on_L0: when false, refine_layer
+        // rebuilds L0 from scratch via random prefill + triangle
+        // propagate, so spending r-net insertion time on L0 neighbors
+        // would be wasted.
+        const auto rnet_t0 = std::chrono::high_resolution_clock::now();
+        base_t::add_vertices(
+            index,
+            std::move(batch_vecs),
+            dist_func,
+            /*insert_on_L0=*/insert_on_L0,
+            shuffle_insertion_order
+        );
+        const auto rnet_t1 = std::chrono::high_resolution_clock::now();
+        const int64_t rnet_ms = std::chrono::duration_cast<std::chrono::milliseconds>(rnet_t1 - rnet_t0).count();
+        ARTEA_INFO(fmt::format("[artea_graph] r-net insertion done (insert_on_L0={}) in {} ms", insert_on_L0, rnet_ms));
+
+        const vertex_id_t new_vid_end = static_cast<vertex_id_t>(index.get_num_vertices());
 
         // Step 2 + 3: refine every occupied layer (including L0) and
         // write back. top_occupied_level_id is 0 for the degenerate
         // single-layer case.
+        const auto refine_t0 = std::chrono::high_resolution_clock::now();
         const layer_id_t top_level_id = index.top_occupied_level_id();
         for (layer_id_t level_id = 0; level_id <= top_level_id; ++level_id) {
-            refine_layer(index, level_id, dist_func);
+            refine_layer(
+                index, level_id, dist_func,
+                new_vid_start, new_vid_end,
+                /*random_prefill_L0=*/!insert_on_L0);
         }
+        const auto refine_t1 = std::chrono::high_resolution_clock::now();
+        const int64_t refine_ms = std::chrono::duration_cast<std::chrono::milliseconds>(refine_t1 - refine_t0).count();
+        ARTEA_INFO(fmt::format("[artea_graph] per-layer refinement done in {} ms (total add_vertices: {} ms)",
+            refine_ms, rnet_ms + refine_ms));
     }
 
     /**
@@ -135,6 +178,12 @@ public:
      *   2. Construct a @c refining_graph_t matching the mode: dense
      *      ctor for L0, sparse ctor for L1+. Fill it from the current
      *      layer slot via @c refiner_utils_t::fill_refining_graph_from_layer.
+     *   2.5. (L0 only, when @p random_prefill_L0) seed the
+     *        newly-inserted-vid window with @c random_updater_t so the
+     *        triangle loop has real edges to propagate from (instead of
+     *        empty rows left behind by @c insert_on_L0=false). The
+     *        number of random neighbors per vertex is
+     *        @c refining_max_nbr_size * @c prefill_ratio.
      *   3. Drive @c propagate_engine with @c triangle_updater +
      *      @c reverse_updater + @c truncate_updater (+ optional routing
      *      loops) directly on the RefiningGraph. We cannot call
@@ -148,21 +197,35 @@ public:
      * All refinement configs come from @p index's stored values (set at
      * construction via the IndexStructure ctor).
      *
-     * @param index          The artea_graph index whose layer is being refined.
-     * @param level_id       Hierarchy layer to refine.
-     * @param dist_func      Distance functor (must outlive this call).
+     * @param index               The artea_graph index whose layer is being refined.
+     * @param level_id            Hierarchy layer to refine.
+     * @param dist_func           Distance functor (must outlive this call).
+     * @param new_vid_start       Inclusive lower bound of the newly
+     *                            inserted vid window (captured in
+     *                            @c add_vertices). Used to restrict L0
+     *                            random prefill to the new vertices when
+     *                            @p random_prefill_L0 is true.
+     * @param new_vid_end         Exclusive upper bound of the newly
+     *                            inserted vid window.
+     * @param random_prefill_L0   When true and @p level_id == 0, seed L0
+     *                            with random edges over
+     *                            @c [new_vid_start, new_vid_end) before
+     *                            running the propagate pipeline. Caller
+     *                            typically passes @c !insert_on_L0.
      */
     static auto refine_layer(
         this_index_t&      index,
         const layer_id_t   level_id,
-        const dist_func_t& dist_func
+        const dist_func_t& dist_func,
+        const vertex_id_t  new_vid_start,
+        const vertex_id_t  new_vid_end,
+        const bool         random_prefill_L0
     ) -> void {
-        auto& hier_graph              = index.get_hierarchical_graph();
-        auto& vecs_storage            = index.get_vecs_storage();
-        auto& layer_config            = index.refining_layer_config();
-        const auto& pruning_config    = index.pruning_config();
-        const auto& propagate_config  = index.propagate_config();
-
+        auto& hier_graph                = index.get_hierarchical_graph();
+        auto& vecs_storage              = index.get_vecs_storage();
+        auto& layer_config              = index.refining_layer_config();
+        const auto& pruning_config      = index.pruning_config();
+        const auto& propagate_config    = index.propagate_config();
         const vertex_num_t max_nbr_size = layer_config.max_nbr_size();
 
         // /** -------------------- Optimization ------------------------------------- ***/
@@ -177,18 +240,19 @@ public:
         std::unique_ptr<refining_graph_t> refining_graph;
         if (local_to_global.empty()) {
             // L0 / identity mode: dense ctor, _nbrs_arr sized to N_global.
-            refining_graph = std::make_unique<refining_graph_t>(
-                vecs_storage, layer_config);
+            refining_graph = std::make_unique<refining_graph_t>(vecs_storage, layer_config);
         } else {
             // L1+ / sparse mode: pass moved maps to the sparse ctor.
             refining_graph = std::make_unique<refining_graph_t>(
-                vecs_storage, layer_config,
-                std::move(local_to_global), std::move(global_to_local));
+                vecs_storage, 
+                layer_config,
+                std::move(local_to_global), 
+                std::move(global_to_local)
+            );
         }
         // Transcribe the current layer edges (produced by r-net
         // insertion on every layer, L0 included) into the RG.
-        refiner_utils_t::fill_refining_graph_from_layer(
-            hier_graph, *refining_graph, level_id);
+        refiner_utils_t::fill_refining_graph_from_layer(hier_graph, *refining_graph, level_id);
 
         // ---- Step 3: run prune + reverse + truncate on the RG ----
         // The log_table inside propagate_engine is indexed by local_vid
@@ -197,15 +261,33 @@ public:
         propagate_engine_t propagate_engine(dist_func);
         propagate_engine.set_graph(*refining_graph);
 
+        // ---- Step 2.5: L0 random prefill when r-net insertion was
+        //      skipped (insert_on_L0 == false at add_vertices time).
+        //      Only the newly-inserted vid window [new_vid_start,
+        //      new_vid_end) is touched via next_range so earlier batches'
+        //      L0 rows stay intact. Density is max_nbr_size * prefill_ratio.
+        if (random_prefill_L0 && level_id == 0 && new_vid_end > new_vid_start) {
+            const vertex_num_t init_nbr_size = static_cast<vertex_num_t>(static_cast<ratio_t>(max_nbr_size) * propagate_config.prefill_ratio());
+            if (init_nbr_size > 0) {
+                const vertex_num_t l0_num_vertices = refining_graph->get_num_vertices();
+                auto random_updater = propagate_engine.template make_updater<random_updater_t>(
+                        init_nbr_size,
+                        /*start_vid=*/vertex_id_t{0},
+                        /*end_vid=*/l0_num_vertices);
+                propagate_engine.next_range(random_updater, new_vid_start, new_vid_end);
+            }
+        }
+
         auto triangle_updater = propagate_engine.template make_updater<triangle_updater_t>();
         auto reverse_updater  = propagate_engine.template make_updater<reverse_updater_t>();
         const vertex_num_t routing_topk = propagate_config.resolve_routing_topk(max_nbr_size);
         const vertex_num_t routing_queue_size = propagate_config.resolve_routing_queue_size(max_nbr_size);
-        auto routing_updater  = propagate_engine.template make_updater<routing_updater_t>(
-            routing_topk, routing_queue_size);
+        auto routing_updater  = propagate_engine.template make_updater<routing_updater_t>(routing_topk, routing_queue_size);
         auto truncate_updater = propagate_engine.template make_updater<truncate_updater_t>();
+        auto pruning_updater = propagate_engine.template make_updater<pruning_updater_t>(
+            pruning_config.scale_coeffs(), pruning_config.shifted_coeffs());
 
-        propagate_engine.next(reverse_updater).next(truncate_updater);
+        // propagate_engine.next(reverse_updater).next(truncate_updater);
         for (iter_t build_loop = 0; build_loop < propagate_config.num_build_loops(); ++build_loop) {
             propagate_engine.run(propagate_config.num_triu_iters(), triangle_updater)
                             .next(reverse_updater).next(truncate_updater);
@@ -216,19 +298,13 @@ public:
         // layer_config.max_nbr_size(max_nbr_size);
         // /** ------------------------------------------------------------------------- ***/
 
-        for (iter_t routing_loop = 0;
-             routing_loop < propagate_config.num_routing_loops();
-             ++routing_loop)
-        {
-            auto pruning_updater = propagate_engine.template make_updater<pruning_updater_t>(
-                pruning_config.scale_coeffs(), pruning_config.shifted_coeffs());
+        for (iter_t routing_loop = 0; routing_loop < propagate_config.num_routing_loops(); ++routing_loop) {
             propagate_engine.next(routing_updater).next(pruning_updater)
                             .next(reverse_updater).next(truncate_updater);
         }
 
         // ---- Step 4: write refined edges back ----
-        refiner_utils_t::writeback_layer_from_refining_graph(
-            hier_graph, *refining_graph, level_id);
+        refiner_utils_t::writeback_layer_from_refining_graph(hier_graph, *refining_graph, level_id);
     }
 
 };  // class IndexFactory

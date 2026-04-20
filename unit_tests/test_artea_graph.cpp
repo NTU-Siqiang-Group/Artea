@@ -79,6 +79,11 @@ struct TestConfig {
     // Insertion-order randomization (see stacked_rgraph::IndexFactory).
     bool     shuffle_insertion_order;
 
+    // When true, the inherited stacked_rgraph factory builds L0 edges
+    // at insertion time; when false (default), L0 is left empty and
+    // artea_graph::refine_layer seeds L0 via random prefill.
+    bool     insert_on_L0;
+
     // Search-time params
     uint32_t query_topk;
     uint32_t queue_size_start;
@@ -108,8 +113,11 @@ auto dump_config(const char* banner) -> void {
     os << "max_nbr_size:               " << g_config.max_nbr_size << "\n"
        << "search_nn_qs:               " << g_config.search_nn_qs << "\n"
        << "select_nbrs_qs:             " << g_config.select_nbrs_qs << "\n"
-       << "scale_coeffs:               " << g_config.scale_coeffs << "\n"
-       << "shifted_coeffs:             " << g_config.shifted_coeffs << "\n"
+       << "scale_coeffs:               " << g_config.scale_coeffs
+       << " (applied to both ul insertion and refinement pruning)\n"
+       << "shifted_coeffs:             " << g_config.shifted_coeffs
+       << " (consumed by refinement pruning only; ul insertion reads "
+       << "scale_coeffs only and ignores shift)\n"
        << "--- Per-layer refinement ---\n"
        << "refining_max_nbr_size:      " << g_config.refining_max_nbr_size
        << " (reserved = 1.5x = "
@@ -126,6 +134,9 @@ auto dump_config(const char* banner) -> void {
        << "routing_queue_size:         " << g_config.routing_queue_size << "\n"
        << "shuffle_insertion_order:    "
        << (g_config.shuffle_insertion_order ? "true" : "false") << "\n"
+       << "insert_on_L0:               "
+       << (g_config.insert_on_L0 ? "true" : "false")
+       << " (false = L0 built via random prefill in refine_layer)\n"
        << "--- Search ---\n"
        << "query_topk:                 " << g_config.query_topk << "\n"
        << "candidate-queue-config:     "
@@ -211,10 +222,14 @@ protected:
         const vertex_num_t total_vertices =
             static_cast<vertex_num_t>(base_vecs.get_num_vecs());
 
+        // Single --select-nbrs-qs feeds both upper-layer (L1+) and
+        // bottom-layer (L0) beam widths. Asymmetric splits are possible
+        // by constructing RGraphConfig directly with distinct values.
         artea_graph::rgraph_config_t rgraph_config(
             g_config.rnet_beta,
             provider.get_l1_radius(),
             static_cast<vertex_num_t>(g_config.search_nn_qs),
+            static_cast<vertex_num_t>(g_config.select_nbrs_qs),
             static_cast<vertex_num_t>(g_config.select_nbrs_qs),
             g_config.max_nbr_size);
 
@@ -239,6 +254,9 @@ protected:
             static_cast<vertex_num_t>(g_config.routing_topk),
             static_cast<vertex_num_t>(g_config.routing_queue_size));
 
+        // Single PruningConfig instance drives both the stacked_rgraph
+        // upper-layer insertion (reads scale_coeffs only, shift ignored)
+        // and the per-layer refinement PruningUpdater (reads both).
         artea_graph::pruning_config_t pruning_config(
             static_cast<ratio_t>(g_config.scale_coeffs),
             static_cast<ratio_t>(g_config.shifted_coeffs));
@@ -255,6 +273,7 @@ protected:
             base_vecs.extract_subset(0, total_vertices);
         artea_graph::factory_t::add_vertices(
             *_graph, std::move(owned_batch), dist_func,
+            g_config.insert_on_L0,
             g_config.shuffle_insertion_order);
 
         auto t1 = std::chrono::high_resolution_clock::now();
@@ -554,6 +573,13 @@ int main(int argc, char** argv) {
               "inserted into the hierarchy (storage layout unchanged). "
               "Absent by default.");
 
+    program.add_argument("--insert-on-l0")
+        .default_value(false).implicit_value(true)
+        .help("If present, the parent stacked_rgraph factory builds L0 "
+              "edges at insertion time. Absent (default) skips L0 "
+              "insertion and lets refine_layer seed L0 via random "
+              "prefill over the newly-inserted vid window.");
+
     // Search
     program.add_argument("--query-topk")
         .default_value(10u).scan<'u', uint32_t>();
@@ -591,6 +617,7 @@ int main(int argc, char** argv) {
     g_config.routing_topk              = program.get<uint32_t>("--routing-topk");
     g_config.routing_queue_size        = program.get<uint32_t>("--routing-queue-size");
     g_config.shuffle_insertion_order   = program.get<bool>("--shuffle");
+    g_config.insert_on_L0              = program.get<bool>("--insert-on-l0");
     g_config.query_topk                = program.get<uint32_t>("--query-topk");
     g_config.warmup_runs               = program.get<uint32_t>("--warmup-runs");
     g_config.test_runs                 = program.get<uint32_t>("--test-runs");

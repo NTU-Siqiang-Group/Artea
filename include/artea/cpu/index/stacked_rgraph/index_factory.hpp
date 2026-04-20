@@ -27,14 +27,16 @@
  *   Step C — Claim a slot in the hierarchical graph via assign_layer.
  *   Step D — Edge insertion for cur_level_id in
  *            [0, highest_insert_level_id]: per-level select_neighbors +
- *            forward + reverse.
+ *            forward + reverse. Beam width is level-dependent (L0 uses
+ *            bl_select_nbrs_qs, L1+ uses ul_select_nbrs_qs); the scaled
+ *            RNG rule with scale_coeffs from the index's PruningConfig
+ *            is applied uniformly at every level.
  *            L0 doesn't get its own descent pass (running beam_search
  *            on the full N-vertex base every insert would be far too
  *            expensive), so before the loop we seed
  *            descent_queue_per_level[0] from descent_queue_per_level[1]
  *            via seed_from_queue. The L0 select then expands from
- *            those L1 NN seeds with the standard select_nbrs_qs beam
- *            (default 100).
+ *            those L1 NN seeds with bl_select_nbrs_qs (default 100).
  */
 
 #pragma once
@@ -55,6 +57,7 @@
 #include <tbb/blocked_range.h>
 
 #include <artea/common/logger.hpp>
+#include <artea/cpu/router/detail/make_layer_range.hpp>
 
 namespace artea {
 namespace cpu {
@@ -98,8 +101,11 @@ class IndexFactory {
     using candidate_entry_t       = typename GraphFactoryTraitsT::candidate_entry_t;
     using std_candidate_queue_t   = typename GraphFactoryTraitsT::std_candidate_queue_t;
     using knn_results_t           = typename GraphFactoryTraitsT::knn_results_t;
-    using hg_router_t             =
-        typename GraphFactoryTraitsT::hierarchical_graph_router_t;
+    // Insertion only needs the atom-level beam_search, so we bind the
+    // graph-agnostic single-layer router directly and skip the
+    // hierarchical wrapper.
+    using single_layer_router_t   =
+        typename GraphFactoryTraitsT::single_layer_router_t;
     using candidate_sample_utils_t =
         typename GraphFactoryTraitsT::candidate_sample_utils_t;
 
@@ -168,10 +174,9 @@ public:
 
         // Construct the pruning updater AFTER append_vecs so the storage
         // reference it captures already points at populated data (belt-
-        // and-suspenders; vecs_storage_t is stable either way). This
-        // build-time pruner applies the plain RNG rule (threshold =
-        // ori_dist) at every level — scale/shift are a post-refining-
-        // only concern now.
+        // and-suspenders; vecs_storage_t is stable either way). The
+        // scaled RNG rule with scale_coeffs from index.pruning_config()
+        // is applied uniformly at every level (L0 included).
         hierarchical_pruning_updater_t pruning_updater(
             dist_func,
             index.get_vecs_storage());
@@ -179,10 +184,11 @@ public:
         const auto& vecs_storage = index.get_vecs_storage();
         const vertex_num_t total_vecs = static_cast<vertex_num_t>(vecs_storage.get_num_vecs());
 
-        hg_router_t router(
-            vecs_storage, dist_func,
-            /*topk=*/std::max(index.search_nn_qs(), index.select_nbrs_qs()),
-            /*candidate_queue_size=*/index.select_nbrs_qs());
+        // Atom-level router: the per-level queue lives on the caller's
+        // stack, so the router itself doesn't need topk /
+        // candidate_queue_size (those only drive the convenience query
+        // layer, which insertion never touches).
+        single_layer_router_t router(vecs_storage, dist_func);
 
         visited_table_pool_t visited_pool(total_vecs);
 
@@ -222,8 +228,8 @@ private:
 
     template <typename PruningUpdaterT>
     static auto _insert_one(
-        this_index_t&       index,
-        const hg_router_t&  router,
+        this_index_t&              index,
+        const single_layer_router_t& router,
         const vertex_id_t   new_vid,
         const dist_func_t&  dist_func,
         PruningUpdaterT&    pruning_updater,
@@ -231,8 +237,10 @@ private:
         const bool          insert_on_L0
     ) -> void {
         const vec_ele_t* new_vec        = index.get_vecs_storage().get(new_vid);
-        const vertex_num_t search_nn_qs   = index.search_nn_qs();
-        const vertex_num_t select_nbrs_qs = index.select_nbrs_qs();
+        const vertex_num_t search_nn_qs      = index.search_nn_qs();
+        const vertex_num_t ul_select_nbrs_qs = index.ul_select_nbrs_qs();
+        const vertex_num_t bl_select_nbrs_qs = index.bl_select_nbrs_qs();
+        const ratio_t      scale_coeffs      = index.pruning_config().scale_coeffs();
         const layer_num_t  max_restrict_level = index.max_restrict_level();
         const layer_id_t   top_level_id = index.top_occupied_level_id();
 
@@ -249,7 +257,10 @@ private:
             candidate_sample_utils_t::sample_single_entry(index.get_vecs_storage(), dist_func, index, new_vec, cur_queue);
 
             for (layer_id_t cur_level_id = top_level_id; cur_level_id >= 1; --cur_level_id) {
-                router.beam_search(new_vec, index, cur_level_id, cur_queue, visited);
+                router.beam_search(
+                    new_vec,
+                    detail::make_layer_range(index, cur_level_id),
+                    cur_queue, visited);
 
                 if (cur_queue.get_result_size() > 0) {
                     min_dist_per_level[cur_level_id] = cur_queue.best_result_distance();
@@ -335,9 +346,15 @@ private:
             // Grow the queue to the select-phase beam width and relax
             // the rejection threshold so the wider search can accept
             // candidates that were filtered by the narrower descent pass.
-            select_queue.set_capacity(select_nbrs_qs);
+            // L0 uses bl_select_nbrs_qs; L1+ uses ul_select_nbrs_qs.
+            const vertex_num_t level_select_nbrs_qs =
+                (target_level_id == 0) ? bl_select_nbrs_qs : ul_select_nbrs_qs;
+            select_queue.set_capacity(level_select_nbrs_qs);
             select_queue.reset_lower_bound();
-            router.beam_search(new_vec, index, target_level_id, select_queue, visited);
+            router.beam_search(
+                new_vec,
+                detail::make_layer_range(index, target_level_id),
+                select_queue, visited);
 
             std::vector<nbr_t> pruned_results;
             const std::size_t result_size = select_queue.get_result_size();
@@ -353,7 +370,10 @@ private:
                 if (cand.get_vid() == new_vid) continue;
                 pruned_results.emplace_back(cand.get_vid(), cand.get_distance(), /*is_new=*/true);
             }
-            pruning_updater.update_impl(pruned_results, index.max_nbr_size(target_level_id));
+            pruning_updater.update_impl(
+                pruned_results,
+                index.max_nbr_size(target_level_id),
+                scale_coeffs);
             return pruned_results;
         };
 
@@ -372,7 +392,7 @@ private:
                 /*max_write_count=*/index.max_nbr_size(cur_level_id));
             _write_reverse_edges(
                 index, new_vid, cur_level_id, pruned_results,
-                pruning_updater);
+                pruning_updater, scale_coeffs);
         }
     }
 
@@ -419,7 +439,9 @@ private:
      * If the neighbor's slot is not yet full, the new back-edge is
      * appended (with a trailing invalid sentinel if space remains).
      * If the slot is full, existing entries plus the new back-edge are
-     * re-pruned via @p pruning_updater and rewritten.
+     * re-pruned via @p pruning_updater and rewritten. The @p scale_coeffs
+     * is forwarded to the pruner so upper-layer overflow pruning uses
+     * the same relaxed RNG rule as the forward-edge path at that level.
      */
     template <typename PruningUpdaterT>
     __attribute__((always_inline))
@@ -428,7 +450,8 @@ private:
         const vertex_id_t          new_vid,
         const layer_id_t           target_level_id,
         const std::vector<nbr_t>&  pruned_results,
-        PruningUpdaterT&           pruning_updater
+        PruningUpdaterT&           pruning_updater,
+        const ratio_t              scale_coeffs
     ) -> void {
         for (std::size_t i = 0; i < pruned_results.size(); ++i) {
             const vertex_id_t nbr_vid  = pruned_results[i].get_vid();
@@ -456,7 +479,7 @@ private:
                     [](const nbr_t& a, const nbr_t& b) {
                         return a.get_distance() < b.get_distance();
                     });
-                pruning_updater.update_impl(merged, slot_cap);
+                pruning_updater.update_impl(merged, slot_cap, scale_coeffs);
                 for (std::size_t k = 0; k < merged.size() && k < slot_cap; ++k) {
                     slot[k] = merged[k];
                 }

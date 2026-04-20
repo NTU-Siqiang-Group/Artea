@@ -1,13 +1,18 @@
 /*
  * @FilePath: /Artea/include/artea/cpu/index/stacked_rgraph/configs.hpp
  * @Author: Chandler (Weitang Ye) <weitang.ye@ntu.edu.sg>
- * @Description: Configuration for Stacked R-Net (dynamic hierarchical r-net).
+ * @Description: Configuration for Stacked R-Net (dynamic hierarchical
+ *               r-net). PruningConfig is a using-alias of
+ *               conv_graph::PruningConfig — the stacked-rgraph insertion
+ *               path only reads scale_coeffs from it (shift is a
+ *               post-refinement concern and is ignored here).
  */
 
 #pragma once
 
 #include <cmath>
 #include <artea/common/logger.hpp>
+#include <artea/cpu/index/conv_graph/configs.hpp>
 
 namespace artea {
 namespace cpu {
@@ -17,8 +22,9 @@ namespace stacked_rgraph {
  * @brief Configuration for the Stacked R-Net hierarchical index.
  *
  * Encapsulates all construction-time parameters: r-net geometry
- * (beta, L1 radius), beam-search queue sizes, per-vertex neighbor
- * capacity, and per-layer pre-allocation policy.
+ * (beta, L1 radius), beam-search queue sizes (split into an upper-layer
+ * variant used for L1+ and a bottom-layer variant used for L0),
+ * per-vertex neighbor capacity, and per-layer pre-allocation policy.
  *
  * @tparam BaseTraitsT The base traits type.
  */
@@ -41,24 +47,28 @@ struct RGraphConfig {
 
     /**
      * @brief Construct a RGraphConfig.
-     * @param rnet_beta        Radius growth factor: R_h = L1_rnet_radius * rnet_beta^(h-1). Must be > 1.
-     * @param L1_rnet_radius   Covering radius for layer 1 (the lowest upper layer). Must be > 0.
-     * @param search_nn_qs     Beam-search queue size for Phase 1 descent. Must be >= 1.
-     * @param select_nbrs_qs   Beam-search queue size for Phase 2 candidate gathering at
-     *                         every level (L0..highest_insert_level). Must be >= 1. Default 100.
-     * @param max_nbr_size     Per-vertex neighbor capacity for every layer (default: 32).
+     * @param rnet_beta           Radius growth factor: R_h = L1_rnet_radius * rnet_beta^(h-1). Must be > 1.
+     * @param L1_rnet_radius      Covering radius for layer 1 (the lowest upper layer). Must be > 0.
+     * @param search_nn_qs        Beam-search queue size for Phase 1 descent. Must be >= 1.
+     * @param ul_select_nbrs_qs   Beam-search queue size for Phase 2 candidate gathering at
+     *                            upper levels (L1..highest_insert_level). Must be >= 1. Default 100.
+     * @param bl_select_nbrs_qs   Beam-search queue size for Phase 2 candidate gathering at
+     *                            the bottom level (L0). Must be >= 1. Default 100.
+     * @param max_nbr_size        Per-vertex neighbor capacity for every layer (default: 32).
      */
     RGraphConfig(
         ratio_t rnet_beta,
         distance_t L1_rnet_radius,
         vertex_num_t search_nn_qs,
-        vertex_num_t select_nbrs_qs = 100,
+        vertex_num_t ul_select_nbrs_qs = 100,
+        vertex_num_t bl_select_nbrs_qs = 100,
         vertex_num_t max_nbr_size = 32
     ) :
         _rnet_beta(rnet_beta),
         _L1_rnet_radius(L1_rnet_radius),
         _search_nn_qs(search_nn_qs),
-        _select_nbrs_qs(select_nbrs_qs),
+        _ul_select_nbrs_qs(ul_select_nbrs_qs),
+        _bl_select_nbrs_qs(bl_select_nbrs_qs),
         _max_nbr_size(max_nbr_size)
     {
         if (rnet_beta <= ratio_t(1)) {
@@ -70,8 +80,11 @@ struct RGraphConfig {
         if (search_nn_qs < 1) {
             ARTEA_ERROR(fmt::format("search_nn_qs ({}) must be >= 1", search_nn_qs));
         }
-        if (select_nbrs_qs < 1) {
-            ARTEA_ERROR(fmt::format("select_nbrs_qs ({}) must be >= 1", select_nbrs_qs));
+        if (ul_select_nbrs_qs < 1) {
+            ARTEA_ERROR(fmt::format("ul_select_nbrs_qs ({}) must be >= 1", ul_select_nbrs_qs));
+        }
+        if (bl_select_nbrs_qs < 1) {
+            ARTEA_ERROR(fmt::format("bl_select_nbrs_qs ({}) must be >= 1", bl_select_nbrs_qs));
         }
     }
 
@@ -79,7 +92,8 @@ struct RGraphConfig {
     __attribute__((always_inline)) auto rnet_beta()          const -> ratio_t      { return _rnet_beta; }
     __attribute__((always_inline)) auto L1_rnet_radius()     const -> distance_t   { return _L1_rnet_radius; }
     __attribute__((always_inline)) auto search_nn_qs()       const -> vertex_num_t { return _search_nn_qs; }
-    __attribute__((always_inline)) auto select_nbrs_qs()     const -> vertex_num_t { return _select_nbrs_qs; }
+    __attribute__((always_inline)) auto ul_select_nbrs_qs()  const -> vertex_num_t { return _ul_select_nbrs_qs; }
+    __attribute__((always_inline)) auto bl_select_nbrs_qs()  const -> vertex_num_t { return _bl_select_nbrs_qs; }
     __attribute__((always_inline)) auto max_nbr_size()       const -> vertex_num_t { return _max_nbr_size; }
 
     /**
@@ -130,12 +144,21 @@ private:
     /** @brief Beam-search queue size for Phase 1 top-down descent. */
     vertex_num_t _search_nn_qs;
 
-    /** @brief Beam-search queue size for Phase 2 candidate gathering. */
-    vertex_num_t _select_nbrs_qs;
+    /** @brief Beam-search queue size for Phase 2 candidate gathering at upper levels (L1+). */
+    vertex_num_t _ul_select_nbrs_qs;
+
+    /** @brief Beam-search queue size for Phase 2 candidate gathering at the bottom level (L0). */
+    vertex_num_t _bl_select_nbrs_qs;
 
     /** @brief Per-vertex neighbor capacity for every layer. */
     vertex_num_t _max_nbr_size;
 };
+
+/** @brief stacked_rgraph reuses conv_graph's PruningConfig — the
+ *         insertion path reads scale_coeffs only; shifted_coeffs is a
+ *         post-refinement concern and is ignored on the insertion path. */
+template <typename BaseTraitsT>
+using PruningConfig = conv_graph::PruningConfig<BaseTraitsT>;
 
 }   // namespace stacked_rgraph
 }   // namespace cpu

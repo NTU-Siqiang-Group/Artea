@@ -73,6 +73,7 @@ public:
     using vector_array_t       = typename IndexTraitsT::vector_array_t;
     using vecs_storage_t       = typename IndexTraitsT::vecs_storage_t;
     using rgraph_config_t      = typename IndexTraitsT::stacked_rgraph::rgraph_config_t;
+    using pruning_config_t     = typename IndexTraitsT::stacked_rgraph::pruning_config_t;
 
     using hierarchical_graph_t = typename IndexTraitsT::dynamic::hierarchical_graph_t;
 
@@ -94,10 +95,18 @@ public:
      *                        cap via @c rgraph_config_t::compute_max_restrict_level.
      * @param rgraph_config   R-graph configuration (r-net geometry,
      *                        queue sizes, neighbor capacity).
+     * @param pruning_config  Insert-time RNG pruning policy applied to
+     *                        upper-layer (L1+) edges. L0 retains plain
+     *                        RNG regardless of this value. Only
+     *                        @c scale_coeffs is consumed (default 1.1);
+     *                        @c shifted_coeffs is ignored on the
+     *                        insertion path.
      */
     IndexStructure(
         const vertex_num_t      total_vertices,
-        const rgraph_config_t&  rgraph_config
+        const rgraph_config_t&  rgraph_config,
+        const pruning_config_t  pruning_config = pruning_config_t(
+            ratio_t(1.1), ratio_t(0))
     ) :
         _max_restrict_level(
             rgraph_config_t::compute_max_restrict_level(total_vertices)),
@@ -115,6 +124,7 @@ public:
             rgraph_config.max_nbr_size(),
             total_vertices)),
         _rgraph_config(rgraph_config),
+        _pruning_config(pruning_config),
         _vecs_storage()
     {}
 
@@ -221,11 +231,13 @@ public:
     // =================================================================
 
     __attribute__((always_inline)) auto rgraph_config()      const -> const rgraph_config_t&  { return _rgraph_config; }
+    __attribute__((always_inline)) auto pruning_config()     const -> const pruning_config_t& { return _pruning_config; }
     __attribute__((always_inline)) auto rnet_beta()          const -> ratio_t      { return _rgraph_config.rnet_beta(); }
     __attribute__((always_inline)) auto L1_rnet_radius()     const -> distance_t   { return _rgraph_config.L1_rnet_radius(); }
     __attribute__((always_inline)) auto max_restrict_level() const -> layer_num_t  { return _max_restrict_level; }
     __attribute__((always_inline)) auto search_nn_qs()       const -> vertex_num_t { return _rgraph_config.search_nn_qs(); }
-    __attribute__((always_inline)) auto select_nbrs_qs()     const -> vertex_num_t { return _rgraph_config.select_nbrs_qs(); }
+    __attribute__((always_inline)) auto ul_select_nbrs_qs()  const -> vertex_num_t { return _rgraph_config.ul_select_nbrs_qs(); }
+    __attribute__((always_inline)) auto bl_select_nbrs_qs()  const -> vertex_num_t { return _rgraph_config.bl_select_nbrs_qs(); }
     static constexpr ratio_t      layer_cap_decay_ratio = rgraph_config_t::layer_cap_decay_ratio;
     static constexpr vertex_num_t min_layer_cap         = rgraph_config_t::min_layer_cap;
 
@@ -268,6 +280,9 @@ private:
 
     /// @brief R-graph configuration.
     rgraph_config_t _rgraph_config;
+
+    /// @brief Insert-time upper-layer pruning configuration.
+    pruning_config_t _pruning_config;
 
     /// @brief Owned vector storage. Grown in-place by append_vecs.
     vecs_storage_t _vecs_storage;

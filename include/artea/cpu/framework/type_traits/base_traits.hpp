@@ -67,6 +67,10 @@ namespace symmetric_knn_graph {
 
 namespace stacked_rgraph {
     template <typename BaseTraitsT> struct RGraphConfig;
+    // stacked_rgraph shares the same PruningConfig type as conv_graph /
+    // artea_graph — the stacked-rgraph insertion only reads scale_coeffs
+    // from it (shift is a post-refinement concern).
+    template <typename BaseTraitsT> using PruningConfig = conv_graph::PruningConfig<BaseTraitsT>;
 }
 
 namespace artea_graph {
@@ -239,6 +243,7 @@ public:
     struct stacked_rgraph {
         stacked_rgraph() = delete;
         using rgraph_config_t  = cpu::stacked_rgraph::RGraphConfig<base_traits_t>;
+        using pruning_config_t = cpu::stacked_rgraph::PruningConfig<base_traits_t>;  // alias of conv_graph::PruningConfig
     };
 
     /** @brief Namespace-specific type aliases for artea_graph

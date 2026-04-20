@@ -56,6 +56,7 @@ class HierarchicalPruningUpdater {
     using vertex_num_t    = typename RefinerTraitsT::vertex_num_t;
     using vec_ele_t       = typename RefinerTraitsT::vec_ele_t;
     using distance_t      = typename RefinerTraitsT::distance_t;
+    using ratio_t         = typename RefinerTraitsT::ratio_t;
     using vector_array_t  = typename RefinerTraitsT::vector_array_t;
     using dist_func_t     = typename RefinerTraitsT::dist_func_t;
     using nbr_t           = typename RefinerTraitsT::nbr_t;
@@ -65,8 +66,10 @@ public:
 
     /**
      * @brief Construct an updater bound to a vector array + distance
-     *        functor. Pruning uses the plain RNG rule (threshold =
-     *        ori_dist) — no scale/shift coefficients are consumed here.
+     *        functor. The scale coefficient applied to the RNG triangle
+     *        threshold is passed per @c update_impl call, so a single
+     *        updater instance can serve both plain (L0) and scaled
+     *        (L1+) callers without re-binding state.
      *
      * @param dist_func  Distance functor.
      * @param vecs_data  Base vector storage (coordinate lookup).
@@ -85,16 +88,21 @@ public:
      * @p origin_nbrs must be sorted ascending by distance on entry. The
      * first entry is always retained (it is the closest); each
      * subsequent entry is retained iff every already-retained entry is
-     * strictly farther from it than the pivot is from it — i.e. the
-     * plain RNG rule with no scale/shift. Retained entries preserve
-     * their ascending order and are marked as "old".
+     * strictly farther from it than @c (ori_dist / scale_coeffs). With
+     * @p scale_coeffs == 1 this collapses to the plain RNG rule; values
+     * > 1 relax the triangle check and let more neighbors through.
+     * Retained entries preserve their ascending order and are marked as
+     * "old".
      *
      * @param origin_nbrs   Candidate list; pruned in place.
      * @param max_nbr_size  Maximum number of retained neighbors.
+     * @param scale_coeffs  RNG scale coefficient (default 1.0 = plain
+     *                      RNG). Must be > 0.
      */
     auto update_impl(
         std::vector<nbr_t>& origin_nbrs,
-        const vertex_num_t  max_nbr_size
+        const vertex_num_t  max_nbr_size,
+        const ratio_t       scale_coeffs = ratio_t(1)
     ) const -> void {
         if (origin_nbrs.empty()) return;
 
@@ -105,12 +113,15 @@ public:
         // The closest candidate is always retained.
         retained_nbrs.push_back(origin_nbrs[0]);
 
+        const ratio_t inv_scale = ratio_t(1) / scale_coeffs;
+
         for (vertex_num_t i = 1;
              i < origin_nbrs.size() && retained_nbrs.size() < max_nbr_size;
              ++i)
         {
             const nbr_t& ori_nbr = origin_nbrs[i];
-            const distance_t threshold = ori_nbr.get_distance();
+            const distance_t threshold =
+                static_cast<distance_t>(ori_nbr.get_distance() * inv_scale);
             const vec_ele_t* ori_vec   = _vecs_data.get(ori_nbr.get_vid());
 
             bool accepted = true;

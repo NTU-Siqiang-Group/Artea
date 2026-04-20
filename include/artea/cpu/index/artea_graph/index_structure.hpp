@@ -58,8 +58,12 @@ public:
      *                                for a single layer inside @c refine_layer.
      * @param propagate_config        Conv-graph propagate config used when
      *                                @c refine_layer is invoked.
-     * @param pruning_config          Conv-graph pruning config used when
-     *                                @c refine_layer is invoked.
+     * @param pruning_config          PruningConfig (scale + shift) used by
+     *                                both (a) stacked-rgraph upper-layer
+     *                                insert-time pruning — only scale_coeffs
+     *                                is consumed there — and (b) the
+     *                                per-layer refinement PruningUpdater
+     *                                routing loop.
      */
     IndexStructure(
         const vertex_num_t        total_vertices,
@@ -68,14 +72,12 @@ public:
         const propagate_config_t  propagate_config,
         const pruning_config_t    pruning_config
     ) :
-        // Stacked-rgraph backbone no longer carries pruning_config — the
-        // build-time hierarchical pruner uses plain RNG. pruning_config
-        // is kept here because the per-layer refinement pipeline still
-        // consumes scale/shift in its PruningUpdater routing loop.
-        base_t(total_vertices, rgraph_config),
+        // Both the stacked-rgraph upper-layer insertion and the per-layer
+        // refinement pull from the same PruningConfig instance owned by
+        // the base class. The insertion path ignores shifted_coeffs.
+        base_t(total_vertices, rgraph_config, pruning_config),
         _refining_layer_config(refining_layer_config),
-        _propagate_config(propagate_config),
-        _pruning_config(pruning_config)
+        _propagate_config(propagate_config)
     {}
 
     IndexStructure(const IndexStructure&)            = delete;
@@ -102,10 +104,7 @@ public:
         return _propagate_config;
     }
 
-    __attribute__((always_inline))
-    auto pruning_config() const -> const pruning_config_t& {
-        return _pruning_config;
-    }
+    // pruning_config() is inherited from stacked_rgraph::IndexStructure.
 
 private:
     /** @brief Layer config used to size the RefiningGraph built per layer
@@ -114,9 +113,6 @@ private:
 
     /** @brief Conv-graph propagate config for per-layer refinement. */
     propagate_config_t _propagate_config;
-
-    /** @brief Conv-graph pruning config for per-layer refinement. */
-    pruning_config_t   _pruning_config;
 
 };  // class IndexStructure
 
