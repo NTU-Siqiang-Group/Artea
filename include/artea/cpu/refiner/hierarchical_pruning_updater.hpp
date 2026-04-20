@@ -120,10 +120,8 @@ public:
                 // prior decision still holds.
                 if (ori_nbr.is_old() && retained_nbr.is_old()) continue;
 
-                const vec_ele_t* retained_vec =
-                    _vecs_data.get(retained_nbr.get_vid());
-                const distance_t dist_to_retained =
-                    _dist_func(ori_vec, retained_vec);
+                const vec_ele_t* retained_vec = _vecs_data.get(retained_nbr.get_vid());
+                const distance_t dist_to_retained = _dist_func(ori_vec, retained_vec);
                 if (dist_to_retained < threshold) { accepted = false; break; }
             }
             if (accepted) retained_nbrs.push_back(ori_nbr);

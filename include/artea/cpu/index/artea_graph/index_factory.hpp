@@ -205,12 +205,10 @@ public:
             routing_topk, routing_queue_size);
         auto truncate_updater = propagate_engine.template make_updater<truncate_updater_t>();
 
-        for (iter_t build_loop = 0;
-             build_loop < propagate_config.num_build_loops();
-             ++build_loop)
-        {
-            propagate_engine.next(reverse_updater).next(truncate_updater)
-                            .run(propagate_config.num_triu_iters(), triangle_updater);
+        propagate_engine.next(reverse_updater).next(truncate_updater);
+        for (iter_t build_loop = 0; build_loop < propagate_config.num_build_loops(); ++build_loop) {
+            propagate_engine.run(propagate_config.num_triu_iters(), triangle_updater)
+                            .next(reverse_updater).next(truncate_updater);
         }
 
         // /** -------------------- Optimization --------------------------------------- ***/
@@ -225,7 +223,7 @@ public:
             auto pruning_updater = propagate_engine.template make_updater<pruning_updater_t>(
                 pruning_config.scale_coeffs(), pruning_config.shifted_coeffs());
             propagate_engine.next(routing_updater).next(pruning_updater)
-                            .next(truncate_updater).next(reverse_updater).next(truncate_updater);
+                            .next(reverse_updater).next(truncate_updater);
         }
 
         // ---- Step 4: write refined edges back ----
