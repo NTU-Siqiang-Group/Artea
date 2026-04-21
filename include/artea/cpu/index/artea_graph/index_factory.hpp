@@ -31,6 +31,7 @@
 #include <chrono>
 #include <memory>
 #include <utility>
+#include <fmt/format.h>
 
 #include <artea/cpu/index/stacked_rgraph/index_factory.hpp>
 
@@ -228,9 +229,23 @@ public:
         const auto& propagate_config    = index.propagate_config();
         const vertex_num_t max_nbr_size = layer_config.max_nbr_size();
 
+        ARTEA_INFO(fmt::format(
+            "[artea_graph] refine_layer start: level_id={}, max_nbr_size={}, "
+            "random_prefill_L0={}, new_vid_range=[{}, {}), "
+            "prefill_ratio={}, num_build_loops={}, num_triu_iters={}, "
+            "num_routing_loops={}, routing_topk={}, routing_queue_size={}",
+            level_id, max_nbr_size,
+            random_prefill_L0, new_vid_start, new_vid_end,
+            propagate_config.prefill_ratio(),
+            propagate_config.num_build_loops(),
+            propagate_config.num_triu_iters(),
+            propagate_config.num_routing_loops(),
+            propagate_config.resolve_routing_topk(max_nbr_size),
+            propagate_config.resolve_routing_queue_size(max_nbr_size)));
+
         // /** -------------------- Optimization ------------------------------------- ***/
         // /** @brief A sparse graph is efficient enough to search nearest neighbors     */
-        // layer_config.max_nbr_size(max_nbr_size / 2);
+        // layer_config.max_nbr_size(max_nbr_size / 3);
         // /** ----------------------------------------------------------------------- ***/
 
         // ---- Step 1: build vid maps for the participating set ----
@@ -284,12 +299,11 @@ public:
         const vertex_num_t routing_queue_size = propagate_config.resolve_routing_queue_size(max_nbr_size);
         auto routing_updater  = propagate_engine.template make_updater<routing_updater_t>(routing_topk, routing_queue_size);
         auto truncate_updater = propagate_engine.template make_updater<truncate_updater_t>();
-        auto pruning_updater = propagate_engine.template make_updater<pruning_updater_t>(
-            pruning_config.scale_coeffs(), pruning_config.shifted_coeffs());
+        auto pruning_updater = propagate_engine.template make_updater<pruning_updater_t>(pruning_config.scale_coeffs(), pruning_config.shifted_coeffs());
 
         // propagate_engine.next(reverse_updater).next(truncate_updater);
         for (iter_t build_loop = 0; build_loop < propagate_config.num_build_loops(); ++build_loop) {
-            propagate_engine.run(propagate_config.num_triu_iters(), triangle_updater)
+            propagate_engine.run(propagate_config.num_triu_iters(), triangle_updater).next(truncate_updater)
                             .next(reverse_updater).next(truncate_updater);
         }
 
