@@ -13,7 +13,7 @@
 // limitations under the License.
 
 /*
- * @FilePath: /Artea/include/artea/cpu/refiner/hierarchical_pruning_updater.hpp
+ * @FilePath: /Artea/include/artea/cpu/refiner/updaters/hierarchical_pruning_updater.hpp
  * @Author: Chandler (Weitang Ye) <weitang.ye@ntu.edu.sg>
  * @Description: Pure-RNG neighbor pruning over nbr_t, decoupled from any
  *               RefiningGraph / layer_config. Used by

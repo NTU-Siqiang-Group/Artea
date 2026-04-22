@@ -31,15 +31,15 @@ namespace artea_graph {
 
 /** @brief artea_graph reuses conv_graph's propagate/pruning configs —
  *         the per-layer refinement drives a conv_graph build. */
-template <typename BaseTraitsT>
-using PropagateConfig = conv_graph::PropagateConfig<BaseTraitsT>;
+template <typename IndexTraitsT>
+using PropagateConfig = conv_graph::PropagateConfig<IndexTraitsT>;
 
-template <typename BaseTraitsT>
-using PruningConfig = conv_graph::PruningConfig<BaseTraitsT>;
+template <typename IndexTraitsT>
+using PruningConfig = conv_graph::PruningConfig<IndexTraitsT>;
 
 /** @brief artea_graph reuses stacked_rgraph's r-net geometry config. */
-template <typename BaseTraitsT>
-using RGraphConfig = stacked_rgraph::RGraphConfig<BaseTraitsT>;
+template <typename IndexTraitsT>
+using RGraphConfig = stacked_rgraph::RGraphConfig<IndexTraitsT>;
 
 }   // namespace artea_graph
 }   // namespace cpu

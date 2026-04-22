@@ -13,8 +13,8 @@ namespace cpu {
 namespace symmetric_knn_graph {
 
 /** @brief Symmetric KNN graph uses the same PropagateConfig as conv_graph. */
-template <typename BaseTraitsT>
-using PropagateConfig = conv_graph::PropagateConfig<BaseTraitsT>;
+template <typename IndexTraitsT>
+using PropagateConfig = conv_graph::PropagateConfig<IndexTraitsT>;
 
 }   // namespace symmetric_knn_graph
 }   // namespace cpu

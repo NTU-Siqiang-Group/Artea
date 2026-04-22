@@ -13,7 +13,7 @@
 // limitations under the License.
 
 /*
- * @FilePath: /Artea/include/artea/cpu/refiner/neighbor_updater.hpp
+ * @FilePath: /Artea/include/artea/cpu/refiner/updaters/neighbor_updater.hpp
  * @Author: Chandler (Weitang Ye) <weitang.ye@ntu.edu.sg>
  * @Description: Neighbor updater base class for edge generation.
  */

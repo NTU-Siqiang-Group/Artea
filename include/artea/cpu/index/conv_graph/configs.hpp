@@ -13,13 +13,13 @@ namespace conv_graph {
 /**
  * @brief Configuration for propagation during edge generation.
  * Supports builder pattern for flexible configuration.
- * @tparam BaseTraitsT The index traits type.
+ * @tparam IndexTraitsT The index traits type.
  */
-template <typename BaseTraitsT>
+template <typename IndexTraitsT>
 struct PropagateConfig {
-    using ratio_t = typename BaseTraitsT::ratio_t;
-    using iter_t = typename BaseTraitsT::iter_t;
-    using vertex_num_t = typename BaseTraitsT::vertex_num_t;
+    using ratio_t = typename IndexTraitsT::ratio_t;
+    using iter_t = typename IndexTraitsT::iter_t;
+    using vertex_num_t = typename IndexTraitsT::vertex_num_t;
 
     /**
      * @brief Constructor for propagation configuration.
@@ -99,11 +99,11 @@ private:
 /**
  * @brief Configuration for pruning during edge generation.
  * Supports builder pattern for flexible configuration.
- * @tparam BaseTraitsT The index traits type.
+ * @tparam IndexTraitsT The index traits type.
  */
-template <typename BaseTraitsT>
+template <typename IndexTraitsT>
 struct PruningConfig {
-    using ratio_t = typename BaseTraitsT::ratio_t;
+    using ratio_t = typename IndexTraitsT::ratio_t;
 
     /**
      * @brief Constructor for pruning configuration.

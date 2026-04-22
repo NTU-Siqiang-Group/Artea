@@ -1,4 +1,4 @@
-// Copyright 2025 Weitang Ye
+// Copyright 2026 Weitang Ye
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -13,19 +13,17 @@
 // limitations under the License.
 
 /*
- * @FilePath: /Artea/include/artea/cpu/refiner/triangle_updater.hpp
+ * @FilePath: /Artea/include/artea/cpu/refiner/updaters/pruning_updater.hpp
  * @Author: Chandler (Weitang Ye) <weitang.ye@ntu.edu.sg>
- * @Description: Pure-RNG triangle-based neighbor updater for edge
- *               generation. Threshold is always @c ori_dist — no
- *               scale/shift coefficients are consumed. Conflicts write
- *               reverse-edge entries to the log table.
+ * @Description: Pruning-based neighbor updater (no log writes). This is
+ *               the only post-refining component that still consumes
+ *               RNG scale/shift coefficients.
  */
 
 #pragma once
 
 #include <cstddef>
 #include <cstdint>
-#include <tuple>
 #include <vector>
 #include <stdexcept>
 #include <artea/cpu/utils/nbr_arr_checker.hpp>
@@ -33,21 +31,37 @@
 namespace artea {
 namespace cpu {
 
+/* ------ Pruning Condition Enumeration ------ *
+ *
+ * Only PruningUpdater consumes this enum now: the post-refining routing
+ * loop uses it to pick between plain RNG and the scaled/shifted RNG
+ * variants. TriangleUpdater / HierarchicalPruningUpdater hard-code the
+ * plain RNG rule and ignore scale/shift entirely.
+ */
+enum class PruningConditionT {
+    scaled_ineq,
+    scaled_shifted_ineq,
+    shifted_ineq,
+    origin_rng_ineq
+};
+
 template <typename RefinerTraitsT>
-class TriangleUpdater :
-    public RefinerTraitsT::template neighbor_updater_t<TriangleUpdater<RefinerTraitsT>> {
+class PruningUpdater :
+    public RefinerTraitsT::template neighbor_updater_t<PruningUpdater<RefinerTraitsT>> {
 
     using vertex_id_t = typename RefinerTraitsT::vertex_id_t;
     using vertex_num_t = typename RefinerTraitsT::vertex_num_t;
     using vec_ele_t = typename RefinerTraitsT::vec_ele_t;
     using distance_t = typename RefinerTraitsT::distance_t;
+    using ratio_t = typename RefinerTraitsT::ratio_t;
     using vector_array_t = typename RefinerTraitsT::vector_array_t;
     using nbr_t = typename RefinerTraitsT::nbr_t;
     using nbr_arr_t = typename RefinerTraitsT::nbr_arr_t;
     using log_table_t = typename RefinerTraitsT::log_table_t;
     using dist_func_t = typename RefinerTraitsT::dist_func_t;
+    using pruning_condition_t = typename RefinerTraitsT::pruning_condition_t;
     using refining_graph_t = typename RefinerTraitsT::dynamic::refining_graph_t;
-    using base_class_t = typename RefinerTraitsT::template neighbor_updater_t<TriangleUpdater<RefinerTraitsT>>;
+    using base_class_t = typename RefinerTraitsT::template neighbor_updater_t<PruningUpdater<RefinerTraitsT>>;
     static constexpr vertex_id_t invalid_vertex_id = RefinerTraitsT::invalid_vertex_id;
     static constexpr distance_t nan_distance = RefinerTraitsT::nan_distance;
     static constexpr distance_t max_distance = RefinerTraitsT::max_distance;
@@ -55,14 +69,18 @@ class TriangleUpdater :
     static constexpr bool rejected = false;
 
 public:
-    static constexpr const char* updater_name = "triangle_updater";
+    static constexpr const char* updater_name = "pruning_updater";
 
-    TriangleUpdater(
+    PruningUpdater(
         const dist_func_t&        dist_func,
         const vector_array_t&     vecs_data,
         log_table_t&              log_table,
-        const refining_graph_t&   refining_graph
-    ) : base_class_t(dist_func, vecs_data, log_table, refining_graph) {}
+        const refining_graph_t&   refining_graph,
+        const ratio_t             scale_coeffs,
+        const ratio_t             shifted_coeffs = 0.0
+    ) : base_class_t(dist_func, vecs_data, log_table, refining_graph),
+        _inv_scale_coeffs(static_cast<ratio_t>(1.0) / scale_coeffs),
+        _shifted_coeffs(shifted_coeffs) {}
 
     __attribute__((always_inline))
     auto get_max_nbr_size() const -> vertex_num_t {
@@ -70,38 +88,20 @@ public:
     }
 
     /**
-     * @brief Apply pure-RNG triangle-inequality pruning to the neighbor
-     *        array of a pivot vertex.
+     * @brief Apply triangle inequality pruning without writing any logs.
      *
-     * For each candidate, the threshold is simply its own distance to
-     * the pivot (@c ori_dist): a candidate is rejected iff some already-
-     * retained neighbor is closer to it than the pivot is. Rejected
-     * candidates log a reverse-edge entry rather than being silently
-     * discarded.
-     *
-     * @param pivot_vid   Unused; retained only for the updater interface.
-     * @param origin_nbrs The neighbor array to be pruned. On return it
-     *                    contains only retained neighbors, sorted by
-     *                    distance and marked as old.
-     *
-     * @warning origin_nbrs MUST NOT be empty before calling this
-     *          operator. Debug builds assert; release builds have UB.
-     *
-     * Algorithm:
-     * 1. The first (closest) neighbor is always retained.
-     * 2. For each subsequent neighbor, check if it conflicts with any
-     *    already-retained neighbor under the plain RNG rule.
-     * 3. Retain on success; otherwise log a reverse edge and reject.
-     * 4. Stop early once max_nbr_size is reached.
-     * 5. Mark retained as old and swap into origin_nbrs.
+     * Same RNG pruning logic as TriangleUpdater, but rejected candidates are
+     * simply discarded — no reverse edges are logged. This is useful when the
+     * graph already has good edge quality and only in-place pruning is needed.
      */
+    template <pruning_condition_t ConditionType = pruning_condition_t::scaled_ineq>
     auto update_impl(
         const vertex_id_t /*layer_vid*/,
         nbr_arr_t& origin_nbrs
     ) -> void {
         #ifndef NDEBUG
         if (origin_nbrs.empty()) {
-            ARTEA_ERROR("[TriangleUpdater]: origin_nbrs cannot be empty");
+            ARTEA_ERROR("[PruningUpdater]: origin_nbrs cannot be empty");
         }
         #endif
 
@@ -109,27 +109,18 @@ public:
         retained_nbrs.reserve(origin_nbrs.capacity());
         const vertex_num_t max_sz = this->_refining_graph.layer_config().max_nbr_size();
 
-        // The first neighbor is always the closest to pivot_vid and cannot conflict with any existing neighbor
+        // The first neighbor is always the closest and cannot conflict
         retained_nbrs.push_back(origin_nbrs[0]);
 
         for (vertex_num_t i = 1; i < origin_nbrs.size(); ++i) {
             const nbr_t& ori_nbr = origin_nbrs[i];
-            auto [passed, conflict_vid, conflict_dist] = _internal_check(ori_nbr, retained_nbrs);
+            bool passed = _internal_check<ConditionType>(ori_nbr, retained_nbrs);
 
             if (passed) {
                 retained_nbrs.push_back(ori_nbr);
-                // Do not accept because we've reached the maximum neighbor size
                 if (retained_nbrs.size() >= max_sz) {
-                    // break;
                     continue;
                 }
-            }
-            else {
-                // conflict_vid is a global nbr vid; translate to local for
-                // the log_table (row index into the RG).
-                this->_log_table.write_log(
-                    this->_refining_graph.local_id_of(conflict_vid),
-                    ori_nbr.get_vid(), conflict_dist);
             }
         }
 
@@ -143,16 +134,35 @@ public:
 
 private:
 
+    /** @brief Inverse of scale coefficient for RNG Triangle Inequality. */
+    const ratio_t _inv_scale_coeffs;
+
+    /** @brief Shifted coefficient for RNG Triangle Inequality. */
+    const ratio_t _shifted_coeffs;
+
+    template <PruningConditionT ConditionType>
+    __attribute__((always_inline))
+    constexpr auto _compute_threshold(const distance_t ori_dist) const -> distance_t {
+        if constexpr (ConditionType == PruningConditionT::scaled_ineq) {
+            return ori_dist * _inv_scale_coeffs;
+        } else if constexpr (ConditionType == PruningConditionT::scaled_shifted_ineq) {
+            return ori_dist * _inv_scale_coeffs - _shifted_coeffs;
+        } else if constexpr (ConditionType == PruningConditionT::shifted_ineq) {
+            return ori_dist - _shifted_coeffs;
+        } else if constexpr (ConditionType == PruningConditionT::origin_rng_ineq) {
+            return ori_dist;
+        }
+    }
+
+    template <PruningConditionT ConditionType>
     auto _internal_check(
         const nbr_t& ori_nbr,
         const nbr_arr_t& retained_nbrs
-    ) -> std::tuple<bool, vertex_id_t, distance_t> {
+    ) -> bool {
         const vec_ele_t* ori_vec = this->_vecs_data.get(ori_nbr.get_vid());
-        const distance_t threshold = ori_nbr.get_distance();
+        const distance_t threshold = _compute_threshold<ConditionType>(ori_nbr.get_distance());
 
-        // Check conflict with all retained neighbors
         for (vertex_num_t i = 0; i < retained_nbrs.size(); ++i) {
-            // Skip distance calculation for old-old pairs
             if (ori_nbr.is_old() && retained_nbrs[i].is_old()) {
                 continue;
             }
@@ -162,16 +172,14 @@ private:
             distance_t dist_to_retained = this->_dist_func(ori_vec, retained_vec);
 
             if (dist_to_retained < threshold) {
-                // RNG conflict detected, rejected
-                return std::make_tuple(rejected, retained_nbr.get_vid(), dist_to_retained);
+                return rejected;
             }
         }
 
-        // NO RNG conflict, accepted
-        return std::make_tuple(accepted, invalid_vertex_id, nan_distance);
+        return accepted;
     }
 
-};  // class TriangleUpdater
+};  // class PruningUpdater
 
 }   // namespace cpu
 }   // namespace artea

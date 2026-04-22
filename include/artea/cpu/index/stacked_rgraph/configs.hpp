@@ -26,24 +26,19 @@ namespace stacked_rgraph {
  * variant used for L1+ and a bottom-layer variant used for L0),
  * per-vertex neighbor capacity, and per-layer pre-allocation policy.
  *
- * @tparam BaseTraitsT The base traits type.
+ * @tparam IndexTraitsT The index traits type.
  */
-template <typename BaseTraitsT>
+template <typename IndexTraitsT>
 struct RGraphConfig {
-    using vertex_num_t = typename BaseTraitsT::vertex_num_t;
-    using layer_num_t  = typename BaseTraitsT::layer_num_t;
-    using distance_t   = typename BaseTraitsT::distance_t;
-    using ratio_t      = typename BaseTraitsT::ratio_t;
+    using vertex_num_t = typename IndexTraitsT::vertex_num_t;
+    using layer_num_t  = typename IndexTraitsT::layer_num_t;
+    using distance_t   = typename IndexTraitsT::distance_t;
+    using ratio_t      = typename IndexTraitsT::ratio_t;
 
     /** @brief Geometric decay ratio for per-layer initial capacity;
      *         capacity(layer_id) = base_capacity * decay^layer_id.
      *         Each layer starts at half the capacity of the one below. */
     static constexpr ratio_t      layer_cap_decay_ratio = ratio_t(0.5);
-
-    /** @brief Floor on per-layer capacity, also used by
-     *         @c HierarchicalGraphCompactor as the threshold below
-     *         which a top-level bucket is trimmed at compaction time. */
-    static constexpr vertex_num_t min_layer_cap         = 128;
 
     /**
      * @brief Construct a RGraphConfig.
@@ -109,7 +104,8 @@ struct RGraphConfig {
 
     /**
      * @brief Initial CSR capacity for the given 0-indexed layer id.
-     *        capacity = base_capacity * decay_ratio^layer_id, floored at min_layer_cap.
+     *        capacity = base_capacity * decay_ratio^layer_id, floored at
+     *        @c IndexTraitsT::min_layer_cap.
      *        Returns base_capacity when decay_ratio == 1 (no decay).
      */
     __attribute__((always_inline))
@@ -118,7 +114,7 @@ struct RGraphConfig {
         const double factor = std::pow(static_cast<double>(layer_cap_decay_ratio), static_cast<double>(layer_id));
         const double raw = static_cast<double>(base_capacity) * factor;
         const vertex_num_t cap = static_cast<vertex_num_t>(raw);
-        return std::max<vertex_num_t>(cap, min_layer_cap);
+        return std::max<vertex_num_t>(cap, IndexTraitsT::min_layer_cap);
     }
 
     /**
@@ -157,8 +153,8 @@ private:
 /** @brief stacked_rgraph reuses conv_graph's PruningConfig — the
  *         insertion path reads scale_coeffs only; shifted_coeffs is a
  *         post-refinement concern and is ignored on the insertion path. */
-template <typename BaseTraitsT>
-using PruningConfig = conv_graph::PruningConfig<BaseTraitsT>;
+template <typename IndexTraitsT>
+using PruningConfig = conv_graph::PruningConfig<IndexTraitsT>;
 
 }   // namespace stacked_rgraph
 }   // namespace cpu

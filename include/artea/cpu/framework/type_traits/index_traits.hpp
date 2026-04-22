@@ -63,6 +63,15 @@ struct IndexTraits : virtual public BaseTraitsT {
     /** @brief Base traits type. */
     using base_traits_t = BaseTraitsT;
 
+    /** @brief Floor on per-layer CSR capacity and minimum apex population
+     *         for a top bucket to survive @c HierarchicalGraphCompactor
+     *         trimming. Consumed by @c stacked_rgraph::RGraphConfig and
+     *         @c HierarchicalGraphCompactor. */
+    static constexpr typename BaseTraitsT::vertex_num_t min_layer_cap = 128;
+
+    /** @brief Layer configuration type. */
+    using layer_config_t = LayerConfig<index_traits_t>;
+
     /** @brief Graph structures grouped by mode. */
     struct compact {
         compact() = delete;
@@ -75,22 +84,26 @@ struct IndexTraits : virtual public BaseTraitsT {
         using hierarchical_graph_t = cpu::dynamic::HierarchicalGraph<index_traits_t>;
     };
 
-    /** @brief Namespace-scoped index types for conv_graph, extending BaseTraits::conv_graph. */
-    struct conv_graph : BaseTraitsT::conv_graph {
+    /** @brief Namespace-scoped types for conv_graph. */
+    struct conv_graph {
         conv_graph() = delete;
-        using index_t = cpu::conv_graph::IndexStructure<index_traits_t>;
+        using index_t            = cpu::conv_graph::IndexStructure<index_traits_t>;
+        using propagate_config_t = cpu::conv_graph::PropagateConfig<index_traits_t>;
+        using pruning_config_t   = cpu::conv_graph::PruningConfig<index_traits_t>;
     };
 
-    /** @brief Namespace-scoped index types for knn_graph, extending BaseTraits::knn_graph. */
-    struct knn_graph : BaseTraitsT::knn_graph {
+    /** @brief Namespace-scoped types for knn_graph. */
+    struct knn_graph {
         knn_graph() = delete;
-        using index_t = cpu::knn_graph::IndexStructure<index_traits_t>;
+        using index_t            = cpu::knn_graph::IndexStructure<index_traits_t>;
+        using propagate_config_t = cpu::knn_graph::PropagateConfig<index_traits_t>;
     };
 
-    /** @brief Namespace-scoped index types for symmetric_knn_graph, extending BaseTraits::symmetric_knn_graph. */
-    struct symmetric_knn_graph : BaseTraitsT::symmetric_knn_graph {
+    /** @brief Namespace-scoped types for symmetric_knn_graph. */
+    struct symmetric_knn_graph {
         symmetric_knn_graph() = delete;
-        using index_t = cpu::symmetric_knn_graph::IndexStructure<index_traits_t>;
+        using index_t            = cpu::symmetric_knn_graph::IndexStructure<index_traits_t>;
+        using propagate_config_t = cpu::symmetric_knn_graph::PropagateConfig<index_traits_t>;
     };
 
     /** @brief Descent graph compactor type. */
@@ -108,22 +121,24 @@ struct IndexTraits : virtual public BaseTraitsT {
     /** @brief Multi-layer compactor: dynamic::HierarchicalGraph -> compact::HierarchicalGraph. */
     using hierarchical_graph_compactor_t = HierarchicalGraphCompactor<index_traits_t>;
 
-    /** @brief Namespace-scoped index types for stacked_rgraph
+    /** @brief Namespace-scoped types for stacked_rgraph
      *  (dynamic r-net insertion over HierarchicalGraph). */
-    struct stacked_rgraph : BaseTraitsT::stacked_rgraph {
+    struct stacked_rgraph {
         stacked_rgraph() = delete;
-        using index_t = cpu::stacked_rgraph::IndexStructure<index_traits_t>;
+        using index_t          = cpu::stacked_rgraph::IndexStructure<index_traits_t>;
+        using rgraph_config_t  = cpu::stacked_rgraph::RGraphConfig<index_traits_t>;
+        using pruning_config_t = cpu::stacked_rgraph::PruningConfig<index_traits_t>;
     };
 
-    /** @brief Namespace-scoped index types for artea_graph
+    /** @brief Namespace-scoped types for artea_graph
      *  (stacked_rgraph backbone with per-layer conv_graph refinement). */
-    struct artea_graph : BaseTraitsT::artea_graph {
+    struct artea_graph {
         artea_graph() = delete;
-        using index_t = cpu::artea_graph::IndexStructure<index_traits_t>;
+        using index_t            = cpu::artea_graph::IndexStructure<index_traits_t>;
+        using rgraph_config_t    = cpu::artea_graph::RGraphConfig<index_traits_t>;
+        using propagate_config_t = cpu::artea_graph::PropagateConfig<index_traits_t>;
+        using pruning_config_t   = cpu::artea_graph::PruningConfig<index_traits_t>;
     };
-
-    /** @brief Minimum number of vertices required for a layer to continue building upper layers. */
-    static constexpr uint32_t min_num_layer_vertex = 1024;
 
 };  // struct IndexTraits
 

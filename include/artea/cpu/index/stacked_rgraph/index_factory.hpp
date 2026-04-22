@@ -104,16 +104,13 @@ class IndexFactory {
     // Insertion only needs the atom-level beam_search, so we bind the
     // graph-agnostic single-layer router directly and skip the
     // hierarchical wrapper.
-    using single_layer_router_t   =
-        typename GraphFactoryTraitsT::single_layer_router_t;
-    using candidate_sample_utils_t =
-        typename GraphFactoryTraitsT::candidate_sample_utils_t;
+    using single_layer_router_t    = typename GraphFactoryTraitsT::single_layer_router_t;
+    using candidate_sample_utils_t = typename GraphFactoryTraitsT::candidate_sample_utils_t;
 
     static constexpr vertex_id_t invalid_vertex_id = GraphFactoryTraitsT::invalid_vertex_id;
     static constexpr distance_t  max_distance      = GraphFactoryTraitsT::max_distance;
 
-    static constexpr layer_id_t  unassigned_highest_level_id =
-        hierarchical_graph_t::unassigned_highest_level_id;
+    static constexpr layer_id_t  unassigned_highest_level_id = hierarchical_graph_t::unassigned_highest_level_id;
 
 public:
     /** @brief Number of vertices inserted serially during bootstrap
@@ -155,6 +152,16 @@ public:
         const bool         insert_on_L0 = true,
         const bool         shuffle_insertion_order = false
     ) -> void {
+        // bl_select_nbrs_qs only drives the L0 select phase in Step D.
+        // When insert_on_L0 == false that phase is skipped, so whatever
+        // value the caller stored on the index config is dead weight.
+        if (!insert_on_L0) {
+            ARTEA_WARN(fmt::format(
+                "[stacked_rgraph] insert_on_L0=false: bl_select_nbrs_qs={} "
+                "will be ignored (L0 select phase is skipped).",
+                index.bl_select_nbrs_qs()));
+        }
+
         const vertex_num_t batch_size = static_cast<vertex_num_t>(batch_vecs.get_num_vecs());
         if (batch_size == 0) return;
 

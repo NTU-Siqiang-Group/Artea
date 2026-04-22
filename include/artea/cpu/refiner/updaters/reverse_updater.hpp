@@ -13,7 +13,7 @@
 // limitations under the License.
 
 /*
- * @FilePath: /Artea/include/artea/cpu/refiner/reverse_updater.hpp
+ * @FilePath: /Artea/include/artea/cpu/refiner/updaters/reverse_updater.hpp
  * @Author: Chandler (Weitang Ye) <weitang.ye@ntu.edu.sg>
  * @Description: Reverse edge updater for building bidirectional graphs.
  */

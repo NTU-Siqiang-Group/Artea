@@ -103,17 +103,17 @@
 #include <artea/cpu/vertex_generator/graph_mis_vg.hpp>
 
 #include <artea/cpu/refiner/nbr_log_table.hpp>
-#include <artea/cpu/refiner/neighbor_updater.hpp>
-#include <artea/cpu/refiner/triangle_updater.hpp>
-#include <artea/cpu/refiner/pruning_updater.hpp>
-#include <artea/cpu/refiner/hierarchical_pruning_updater.hpp>
-#include <artea/cpu/refiner/reverse_updater.hpp>
-#include <artea/cpu/refiner/random_updater.hpp>
+#include <artea/cpu/refiner/updaters/neighbor_updater.hpp>
+#include <artea/cpu/refiner/updaters/triangle_updater.hpp>
+#include <artea/cpu/refiner/updaters/pruning_updater.hpp>
+#include <artea/cpu/refiner/updaters/hierarchical_pruning_updater.hpp>
+#include <artea/cpu/refiner/updaters/reverse_updater.hpp>
+#include <artea/cpu/refiner/updaters/random_updater.hpp>
 #include <artea/cpu/refiner/random_eg.hpp>
 #include <artea/cpu/refiner/propagate_engine.hpp>
 #include <artea/cpu/refiner/ivf_partitions.hpp>
-#include <artea/cpu/refiner/routing_updater.hpp>
-#include <artea/cpu/refiner/truncate_updater.hpp>
+#include <artea/cpu/refiner/updaters/routing_updater.hpp>
+#include <artea/cpu/refiner/updaters/truncate_updater.hpp>
 #include <artea/cpu/refiner/refiner_utils.hpp>
 
 #include <artea/cpu/utils/bit_ops.hpp>

@@ -100,8 +100,8 @@ using log_buffer_t = typename buffer_traits_t::log_buffer_t;
 using log_container_t = typename buffer_traits_t::log_container_t;
 using log_table_t = typename buffer_traits_t::log_table_t;
 
-// Config types from BaseTraits
-using layer_config_t = typename base_traits_t::layer_config_t;
+// Config types from IndexTraits
+using layer_config_t = typename index_traits_t::layer_config_t;
 
 // Index types from IndexTraits
 using refining_graph_compactor_t = typename index_traits_t::refining_graph_compactor_t;

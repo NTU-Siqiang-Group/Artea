@@ -94,8 +94,10 @@ class HierarchicalGraphCompactor {
 public:
     /** @brief Minimum apex population for a top layer to survive
      *         compaction. Top buckets thinner than this are trimmed
-     *         and their vids demoted into the next-lower layer. */
-    static constexpr vertex_num_t min_layer_cap = 1024;
+     *         and their vids demoted into the next-lower layer.
+     *         Pulled from @c IndexTraitsT so the trim threshold shares
+     *         a single source of truth with the r-net capacity floor. */
+    static constexpr vertex_num_t min_layer_cap = IndexTraitsT::min_layer_cap;
 
     /**
      * @brief Parallel-compact @p src into a fresh compact graph.
@@ -124,9 +126,7 @@ public:
         const layer_id_t   src_top      = src.top_occupied_level_id();
 
         // ---- Empty source: return a degenerate compact graph. ----
-        if (num_vertices == 0 ||
-            src_top == src_graph_t::unassigned_highest_level_id)
-        {
+        if (num_vertices == 0 || src_top == src_graph_t::unassigned_highest_level_id) {
             std::vector<std::size_t> empty_cap(1, 0);
             return compact_graph_t(
                 layer_id_t{0}, max_nbr_size, num_vertices,

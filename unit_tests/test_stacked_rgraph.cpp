@@ -61,7 +61,8 @@ struct TestConfig {
 
     // Beam-search queue sizes
     uint32_t search_nn_qs;
-    uint32_t select_nbrs_qs;
+    uint32_t ul_select_nbrs_qs;
+    uint32_t bl_select_nbrs_qs;
 
     // Insert-time upper-layer RNG scale (shifted is forced to 0 at the
     // stacked_rgraph config level).
@@ -140,14 +141,11 @@ protected:
 
         const vertex_num_t total_vertices =
             static_cast<vertex_num_t>(base_vecs.get_num_vecs());
-        // Single --select-nbrs-qs feeds both the upper-layer (L1+) and
-        // bottom-layer (L0) beam widths; tune separately by tweaking
-        // RGraphConfig directly if an asymmetric split is desired.
         stacked_rgraph::rgraph_config_t rgraph_config(
             g_config.rnet_beta, provider.get_l1_radius(),
             static_cast<vertex_num_t>(g_config.search_nn_qs),
-            static_cast<vertex_num_t>(g_config.select_nbrs_qs),
-            static_cast<vertex_num_t>(g_config.select_nbrs_qs),
+            static_cast<vertex_num_t>(g_config.ul_select_nbrs_qs),
+            static_cast<vertex_num_t>(g_config.bl_select_nbrs_qs),
             g_config.max_nbr_size);
         // stacked_rgraph::pruning_config_t is an alias of conv_graph's
         // PruningConfig; the stacked_rgraph backbone only reads
@@ -198,12 +196,14 @@ protected:
     static void SetUpTestSuite() {
         ARTEA_INFO(fmt::format(
             "Building StackedRGraph: beta={:.3f}, L1_radius={:.6f}, "
-            "max_nbr={}, search_nn_qs={}, select_nbrs_qs={}, "
+            "max_nbr={}, search_nn_qs={}, "
+            "ul_select_nbrs_qs={}, bl_select_nbrs_qs={}, "
             "scale_coeffs={:.3f}",
             g_config.rnet_beta,
             DataProvider::instance().get_l1_radius(),
             g_config.max_nbr_size,
-            g_config.search_nn_qs, g_config.select_nbrs_qs,
+            g_config.search_nn_qs,
+            g_config.ul_select_nbrs_qs, g_config.bl_select_nbrs_qs,
             g_config.scale_coeffs));
 
         ARTEA_INFO("--- Building with insert_on_L0=false ---");
@@ -286,10 +286,12 @@ int main(int argc, char** argv) {
 
     program.add_argument("--search-nn-qs")
         .default_value(40u).scan<'u', uint32_t>();
-    program.add_argument("--select-nbrs-qs")
+    program.add_argument("--ul-select-nbrs-qs")
         .default_value(100u).scan<'u', uint32_t>()
-        .help("Beam-search queue size; feeds both ul (L1+) and bl (L0) "
-              "select phases with the same value.");
+        .help("Upper-layer (L1+) beam-search queue size for the select phase.");
+    program.add_argument("--bl-select-nbrs-qs")
+        .default_value(100u).scan<'u', uint32_t>()
+        .help("Bottom-layer (L0) beam-search queue size for the select phase.");
     program.add_argument("--scale-coeffs")
         .default_value(1.1f).scan<'g', float>()
         .help("RNG scale coefficient applied at upper layers (default 1.1). "
@@ -309,7 +311,8 @@ int main(int argc, char** argv) {
     g_config.probe_num_samples  = program.get<uint32_t>("--probe-num-samples");
     g_config.probe_quantile     = program.get<float>("--probe-quantile");
     g_config.search_nn_qs       = program.get<uint32_t>("--search-nn-qs");
-    g_config.select_nbrs_qs     = program.get<uint32_t>("--select-nbrs-qs");
+    g_config.ul_select_nbrs_qs  = program.get<uint32_t>("--ul-select-nbrs-qs");
+    g_config.bl_select_nbrs_qs  = program.get<uint32_t>("--bl-select-nbrs-qs");
     g_config.scale_coeffs       = program.get<float>("--scale-coeffs");
 
     const float l1 = program.get<float>("--l1-radius");
@@ -328,10 +331,11 @@ int main(int argc, char** argv) {
                   << "th pct, " << g_config.probe_num_samples
                   << " samples)\n";
     }
-    std::cout << "max_nbr_size:   " << g_config.max_nbr_size   << "\n";
-    std::cout << "search_nn_qs:   " << g_config.search_nn_qs   << "\n";
-    std::cout << "select_nbrs_qs: " << g_config.select_nbrs_qs << "\n";
-    std::cout << "scale_coeffs:   " << g_config.scale_coeffs   << "\n";
+    std::cout << "max_nbr_size:      " << g_config.max_nbr_size      << "\n";
+    std::cout << "search_nn_qs:      " << g_config.search_nn_qs      << "\n";
+    std::cout << "ul_select_nbrs_qs: " << g_config.ul_select_nbrs_qs << "\n";
+    std::cout << "bl_select_nbrs_qs: " << g_config.bl_select_nbrs_qs << "\n";
+    std::cout << "scale_coeffs:      " << g_config.scale_coeffs      << "\n";
     std::cout << "modes:          insert_on_L0={false, true}\n";
     std::cout << "============================\n\n";
 

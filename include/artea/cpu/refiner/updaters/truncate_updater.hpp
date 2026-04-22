@@ -13,7 +13,7 @@
 // limitations under the License.
 
 /*
- * @FilePath: /Artea/include/artea/cpu/refiner/truncate_updater.hpp
+ * @FilePath: /Artea/include/artea/cpu/refiner/updaters/truncate_updater.hpp
  * @Author: Chandler (Weitang Ye) <weitang.ye@ntu.edu.sg>
  * @Description: Truncate updater: trims each vertex's neighbor array to a specified size.
  */

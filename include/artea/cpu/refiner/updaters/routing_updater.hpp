@@ -13,7 +13,7 @@
 // limitations under the License.
 
 /*
- * @FilePath: /Artea/include/artea/cpu/refiner/routing_updater.hpp
+ * @FilePath: /Artea/include/artea/cpu/refiner/updaters/routing_updater.hpp
  * @Author: Chandler (Weitang Ye) <weitang.ye@ntu.edu.sg>
  * @Description: Routing-based edge updater: uses a construct-mode router to find
  *               approximate nearest neighbors and writes them to the log table.

@@ -13,7 +13,7 @@
 // limitations under the License.
 
 /*
- * @FilePath: /Artea/include/artea/cpu/refiner/random_updater.hpp
+ * @FilePath: /Artea/include/artea/cpu/refiner/updaters/random_updater.hpp
  * @Author: Chandler (Weitang Ye) <weitang.ye@ntu.edu.sg>
  * @Description: Random edge updater for generating random neighbors.
  */
@@ -54,13 +54,15 @@ public:
     /**
      * @brief Constructor for RandomUpdater.
      *
-     * @param start_vid  Inclusive lower bound on the local row indices
-     *                   sampled by this updater. Generated ids satisfy
-     *                   @c start_vid <= id < end_vid. Defaults to 0 for
-     *                   backward compatibility with callers that want to
-     *                   sample the entire local-row range.
-     * @param end_vid    Exclusive upper bound. Must satisfy
-     *                   @c start_vid < end_vid <= num_vertices.
+     * @param rand_gen_size Per-row target: pivots with a current neighbor
+     *                      count below this are topped up with
+     *                      @c rand_gen_size - pivot_nbrs.size() random
+     *                      ids; pivots already at/above it are skipped.
+     * @param start_vid     Inclusive lower bound on the local row indices
+     *                      sampled by this updater. Generated ids satisfy
+     *                      @c start_vid <= id < end_vid.
+     * @param end_vid       Exclusive upper bound. Must satisfy
+     *                      @c start_vid < end_vid <= num_vertices.
      */
     RandomUpdater(
         const dist_func_t&        dist_func,
@@ -97,24 +99,32 @@ public:
         nbr_arr_t& origin_nbrs
     ) -> void {
         const vertex_id_t storage_vid = this->_refining_graph.get_storage_vid(layer_vid);
+
+        // Top-up gate: rows that already sit at/above rand_gen_size are
+        // skipped; rows below it are padded with exactly the deficit.
+        const vertex_num_t cur_size = static_cast<vertex_num_t>(
+            this->_refining_graph.fetch_nbrs(storage_vid).size());
+        if (cur_size >= _rand_gen_size) { return; }
+        const vertex_num_t gen_size = _rand_gen_size - cur_size;
+
         // Random ids are drawn in [_start_vid, _end_vid) = caller-
         // restricted local-row window; translate each to a global vid
         // for distance evaluation. The range-form RandomSeq::generate
         // passes the bounds straight into MKL's viRngUniform so no
         // post-shift is needed.
-        std::vector<vertex_id_t> rand_ids_buffer(_rand_gen_size);
+        std::vector<vertex_id_t> rand_ids_buffer(gen_size);
         _random_seq.generate(
-            rand_ids_buffer, _start_vid, _end_vid, _rand_gen_size);
+            rand_ids_buffer, _start_vid, _end_vid, gen_size);
 
         const vec_ele_t* pivot_vec = this->_vecs_data.get(storage_vid);
         const vertex_num_t max_sz = this->_refining_graph.layer_config().max_nbr_size();
 
         std::vector<vertex_id_t> nbr_ids;
         std::vector<distance_t> nbr_dists;
-        nbr_ids.reserve(_rand_gen_size);
-        nbr_dists.reserve(_rand_gen_size);
+        nbr_ids.reserve(gen_size);
+        nbr_dists.reserve(gen_size);
 
-        for (vertex_num_t i = 0; i < _rand_gen_size; ++i) {
+        for (vertex_num_t i = 0; i < gen_size; ++i) {
             const vertex_id_t rand_nbr_global = this->_refining_graph.get_storage_vid(rand_ids_buffer[i]);
             if (rand_nbr_global == storage_vid) { continue; }
             const distance_t dist = this->_dist_func(pivot_vec, this->_vecs_data.get(rand_nbr_global));

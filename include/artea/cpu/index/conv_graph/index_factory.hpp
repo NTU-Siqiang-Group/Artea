@@ -198,7 +198,8 @@ private:
         propagate_engine_t propagate_engine(dist_func);
         propagate_engine.set_graph(graph_index.get_refining_graph());
 
-        auto triangle_updater  = propagate_engine.template make_updater<triangle_updater_t>();
+        auto triangle_updater  = propagate_engine.template make_updater<triangle_updater_t>(
+            pruning_config.scale_coeffs(), pruning_config.shifted_coeffs());
         auto reverse_updater   = propagate_engine.template make_updater<reverse_updater_t>();
         const vertex_num_t routing_topk = propagate_config.resolve_routing_topk(max_nbr_size);
         const vertex_num_t routing_queue_size = propagate_config.resolve_routing_queue_size(max_nbr_size);

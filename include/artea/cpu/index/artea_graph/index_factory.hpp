@@ -104,15 +104,17 @@ public:
      * @param index                    The artea_graph index to grow.
      * @param batch_vecs               Batch to insert (moved into @p index).
      * @param dist_func                Distance functor (must outlive this call).
-     * @param insert_on_L0             When true (default), the parent r-net
-     *                                 factory builds L0 edges for each new
-     *                                 vertex before refinement. When false,
-     *                                 L0 is left empty by the parent and
-     *                                 @c refine_layer seeds L0 with random
-     *                                 neighbors (prefill density =
+     * @param insert_on_L0             Forwarded to the parent r-net factory:
+     *                                 when true (default) it builds L0 edges
+     *                                 for each new vertex; when false it
+     *                                 leaves L0 slots empty. Independently,
+     *                                 @c refine_layer always runs a random
+     *                                 top-up pass on L0 so that every vertex
+     *                                 in the newly-inserted vid window ends
+     *                                 up with at least
      *                                 @c refining_max_nbr_size *
-     *                                 @c prefill_ratio) over the newly
-     *                                 inserted vid window.
+     *                                 @c prefill_ratio neighbors before the
+     *                                 propagate pipeline starts.
      * @param shuffle_insertion_order  Forwarded to the inherited
      *                                 @c stacked_rgraph::IndexFactory::add_vertices;
      *                                 see that overload for semantics.
@@ -124,19 +126,18 @@ public:
         const bool         insert_on_L0 = true,
         const bool         shuffle_insertion_order = false
     ) -> void {
-        // Capture the vid window owned by this batch so L0 refinement
-        // can draw random prefill neighbors from exactly the newly
-        // inserted vertices (see refine_layer). Only meaningful when
-        // insert_on_L0 == false; when true, L0 slots already carry the
-        // r-net candidates and no prefill is needed.
+        // Capture the vid window owned by this batch. refine_layer uses
+        // it to scope the L0 random top-up pass to exactly the new
+        // vertices — earlier batches' L0 rows stay untouched, and rows
+        // that already have enough neighbors (from r-net insertion when
+        // insert_on_L0 == true) are skipped via the threshold gate.
         const vertex_id_t new_vid_start =
             static_cast<vertex_id_t>(index.get_num_vertices());
 
         // Step 1: coarse stacked_rgraph insertion. L0 edge construction
-        // is governed by @p insert_on_L0: when false, refine_layer
-        // rebuilds L0 from scratch via random prefill + triangle
-        // propagate, so spending r-net insertion time on L0 neighbors
-        // would be wasted.
+        // is governed by @p insert_on_L0. Either way, refine_layer's
+        // random top-up pass will fill L0 rows that still sit below
+        // the prefill threshold — no extra orchestration needed here.
         const auto rnet_t0 = std::chrono::high_resolution_clock::now();
         base_t::add_vertices(
             index,
@@ -159,8 +160,7 @@ public:
         for (layer_id_t level_id = 0; level_id <= top_level_id; ++level_id) {
             refine_layer(
                 index, level_id, dist_func,
-                new_vid_start, new_vid_end,
-                /*random_prefill_L0=*/!insert_on_L0);
+                new_vid_start, new_vid_end);
         }
         const auto refine_t1 = std::chrono::high_resolution_clock::now();
         const int64_t refine_ms = std::chrono::duration_cast<std::chrono::milliseconds>(refine_t1 - refine_t0).count();
@@ -179,12 +179,15 @@ public:
      *   2. Construct a @c refining_graph_t matching the mode: dense
      *      ctor for L0, sparse ctor for L1+. Fill it from the current
      *      layer slot via @c refiner_utils_t::fill_refining_graph_from_layer.
-     *   2.5. (L0 only, when @p random_prefill_L0) seed the
-     *        newly-inserted-vid window with @c random_updater_t so the
-     *        triangle loop has real edges to propagate from (instead of
-     *        empty rows left behind by @c insert_on_L0=false). The
-     *        number of random neighbors per vertex is
-     *        @c refining_max_nbr_size * @c prefill_ratio.
+     *   2.5. (L0 only) run @c random_updater_t in top-up mode over the
+     *        newly-inserted vid window: rows whose current neighbor
+     *        count is below @c refining_max_nbr_size *
+     *        @c prefill_ratio are padded up to that threshold with
+     *        random candidates; rows that already meet the threshold
+     *        are skipped by the updater itself. This fires regardless
+     *        of @c insert_on_L0 — when L0 was built by r-net insertion
+     *        the pass is a cheap no-op for rows that already have
+     *        enough edges, and it still rescues any sparse rows.
      *   3. Drive @c propagate_engine with @c triangle_updater +
      *      @c reverse_updater + @c truncate_updater (+ optional routing
      *      loops) directly on the RefiningGraph. We cannot call
@@ -203,24 +206,18 @@ public:
      * @param dist_func           Distance functor (must outlive this call).
      * @param new_vid_start       Inclusive lower bound of the newly
      *                            inserted vid window (captured in
-     *                            @c add_vertices). Used to restrict L0
-     *                            random prefill to the new vertices when
-     *                            @p random_prefill_L0 is true.
+     *                            @c add_vertices). Used to restrict the
+     *                            L0 random top-up pass to exactly the
+     *                            new vertices.
      * @param new_vid_end         Exclusive upper bound of the newly
      *                            inserted vid window.
-     * @param random_prefill_L0   When true and @p level_id == 0, seed L0
-     *                            with random edges over
-     *                            @c [new_vid_start, new_vid_end) before
-     *                            running the propagate pipeline. Caller
-     *                            typically passes @c !insert_on_L0.
      */
     static auto refine_layer(
         this_index_t&      index,
         const layer_id_t   level_id,
         const dist_func_t& dist_func,
         const vertex_id_t  new_vid_start,
-        const vertex_id_t  new_vid_end,
-        const bool         random_prefill_L0
+        const vertex_id_t  new_vid_end
     ) -> void {
         auto& hier_graph                = index.get_hierarchical_graph();
         auto& vecs_storage              = index.get_vecs_storage();
@@ -231,11 +228,11 @@ public:
 
         ARTEA_INFO(fmt::format(
             "[artea_graph] refine_layer start: level_id={}, max_nbr_size={}, "
-            "random_prefill_L0={}, new_vid_range=[{}, {}), "
+            "new_vid_range=[{}, {}), "
             "prefill_ratio={}, num_build_loops={}, num_triu_iters={}, "
             "num_routing_loops={}, routing_topk={}, routing_queue_size={}",
             level_id, max_nbr_size,
-            random_prefill_L0, new_vid_start, new_vid_end,
+            new_vid_start, new_vid_end,
             propagate_config.prefill_ratio(),
             propagate_config.num_build_loops(),
             propagate_config.num_triu_iters(),
@@ -276,24 +273,27 @@ public:
         propagate_engine_t propagate_engine(dist_func);
         propagate_engine.set_graph(*refining_graph);
 
-        // ---- Step 2.5: L0 random prefill when r-net insertion was
-        //      skipped (insert_on_L0 == false at add_vertices time).
-        //      Only the newly-inserted vid window [new_vid_start,
-        //      new_vid_end) is touched via next_range so earlier batches'
-        //      L0 rows stay intact. Density is max_nbr_size * prefill_ratio.
-        if (random_prefill_L0 && level_id == 0 && new_vid_end > new_vid_start) {
-            const vertex_num_t init_nbr_size = static_cast<vertex_num_t>(static_cast<ratio_t>(max_nbr_size) * propagate_config.prefill_ratio());
-            if (init_nbr_size > 0) {
+        // ---- Step 2.5: L0 random top-up. Fires regardless of how the
+        //      r-net insertion step filled L0: RandomUpdater's threshold
+        //      gate skips rows that already carry >= prefill_threshold
+        //      neighbors and only tops up the deficit on sparse rows.
+        //      Scope is restricted to the newly-inserted vid window via
+        //      next_range so earlier batches' L0 rows stay untouched.
+        if (level_id == 0 && new_vid_end > new_vid_start) {
+            const vertex_num_t prefill_threshold = static_cast<vertex_num_t>(
+                static_cast<ratio_t>(max_nbr_size) * propagate_config.prefill_ratio());
+            if (prefill_threshold > 0) {
                 const vertex_num_t l0_num_vertices = refining_graph->get_num_vertices();
                 auto random_updater = propagate_engine.template make_updater<random_updater_t>(
-                        init_nbr_size,
+                        /*rand_gen_size=*/prefill_threshold,
                         /*start_vid=*/vertex_id_t{0},
                         /*end_vid=*/l0_num_vertices);
                 propagate_engine.next_range(random_updater, new_vid_start, new_vid_end);
             }
         }
 
-        auto triangle_updater = propagate_engine.template make_updater<triangle_updater_t>();
+        auto triangle_updater = propagate_engine.template make_updater<triangle_updater_t>(
+            pruning_config.scale_coeffs(), pruning_config.shifted_coeffs());
         auto reverse_updater  = propagate_engine.template make_updater<reverse_updater_t>();
         const vertex_num_t routing_topk = propagate_config.resolve_routing_topk(max_nbr_size);
         const vertex_num_t routing_queue_size = propagate_config.resolve_routing_queue_size(max_nbr_size);

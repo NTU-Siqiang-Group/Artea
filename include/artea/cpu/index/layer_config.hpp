@@ -26,11 +26,11 @@ namespace cpu {
 /**
  * @brief Configuration for a single layer in hierarchical graph.
  * Supports builder pattern for flexible configuration.
- * @tparam BaseTraitsT The index traits type.
+ * @tparam IndexTraitsT The index traits type.
  */
-template <typename BaseTraitsT>
+template <typename IndexTraitsT>
 struct LayerConfig {
-    using vertex_num_t = typename BaseTraitsT::vertex_num_t;
+    using vertex_num_t = typename IndexTraitsT::vertex_num_t;
 
     /**
      * @brief Constructor for layer configuration.

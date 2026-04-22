@@ -155,7 +155,11 @@ private:
         propagate_engine_t propagate_engine(dist_func);
         propagate_engine.set_graph(graph_index.get_refining_graph());
 
-        auto triangle_updater  = propagate_engine.template make_updater<triangle_updater_t>();
+        // symmetric_knn_graph dropped PruningConfig in a prior commit;
+        // pass plain RNG coefficients (scale=1, shift=0) to preserve the
+        // ori_dist threshold TriangleUpdater used before gaining params.
+        auto triangle_updater  = propagate_engine.template make_updater<triangle_updater_t>(
+            ratio_t{1}, ratio_t{0});
         auto reverse_updater   = propagate_engine.template make_updater<reverse_updater_t>();
         const vertex_num_t routing_topk = propagate_config.resolve_routing_topk(max_nbr_size);
         const vertex_num_t routing_queue_size = propagate_config.resolve_routing_queue_size(max_nbr_size);

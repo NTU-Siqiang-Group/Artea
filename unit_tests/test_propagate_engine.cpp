@@ -179,7 +179,8 @@ TEST_F(PropagateEngineCorrectnessTest, TrianglePruningWithPropagateEngine) {
     propagate_engine_t propagate_engine(*dist_func_);
     propagate_engine.set_graph(graph_index_->get_refining_graph());
 
-    auto triangle_updater = propagate_engine.make_updater<triangle_updater_t>();
+    auto triangle_updater = propagate_engine.make_updater<triangle_updater_t>(
+        pruning_config_.scale_coeffs(), pruning_config_.shifted_coeffs());
 
     // Apply triangle pruning for 5 iterations
     propagate_engine.run(5, triangle_updater);
@@ -343,7 +344,8 @@ TEST_F(PropagateEngineCorrectnessTest, NeighborsSortedAfterPruning) {
     propagate_engine_t propagate_engine(*dist_func_);
     propagate_engine.set_graph(graph_index_->get_refining_graph());
 
-    auto triangle_updater = propagate_engine.make_updater<triangle_updater_t>();
+    auto triangle_updater = propagate_engine.make_updater<triangle_updater_t>(
+        pruning_config_.scale_coeffs(), pruning_config_.shifted_coeffs());
 
     propagate_engine.run(5, triangle_updater);
 
@@ -486,7 +488,8 @@ TEST_F(PropagateEngineCorrectnessTest, TrianglePruningWithoutSelectiveScheduling
     propagate_engine_t propagate_engine(*dist_func_);
     propagate_engine.set_graph(graph_index_->get_refining_graph());
 
-    auto triangle_updater = propagate_engine.make_updater<triangle_updater_t>();
+    auto triangle_updater = propagate_engine.make_updater<triangle_updater_t>(
+        pruning_config_.scale_coeffs(), pruning_config_.shifted_coeffs());
 
     propagate_engine.run(5, triangle_updater);
 

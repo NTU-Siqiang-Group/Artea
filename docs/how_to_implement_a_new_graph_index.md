@@ -26,16 +26,16 @@ If a config you need already exists in another namespace, include it and reuse v
 
 namespace artea::cpu::my_graph {
 
-template <typename BaseTraitsT>
-using PropagateConfig = conv_graph::PropagateConfig<BaseTraitsT>;
+template <typename IndexTraitsT>
+using PropagateConfig = conv_graph::PropagateConfig<IndexTraitsT>;
 
-template <typename BaseTraitsT>
-using PruningConfig = conv_graph::PruningConfig<BaseTraitsT>;
+template <typename IndexTraitsT>
+using PruningConfig = conv_graph::PruningConfig<IndexTraitsT>;
 
 }
 ```
 
-If you need a config with different semantics, define a new struct templated on `BaseTraitsT` with const getters and builder-pattern setters. Always extract scalar types from `BaseTraitsT`.
+If you need a config with different semantics, define a new struct templated on `IndexTraitsT` with const getters and builder-pattern setters. Always extract scalar types from `IndexTraitsT` (scalar typedefs are inherited from `BaseTraits`, plus any index-level constants like `min_layer_cap` are reachable here too).
 
 ---
 
@@ -151,32 +151,29 @@ BaseTraits  -->  IndexTraits  -->  (RefinerTraits)  -->  GraphFactoryTraits
 
 ### 4.1 `base_traits.hpp`
 
-**(a) Forward declaration area** (before `BaseTraits` struct):
+Only forward-declare the config templates here. `BaseTraits` no longer owns a `my_graph` nested struct — every config is parameterized on `IndexTraitsT`, which `BaseTraits` cannot name.
+
 ```cpp
 namespace my_graph {
-    template <typename BaseTraitsT> using PropagateConfig = conv_graph::PropagateConfig<BaseTraitsT>;
-    template <typename BaseTraitsT> using PruningConfig   = conv_graph::PruningConfig<BaseTraitsT>;
+    template <typename IndexTraitsT> using PropagateConfig = conv_graph::PropagateConfig<IndexTraitsT>;
+    template <typename IndexTraitsT> using PruningConfig   = conv_graph::PruningConfig<IndexTraitsT>;
 }
-```
-
-**(b) Inside `BaseTraits` struct** (nested struct):
-```cpp
-struct my_graph {
-    my_graph() = delete;
-    using propagate_config_t = cpu::my_graph::PropagateConfig<base_traits_t>;
-    using pruning_config_t   = cpu::my_graph::PruningConfig<base_traits_t>;
-};
 ```
 
 ### 4.2 `index_traits.hpp`
 
+The `my_graph` nested struct lives directly on `IndexTraits` and holds **both** the config aliases and the index type. It does not inherit from any `BaseTraits::my_graph`.
+
 ```cpp
-struct my_graph : BaseTraitsT::my_graph {
+struct my_graph {
     my_graph() = delete;
-    using index_t = cpu::my_graph::IndexStructure<index_traits_t>;
-    // or reuse: using index_t = cpu::conv_graph::IndexStructure<index_traits_t>;
+    using index_t            = cpu::my_graph::IndexStructure<index_traits_t>;
+    using propagate_config_t = cpu::my_graph::PropagateConfig<index_traits_t>;
+    using pruning_config_t   = cpu::my_graph::PruningConfig<index_traits_t>;
 };
 ```
+
+If your graph needs to expose an index-level constant to its configs (the way `stacked_rgraph` reads `IndexTraitsT::min_layer_cap` from inside `RGraphConfig::capacity_for_layer`), declare it as a `static constexpr` member directly on `IndexTraits`.
 
 ### 4.3 `graph_factory_traits.hpp`
 
@@ -195,8 +192,7 @@ struct my_graph : RefinerTraitsT::my_graph {
 
 The nested struct chain accumulates all types:
 ```
-BaseTraits::my_graph          = { propagate_config_t, pruning_config_t }
-IndexTraits::my_graph         = { ..., index_t }
+IndexTraits::my_graph         = { propagate_config_t, pruning_config_t, index_t }
 GraphFactoryTraits::my_graph  = { ..., factory_t }
 ```
 
@@ -267,8 +263,8 @@ Use `argparse` to expose all parameters as CLI arguments for reproducibility.
 - [ ] Configs in `index/my_graph/configs.hpp` (alias or new struct)
 - [ ] IndexStructure in `index/my_graph/index_structure.hpp` (or reused via alias)
 - [ ] IndexFactory in `index/my_graph/index_factory.hpp`
-- [ ] `base_traits.hpp` -- forward declarations + nested struct
-- [ ] `index_traits.hpp` -- nested struct with `index_t`
+- [ ] `base_traits.hpp` -- forward declarations only (configs are templated on `IndexTraitsT`)
+- [ ] `index_traits.hpp` -- nested struct holding `index_t` + config aliases
 - [ ] `graph_factory_traits.hpp` -- forward declaration + nested struct with `factory_t`
 - [ ] `default_context.hpp` -- namespace block
 - [ ] `artea.hpp` -- `#include` new headers

@@ -4,7 +4,7 @@ This guide uses `MyUpdater` as a placeholder name. The process consists of **4 s
 
 | Step | What | Where |
 |------|------|-------|
-| 1 | Implement the Updater | `include/artea/cpu/refiner/my_updater.hpp` |
+| 1 | Implement the Updater | `include/artea/cpu/refiner/updaters/my_updater.hpp` |
 | 2 | Register in the Type System | `include/artea/cpu/framework/type_traits/refiner_traits.hpp` |
 | 3 | Add to PropagateEngine | `include/artea/cpu/refiner/propagate_engine.hpp` |
 | 4 | Export via Include | `include/artea/cpu/framework/artea.hpp` |
@@ -40,7 +40,7 @@ Existing updaters and their behaviors:
 
 ## Step 1 : Implement the Updater
 
-**File:** `include/artea/cpu/refiner/my_updater.hpp`
+**File:** `include/artea/cpu/refiner/updaters/my_updater.hpp`
 
 All updaters inherit from `NeighborUpdater` via CRTP:
 
@@ -176,7 +176,7 @@ auto updater = propagate_engine.template make_updater<my_updater_t>(arg1, arg2);
 Add `#include` in the refiner section:
 
 ```cpp
-#include <artea/cpu/refiner/my_updater.hpp>
+#include <artea/cpu/refiner/updaters/my_updater.hpp>
 ```
 
 ---
@@ -201,7 +201,7 @@ propagate_engine.run(num_iters, my_updater);
 
 ## Checklist
 
-- [ ] Updater class in `include/artea/cpu/refiner/my_updater.hpp`
+- [ ] Updater class in `include/artea/cpu/refiner/updaters/my_updater.hpp`
 - [ ] CRTP inheritance from `neighbor_updater_t`
 - [ ] `static constexpr const char* updater_name` defined
 - [ ] `update_impl(pivot_vid, origin_nbrs)` implemented

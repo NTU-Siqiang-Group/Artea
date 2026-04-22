@@ -239,7 +239,6 @@ public:
     __attribute__((always_inline)) auto ul_select_nbrs_qs()  const -> vertex_num_t { return _rgraph_config.ul_select_nbrs_qs(); }
     __attribute__((always_inline)) auto bl_select_nbrs_qs()  const -> vertex_num_t { return _rgraph_config.bl_select_nbrs_qs(); }
     static constexpr ratio_t      layer_cap_decay_ratio = rgraph_config_t::layer_cap_decay_ratio;
-    static constexpr vertex_num_t min_layer_cap         = rgraph_config_t::min_layer_cap;
 
     /**
      * @brief Covering radius for 1-indexed layer @p h (paper convention).

@@ -50,33 +50,33 @@ template <typename BaseTraitsT> class RandomSeqNR;
 template <typename BaseTraitsT> class CentroidComputer;
 template <typename BaseTraitsT> struct VertexSubset;
 template <typename T, typename ContainerT, typename Compare> class FourAryHeap;
-template <typename BaseTraitsT> struct LayerConfig;
+template <typename IndexTraitsT> struct LayerConfig;
 
 namespace conv_graph {
-    template <typename BaseTraitsT> struct PropagateConfig;
-    template <typename BaseTraitsT> struct PruningConfig;
+    template <typename IndexTraitsT> struct PropagateConfig;
+    template <typename IndexTraitsT> struct PruningConfig;
 }
 
 namespace knn_graph {
-    template <typename BaseTraitsT> using PropagateConfig = conv_graph::PropagateConfig<BaseTraitsT>;
+    template <typename IndexTraitsT> using PropagateConfig = conv_graph::PropagateConfig<IndexTraitsT>;
 }
 
 namespace symmetric_knn_graph {
-    template <typename BaseTraitsT> using PropagateConfig = conv_graph::PropagateConfig<BaseTraitsT>;
+    template <typename IndexTraitsT> using PropagateConfig = conv_graph::PropagateConfig<IndexTraitsT>;
 }
 
 namespace stacked_rgraph {
-    template <typename BaseTraitsT> struct RGraphConfig;
+    template <typename IndexTraitsT> struct RGraphConfig;
     // stacked_rgraph shares the same PruningConfig type as conv_graph /
     // artea_graph — the stacked-rgraph insertion only reads scale_coeffs
     // from it (shift is a post-refinement concern).
-    template <typename BaseTraitsT> using PruningConfig = conv_graph::PruningConfig<BaseTraitsT>;
+    template <typename IndexTraitsT> using PruningConfig = conv_graph::PruningConfig<IndexTraitsT>;
 }
 
 namespace artea_graph {
-    template <typename BaseTraitsT> using PropagateConfig = conv_graph::PropagateConfig<BaseTraitsT>;
-    template <typename BaseTraitsT> using PruningConfig = conv_graph::PruningConfig<BaseTraitsT>;
-    template <typename BaseTraitsT> using RGraphConfig = stacked_rgraph::RGraphConfig<BaseTraitsT>;
+    template <typename IndexTraitsT> using PropagateConfig = conv_graph::PropagateConfig<IndexTraitsT>;
+    template <typename IndexTraitsT> using PruningConfig = conv_graph::PruningConfig<IndexTraitsT>;
+    template <typename IndexTraitsT> using RGraphConfig = stacked_rgraph::RGraphConfig<IndexTraitsT>;
 }
 
 /* ------ Enumerations ------ */
@@ -217,43 +217,9 @@ public:
     /** @brief pruning condition type for triangle inequality. */
     using pruning_condition_t = PruningConditionT;
 
-    /** @brief Layer configuration type. */
-    using layer_config_t = LayerConfig<base_traits_t>;
-
-    /** @brief Namespace-specific type aliases for conv_graph. */
-    struct conv_graph {
-        conv_graph() = delete;
-        using propagate_config_t = cpu::conv_graph::PropagateConfig<base_traits_t>;
-        using pruning_config_t = cpu::conv_graph::PruningConfig<base_traits_t>;
-    };
-
-    /** @brief Namespace-specific type aliases for knn_graph. */
-    struct knn_graph {
-        knn_graph() = delete;
-        using propagate_config_t = cpu::knn_graph::PropagateConfig<base_traits_t>;
-    };
-
-    /** @brief Namespace-specific type aliases for symmetric_knn_graph. */
-    struct symmetric_knn_graph {
-        symmetric_knn_graph() = delete;
-        using propagate_config_t = cpu::symmetric_knn_graph::PropagateConfig<base_traits_t>;
-    };
-
-    /** @brief Namespace-specific type aliases for stacked_rgraph. */
-    struct stacked_rgraph {
-        stacked_rgraph() = delete;
-        using rgraph_config_t  = cpu::stacked_rgraph::RGraphConfig<base_traits_t>;
-        using pruning_config_t = cpu::stacked_rgraph::PruningConfig<base_traits_t>;  // alias of conv_graph::PruningConfig
-    };
-
-    /** @brief Namespace-specific type aliases for artea_graph
-     *         (stacked_rgraph backbone + per-layer conv_graph refinement). */
-    struct artea_graph {
-        artea_graph() = delete;
-        using rgraph_config_t    = cpu::artea_graph::RGraphConfig<base_traits_t>;
-        using propagate_config_t = cpu::artea_graph::PropagateConfig<base_traits_t>;
-        using pruning_config_t   = cpu::artea_graph::PruningConfig<base_traits_t>;
-    };
+    // layer_config_t and namespace-scoped config aliases live on
+    // IndexTraits — every config template is parameterized on
+    // IndexTraitsT, which BaseTraits has no reference to.
 
     #ifdef ARTEA_PROFILING
     static constexpr bool profiling_mode = true;

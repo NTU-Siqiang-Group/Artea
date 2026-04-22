@@ -124,7 +124,8 @@ static void BM_TriangleUpdater(benchmark::State& state) {
     propagate_engine.set_graph(graph_index.get_refining_graph());
 
     // Create TriangleUpdater using the factory method
-    auto triangle_updater = propagate_engine.make_updater<triangle_updater_t>();
+    auto triangle_updater = propagate_engine.make_updater<triangle_updater_t>(
+        g_config.scale_coeffs, g_config.shifted_coeffs);
 
     for (auto _ : state) {
         // Reset graph to initial state before each benchmark iteration
@@ -164,7 +165,8 @@ static void BM_TriangleUpdater_NoSS(benchmark::State& state) {
     propagate_engine.set_graph(graph_index.get_refining_graph());
 
     // Create TriangleUpdater using the factory method
-    auto triangle_updater = propagate_engine.make_updater<triangle_updater_t>();
+    auto triangle_updater = propagate_engine.make_updater<triangle_updater_t>(
+        g_config.scale_coeffs, g_config.shifted_coeffs);
 
     for (auto _ : state) {
         // Reset graph to initial state before each benchmark iteration

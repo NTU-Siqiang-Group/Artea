@@ -59,7 +59,8 @@ struct TestConfig {
     float    l1_rnet_radius;
     uint32_t max_nbr_size;
     uint32_t search_nn_qs;
-    uint32_t select_nbrs_qs;
+    uint32_t ul_select_nbrs_qs;
+    uint32_t bl_select_nbrs_qs;
     float    scale_coeffs;
     float    shifted_coeffs;
 
@@ -112,7 +113,8 @@ auto dump_config(const char* banner) -> void {
     }
     os << "max_nbr_size:               " << g_config.max_nbr_size << "\n"
        << "search_nn_qs:               " << g_config.search_nn_qs << "\n"
-       << "select_nbrs_qs:             " << g_config.select_nbrs_qs << "\n"
+       << "ul_select_nbrs_qs:          " << g_config.ul_select_nbrs_qs << "\n"
+       << "bl_select_nbrs_qs:          " << g_config.bl_select_nbrs_qs << "\n"
        << "scale_coeffs:               " << g_config.scale_coeffs
        << " (applied to both ul insertion and refinement pruning)\n"
        << "shifted_coeffs:             " << g_config.shifted_coeffs
@@ -222,15 +224,12 @@ protected:
         const vertex_num_t total_vertices =
             static_cast<vertex_num_t>(base_vecs.get_num_vecs());
 
-        // Single --select-nbrs-qs feeds both upper-layer (L1+) and
-        // bottom-layer (L0) beam widths. Asymmetric splits are possible
-        // by constructing RGraphConfig directly with distinct values.
         artea_graph::rgraph_config_t rgraph_config(
             g_config.rnet_beta,
             provider.get_l1_radius(),
             static_cast<vertex_num_t>(g_config.search_nn_qs),
-            static_cast<vertex_num_t>(g_config.select_nbrs_qs),
-            static_cast<vertex_num_t>(g_config.select_nbrs_qs),
+            static_cast<vertex_num_t>(g_config.ul_select_nbrs_qs),
+            static_cast<vertex_num_t>(g_config.bl_select_nbrs_qs),
             g_config.max_nbr_size);
 
         // Reserved capacity is fixed at 1.5x the max — sized for the
@@ -536,8 +535,12 @@ int main(int argc, char** argv) {
         .default_value(32u).scan<'u', uint32_t>();
     program.add_argument("--search-nn-qs")
         .default_value(40u).scan<'u', uint32_t>();
-    program.add_argument("--select-nbrs-qs")
-        .default_value(100u).scan<'u', uint32_t>();
+    program.add_argument("--ul-select-nbrs-qs")
+        .default_value(100u).scan<'u', uint32_t>()
+        .help("Upper-layer (L1+) beam-search queue size for the select phase.");
+    program.add_argument("--bl-select-nbrs-qs")
+        .default_value(100u).scan<'u', uint32_t>()
+        .help("Bottom-layer (L0) beam-search queue size for the select phase.");
     program.add_argument("--scale-coeffs")
         .default_value(1.1f).scan<'g', float>();
     program.add_argument("--shifted-coeffs")
@@ -604,7 +607,8 @@ int main(int argc, char** argv) {
     g_config.rnet_beta                 = program.get<float>("--beta");
     g_config.max_nbr_size              = program.get<uint32_t>("--max-nbr-size");
     g_config.search_nn_qs              = program.get<uint32_t>("--search-nn-qs");
-    g_config.select_nbrs_qs            = program.get<uint32_t>("--select-nbrs-qs");
+    g_config.ul_select_nbrs_qs         = program.get<uint32_t>("--ul-select-nbrs-qs");
+    g_config.bl_select_nbrs_qs         = program.get<uint32_t>("--bl-select-nbrs-qs");
     g_config.scale_coeffs              = program.get<float>("--scale-coeffs");
     g_config.shifted_coeffs            = program.get<float>("--shifted-coeffs");
     g_config.probe_num_samples         = program.get<uint32_t>("--probe-num-samples");
