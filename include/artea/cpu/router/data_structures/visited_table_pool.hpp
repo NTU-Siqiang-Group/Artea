@@ -25,7 +25,7 @@
 #include <tbb/parallel_for.h>
 #include <tbb/blocked_range.h>
 #include <artea/cpu/utils/parallel.hpp>
-#include <artea/cpu/router/visited_table_concept.hpp>
+#include <artea/cpu/router/data_structures/visited_table_concept.hpp>
 
 namespace artea {
 namespace cpu {

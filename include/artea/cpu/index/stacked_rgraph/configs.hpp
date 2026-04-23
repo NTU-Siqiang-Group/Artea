@@ -42,8 +42,9 @@ struct RGraphConfig {
 
     /**
      * @brief Construct a RGraphConfig.
-     * @param rnet_beta           Radius growth factor: R_h = L1_rnet_radius * rnet_beta^(h-1). Must be > 1.
-     * @param L1_rnet_radius      Covering radius for layer 1 (the lowest upper layer). Must be > 0.
+     * @param rnet_beta           Radius growth factor: R_h = L0_rnet_radius * rnet_beta^h. Must be > 1.
+     * @param L0_rnet_radius      Covering radius for layer 0 (the bottom layer). Must be > 0.
+     *                            The layer-1 covering radius is derived as @c rnet_beta * @c L0_rnet_radius.
      * @param search_nn_qs        Beam-search queue size for Phase 1 descent. Must be >= 1.
      * @param ul_select_nbrs_qs   Beam-search queue size for Phase 2 candidate gathering at
      *                            upper levels (L1..highest_insert_level). Must be >= 1. Default 100.
@@ -53,14 +54,14 @@ struct RGraphConfig {
      */
     RGraphConfig(
         ratio_t rnet_beta,
-        distance_t L1_rnet_radius,
+        distance_t L0_rnet_radius,
         vertex_num_t search_nn_qs,
         vertex_num_t ul_select_nbrs_qs = 100,
         vertex_num_t bl_select_nbrs_qs = 100,
         vertex_num_t max_nbr_size = 32
     ) :
         _rnet_beta(rnet_beta),
-        _L1_rnet_radius(L1_rnet_radius),
+        _L0_rnet_radius(L0_rnet_radius),
         _search_nn_qs(search_nn_qs),
         _ul_select_nbrs_qs(ul_select_nbrs_qs),
         _bl_select_nbrs_qs(bl_select_nbrs_qs),
@@ -69,8 +70,8 @@ struct RGraphConfig {
         if (rnet_beta <= ratio_t(1)) {
             ARTEA_ERROR(fmt::format("rnet_beta ({}) must be > 1", rnet_beta));
         }
-        if (L1_rnet_radius <= distance_t(0)) {
-            ARTEA_ERROR(fmt::format("L1_rnet_radius ({}) must be > 0", L1_rnet_radius));
+        if (L0_rnet_radius <= distance_t(0)) {
+            ARTEA_ERROR(fmt::format("L0_rnet_radius ({}) must be > 0", L0_rnet_radius));
         }
         if (search_nn_qs < 1) {
             ARTEA_ERROR(fmt::format("search_nn_qs ({}) must be >= 1", search_nn_qs));
@@ -85,20 +86,21 @@ struct RGraphConfig {
 
     // Const getters
     __attribute__((always_inline)) auto rnet_beta()          const -> ratio_t      { return _rnet_beta; }
-    __attribute__((always_inline)) auto L1_rnet_radius()     const -> distance_t   { return _L1_rnet_radius; }
+    __attribute__((always_inline)) auto L0_rnet_radius()     const -> distance_t   { return _L0_rnet_radius; }
     __attribute__((always_inline)) auto search_nn_qs()       const -> vertex_num_t { return _search_nn_qs; }
     __attribute__((always_inline)) auto ul_select_nbrs_qs()  const -> vertex_num_t { return _ul_select_nbrs_qs; }
     __attribute__((always_inline)) auto bl_select_nbrs_qs()  const -> vertex_num_t { return _bl_select_nbrs_qs; }
     __attribute__((always_inline)) auto max_nbr_size()       const -> vertex_num_t { return _max_nbr_size; }
 
     /**
-     * @brief Covering radius for 1-indexed layer @p h: R_h = L1 * beta^(h-1).
+     * @brief Covering radius for 0-indexed layer @p h: R_h = L0 * beta^h.
+     *        Thus R_0 = L0_rnet_radius and R_1 = beta * L0_rnet_radius.
      */
     __attribute__((always_inline))
     auto radius_at(const layer_num_t h) const -> distance_t {
         return static_cast<distance_t>(
-            _L1_rnet_radius * std::pow(static_cast<double>(_rnet_beta),
-                                       static_cast<double>(h - 1))
+            _L0_rnet_radius * std::pow(static_cast<double>(_rnet_beta),
+                                       static_cast<double>(h))
         );
     }
 
@@ -125,17 +127,18 @@ struct RGraphConfig {
         if (total_vertices == 0) return 1;
         const double ratio = static_cast<double>(total_vertices) / 1000.0;
         if (ratio <= 1.0) return 1;
-        const double raw = std::log(ratio) / std::log(10.0);
+        const double raw = std::log(ratio);
         const layer_num_t ceiled = static_cast<layer_num_t>(std::ceil(raw));
         return std::max<layer_num_t>(ceiled, layer_num_t(1));
     }
 
 private:
-    /** @brief Radius growth factor: R_h = L1_rnet_radius * rnet_beta^(h-1). Must be > 1. */
+    /** @brief Radius growth factor: R_h = L0_rnet_radius * rnet_beta^h. Must be > 1. */
     ratio_t      _rnet_beta;
 
-    /** @brief Covering radius for layer 1 (the lowest upper layer, not bottom layer). Must be > 0. */
-    distance_t   _L1_rnet_radius;
+    /** @brief Covering radius for layer 0 (the bottom layer). Must be > 0.
+     *         Layer 1's covering radius is derived as @c _rnet_beta * @c _L0_rnet_radius. */
+    distance_t   _L0_rnet_radius;
 
     /** @brief Beam-search queue size for Phase 1 top-down descent. */
     vertex_num_t _search_nn_qs;

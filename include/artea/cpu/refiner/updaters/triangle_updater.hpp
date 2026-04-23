@@ -108,11 +108,9 @@ public:
         const vertex_id_t /*layer_vid*/,
         nbr_arr_t& origin_nbrs
     ) -> void {
-        #ifndef NDEBUG
-        if (origin_nbrs.empty()) {
-            ARTEA_ERROR("[TriangleUpdater]: origin_nbrs cannot be empty");
-        }
-        #endif
+        // Nothing to prune — can happen at the top layer of a sparse
+        // hierarchy when the bucket holds a single vertex with no peers.
+        if (origin_nbrs.empty()) return;
 
         nbr_arr_t retained_nbrs;
         retained_nbrs.reserve(origin_nbrs.capacity());

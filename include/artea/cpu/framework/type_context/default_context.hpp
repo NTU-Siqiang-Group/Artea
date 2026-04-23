@@ -156,6 +156,8 @@ using candidate_queue_t = typename router_traits_t::candidate_queue_t;
 using visited_table_pool_t = typename router_traits_t::visited_table_pool_t;
 using candidate_sample_utils_t = typename router_traits_t::candidate_sample_utils_t;
 using bruteforce_router_t = typename router_traits_t::bruteforce_router_t;
+using sl_router_profiler_t = typename router_traits_t::sl_router_profiler_t;
+using hg_router_profiler_t = typename router_traits_t::hg_router_profiler_t;
 
 // Utility types
 using index_register_util_t = IndexRegisterUtil;

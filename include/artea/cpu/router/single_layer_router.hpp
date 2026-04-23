@@ -33,7 +33,7 @@
 #include <artea/common/logger.hpp>
 #include <artea/cpu/router/detail/beam_loop.hpp>
 #include <artea/cpu/router/detail/make_flat_range.hpp>
-#include <artea/cpu/router/neighbor_range_concept.hpp>
+#include <artea/cpu/router/data_structures/neighbor_range_concept.hpp>
 #include <artea/cpu/utils/parallel.hpp>
 
 namespace artea {

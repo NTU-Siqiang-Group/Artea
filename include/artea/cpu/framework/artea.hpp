@@ -75,12 +75,14 @@
 #include <artea/cpu/router/bruteforce_router.hpp>
 #include <artea/cpu/router/single_layer_router.hpp>
 #include <artea/cpu/router/hierarchical_graph_router.hpp>
+#include <artea/cpu/router/profiler/sl_router_profiler.hpp>
+#include <artea/cpu/router/profiler/hg_router_profiler.hpp>
 #include <artea/cpu/router/data_structures/candidate_entry.hpp>
 #include <artea/cpu/router/data_structures/candidate_queue_concept.hpp>
-#include <artea/cpu/router/visited_table_concept.hpp>
+#include <artea/cpu/router/data_structures/visited_table_concept.hpp>
 #include <artea/cpu/router/data_structures/visited_table_pool.hpp>
-#include <artea/cpu/router/candidate_sample_utils.hpp>
-#include <artea/cpu/router/neighbor_range_concept.hpp>
+#include <artea/cpu/router/detail/candidate_sample_utils.hpp>
+#include <artea/cpu/router/data_structures/neighbor_range_concept.hpp>
 #include <artea/cpu/router/detail/beam_loop.hpp>
 #include <artea/cpu/router/detail/compact_layer_range.hpp>
 #include <artea/cpu/router/detail/dynamic_layer_range.hpp>
@@ -92,6 +94,7 @@
 #include <artea/cpu/router/data_structures/fh_candidate_queue.hpp>
 #include <artea/cpu/router/data_structures/linear_candidate_queue.hpp>
 #include <artea/cpu/router/data_structures/boost_candidate_queue.hpp>
+#include <artea/cpu/router/profiler/profile_1nn_result.hpp>
 
 #include <artea/cpu/vertex_generator/vertex_generator.hpp>
 #include <artea/cpu/vertex_generator/lsh_table.hpp>

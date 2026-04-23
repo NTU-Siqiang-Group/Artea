@@ -13,7 +13,7 @@
 // limitations under the License.
 
 /*
- * @FilePath: /Artea/include/artea/cpu/router/neighbor_range_concept.hpp
+ * @FilePath: /Artea/include/artea/cpu/router/data_structures/neighbor_range_concept.hpp
  * @Author: Chandler (Weitang Ye) <weitang.ye@ntu.edu.sg>
  * @Description: NeighborRange concept — a thin adapter that lets one
  *               beam-search loop body iterate either compact (raw vid

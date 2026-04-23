@@ -266,6 +266,20 @@ public:
         // insertion on every layer, L0 included) into the RG.
         refiner_utils_t::fill_refining_graph_from_layer(hier_graph, *refining_graph, level_id);
 
+        // Buckets below @c IndexTraitsT::min_layer_cap get trimmed at
+        // compaction (see @c HierarchicalGraphCompactor). Refining them
+        // is pure waste, and on a single-vid bucket some updaters rely
+        // on non-empty origin_nbrs and would read past the end.
+        const vertex_num_t n_local = refining_graph->get_num_vertices();
+        if (n_local < GraphFactoryTraitsT::min_layer_cap) {
+            ARTEA_INFO(fmt::format(
+                "[artea_graph] refine_layer skipping level_id={}: "
+                "N_local={} < min_layer_cap={} (bucket will be trimmed "
+                "at compaction).",
+                level_id, n_local, GraphFactoryTraitsT::min_layer_cap));
+            return;
+        }
+
         // ---- Step 3: run prune + reverse + truncate on the RG ----
         // The log_table inside propagate_engine is indexed by local_vid
         // (N_local for sparse upper layers, N_global in identity mode);

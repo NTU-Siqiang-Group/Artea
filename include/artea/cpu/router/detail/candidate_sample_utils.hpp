@@ -13,7 +13,7 @@
 // limitations under the License.
 
 /*
- * @FilePath: /Artea/include/artea/cpu/router/candidate_sample_utils.hpp
+ * @FilePath: /Artea/include/artea/cpu/router/detail/candidate_sample_utils.hpp
  * @Author: Chandler (Weitang Ye) <weitang.ye@ntu.edu.sg>
  * @Description: Stateless apex-bucket samplers shared by dynamic / compact
  *               routers. Each sampler has a queue-push form and a

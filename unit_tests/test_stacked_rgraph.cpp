@@ -51,11 +51,11 @@ struct TestConfig {
 
     // StackedRGraph parameters
     float    rnet_beta;
-    bool     l1_radius_provided;
-    float    l1_rnet_radius;
+    bool     l0_radius_provided;
+    float    l0_rnet_radius;
     uint32_t max_nbr_size;
 
-    // L1-radius auto-probe
+    // L0-radius auto-probe
     uint32_t probe_num_samples;
     float    probe_quantile;
 
@@ -96,34 +96,34 @@ public:
 
         _dist_func = std::make_unique<dist_func_t>(base_vecs.get_vec_dim());
 
-        if (g_config.l1_radius_provided) {
-            _l1_radius = g_config.l1_rnet_radius;
+        if (g_config.l0_radius_provided) {
+            _l0_radius = g_config.l0_rnet_radius;
             ARTEA_INFO(fmt::format(
-                "Using user-provided L1 rnet_radius = {:.6f}", _l1_radius));
+                "Using user-provided L0 rnet_radius = {:.6f}", _l0_radius));
         } else {
             dataset_prober_t prober(base_vecs, *_dist_func);
             const std::vector<float> quantiles = { g_config.probe_quantile };
             ARTEA_INFO(fmt::format(
-                "Probing L1 rnet_radius ({}th pct, {} samples)...",
+                "Probing L0 rnet_radius ({}th pct, {} samples)...",
                 static_cast<int>(g_config.probe_quantile * 100.0f),
                 g_config.probe_num_samples));
             auto result = prober.probe(quantiles, g_config.probe_num_samples);
-            _l1_radius = static_cast<float>(result.table[0][0]);
+            _l0_radius = static_cast<float>(result.table[0][0]);
             ARTEA_INFO(fmt::format(
-                "Auto-probed L1 rnet_radius = {:.6f}", _l1_radius));
+                "Auto-probed L0 rnet_radius = {:.6f}", _l0_radius));
         }
     }
 
     auto get_dataset()   -> vector_dataset_t& { return *_dataset; }
     auto get_dist_func() -> dist_func_t&      { return *_dist_func; }
-    auto get_l1_radius() const -> float       { return _l1_radius; }
+    auto get_l0_radius() const -> float       { return _l0_radius; }
 
 private:
     DataProvider() = default;
 
     std::unique_ptr<vector_dataset_t> _dataset;
     std::unique_ptr<dist_func_t>      _dist_func;
-    float                             _l1_radius = 0.0f;
+    float                             _l0_radius = 0.0f;
 };
 
 // ============================================================
@@ -142,7 +142,7 @@ protected:
         const vertex_num_t total_vertices =
             static_cast<vertex_num_t>(base_vecs.get_num_vecs());
         stacked_rgraph::rgraph_config_t rgraph_config(
-            g_config.rnet_beta, provider.get_l1_radius(),
+            g_config.rnet_beta, provider.get_l0_radius(),
             static_cast<vertex_num_t>(g_config.search_nn_qs),
             static_cast<vertex_num_t>(g_config.ul_select_nbrs_qs),
             static_cast<vertex_num_t>(g_config.bl_select_nbrs_qs),
@@ -195,12 +195,12 @@ protected:
 
     static void SetUpTestSuite() {
         ARTEA_INFO(fmt::format(
-            "Building StackedRGraph: beta={:.3f}, L1_radius={:.6f}, "
+            "Building StackedRGraph: beta={:.3f}, L0_radius={:.6f}, "
             "max_nbr={}, search_nn_qs={}, "
             "ul_select_nbrs_qs={}, bl_select_nbrs_qs={}, "
             "scale_coeffs={:.3f}",
             g_config.rnet_beta,
-            DataProvider::instance().get_l1_radius(),
+            DataProvider::instance().get_l0_radius(),
             g_config.max_nbr_size,
             g_config.search_nn_qs,
             g_config.ul_select_nbrs_qs, g_config.bl_select_nbrs_qs,
@@ -272,9 +272,11 @@ int main(int argc, char** argv) {
     program.add_argument("--beta")
         .default_value(2.0f).scan<'g', float>()
         .help("R-net radius growth factor between layers");
-    program.add_argument("--l1-radius")
+    program.add_argument("--l0-radius")
         .default_value(-1.0f).scan<'g', float>()
-        .help("L1 rnet_radius. If negative, auto-probe via DatasetProber.");
+        .help("L0 rnet_radius (covering radius at the bottom layer). "
+              "L1 and higher radii are derived as L0 * beta^h. "
+              "If negative, auto-probe via DatasetProber.");
     program.add_argument("--max-nbr-size")
         .default_value(32u).scan<'u', uint32_t>()
         .help("Per-vertex neighbor capacity at upper levels (level 0 = 2x).");
@@ -315,18 +317,18 @@ int main(int argc, char** argv) {
     g_config.bl_select_nbrs_qs  = program.get<uint32_t>("--bl-select-nbrs-qs");
     g_config.scale_coeffs       = program.get<float>("--scale-coeffs");
 
-    const float l1 = program.get<float>("--l1-radius");
-    g_config.l1_radius_provided = (l1 >= 0.0f);
-    g_config.l1_rnet_radius     = l1;
+    const float l0_radius_arg = program.get<float>("--l0-radius");
+    g_config.l0_radius_provided = (l0_radius_arg >= 0.0f);
+    g_config.l0_rnet_radius     = l0_radius_arg;
 
     std::cout << "\n=== Test Configuration ===\n";
     std::cout << "Dataset:        " << g_config.dataset_name   << "\n";
     std::cout << "rnet_beta:      " << g_config.rnet_beta      << "\n";
-    if (g_config.l1_radius_provided) {
-        std::cout << "L1 radius:      " << g_config.l1_rnet_radius
+    if (g_config.l0_radius_provided) {
+        std::cout << "L0 radius:      " << g_config.l0_rnet_radius
                   << " (user-provided)\n";
     } else {
-        std::cout << "L1 radius:      auto-probe ("
+        std::cout << "L0 radius:      auto-probe ("
                   << static_cast<int>(g_config.probe_quantile * 100.0f)
                   << "th pct, " << g_config.probe_num_samples
                   << " samples)\n";

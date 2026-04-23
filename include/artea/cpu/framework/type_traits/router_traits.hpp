@@ -21,7 +21,7 @@
 #pragma once
 
 #include <artea/cpu/router/data_structures/candidate_queue_concept.hpp>
-#include <artea/cpu/router/visited_table_concept.hpp>
+#include <artea/cpu/router/data_structures/visited_table_concept.hpp>
 
 namespace artea {
 namespace cpu {
@@ -31,6 +31,8 @@ template <typename RouterTraitsT, typename DerivedClassT> class VectorRouter;
 template <typename RouterTraitsT> class BruteforceRouter;
 template <typename RouterTraitsT> class SingleLayerRouter;
 template <typename RouterTraitsT> class HierarchicalGraphRouter;
+template <typename RouterTraitsT> class SLRouterProfiler;
+template <typename RouterTraitsT> class HGRouterProfiler;
 template <typename RouterTraitsT> struct CandidateEntry;
 template <typename RouterTraitsT, typename EntryT> class StdCandidateQueue;
 template <typename RouterTraitsT, typename EntryT> class LinearCandidateQueue;
@@ -114,6 +116,12 @@ struct RouterTraits : virtual public ComputerTraitsT, virtual public IndexTraits
     /** @brief Unified multi-level router. Same graph-agnostic design. */
     using hierarchical_graph_router_t =
         cpu::HierarchicalGraphRouter<router_traits_t>;
+
+    /** @brief Standalone per-hop 1-NN profiler for a single flat layer. */
+    using sl_router_profiler_t = cpu::SLRouterProfiler<router_traits_t>;
+
+    /** @brief Standalone per-hop 1-NN profiler for the full hierarchy. */
+    using hg_router_profiler_t = cpu::HGRouterProfiler<router_traits_t>;
 
     /** @brief Pass-through of the per-mode graph types from IndexTraits;
      *         router types are no longer per-mode (lifted to top-level). */

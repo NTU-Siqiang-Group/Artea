@@ -22,3 +22,4 @@ backup_prefill/
 build-tsan/
 test_artea_graph.output
 .codex
+vldb27-exp/results/

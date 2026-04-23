@@ -23,7 +23,7 @@
 #include <cstdint>
 #include <cstring>
 #include <artea/cpu/containers/allocator.hpp>
-#include <artea/cpu/router/visited_table_concept.hpp>
+#include <artea/cpu/router/data_structures/visited_table_concept.hpp>
 
 namespace artea {
 namespace cpu {

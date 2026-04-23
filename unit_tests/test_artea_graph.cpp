@@ -55,8 +55,8 @@ struct TestConfig {
 
     // Stacked r-net backbone
     float    rnet_beta;
-    bool     l1_radius_provided;
-    float    l1_rnet_radius;
+    bool     l0_radius_provided;
+    float    l0_rnet_radius;
     uint32_t max_nbr_size;
     uint32_t search_nn_qs;
     uint32_t ul_select_nbrs_qs;
@@ -64,7 +64,7 @@ struct TestConfig {
     float    scale_coeffs;
     float    shifted_coeffs;
 
-    // L1-radius auto-probe
+    // L0-radius auto-probe
     uint32_t probe_num_samples;
     float    probe_quantile;
 
@@ -103,11 +103,11 @@ auto dump_config(const char* banner) -> void {
        << "Config path:                " << g_config.config_path << "\n"
        << "--- Stacked r-net backbone ---\n"
        << "rnet_beta:                  " << g_config.rnet_beta << "\n";
-    if (g_config.l1_radius_provided) {
-        os << "L1 radius:                  " << g_config.l1_rnet_radius
+    if (g_config.l0_radius_provided) {
+        os << "L0 radius:                  " << g_config.l0_rnet_radius
            << " (user-provided)\n";
     } else {
-        os << "L1 radius:                  auto-probe ("
+        os << "L0 radius:                  auto-probe ("
            << static_cast<int>(g_config.probe_quantile * 100.0f)
            << "th pct, " << g_config.probe_num_samples << " samples)\n";
     }
@@ -180,34 +180,34 @@ public:
 
         _dist_func = std::make_unique<dist_func_t>(base_vecs.get_vec_dim());
 
-        if (g_config.l1_radius_provided) {
-            _l1_radius = g_config.l1_rnet_radius;
+        if (g_config.l0_radius_provided) {
+            _l0_radius = g_config.l0_rnet_radius;
             ARTEA_INFO(fmt::format(
-                "Using user-provided L1 rnet_radius = {:.6f}", _l1_radius));
+                "Using user-provided L0 rnet_radius = {:.6f}", _l0_radius));
         } else {
             dataset_prober_t prober(base_vecs, *_dist_func);
             const std::vector<float> quantiles = { g_config.probe_quantile };
             ARTEA_INFO(fmt::format(
-                "Probing L1 rnet_radius ({}th pct, {} samples)...",
+                "Probing L0 rnet_radius ({}th pct, {} samples)...",
                 static_cast<int>(g_config.probe_quantile * 100.0f),
                 g_config.probe_num_samples));
             auto result = prober.probe(quantiles, g_config.probe_num_samples);
-            _l1_radius = static_cast<float>(result.table[0][0]);
+            _l0_radius = static_cast<float>(result.table[0][0]);
             ARTEA_INFO(fmt::format(
-                "Auto-probed L1 rnet_radius = {:.6f}", _l1_radius));
+                "Auto-probed L0 rnet_radius = {:.6f}", _l0_radius));
         }
     }
 
     auto get_dataset()   -> vector_dataset_t& { return *_dataset; }
     auto get_dist_func() -> dist_func_t&      { return *_dist_func; }
-    auto get_l1_radius() const -> float       { return _l1_radius; }
+    auto get_l0_radius() const -> float       { return _l0_radius; }
 
 private:
     DataProvider() = default;
 
     std::unique_ptr<vector_dataset_t> _dataset;
     std::unique_ptr<dist_func_t>      _dist_func;
-    float                             _l1_radius = 0.0f;
+    float                             _l0_radius = 0.0f;
 };
 
 // ============================================================
@@ -226,7 +226,7 @@ protected:
 
         artea_graph::rgraph_config_t rgraph_config(
             g_config.rnet_beta,
-            provider.get_l1_radius(),
+            provider.get_l0_radius(),
             static_cast<vertex_num_t>(g_config.search_nn_qs),
             static_cast<vertex_num_t>(g_config.ul_select_nbrs_qs),
             static_cast<vertex_num_t>(g_config.bl_select_nbrs_qs),
@@ -361,10 +361,6 @@ TEST_F(ArteaGraphTest, SearchRecallAndThroughput) {
         double   s_batch_ms;
         double   s_qps;
         float    s_recall;
-        // Dynamic artea: dynamic hierarchical graph, same greedy-upper + beam-L0.
-        double   d_batch_ms;
-        double   d_qps;
-        float    d_recall;
         // Static artea L0-only baseline: flat beam on compact L0 from entry_point.
         double   l0_batch_ms;
         double   l0_qps;
@@ -412,13 +408,7 @@ TEST_F(ArteaGraphTest, SearchRecallAndThroughput) {
             /*candidate_queue_size=*/effective_queue_size);
         s_router.initialize();
 
-        hierarchical_graph_router_t d_router(
-            base_vecs, dist_func,
-            /*topk=*/topk,
-            /*candidate_queue_size=*/effective_queue_size);
-        d_router.initialize();
-
-        // --- Static artea: compact hier_graph, greedy-upper + beam-L0
+        // --- Hierarchical router: compact hier_graph, greedy-upper + beam-L0
         //     (RandomSeeding=false uses compact_hg.entry_point_vid()) ---
         auto [s_avg_us, s_recall, s_last] = time_batch([&]() {
             return s_router.template batch_query</*RandomSeeding=*/false, /*UpperLevelBeamSearch=*/false>(
@@ -426,18 +416,7 @@ TEST_F(ArteaGraphTest, SearchRecallAndThroughput) {
         });
         ASSERT_EQ(s_last.size(), static_cast<std::size_t>(num_queries) * topk);
 
-        // --- Dynamic artea: dynamic hier_graph, greedy-upper + beam-L0
-        //     (dynamic graphs auto-fall-back to sample_single_entry
-        //      since they have no precomputed entry point) ---
-        auto [d_avg_us, d_recall, d_last] = time_batch(
-            [&]() {
-                return d_router.template batch_query</*RandomSeeding=*/false, /*UpperLevelBeamSearch=*/false>(
-                    query_vecs, dyn_hg);
-            });
-        ASSERT_EQ(d_last.size(),
-                  static_cast<std::size_t>(num_queries) * topk);
-
-        // --- Static artea L0-only (flat beam on compact L0 from entry_point) ---
+        // --- L0-only single-layer router (flat beam on compact L0 from entry_point) ---
         auto [l0_avg_us, l0_recall, l0_last] = time_batch(
             [&]() {
                 return s_router.template batch_query_l0_only</*RandomSeeding=*/false>(
@@ -451,9 +430,6 @@ TEST_F(ArteaGraphTest, SearchRecallAndThroughput) {
         row.s_batch_ms  = s_avg_us  / 1000.0;
         row.s_qps       = num_queries * 1e6 / s_avg_us;
         row.s_recall    = s_recall;
-        row.d_batch_ms  = d_avg_us  / 1000.0;
-        row.d_qps       = num_queries * 1e6 / d_avg_us;
-        row.d_recall    = d_recall;
         row.l0_batch_ms = l0_avg_us / 1000.0;
         row.l0_qps      = num_queries * 1e6 / l0_avg_us;
         row.l0_recall   = l0_recall;
@@ -461,51 +437,42 @@ TEST_F(ArteaGraphTest, SearchRecallAndThroughput) {
 
         ARTEA_INFO(fmt::format(
             "CandidateQueue={:4}: "
-            "static  [R@{}={:.4f}, QPS={:8.1f}, batch={:.2f} ms] | "
-            "dynamic [R@{}={:.4f}, QPS={:8.1f}, batch={:.2f} ms] | "
-            "L0-only [R@{}={:.4f}, QPS={:8.1f}, batch={:.2f} ms]",
+            "hierarchical [R@{}={:.4f}, QPS={:8.1f}, batch={:.2f} ms] | "
+            "L0-only      [R@{}={:.4f}, QPS={:8.1f}, batch={:.2f} ms]",
             effective_queue_size,
             topk, row.s_recall,  row.s_qps,  row.s_batch_ms,
-            topk, row.d_recall,  row.d_qps,  row.d_batch_ms,
             topk, row.l0_recall, row.l0_qps, row.l0_batch_ms));
     }
 
-    ARTEA_INFO("=== static artea vs. dynamic artea vs. static artea L0 summary ===");
+    ARTEA_INFO("=== hierarchical router vs. L0-only single-layer router summary ===");
     ARTEA_INFO(fmt::format("  build_time    : {} ms", _build_ms));
     ARTEA_INFO(fmt::format("  compact_time  : {} ms", compact_ms));
     ARTEA_INFO(fmt::format("  num_queries   : {}", num_queries));
     ARTEA_INFO(fmt::format("  topk          : {}", topk));
     ARTEA_INFO(fmt::format(
-        "{:<8} | {:<10} {:<10} {:<10} | {:<10} {:<10} {:<10} | {:<10} {:<10} {:<10}",
+        "{:<8} | {:<10} {:<10} {:<10} | {:<10} {:<10} {:<10}",
         "Queue",
-        "S.Recall@k",  "S.QPS",  "S.batch(ms)",
-        "D.Recall@k",  "D.QPS",  "D.batch(ms)",
+        "H.Recall@k",  "H.QPS",  "H.batch(ms)",
         "L0.Recall@k", "L0.QPS", "L0.batch(ms)"));
     ARTEA_INFO(std::string(
-        8 + 3 + 10 + 10 + 10 + 3 + 10 + 10 + 10 + 3 + 10 + 10 + 10, '-'));
+        8 + 3 + 10 + 10 + 10 + 3 + 10 + 10 + 10, '-'));
     for (const auto& row : rows) {
         ARTEA_INFO(fmt::format(
             "{:<8} | {:<10.4f} {:<10.1f} {:<10.2f} | "
-            "{:<10.4f} {:<10.1f} {:<10.2f} | "
             "{:<10.4f} {:<10.1f} {:<10.2f}",
             row.queue_size,
             row.s_recall,  row.s_qps,  row.s_batch_ms,
-            row.d_recall,  row.d_qps,  row.d_batch_ms,
             row.l0_recall, row.l0_qps, row.l0_batch_ms));
     }
 
-    bool has_any_static  = false;
-    bool has_any_dynamic = false;
-    bool has_any_l0      = false;
+    bool has_any_hier = false;
+    bool has_any_l0   = false;
     for (const auto& row : rows) {
-        if (row.s_recall  > 0.0f) has_any_static  = true;
-        if (row.d_recall  > 0.0f) has_any_dynamic = true;
-        if (row.l0_recall > 0.0f) has_any_l0      = true;
+        if (row.s_recall  > 0.0f) has_any_hier = true;
+        if (row.l0_recall > 0.0f) has_any_l0   = true;
     }
-    EXPECT_TRUE(has_any_static)
-        << "At least one queue-size should return static artea results";
-    EXPECT_TRUE(has_any_dynamic)
-        << "At least one queue-size should return dynamic artea results";
+    EXPECT_TRUE(has_any_hier)
+        << "At least one queue-size should return hierarchical router results";
     EXPECT_TRUE(has_any_l0)
         << "At least one queue-size should return L0-only results";
 }
@@ -528,9 +495,11 @@ int main(int argc, char** argv) {
     // Stacked r-net backbone
     program.add_argument("--beta")
         .default_value(2.0f).scan<'g', float>();
-    program.add_argument("--l1-radius")
+    program.add_argument("--l0-radius")
         .default_value(-1.0f).scan<'g', float>()
-        .help("L1 rnet_radius. If negative, auto-probe via DatasetProber.");
+        .help("L0 rnet_radius (covering radius at the bottom layer). "
+              "L1 and higher radii are derived as L0 * beta^h. "
+              "If negative, auto-probe via DatasetProber.");
     program.add_argument("--max-nbr-size")
         .default_value(32u).scan<'u', uint32_t>();
     program.add_argument("--search-nn-qs")
@@ -645,9 +614,9 @@ int main(int argc, char** argv) {
         g_config.queue_size_step  = values[2];
     }
 
-    const float l1 = program.get<float>("--l1-radius");
-    g_config.l1_radius_provided = (l1 >= 0.0f);
-    g_config.l1_rnet_radius     = l1;
+    const float l0_radius_arg = program.get<float>("--l0-radius");
+    g_config.l0_radius_provided = (l0_radius_arg >= 0.0f);
+    g_config.l0_rnet_radius     = l0_radius_arg;
 
     dump_config("artea_graph test — configuration (start)");
 

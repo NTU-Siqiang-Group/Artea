@@ -26,8 +26,8 @@
 #include <utility>
 
 #include <artea/cpu/router/data_structures/candidate_queue_concept.hpp>
-#include <artea/cpu/router/neighbor_range_concept.hpp>
-#include <artea/cpu/router/visited_table_concept.hpp>
+#include <artea/cpu/router/data_structures/neighbor_range_concept.hpp>
+#include <artea/cpu/router/data_structures/visited_table_concept.hpp>
 
 namespace artea {
 namespace cpu {

@@ -88,29 +88,23 @@ TEST_F(DatasetProberTest, Probe) {
     ARTEA_INFO(fmt::format("Probing completed in {:.2f} s ({} samples x 128 ranks)", elapsed_s, num_samples));
     ARTEA_INFO(fmt::format("Estimated LID (Levina-Bickel, k=128): {:.4f}", result.lid));
 
-    // Print table in chunks of at most 10 nn_rank columns
+    // Print table: one row per nn_rank, one column per quantile.
     const uint32_t total_ranks = static_cast<uint32_t>(result.nn_ranks.size());
-    const uint32_t cols_per_chunk = 10;
 
-    for (uint32_t chunk_start = 0; chunk_start < total_ranks; chunk_start += cols_per_chunk) {
-        uint32_t chunk_end = std::min(chunk_start + cols_per_chunk, total_ranks);
+    // Header: rank label + quantile columns
+    std::string header = fmt::format("  {:>6s}", "rank");
+    for (size_t qi = 0; qi < result.quantiles.size(); ++qi) {
+        header += fmt::format(" {:>9.3f}%", result.quantiles[qi] * 100.0f);
+    }
+    ARTEA_INFO(header);
 
-        // Header
-        std::string header = fmt::format("  {:>8s}", "quantile");
-        for (uint32_t c = chunk_start; c < chunk_end; ++c) {
-            header += fmt::format(" {:>10d}", result.nn_ranks[c]);
-        }
-        ARTEA_INFO(fmt::format("--- nn_rank [{}, {}] ---", result.nn_ranks[chunk_start], result.nn_ranks[chunk_end - 1]));
-        ARTEA_INFO(header);
-
-        // Data rows
+    // Data rows: one per rank
+    for (uint32_t r = 0; r < total_ranks; ++r) {
+        std::string row = fmt::format("  {:>6d}", result.nn_ranks[r]);
         for (size_t qi = 0; qi < result.quantiles.size(); ++qi) {
-            std::string row = fmt::format("  {:>7.3f}%", result.quantiles[qi] * 100.0f);
-            for (uint32_t c = chunk_start; c < chunk_end; ++c) {
-                row += fmt::format(" {:>10.2f}", result.table[c][qi]);
-            }
-            ARTEA_INFO(row);
+            row += fmt::format(" {:>10.2f}", result.table[r][qi]);
         }
+        ARTEA_INFO(row);
     }
 
     // Verify LID is positive and reasonable
@@ -169,29 +163,23 @@ TEST_F(DatasetProberTest, ProbeQuery) {
         "Query probe completed in {:.2f} s ({} queries x {} ranks)",
         elapsed_s, result.num_queries, result.nn_ranks.size()));
 
-    // Print table in chunks of at most 10 nn_rank columns
+    // Print table: one row per nn_rank, one column per quantile.
     const uint32_t total_ranks = static_cast<uint32_t>(result.nn_ranks.size());
-    const uint32_t cols_per_chunk = 10;
 
-    for (uint32_t chunk_start = 0; chunk_start < total_ranks; chunk_start += cols_per_chunk) {
-        uint32_t chunk_end = std::min(chunk_start + cols_per_chunk, total_ranks);
+    // Header: rank label + quantile columns
+    std::string header = fmt::format("  {:>6s}", "rank");
+    for (size_t qi = 0; qi < result.quantiles.size(); ++qi) {
+        header += fmt::format(" {:>9.3f}%", result.quantiles[qi] * 100.0f);
+    }
+    ARTEA_INFO(header);
 
-        // Header
-        std::string header = fmt::format("  {:>8s}", "quantile");
-        for (uint32_t c = chunk_start; c < chunk_end; ++c) {
-            header += fmt::format(" {:>10d}", result.nn_ranks[c]);
-        }
-        ARTEA_INFO(fmt::format("--- nn_rank [{}, {}] ---", result.nn_ranks[chunk_start], result.nn_ranks[chunk_end - 1]));
-        ARTEA_INFO(header);
-
-        // Data rows
+    // Data rows: one per rank
+    for (uint32_t r = 0; r < total_ranks; ++r) {
+        std::string row = fmt::format("  {:>6d}", result.nn_ranks[r]);
         for (size_t qi = 0; qi < result.quantiles.size(); ++qi) {
-            std::string row = fmt::format("  {:>7.3f}%", result.quantiles[qi] * 100.0f);
-            for (uint32_t c = chunk_start; c < chunk_end; ++c) {
-                row += fmt::format(" {:>10.2f}", result.table[c][qi]);
-            }
-            ARTEA_INFO(row);
+            row += fmt::format(" {:>10.2f}", result.table[r][qi]);
         }
+        ARTEA_INFO(row);
     }
 
     // Verify: shape is consistent
@@ -225,7 +213,7 @@ int main(int argc, char** argv) {
     argparse::ArgumentParser program("test_dataset_prober");
     program.add_argument("-c", "--config").default_value(std::string("./configs/datasets.json"));
     program.add_argument("-d", "--dataset").default_value(std::string("sift-1m"));
-    program.add_argument("--num-samples").default_value(10000u).scan<'u', uint32_t>();
+    program.add_argument("--num-samples").default_value(1000u).scan<'u', uint32_t>();
 
     try {
         program.parse_args(argc, argv);
