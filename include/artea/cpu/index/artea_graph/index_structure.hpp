@@ -46,29 +46,39 @@ class IndexStructure : public stacked_rgraph::IndexStructure<IndexTraitsT> {
     using propagate_config_t  = typename IndexTraitsT::artea_graph::propagate_config_t;
     using pruning_config_t    = typename IndexTraitsT::artea_graph::pruning_config_t;
 
+    /** @brief Refining capacity per vertex is fixed at 1.5× the rgraph
+     *         per-layer @c max_nbr_size. */
+    static constexpr auto _refining_max_nbr_size(vertex_num_t rgraph_max_nbr_size)
+        -> vertex_num_t
+    {
+        return static_cast<vertex_num_t>(
+            static_cast<double>(rgraph_max_nbr_size) * 1.5);
+    }
+
 public:
     /**
      * @brief Construct an empty artea_graph index.
      *
-     * @param total_vertices          Expected eventual size of the base dataset
-     *                                (forwarded to the stacked_rgraph parent).
-     * @param rgraph_config           Stacked r-net geometry / queue / capacity.
-     * @param refining_layer_config   Layer config (max_nbr_size / reserved_nbr_size)
-     *                                used when constructing the @c RefiningGraph
-     *                                for a single layer inside @c refine_layer.
-     * @param propagate_config        Conv-graph propagate config used when
-     *                                @c refine_layer is invoked.
-     * @param pruning_config          PruningConfig (scale + shift) used by
-     *                                both (a) stacked-rgraph upper-layer
-     *                                insert-time pruning — only scale_coeffs
-     *                                is consumed there — and (b) the
-     *                                per-layer refinement PruningUpdater
-     *                                routing loop.
+     * @param total_vertices    Expected eventual size of the base dataset
+     *                          (forwarded to the stacked_rgraph parent).
+     * @param rgraph_config     Stacked r-net geometry / queue / capacity,
+     *                          including independent @c ul_max_nbr_size
+     *                          and @c bl_max_nbr_size. The two refining
+     *                          LayerConfigs are derived as
+     *                          @c rgraph_config.{ul,bl}_max_nbr_size() ×
+     *                          1.5.
+     * @param propagate_config  Conv-graph propagate config used when
+     *                          @c refine_layer is invoked.
+     * @param pruning_config    PruningConfig (scale + shift) used by
+     *                          both (a) stacked-rgraph upper-layer
+     *                          insert-time pruning — only scale_coeffs
+     *                          is consumed there — and (b) the
+     *                          per-layer refinement PruningUpdater
+     *                          routing loop.
      */
     IndexStructure(
         const vertex_num_t        total_vertices,
         const rgraph_config_t&    rgraph_config,
-        const layer_config_t      refining_layer_config,
         const propagate_config_t  propagate_config,
         const pruning_config_t    pruning_config
     ) :
@@ -76,7 +86,10 @@ public:
         // refinement pull from the same PruningConfig instance owned by
         // the base class. The insertion path ignores shifted_coeffs.
         base_t(total_vertices, rgraph_config, pruning_config),
-        _refining_layer_config(refining_layer_config),
+        _ul_refining_layer_config(
+            _refining_max_nbr_size(rgraph_config.ul_max_nbr_size())),
+        _bl_refining_layer_config(
+            _refining_max_nbr_size(rgraph_config.bl_max_nbr_size())),
         _propagate_config(propagate_config)
     {}
 
@@ -89,14 +102,35 @@ public:
     //   Config accessors (refinement-time configs)
     // =================================================================
 
+    /** @brief Layer config for refining upper layers (level_id > 0). */
     __attribute__((always_inline))
-    auto refining_layer_config() const -> const layer_config_t& {
-        return _refining_layer_config;
+    auto ul_refining_layer_config() const -> const layer_config_t& {
+        return _ul_refining_layer_config;
     }
 
     __attribute__((always_inline))
-    auto refining_layer_config() -> layer_config_t& {
-        return _refining_layer_config;
+    auto ul_refining_layer_config() -> layer_config_t& {
+        return _ul_refining_layer_config;
+    }
+
+    /** @brief Layer config for refining the bottom layer (L0). */
+    __attribute__((always_inline))
+    auto bl_refining_layer_config() const -> const layer_config_t& {
+        return _bl_refining_layer_config;
+    }
+
+    __attribute__((always_inline))
+    auto bl_refining_layer_config() -> layer_config_t& {
+        return _bl_refining_layer_config;
+    }
+
+    /** @brief Refining layer config for @p level_id (bl for L0, ul elsewhere). */
+    __attribute__((always_inline))
+    auto refining_layer_config(const typename IndexTraitsT::layer_id_t level_id)
+        -> layer_config_t&
+    {
+        return (level_id == 0) ? _bl_refining_layer_config
+                               : _ul_refining_layer_config;
     }
 
     __attribute__((always_inline))
@@ -107,9 +141,13 @@ public:
     // pruning_config() is inherited from stacked_rgraph::IndexStructure.
 
 private:
-    /** @brief Layer config used to size the RefiningGraph built per layer
-     *         inside @c refine_layer. */
-    layer_config_t     _refining_layer_config;
+    /** @brief Layer config used to size the RefiningGraph built for
+     *         upper layers (level_id > 0) inside @c refine_layer. */
+    layer_config_t     _ul_refining_layer_config;
+
+    /** @brief Layer config used to size the RefiningGraph built for
+     *         the bottom layer (L0) inside @c refine_layer. */
+    layer_config_t     _bl_refining_layer_config;
 
     /** @brief Conv-graph propagate config for per-layer refinement. */
     propagate_config_t _propagate_config;

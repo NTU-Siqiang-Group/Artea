@@ -37,8 +37,8 @@ DEFAULT_FLAGS=(
     --ul-select-nbrs-qs 64
     --bl-select-nbrs-qs 64
     --search-nn-qs 20
-    --max-nbr-size 48
-    --refining-max-nbr-size 96
+    --ul-max-nbr-size 32
+    --bl-max-nbr-size 64
     --num-build-loops 5
     --num-triu-iters 12
     --prefill-ratio 0.34

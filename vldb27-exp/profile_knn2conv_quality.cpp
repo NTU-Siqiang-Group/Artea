@@ -33,7 +33,7 @@ struct TestConfig {
     std::string dataset_name;
 
     // KNN graph build params
-    layer_config_t knn_layer_config{64, 96};
+    layer_config_t knn_layer_config{64};
     knn_graph::propagate_config_t knn_propagate_config{4, 14};
 
     // Conv graph refinement params
@@ -221,7 +221,7 @@ int main(int argc, char** argv) {
 
     // KNN graph config
     uint32_t knn_max_nbr_size = program.get<uint32_t>("--knn-max-nbr-size");
-    g_config.knn_layer_config = layer_config_t(knn_max_nbr_size, static_cast<uint32_t>(knn_max_nbr_size * 1.5));
+    g_config.knn_layer_config = layer_config_t(knn_max_nbr_size);
     g_config.knn_propagate_config = knn_graph::propagate_config_t(
         program.get<uint32_t>("--knn-num-build-loops"),
         program.get<uint32_t>("--knn-num-triu-iters"),

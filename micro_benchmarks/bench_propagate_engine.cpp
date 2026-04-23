@@ -25,7 +25,7 @@ using namespace artea;
 struct BenchConfig {
     std::string config_path;
     std::string dataset_name;
-    layer_config_t layer_config{16, 32};
+    layer_config_t layer_config{16};
     conv_graph::pruning_config_t pruning_config{1.0, 0.0};
     conv_graph::propagate_config_t propagate_config{4, 14, 0.6};
     vec_num_t rand_gen_size;
@@ -365,11 +365,6 @@ int main(int argc, char** argv) {
         .scan<'i', int>()
         .help("Number of random neighbors to generate for initial graph");
 
-    program.add_argument("--reserved-nbrs")
-        .default_value(32)
-        .scan<'i', int>()
-        .help("Reserved neighbor array size for the graph");
-
     program.add_argument("--max-nbrs")
         .default_value(16)
         .scan<'i', int>()
@@ -427,8 +422,7 @@ int main(int argc, char** argv) {
     g_config.config_path = program.get<std::string>("--config");
     g_config.dataset_name = program.get<std::string>("--dataset");
     g_config.layer_config = layer_config_t(
-        static_cast<vec_num_t>(program.get<int>("--max-nbrs")),
-        static_cast<vec_num_t>(program.get<int>("--reserved-nbrs"))
+        static_cast<vec_num_t>(program.get<int>("--max-nbrs"))
     );
     g_config.rand_gen_size = static_cast<vec_num_t>(program.get<int>("--rand-gen-size"));
     g_config.num_iters = static_cast<iter_t>(program.get<int>("--num-iters"));
@@ -440,7 +434,6 @@ int main(int argc, char** argv) {
     ARTEA_INFO(fmt::format("Benchmark Configuration:"));
     ARTEA_INFO(fmt::format("  Dataset: {}", g_config.dataset_name));
     ARTEA_INFO(fmt::format("  Config path: {}", g_config.config_path));
-    ARTEA_INFO(fmt::format("  Reserved neighbors: {}", g_config.layer_config.reserved_nbr_size()));
     ARTEA_INFO(fmt::format("  Max neighbors: {}", g_config.layer_config.max_nbr_size()));
     ARTEA_INFO(fmt::format("  Random gen size: {}", g_config.rand_gen_size));
     ARTEA_INFO(fmt::format("  Propagation iterations: {}", g_config.num_iters));

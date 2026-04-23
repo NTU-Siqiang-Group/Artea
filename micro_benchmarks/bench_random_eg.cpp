@@ -24,7 +24,7 @@ using namespace artea::cpu;
 struct BenchConfig {
     std::string config_path;
     std::string dataset_name;
-    layer_config_t layer_config{32, 32};
+    layer_config_t layer_config{32};
     conv_graph::pruning_config_t pruning_config{1.0, 0.0};
     conv_graph::propagate_config_t propagate_config{4, 14};
     int64_t iterations;
@@ -148,7 +148,7 @@ int main(int argc, char** argv) {
     g_config.config_path = program.get<std::string>("--config");
     g_config.dataset_name = program.get<std::string>("--dataset");
     vec_num_t max_nbr_size = static_cast<vec_num_t>(program.get<int>("--max-nbrs"));
-    g_config.layer_config = layer_config_t(max_nbr_size, max_nbr_size);
+    g_config.layer_config = layer_config_t(max_nbr_size);
     g_config.iterations = program.get<int64_t>("--iterations");
 
     ARTEA_INFO(fmt::format("Benchmark Configuration:"));

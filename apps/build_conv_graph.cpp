@@ -33,7 +33,6 @@ using namespace artea::cpu;
 
 struct GraphParams {
     vertex_num_t max_nbr_size = 32;
-    vertex_num_t reserved_nbr_size = 64;
     ratio_t scale_coeffs = 1.00;
     ratio_t shifted_coeffs = 0.00;
     iter_t num_build_loops = 4;
@@ -110,7 +109,6 @@ int main(int argc, char** argv) {
 
     GraphParams params;
     params.max_nbr_size = program.get<uint32_t>("--max-nbr-size");
-    params.reserved_nbr_size = static_cast<uint32_t>(params.max_nbr_size * 1.5);
     params.scale_coeffs = program.get<double>("--scale-coeffs");
     params.shifted_coeffs = program.get<double>("--shifted-coeffs");
     params.num_build_loops = program.get<uint32_t>("--num-build-loops");
@@ -123,7 +121,6 @@ int main(int argc, char** argv) {
     ARTEA_INFO(fmt::format("  Config path: {}", config_path));
     ARTEA_INFO(fmt::format("  Output directory: {}", output_dir));
     ARTEA_INFO(fmt::format("  Max neighbors: {}", params.max_nbr_size));
-    ARTEA_INFO(fmt::format("  Reserved neighbors: {}", params.reserved_nbr_size));
     ARTEA_INFO(fmt::format("  Scale coefficient: {:.2f}", params.scale_coeffs));
     ARTEA_INFO(fmt::format("  Shifted coefficient: {:.2f}", params.shifted_coeffs));
     ARTEA_INFO(fmt::format("  Build loops: {}", params.num_build_loops));
@@ -144,7 +141,7 @@ int main(int argc, char** argv) {
     ARTEA_INFO("Constructing convergent graph...");
     auto start_time = std::chrono::high_resolution_clock::now();
 
-    layer_config_t layer_config(params.max_nbr_size, params.reserved_nbr_size);
+    layer_config_t layer_config(params.max_nbr_size);
     conv_graph::pruning_config_t pruning_config(
         params.scale_coeffs,
         params.shifted_coeffs

@@ -57,7 +57,8 @@ struct ExpConfig {
     float    rnet_beta;
     bool     l0_radius_provided;
     float    l0_rnet_radius;
-    uint32_t max_nbr_size;
+    uint32_t ul_max_nbr_size;
+    uint32_t bl_max_nbr_size;
     uint32_t search_nn_qs;
     uint32_t ul_select_nbrs_qs;
     uint32_t bl_select_nbrs_qs;
@@ -66,8 +67,7 @@ struct ExpConfig {
     uint32_t probe_num_samples;
     float    probe_quantile;
 
-    // Refinement
-    uint32_t refining_max_nbr_size;
+    // Refinement (refining max/reserved derived as rgraph max × 1.5)
     uint32_t num_build_loops;
     uint32_t num_triu_iters;
     float    prefill_ratio;
@@ -168,7 +168,10 @@ int main(int argc, char** argv) {
 
     program.add_argument("--beta").default_value(2.0f).scan<'g', float>();
     program.add_argument("--l0-radius").default_value(-1.0f).scan<'g', float>();
-    program.add_argument("--max-nbr-size").default_value(32u).scan<'u', uint32_t>();
+    program.add_argument("--ul-max-nbr-size").default_value(32u).scan<'u', uint32_t>()
+        .help("Per-vertex neighbor capacity at every upper layer.");
+    program.add_argument("--bl-max-nbr-size").default_value(64u).scan<'u', uint32_t>()
+        .help("Per-vertex neighbor capacity at the bottom layer (L0).");
     program.add_argument("--search-nn-qs").default_value(40u).scan<'u', uint32_t>();
     program.add_argument("--ul-select-nbrs-qs").default_value(100u).scan<'u', uint32_t>();
     program.add_argument("--bl-select-nbrs-qs").default_value(100u).scan<'u', uint32_t>();
@@ -177,7 +180,6 @@ int main(int argc, char** argv) {
     program.add_argument("--probe-num-samples").default_value(500u).scan<'u', uint32_t>();
     program.add_argument("--probe-quantile").default_value(0.9f).scan<'g', float>();
 
-    program.add_argument("--refining-max-nbr-size").default_value(32u).scan<'u', uint32_t>();
     program.add_argument("--num-build-loops").default_value(4u).scan<'u', uint32_t>();
     program.add_argument("--num-triu-iters").default_value(14u).scan<'u', uint32_t>();
     program.add_argument("--prefill-ratio").default_value(0.34f).scan<'g', float>();
@@ -204,7 +206,8 @@ int main(int argc, char** argv) {
     const float l0_arg               = program.get<float>("--l0-radius");
     g_config.l0_radius_provided      = (l0_arg >= 0.0f);
     g_config.l0_rnet_radius          = l0_arg;
-    g_config.max_nbr_size            = program.get<uint32_t>("--max-nbr-size");
+    g_config.ul_max_nbr_size         = program.get<uint32_t>("--ul-max-nbr-size");
+    g_config.bl_max_nbr_size         = program.get<uint32_t>("--bl-max-nbr-size");
     g_config.search_nn_qs            = program.get<uint32_t>("--search-nn-qs");
     g_config.ul_select_nbrs_qs       = program.get<uint32_t>("--ul-select-nbrs-qs");
     g_config.bl_select_nbrs_qs       = program.get<uint32_t>("--bl-select-nbrs-qs");
@@ -212,7 +215,6 @@ int main(int argc, char** argv) {
     g_config.shifted_coeffs          = program.get<float>("--shifted-coeffs");
     g_config.probe_num_samples       = program.get<uint32_t>("--probe-num-samples");
     g_config.probe_quantile          = program.get<float>("--probe-quantile");
-    g_config.refining_max_nbr_size   = program.get<uint32_t>("--refining-max-nbr-size");
     g_config.num_build_loops         = program.get<uint32_t>("--num-build-loops");
     g_config.num_triu_iters          = program.get<uint32_t>("--num-triu-iters");
     g_config.prefill_ratio           = program.get<float>("--prefill-ratio");
@@ -242,12 +244,11 @@ int main(int argc, char** argv) {
         static_cast<vertex_num_t>(g_config.search_nn_qs),
         static_cast<vertex_num_t>(g_config.ul_select_nbrs_qs),
         static_cast<vertex_num_t>(g_config.bl_select_nbrs_qs),
-        g_config.max_nbr_size);
+        g_config.ul_max_nbr_size,
+        g_config.bl_max_nbr_size);
 
-    const vertex_num_t refining_reserved_nbr_size =
-        static_cast<vertex_num_t>(g_config.refining_max_nbr_size * 1.5f);
-    layer_config_t refining_layer_config(
-        g_config.refining_max_nbr_size, refining_reserved_nbr_size);
+    // Refining layer_configs (ul + bl) are derived inside
+    // artea_graph::IndexStructure from rgraph.{ul,bl}_max_nbr_size × 1.5.
 
     artea_graph::propagate_config_t propagate_config(
         static_cast<iter_t>(g_config.num_build_loops),
@@ -263,7 +264,7 @@ int main(int argc, char** argv) {
 
     auto graph = std::make_unique<artea_graph::index_t>(
         total_vertices, rgraph_config,
-        refining_layer_config, propagate_config, pruning_config);
+        propagate_config, pruning_config);
 
     ARTEA_INFO("Building artea_graph...");
     auto build_t0 = std::chrono::high_resolution_clock::now();
@@ -332,12 +333,12 @@ int main(int argc, char** argv) {
     out["config"] = {
         {"rnet_beta",             g_config.rnet_beta},
         {"l0_rnet_radius",        provider.get_l0_radius()},
-        {"max_nbr_size",          g_config.max_nbr_size},
+        {"ul_max_nbr_size",       g_config.ul_max_nbr_size},
+        {"bl_max_nbr_size",       g_config.bl_max_nbr_size},
         {"ul_select_nbrs_qs",     g_config.ul_select_nbrs_qs},
         {"bl_select_nbrs_qs",     g_config.bl_select_nbrs_qs},
         {"scale_coeffs",          g_config.scale_coeffs},
         {"shifted_coeffs",        g_config.shifted_coeffs},
-        {"refining_max_nbr_size", g_config.refining_max_nbr_size},
         {"num_build_loops",       g_config.num_build_loops},
         {"num_triu_iters",        g_config.num_triu_iters},
         {"prefill_ratio",         g_config.prefill_ratio},

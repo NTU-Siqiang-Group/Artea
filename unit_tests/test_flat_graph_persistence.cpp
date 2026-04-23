@@ -31,7 +31,7 @@ struct TestConfig {
     std::string config_path;
     std::string dataset_name;
     std::string temp_dir;
-    layer_config_t layer_config{16, 32};
+    layer_config_t layer_config{16};
     conv_graph::pruning_config_t pruning_config{1.0f, 0.0f};
     conv_graph::propagate_config_t propagate_config{4, 14};
     bool verbose;
@@ -126,9 +126,6 @@ TEST_F(FlatGraphPersistenceTest, RefiningGraphSnapshotRestore) {
 
     EXPECT_EQ(original_graph.layer_config().max_nbr_size(), restored_graph.layer_config().max_nbr_size())
         << "Max neighbor size should match";
-
-    EXPECT_EQ(original_graph.layer_config().reserved_nbr_size(), restored_graph.layer_config().reserved_nbr_size())
-        << "Reserved neighbor size should match";
 
     EXPECT_FLOAT_EQ(original_graph.pruning_config().scale_coeffs(), restored_graph.pruning_config().scale_coeffs())
         << "Scale coefficients should match";

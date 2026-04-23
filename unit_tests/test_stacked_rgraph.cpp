@@ -53,7 +53,8 @@ struct TestConfig {
     float    rnet_beta;
     bool     l0_radius_provided;
     float    l0_rnet_radius;
-    uint32_t max_nbr_size;
+    uint32_t ul_max_nbr_size;
+    uint32_t bl_max_nbr_size;
 
     // L0-radius auto-probe
     uint32_t probe_num_samples;
@@ -146,7 +147,8 @@ protected:
             static_cast<vertex_num_t>(g_config.search_nn_qs),
             static_cast<vertex_num_t>(g_config.ul_select_nbrs_qs),
             static_cast<vertex_num_t>(g_config.bl_select_nbrs_qs),
-            g_config.max_nbr_size);
+            g_config.ul_max_nbr_size,
+            g_config.bl_max_nbr_size);
         // stacked_rgraph::pruning_config_t is an alias of conv_graph's
         // PruningConfig; the stacked_rgraph backbone only reads
         // scale_coeffs from it, so shifted_coeffs is pinned to 0 here.
@@ -196,12 +198,12 @@ protected:
     static void SetUpTestSuite() {
         ARTEA_INFO(fmt::format(
             "Building StackedRGraph: beta={:.3f}, L0_radius={:.6f}, "
-            "max_nbr={}, search_nn_qs={}, "
+            "ul_max_nbr_size={}, bl_max_nbr_size={}, search_nn_qs={}, "
             "ul_select_nbrs_qs={}, bl_select_nbrs_qs={}, "
             "scale_coeffs={:.3f}",
             g_config.rnet_beta,
             DataProvider::instance().get_l0_radius(),
-            g_config.max_nbr_size,
+            g_config.ul_max_nbr_size, g_config.bl_max_nbr_size,
             g_config.search_nn_qs,
             g_config.ul_select_nbrs_qs, g_config.bl_select_nbrs_qs,
             g_config.scale_coeffs));
@@ -277,9 +279,13 @@ int main(int argc, char** argv) {
         .help("L0 rnet_radius (covering radius at the bottom layer). "
               "L1 and higher radii are derived as L0 * beta^h. "
               "If negative, auto-probe via DatasetProber.");
-    program.add_argument("--max-nbr-size")
+    program.add_argument("--ul-max-nbr-size")
         .default_value(32u).scan<'u', uint32_t>()
-        .help("Per-vertex neighbor capacity at upper levels (level 0 = 2x).");
+        .help("Per-vertex neighbor capacity at every upper layer (level_id > 0).");
+    program.add_argument("--bl-max-nbr-size")
+        .default_value(64u).scan<'u', uint32_t>()
+        .help("Per-vertex neighbor capacity at the bottom layer (L0). "
+              "Independent of --ul-max-nbr-size.");
 
     program.add_argument("--probe-num-samples")
         .default_value(500u).scan<'u', uint32_t>();
@@ -309,7 +315,8 @@ int main(int argc, char** argv) {
     g_config.config_path        = program.get<std::string>("--config");
     g_config.dataset_name       = program.get<std::string>("--dataset");
     g_config.rnet_beta          = program.get<float>("--beta");
-    g_config.max_nbr_size       = program.get<uint32_t>("--max-nbr-size");
+    g_config.ul_max_nbr_size    = program.get<uint32_t>("--ul-max-nbr-size");
+    g_config.bl_max_nbr_size    = program.get<uint32_t>("--bl-max-nbr-size");
     g_config.probe_num_samples  = program.get<uint32_t>("--probe-num-samples");
     g_config.probe_quantile     = program.get<float>("--probe-quantile");
     g_config.search_nn_qs       = program.get<uint32_t>("--search-nn-qs");
@@ -333,7 +340,8 @@ int main(int argc, char** argv) {
                   << "th pct, " << g_config.probe_num_samples
                   << " samples)\n";
     }
-    std::cout << "max_nbr_size:      " << g_config.max_nbr_size      << "\n";
+    std::cout << "ul_max_nbr_size:   " << g_config.ul_max_nbr_size   << "\n";
+    std::cout << "bl_max_nbr_size:   " << g_config.bl_max_nbr_size   << "\n";
     std::cout << "search_nn_qs:      " << g_config.search_nn_qs      << "\n";
     std::cout << "ul_select_nbrs_qs: " << g_config.ul_select_nbrs_qs << "\n";
     std::cout << "bl_select_nbrs_qs: " << g_config.bl_select_nbrs_qs << "\n";

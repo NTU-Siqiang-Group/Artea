@@ -50,7 +50,11 @@ struct RGraphConfig {
      *                            upper levels (L1..highest_insert_level). Must be >= 1. Default 100.
      * @param bl_select_nbrs_qs   Beam-search queue size for Phase 2 candidate gathering at
      *                            the bottom level (L0). Must be >= 1. Default 100.
-     * @param max_nbr_size        Per-vertex neighbor capacity for every layer (default: 32).
+     * @param ul_max_nbr_size     Per-vertex neighbor capacity at every upper
+     *                            layer (level_id > 0). Default 32.
+     * @param bl_max_nbr_size     Per-vertex neighbor capacity at the bottom
+     *                            layer (L0). Independent of the upper value.
+     *                            Default 64.
      */
     RGraphConfig(
         ratio_t rnet_beta,
@@ -58,14 +62,16 @@ struct RGraphConfig {
         vertex_num_t search_nn_qs,
         vertex_num_t ul_select_nbrs_qs = 100,
         vertex_num_t bl_select_nbrs_qs = 100,
-        vertex_num_t max_nbr_size = 32
+        vertex_num_t ul_max_nbr_size = 32,
+        vertex_num_t bl_max_nbr_size = 64
     ) :
         _rnet_beta(rnet_beta),
         _L0_rnet_radius(L0_rnet_radius),
         _search_nn_qs(search_nn_qs),
         _ul_select_nbrs_qs(ul_select_nbrs_qs),
         _bl_select_nbrs_qs(bl_select_nbrs_qs),
-        _max_nbr_size(max_nbr_size)
+        _ul_max_nbr_size(ul_max_nbr_size),
+        _bl_max_nbr_size(bl_max_nbr_size)
     {
         if (rnet_beta <= ratio_t(1)) {
             ARTEA_ERROR(fmt::format("rnet_beta ({}) must be > 1", rnet_beta));
@@ -90,7 +96,8 @@ struct RGraphConfig {
     __attribute__((always_inline)) auto search_nn_qs()       const -> vertex_num_t { return _search_nn_qs; }
     __attribute__((always_inline)) auto ul_select_nbrs_qs()  const -> vertex_num_t { return _ul_select_nbrs_qs; }
     __attribute__((always_inline)) auto bl_select_nbrs_qs()  const -> vertex_num_t { return _bl_select_nbrs_qs; }
-    __attribute__((always_inline)) auto max_nbr_size()       const -> vertex_num_t { return _max_nbr_size; }
+    __attribute__((always_inline)) auto ul_max_nbr_size()    const -> vertex_num_t { return _ul_max_nbr_size; }
+    __attribute__((always_inline)) auto bl_max_nbr_size()    const -> vertex_num_t { return _bl_max_nbr_size; }
 
     /**
      * @brief Covering radius for 0-indexed layer @p h: R_h = L0 * beta^h.
@@ -149,8 +156,12 @@ private:
     /** @brief Beam-search queue size for Phase 2 candidate gathering at the bottom level (L0). */
     vertex_num_t _bl_select_nbrs_qs;
 
-    /** @brief Per-vertex neighbor capacity for every layer. */
-    vertex_num_t _max_nbr_size;
+    /** @brief Per-vertex neighbor capacity at every upper layer. */
+    vertex_num_t _ul_max_nbr_size;
+
+    /** @brief Per-vertex neighbor capacity at the bottom layer (L0).
+     *         Independent of @c _ul_max_nbr_size. */
+    vertex_num_t _bl_max_nbr_size;
 };
 
 /** @brief stacked_rgraph reuses conv_graph's PruningConfig — the

@@ -57,7 +57,7 @@ protected:
 
         dist_func_ = std::make_unique<dist_func_t>(vec_dim);
 
-        layer_config_ = layer_config_t(64, 128);
+        layer_config_ = layer_config_t(64);
         graph_index_ = std::make_unique<conv_graph::index_t>(
             *vecs_, layer_config_,
             conv_graph::pruning_config_t(1.0, 0.0),
@@ -86,7 +86,7 @@ protected:
         }
     }
 
-    layer_config_t layer_config_{64, 128};
+    layer_config_t layer_config_{64};
     std::unique_ptr<vector_array_t> vecs_;
     std::unique_ptr<dist_func_t>    dist_func_;
     std::unique_ptr<conv_graph::index_t> graph_index_;

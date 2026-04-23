@@ -59,7 +59,7 @@ public:
     /**
      * @brief Construct a new convergent graph index.
      * @param vecs_data        Reference to the vector data for this layer.
-     * @param layer_config     Layer configuration (max_nbr_size and reserved_nbr_size).
+     * @param layer_config     Layer configuration (max_nbr_size).
      * @param pruning_config   Pruning configuration (scale_coeffs and shifted_coeffs).
      * @param propagate_config Propagation configuration (num_build_loops, num_triu_iters, prefill_ratio).
      */

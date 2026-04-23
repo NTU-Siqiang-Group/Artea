@@ -190,7 +190,6 @@ int main(int argc, char** argv) {
     std::cout << "\n--- Graph Construction Config ---" << std::endl;
     std::cout << fmt::format("  Index size:             {:.2f} MB ({} bytes)", index_size_info.total_mb, index_size_info.total_bytes) << std::endl;
     std::cout << fmt::format("  Max nbr size:           {}", graph_index.layer_config().max_nbr_size()) << std::endl;
-    std::cout << fmt::format("  Reserved nbr size:      {}", graph_index.layer_config().reserved_nbr_size()) << std::endl;
     std::cout << fmt::format("  Scale coeffs:           {}", graph_index.pruning_config().scale_coeffs()) << std::endl;
     std::cout << fmt::format("  Shifted coeffs:         {}", graph_index.pruning_config().shifted_coeffs()) << std::endl;
     std::cout << fmt::format("  Build loops:            {}", graph_index.propagate_config().num_build_loops()) << std::endl;

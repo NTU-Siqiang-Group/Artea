@@ -70,7 +70,7 @@ public:
         const auto& base_vecs = dataset_->get_base_vecs();
 
         // Build KNN graph
-        layer_config_t layer_config(g_config.max_nbr_size, static_cast<uint32_t>(g_config.max_nbr_size * 1.5));
+        layer_config_t layer_config(g_config.max_nbr_size);
         knn_graph::propagate_config_t propagate_config(5, 12, g_config.prefill_ratio, 1,
         g_config.routing_topk, g_config.routing_queue_size);
 

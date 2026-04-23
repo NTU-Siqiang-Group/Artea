@@ -91,7 +91,7 @@ public:
 
         // Build convergent graph
         ARTEA_INFO("Building convergent graph...");
-        layer_config_t layer_cfg(16, 24);
+        layer_config_t layer_cfg(16);
         conv_graph::pruning_config_t pruning_cfg(1.0f, 0.0f);
         conv_graph::propagate_config_t propagate_cfg(4, 14, 0.6f);
         graph_index_ = std::make_unique<conv_graph::index_t>(

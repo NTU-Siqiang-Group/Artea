@@ -57,7 +57,8 @@ struct TestConfig {
     float    rnet_beta;
     bool     l0_radius_provided;
     float    l0_rnet_radius;
-    uint32_t max_nbr_size;
+    uint32_t ul_max_nbr_size;
+    uint32_t bl_max_nbr_size;
     uint32_t search_nn_qs;
     uint32_t ul_select_nbrs_qs;
     uint32_t bl_select_nbrs_qs;
@@ -69,7 +70,7 @@ struct TestConfig {
     float    probe_quantile;
 
     // Per-layer conv_graph-style refinement
-    uint32_t refining_max_nbr_size;
+    // (refining_max_nbr_size / reserved derived as rgraph max_nbr_size × 1.5)
     uint32_t num_build_loops;
     uint32_t num_triu_iters;
     float    prefill_ratio;
@@ -111,7 +112,8 @@ auto dump_config(const char* banner) -> void {
            << static_cast<int>(g_config.probe_quantile * 100.0f)
            << "th pct, " << g_config.probe_num_samples << " samples)\n";
     }
-    os << "max_nbr_size:               " << g_config.max_nbr_size << "\n"
+    os << "ul_max_nbr_size:            " << g_config.ul_max_nbr_size << "\n"
+       << "bl_max_nbr_size:            " << g_config.bl_max_nbr_size << "\n"
        << "search_nn_qs:               " << g_config.search_nn_qs << "\n"
        << "ul_select_nbrs_qs:          " << g_config.ul_select_nbrs_qs << "\n"
        << "bl_select_nbrs_qs:          " << g_config.bl_select_nbrs_qs << "\n"
@@ -121,15 +123,18 @@ auto dump_config(const char* banner) -> void {
        << " (consumed by refinement pruning only; ul insertion reads "
        << "scale_coeffs only and ignores shift)\n"
        << "--- Per-layer refinement ---\n"
-       << "refining_max_nbr_size:      " << g_config.refining_max_nbr_size
-       << " (reserved = 1.5x = "
-       << static_cast<uint32_t>(g_config.refining_max_nbr_size * 1.5f) << ")\n"
+       << "ul_refining_max_nbr_size:   "
+       << static_cast<uint32_t>(g_config.ul_max_nbr_size * 1.5f)
+       << " (= ul_max_nbr_size × 1.5; reserved matches)\n"
+       << "bl_refining_max_nbr_size:   "
+       << static_cast<uint32_t>(g_config.bl_max_nbr_size * 1.5f)
+       << " (= bl_max_nbr_size × 1.5; reserved matches)\n"
        << "num_build_loops:            " << g_config.num_build_loops << "\n"
        << "num_triu_iters:             " << g_config.num_triu_iters << "\n"
        << "prefill_ratio:              " << g_config.prefill_ratio
-       << " (L0 random prefill: "
+       << " (L0 random prefill target: "
        << static_cast<uint32_t>(g_config.prefill_ratio
-              * g_config.refining_max_nbr_size)
+              * g_config.bl_max_nbr_size * 1.5f)
        << " edges/vertex)\n"
        << "num_routing_loops:          " << g_config.num_routing_loops << "\n"
        << "routing_topk:               " << g_config.routing_topk << "\n"
@@ -230,21 +235,13 @@ protected:
             static_cast<vertex_num_t>(g_config.search_nn_qs),
             static_cast<vertex_num_t>(g_config.ul_select_nbrs_qs),
             static_cast<vertex_num_t>(g_config.bl_select_nbrs_qs),
-            g_config.max_nbr_size);
+            g_config.ul_max_nbr_size,
+            g_config.bl_max_nbr_size);
 
-        // Reserved capacity is fixed at 1.5x the max — sized for the
-        // overflow headroom the per-layer refiner needs without
-        // exposing it as a separate knob.
-        const vertex_num_t refining_reserved_nbr_size =
-            static_cast<vertex_num_t>(g_config.refining_max_nbr_size * 1.5f);
-        layer_config_t refining_layer_config(
-            g_config.refining_max_nbr_size,
-            refining_reserved_nbr_size);
+        // Refining layer_configs (ul + bl) are derived inside
+        // artea_graph::IndexStructure as rgraph.{ul,bl}_max_nbr_size × 1.5.
 
-        // prefill_ratio drives L0 random prefill in refine_layer:
-        // each L0 vertex gets prefill_ratio * refining_max_nbr_size
-        // random neighbors sampled from the new-vid window before the
-        // triangle/reverse/truncate pipeline starts.
+        // prefill_ratio drives L0 random top-up in refine_layer.
         artea_graph::propagate_config_t propagate_config(
             static_cast<iter_t>(g_config.num_build_loops),
             static_cast<iter_t>(g_config.num_triu_iters),
@@ -262,7 +259,7 @@ protected:
 
         _graph = std::make_unique<artea_graph::index_t>(
             total_vertices, rgraph_config,
-            refining_layer_config, propagate_config, pruning_config);
+            propagate_config, pruning_config);
 
         ARTEA_INFO("Building artea_graph (3 steps: r-net insert → "
                    "per-layer refine → writeback)...");
@@ -500,8 +497,13 @@ int main(int argc, char** argv) {
         .help("L0 rnet_radius (covering radius at the bottom layer). "
               "L1 and higher radii are derived as L0 * beta^h. "
               "If negative, auto-probe via DatasetProber.");
-    program.add_argument("--max-nbr-size")
-        .default_value(32u).scan<'u', uint32_t>();
+    program.add_argument("--ul-max-nbr-size")
+        .default_value(32u).scan<'u', uint32_t>()
+        .help("Per-vertex neighbor capacity at every upper layer (level_id > 0).");
+    program.add_argument("--bl-max-nbr-size")
+        .default_value(64u).scan<'u', uint32_t>()
+        .help("Per-vertex neighbor capacity at the bottom layer (L0). "
+              "Independent of --ul-max-nbr-size.");
     program.add_argument("--search-nn-qs")
         .default_value(40u).scan<'u', uint32_t>();
     program.add_argument("--ul-select-nbrs-qs")
@@ -521,16 +523,14 @@ int main(int argc, char** argv) {
         .default_value(0.9f).scan<'g', float>();
 
     // Per-layer refinement
-    program.add_argument("--refining-max-nbr-size")
-        .default_value(32u).scan<'u', uint32_t>();
     program.add_argument("--num-build-loops")
         .default_value(4u).scan<'u', uint32_t>();
     program.add_argument("--num-triu-iters")
         .default_value(14u).scan<'u', uint32_t>();
     program.add_argument("--prefill-ratio")
         .default_value(0.34f).scan<'g', float>()
-        .help("L0 random-prefill density: each L0 vertex receives "
-              "prefill_ratio * refining_max_nbr_size random neighbors "
+        .help("L0 random-prefill density: each L0 vertex is topped up to "
+              "prefill_ratio * (bl_max_nbr_size * 1.5) random neighbors "
               "before the propagate loop.");
     program.add_argument("--num-routing-loops")
         .default_value(1u).scan<'u', uint32_t>();
@@ -574,7 +574,8 @@ int main(int argc, char** argv) {
     g_config.config_path               = program.get<std::string>("--config");
     g_config.dataset_name              = program.get<std::string>("--dataset");
     g_config.rnet_beta                 = program.get<float>("--beta");
-    g_config.max_nbr_size              = program.get<uint32_t>("--max-nbr-size");
+    g_config.ul_max_nbr_size           = program.get<uint32_t>("--ul-max-nbr-size");
+    g_config.bl_max_nbr_size           = program.get<uint32_t>("--bl-max-nbr-size");
     g_config.search_nn_qs              = program.get<uint32_t>("--search-nn-qs");
     g_config.ul_select_nbrs_qs         = program.get<uint32_t>("--ul-select-nbrs-qs");
     g_config.bl_select_nbrs_qs         = program.get<uint32_t>("--bl-select-nbrs-qs");
@@ -582,7 +583,6 @@ int main(int argc, char** argv) {
     g_config.shifted_coeffs            = program.get<float>("--shifted-coeffs");
     g_config.probe_num_samples         = program.get<uint32_t>("--probe-num-samples");
     g_config.probe_quantile            = program.get<float>("--probe-quantile");
-    g_config.refining_max_nbr_size     = program.get<uint32_t>("--refining-max-nbr-size");
     g_config.num_build_loops           = program.get<uint32_t>("--num-build-loops");
     g_config.num_triu_iters            = program.get<uint32_t>("--num-triu-iters");
     g_config.prefill_ratio             = program.get<float>("--prefill-ratio");

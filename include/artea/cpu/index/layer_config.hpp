@@ -35,30 +35,20 @@ struct LayerConfig {
     /**
      * @brief Constructor for layer configuration.
      * @param max_nbr_size Maximum number of neighbors (for overflow control).
-     * @param reserved_nbr_size Reserved neighbor array size.
      */
-    LayerConfig(
-        vertex_num_t max_nbr_size,
-        vertex_num_t reserved_nbr_size
-    ) :
-        _max_nbr_size(max_nbr_size),
-        _reserved_nbr_size(reserved_nbr_size)
+    explicit LayerConfig(vertex_num_t max_nbr_size) :
+        _max_nbr_size(max_nbr_size)
     {}
 
-    // Builder pattern setters (chainable)
+    // Builder pattern setter (chainable)
     auto max_nbr_size(vertex_num_t value) -> LayerConfig& { _max_nbr_size = value; return *this; }
-    auto reserved_nbr_size(vertex_num_t value) -> LayerConfig& { _reserved_nbr_size = value; return *this; }
 
-    // Const getters
+    // Const getter
     auto max_nbr_size() const -> vertex_num_t { return _max_nbr_size; }
-    auto reserved_nbr_size() const -> vertex_num_t { return _reserved_nbr_size; }
 
 private:
     /** @brief Maximum number of neighbors (for overflow control). */
     vertex_num_t _max_nbr_size;
-
-    /** @brief Reserved neighbor array size. */
-    vertex_num_t _reserved_nbr_size;
 };
 
 }   // namespace cpu

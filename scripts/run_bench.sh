@@ -116,8 +116,8 @@ shift  # Remove first argument, rest are passed to benchmark
 
 # Default parameters for each benchmark
 declare -A DEFAULT_PARAMS
-DEFAULT_PARAMS["bench_random_eg"]="--config ${PROJECT_ROOT}/configs/datasets.json --dataset sift-1m --init-nbrs 32 --reserved-nbrs 32 -i 10"
-DEFAULT_PARAMS["bench_propagate_engine"]="--config ${PROJECT_ROOT}/configs/datasets.json --dataset sift-1m --init-nbrs 32 --reserved-nbrs 32 --max-nbrs 16 --num-iters 5 --scale-coeffs 1.0 --shifted-coeffs 0.0 -i 10"
+DEFAULT_PARAMS["bench_random_eg"]="--config ${PROJECT_ROOT}/configs/datasets.json --dataset sift-1m --init-nbrs 32 -i 10"
+DEFAULT_PARAMS["bench_propagate_engine"]="--config ${PROJECT_ROOT}/configs/datasets.json --dataset sift-1m --init-nbrs 32 --max-nbrs 16 --num-iters 5 --scale-coeffs 1.0 --shifted-coeffs 0.0 -i 10"
 
 if [ "$BENCH_NAME" = "all" ]; then
     if [ ! -d "${BENCH_DIR}" ] || ! ls -1 "${BENCH_DIR}"/bench_* >/dev/null 2>&1; then

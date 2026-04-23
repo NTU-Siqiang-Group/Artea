@@ -121,16 +121,17 @@ public:
         using src_graph_t     = typename dynamic::hierarchical_graph_t;
         using compact_graph_t = typename compact::hierarchical_graph_t;
 
-        const vertex_num_t num_vertices = src.get_num_vertices();
-        const vertex_num_t max_nbr_size = src.max_nbr_size();
-        const layer_id_t   src_top      = src.top_occupied_level_id();
+        const vertex_num_t num_vertices    = src.get_num_vertices();
+        const vertex_num_t ul_max_nbr_size = src.ul_max_nbr_size();
+        const vertex_num_t bl_max_nbr_size = src.bl_max_nbr_size();
+        const layer_id_t   src_top         = src.top_occupied_level_id();
 
         // ---- Empty source: return a degenerate compact graph. ----
         if (num_vertices == 0 || src_top == src_graph_t::unassigned_highest_level_id) {
             std::vector<std::size_t> empty_cap(1, 0);
             return compact_graph_t(
-                layer_id_t{0}, max_nbr_size, num_vertices,
-                std::move(empty_cap));
+                layer_id_t{0}, ul_max_nbr_size, bl_max_nbr_size,
+                num_vertices, std::move(empty_cap));
         }
 
         // =============================================================
@@ -178,9 +179,11 @@ public:
         std::vector<std::size_t> arena_vid_capacity(
             static_cast<std::size_t>(new_top) + 1);
         for (layer_id_t h = 0; h <= new_top; ++h) {
+            // Upper levels 1..h each use ul_max_nbr_size; L0 uses bl.
             const std::size_t slot_nbrs_count =
-                static_cast<std::size_t>(h + 2) *
-                static_cast<std::size_t>(max_nbr_size);
+                static_cast<std::size_t>(h) *
+                    static_cast<std::size_t>(ul_max_nbr_size)
+                + static_cast<std::size_t>(bl_max_nbr_size);
             std::size_t slot_capacity =
                 static_cast<std::size_t>(src.get_arena_capacity_in_arena(h));
             if (h == new_top) slot_capacity += demoted_count;
@@ -188,8 +191,8 @@ public:
         }
 
         compact_graph_t result(
-            new_top, max_nbr_size, num_vertices,
-            std::move(arena_vid_capacity));
+            new_top, ul_max_nbr_size, bl_max_nbr_size,
+            num_vertices, std::move(arena_vid_capacity));
 
         // =============================================================
         //   Step 4: Populate VertexInfo (parallel).
@@ -205,8 +208,9 @@ public:
         auto& compact_vit = result.get_vertex_info_table_mut();
 
         const std::size_t top_slot_nbrs_count =
-            static_cast<std::size_t>(new_top + 2) *
-            static_cast<std::size_t>(max_nbr_size);
+            static_cast<std::size_t>(new_top) *
+                static_cast<std::size_t>(ul_max_nbr_size)
+            + static_cast<std::size_t>(bl_max_nbr_size);
         const std::size_t demoted_base_offset =
             static_cast<std::size_t>(
                 src.get_arena_capacity_in_arena(new_top)) *
@@ -309,7 +313,7 @@ public:
                             src.fetch_layer_nbrs(vid, cur_level);
                         const std::size_t level_offset =
                             static_cast<std::size_t>(H_new - cur_level) *
-                            static_cast<std::size_t>(max_nbr_size);
+                            static_cast<std::size_t>(ul_max_nbr_size);
                         vertex_id_t* dst = slot_base + level_offset;
 
                         std::size_t out = 0;

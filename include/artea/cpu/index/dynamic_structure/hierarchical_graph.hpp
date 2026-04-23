@@ -20,8 +20,9 @@
  *               vertex whose highest_level_id == H owns one slot in the
  *               arena keyed by H; that slot stores the vertex's neighbors
  *               for every level H, H-1, ..., 1, 0 contiguously (high level
- *               first, bottom level last). The bottom level (level 0) gets
- *               twice the per-level neighbor capacity of upper levels.
+ *               first, bottom level last). Upper levels use
+ *               ul_max_nbr_size entries per vertex; the bottom level uses
+ *               bl_max_nbr_size — independent, no hardcoded coupling.
  */
 
 #pragma once
@@ -70,22 +71,23 @@ namespace dynamic {
  *
  * Vertices that share the same @c highest_level_id share a single
  * @c LevelGroupArena. A vertex with @c highest_level_id == H owns one
- * slot of @c (H + 2) * max_nbr_size entries inside arena @c H. Within
- * that slot, neighbors are laid out contiguously from the highest level
- * down to the bottom level:
+ * slot of @c H * ul_max_nbr_size + bl_max_nbr_size entries inside arena
+ * @c H. Within that slot, neighbors are laid out contiguously from the
+ * highest level down to the bottom level:
  *
- *   [ level H nbrs  | level H-1 nbrs | ... | level 1 nbrs | level 0 nbrs ]
- *      max_nbr_size    max_nbr_size          max_nbr_size   2*max_nbr_size
+ *   [ level H nbrs  | level H-1 nbrs  | ... | level 1 nbrs  | level 0 nbrs ]
+ *      ul_max_nbr_size ul_max_nbr_size         ul_max_nbr_size bl_max_nbr_size
  *
- * Only the bottom level (level 0) gets the doubled per-vertex capacity.
- * Upper levels always use exactly @c max_nbr_size entries per vertex.
+ * Upper levels (1..H) use @c ul_max_nbr_size entries per vertex; the
+ * bottom level uses @c bl_max_nbr_size independently — no hard-coded
+ * 2× coupling.
  *
  * @c fetch_layer_nbrs() composes the arena base pointer with the
  * vertex's @c slot_offset and the level-local offset with no branching:
- *   - Level offset: @c (H - level_id) * max_nbr_size  (correct for
+ *   - Level offset: @c (H - level_id) * ul_max_nbr_size  (correct for
  *     @c level_id == 0 because @c H - 0 == H, which places us at the
  *     start of the L0 block.)
- *   - Level length: @c max_nbr_size + max_nbr_size * (level_id == 0).
+ *   - Level length: @c level_id == 0 ? bl_max_nbr_size : ul_max_nbr_size.
  *
  * Arena pre-allocation
  * --------------------
@@ -192,9 +194,12 @@ public:
      *                              (one arena per possible
      *                              @c highest_level_id in
      *                              @c [0, max_restrict_level]).
-     * @param max_nbr_size          Per-vertex neighbor capacity at every
-     *                              upper level. The bottom level
-     *                              automatically uses @c 2 * max_nbr_size.
+     * @param ul_max_nbr_size       Per-vertex neighbor capacity at every
+     *                              upper level (level_id > 0).
+     * @param bl_max_nbr_size       Per-vertex neighbor capacity at the
+     *                              bottom level (level_id == 0).
+     *                              Independent of @p ul_max_nbr_size —
+     *                              no 2× coupling.
      * @param total_vertices        Expected eventual base-set size. Each
      *                              arena is sized to its worst-case cap
      *                              so live slot claims never need a
@@ -202,11 +207,13 @@ public:
      */
     HierarchicalGraph(
         const layer_num_t  max_restrict_level,
-        const vertex_num_t max_nbr_size,
+        const vertex_num_t ul_max_nbr_size,
+        const vertex_num_t bl_max_nbr_size,
         const vertex_num_t total_vertices
     ) :
         _max_restrict_level(max_restrict_level),
-        _max_nbr_size(max_nbr_size)
+        _ul_max_nbr_size(ul_max_nbr_size),
+        _bl_max_nbr_size(bl_max_nbr_size)
     {
         const std::size_t num_arenas =
             static_cast<std::size_t>(max_restrict_level) + 1;
@@ -378,11 +385,11 @@ public:
         nbr_t* slot_base = _arenas[H]->base_ptr() + vinfo.slot_offset;
 
         const std::size_t level_offset =
-            static_cast<std::size_t>(H - level_id) * _max_nbr_size;
+            static_cast<std::size_t>(H - level_id) * _ul_max_nbr_size;
         const std::size_t level_nbrs_count =
-            static_cast<std::size_t>(_max_nbr_size) +
-            static_cast<std::size_t>(_max_nbr_size) *
-                static_cast<std::size_t>(level_id == 0);
+            (level_id == 0)
+                ? static_cast<std::size_t>(_bl_max_nbr_size)
+                : static_cast<std::size_t>(_ul_max_nbr_size);
 
         return std::span<nbr_t>(slot_base + level_offset, level_nbrs_count);
     }
@@ -397,11 +404,11 @@ public:
         const nbr_t* slot_base = _arenas[H]->base_ptr() + vinfo.slot_offset;
 
         const std::size_t level_offset =
-            static_cast<std::size_t>(H - level_id) * _max_nbr_size;
+            static_cast<std::size_t>(H - level_id) * _ul_max_nbr_size;
         const std::size_t level_nbrs_count =
-            static_cast<std::size_t>(_max_nbr_size) +
-            static_cast<std::size_t>(_max_nbr_size) *
-                static_cast<std::size_t>(level_id == 0);
+            (level_id == 0)
+                ? static_cast<std::size_t>(_bl_max_nbr_size)
+                : static_cast<std::size_t>(_ul_max_nbr_size);
 
         return std::span<const nbr_t>(slot_base + level_offset, level_nbrs_count);
     }
@@ -469,18 +476,24 @@ public:
         return _max_restrict_level;
     }
 
-    /** @brief Per-vertex neighbor capacity at @p level_id (double for L0). */
+    /** @brief Per-vertex neighbor capacity at @p level_id.
+     *         Returns @c bl_max_nbr_size for L0 and @c ul_max_nbr_size
+     *         for every upper layer — the two are independent. */
     __attribute__((always_inline))
     auto max_nbr_size(const layer_id_t level_id) const -> vertex_num_t {
-        return _max_nbr_size +
-               _max_nbr_size * static_cast<vertex_num_t>(level_id == 0);
+        return (level_id == 0) ? _bl_max_nbr_size : _ul_max_nbr_size;
     }
 
-    /** @brief Per-vertex neighbor capacity at every upper layer
-     *         (level 0 capacity is 2x this). */
+    /** @brief Per-vertex neighbor capacity at every upper layer. */
     __attribute__((always_inline))
-    auto max_nbr_size() const -> vertex_num_t {
-        return _max_nbr_size;
+    auto ul_max_nbr_size() const -> vertex_num_t {
+        return _ul_max_nbr_size;
+    }
+
+    /** @brief Per-vertex neighbor capacity at the bottom layer (L0). */
+    __attribute__((always_inline))
+    auto bl_max_nbr_size() const -> vertex_num_t {
+        return _bl_max_nbr_size;
     }
 
     __attribute__((always_inline))
@@ -629,11 +642,13 @@ private:
     // -----------------------------------------------------------------
 
     /** @brief Slot size in @c nbr_t for a vertex with highest_level_id H.
-     *         Upper levels 1..H each take @c max_nbr_size entries; level 0
-     *         takes @c 2 * max_nbr_size. Total = (H + 2) * max_nbr_size. */
+     *         Upper levels 1..H each take @c ul_max_nbr_size entries;
+     *         level 0 takes @c bl_max_nbr_size. Total =
+     *         @c H * ul_max_nbr_size + bl_max_nbr_size. */
     __attribute__((always_inline))
     auto _compute_slots_nbr_count(const layer_id_t highest_level_id) const -> vertex_num_t {
-        return static_cast<vertex_num_t>(highest_level_id + 2) * _max_nbr_size;
+        return static_cast<vertex_num_t>(highest_level_id) * _ul_max_nbr_size
+             + _bl_max_nbr_size;
     }
 
     /** @brief Heuristic pre-allocation: arena @p highest_level_id expects
@@ -686,9 +701,11 @@ private:
     /** @brief Inclusive upper bound of @c highest_level_id for any vertex. */
     layer_num_t _max_restrict_level;
 
-    /** @brief Per-vertex neighbor capacity at every upper layer. The
-     *         bottom layer implicitly uses @c 2 * _max_nbr_size. */
-    vertex_num_t _max_nbr_size;
+    /** @brief Per-vertex neighbor capacity at every upper layer (level_id > 0). */
+    vertex_num_t _ul_max_nbr_size;
+
+    /** @brief Per-vertex neighbor capacity at the bottom layer (L0). */
+    vertex_num_t _bl_max_nbr_size;
 
     /** @brief One arena per possible @c highest_level_id in
      *         @c [0, _max_restrict_level]. */

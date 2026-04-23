@@ -93,8 +93,7 @@ public:
         g_results.vec_dim      = base_vecs.get_vec_dim();
 
         // Build convergent graph
-        uint32_t reserved_nbr_size = static_cast<uint32_t>(g_config.max_nbr_size * 1.5);
-        layer_config_t layer_cfg(g_config.max_nbr_size, reserved_nbr_size);
+        layer_config_t layer_cfg(g_config.max_nbr_size);
         conv_graph::pruning_config_t pruning_cfg(g_config.scale_coeffs, g_config.shifted_coeffs);
         conv_graph::propagate_config_t propagate_cfg(
             g_config.num_build_loops, g_config.num_triu_iters, g_config.prefill_ratio,

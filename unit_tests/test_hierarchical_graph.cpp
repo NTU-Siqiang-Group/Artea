@@ -60,7 +60,8 @@ struct TestConfig {
     std::string config_path;
     std::string dataset_name;
     uint32_t    num_vertices;          // scale for the fixture graph
-    uint32_t    max_nbr_size;
+    uint32_t    ul_max_nbr_size;
+    uint32_t    bl_max_nbr_size;
     uint32_t    max_restrict_level;
     uint32_t    seed;
 } g_config;
@@ -146,12 +147,14 @@ protected:
         _num_vertices = std::min<uint32_t>(
             g_config.num_vertices,
             DataProvider::instance().dataset_size());
-        _max_nbr      = g_config.max_nbr_size;
+        _ul_max_nbr   = g_config.ul_max_nbr_size;
+        _bl_max_nbr   = g_config.bl_max_nbr_size;
         _max_h        = static_cast<layer_id_t>(g_config.max_restrict_level);
 
         _graph = std::make_unique<hg_t>(
             /*max_restrict_level=*/_max_h,
-            /*max_nbr_size=*/_max_nbr,
+            /*ul_max_nbr_size=*/_ul_max_nbr,
+            /*bl_max_nbr_size=*/_bl_max_nbr,
             /*total_vertices=*/_num_vertices);
 
         // Reserve ids, then parallel-assign layers — exactly the
@@ -179,14 +182,16 @@ protected:
     static std::unique_ptr<hg_t>    _graph;
     static std::vector<layer_id_t>  _intended;
     static vertex_num_t             _num_vertices;
-    static vertex_num_t             _max_nbr;
+    static vertex_num_t             _ul_max_nbr;
+    static vertex_num_t             _bl_max_nbr;
     static layer_id_t               _max_h;
 };
 
 std::unique_ptr<hg_t>    HierarchicalGraphTest::_graph;
 std::vector<layer_id_t>  HierarchicalGraphTest::_intended;
 vertex_num_t             HierarchicalGraphTest::_num_vertices = 0;
-vertex_num_t             HierarchicalGraphTest::_max_nbr      = 0;
+vertex_num_t             HierarchicalGraphTest::_ul_max_nbr   = 0;
+vertex_num_t             HierarchicalGraphTest::_bl_max_nbr   = 0;
 layer_id_t               HierarchicalGraphTest::_max_h        = 0;
 
 // ============================================================
@@ -196,13 +201,12 @@ layer_id_t               HierarchicalGraphTest::_max_h        = 0;
 // ---- 1. Construction metadata: immutable graph-level properties ----
 TEST_F(HierarchicalGraphTest, ConstructionMetadata) {
     EXPECT_EQ(_graph->max_restrict_level(), _max_h);
-    EXPECT_EQ(_graph->max_nbr_size(), _max_nbr);
-    // Level 0 is doubled; other levels are not.
-    EXPECT_EQ(_graph->max_nbr_size(0),
-              static_cast<vertex_num_t>(2 * _max_nbr));
+    EXPECT_EQ(_graph->ul_max_nbr_size(), _ul_max_nbr);
+    EXPECT_EQ(_graph->bl_max_nbr_size(), _bl_max_nbr);
+    EXPECT_EQ(_graph->max_nbr_size(0), _bl_max_nbr);
     for (layer_id_t h = 1; h <= _max_h; ++h) {
-        EXPECT_EQ(_graph->max_nbr_size(h), _max_nbr)
-            << "upper level " << h << " should have max_nbr_size";
+        EXPECT_EQ(_graph->max_nbr_size(h), _ul_max_nbr)
+            << "upper level " << h << " should have ul_max_nbr_size";
     }
     EXPECT_EQ(_graph->get_num_vertices(), _num_vertices);
 }
@@ -210,7 +214,8 @@ TEST_F(HierarchicalGraphTest, ConstructionMetadata) {
 // ---- 2. add_vertices on a fresh graph returns contiguous ids and
 //         leaves rows unassigned until assign_layer runs. ----
 TEST(HierarchicalGraphStandalone, AddVerticesBasics) {
-    hg_t fresh(/*max_restrict_level=*/2, /*max_nbr_size=*/16,
+    hg_t fresh(/*max_restrict_level=*/2,
+               /*ul_max_nbr_size=*/16, /*bl_max_nbr_size=*/32,
                /*total_vertices=*/1024);
     EXPECT_EQ(fresh.get_num_vertices(), 0u);
     EXPECT_EQ(fresh.top_occupied_level_id(),
@@ -259,8 +264,9 @@ TEST_F(HierarchicalGraphTest, ParallelAssignLayerSlotUniqueness) {
             const auto off = _graph->get_slot_offset(vid);
             // slot_offset is in nbr_t units; convert to slot units.
             const std::size_t slot_size =
-                static_cast<std::size_t>(h + 2) *
-                static_cast<std::size_t>(_max_nbr);
+                static_cast<std::size_t>(h) *
+                    static_cast<std::size_t>(_ul_max_nbr)
+                + static_cast<std::size_t>(_bl_max_nbr);
             EXPECT_LT(off / slot_size, static_cast<std::size_t>(cap))
                 << "slot_offset out of bounds for arena h=" << h;
         }
@@ -298,9 +304,9 @@ TEST_F(HierarchicalGraphTest, SlotLayoutAndSentinelInit) {
             const vertex_id_t vid = bucket[k];
             for (layer_id_t l = 0; l <= h; ++l) {
                 const auto nbrs = _graph->fetch_layer_nbrs(vid, l);
-                const std::size_t expected_len =
-                    static_cast<std::size_t>(_max_nbr) *
-                    (l == 0 ? 2 : 1);
+                const std::size_t expected_len = (l == 0)
+                    ? static_cast<std::size_t>(_bl_max_nbr)
+                    : static_cast<std::size_t>(_ul_max_nbr);
                 ASSERT_EQ(nbrs.size(), expected_len)
                     << "vid=" << vid << " level=" << l;
                 for (const auto& nbr : nbrs) {
@@ -569,7 +575,8 @@ TEST_F(HierarchicalGraphTest, CompactorPreservesTopology) {
     // (possibly trimmed) top by the compactor.
     EXPECT_EQ(compact_graph.max_restrict_level(), expected_new_top);
     EXPECT_EQ(compact_graph.top_occupied_level_id(), expected_new_top);
-    EXPECT_EQ(compact_graph.max_nbr_size(), _graph->max_nbr_size());
+    EXPECT_EQ(compact_graph.ul_max_nbr_size(), _graph->ul_max_nbr_size());
+    EXPECT_EQ(compact_graph.bl_max_nbr_size(), _graph->bl_max_nbr_size());
     EXPECT_EQ(compact_graph.get_num_vertices(),
               _graph->get_num_vertices());
 
@@ -689,7 +696,7 @@ TEST_F(HierarchicalGraphTest, LayerRefiningGraphRoundTrip) {
     // so an uninitialized buffer of the right shape is sufficient.
     const auto& full_vecs = DataProvider::instance().vectors();
     vector_array_t vecs(_num_vertices, full_vecs.get_vec_dim());
-    const layer_config_t layer_cfg(_max_nbr, /*reserved=*/_max_nbr);
+    const layer_config_t layer_cfg(_ul_max_nbr);
 
     const layer_id_t top_h = _graph->top_occupied_level_id();
     ASSERT_NE(top_h, hg_t::unassigned_highest_level_id);
@@ -774,8 +781,12 @@ int main(int argc, char** argv) {
     program.add_argument("--num-vertices")
         .default_value(100'000u).scan<'u', uint32_t>()
         .help("Number of vertices to simulate (bounded by dataset size).");
-    program.add_argument("--max-nbr-size")
-        .default_value(32u).scan<'u', uint32_t>();
+    program.add_argument("--ul-max-nbr-size")
+        .default_value(32u).scan<'u', uint32_t>()
+        .help("Per-vertex neighbor capacity at every upper layer.");
+    program.add_argument("--bl-max-nbr-size")
+        .default_value(64u).scan<'u', uint32_t>()
+        .help("Per-vertex neighbor capacity at the bottom layer (L0).");
     program.add_argument("--max-highest-level-id")
         .default_value(4u).scan<'u', uint32_t>()
         .help("Inclusive upper bound for per-vertex highest_level_id.");
@@ -792,14 +803,16 @@ int main(int argc, char** argv) {
     g_config.config_path          = program.get<std::string>("--config");
     g_config.dataset_name         = program.get<std::string>("--dataset");
     g_config.num_vertices         = program.get<uint32_t>("--num-vertices");
-    g_config.max_nbr_size         = program.get<uint32_t>("--max-nbr-size");
+    g_config.ul_max_nbr_size      = program.get<uint32_t>("--ul-max-nbr-size");
+    g_config.bl_max_nbr_size      = program.get<uint32_t>("--bl-max-nbr-size");
     g_config.max_restrict_level = program.get<uint32_t>("--max-highest-level-id");
     g_config.seed                 = program.get<uint32_t>("--seed");
 
     std::cout << "\n=== Test Configuration ===\n"
               << "Dataset:              " << g_config.dataset_name << "\n"
               << "num_vertices:         " << g_config.num_vertices << "\n"
-              << "max_nbr_size:         " << g_config.max_nbr_size << "\n"
+              << "ul_max_nbr_size:      " << g_config.ul_max_nbr_size << "\n"
+              << "bl_max_nbr_size:      " << g_config.bl_max_nbr_size << "\n"
               << "max_restrict_level: " << g_config.max_restrict_level << "\n"
               << "seed:                 " << g_config.seed << "\n"
               << "==========================\n\n";

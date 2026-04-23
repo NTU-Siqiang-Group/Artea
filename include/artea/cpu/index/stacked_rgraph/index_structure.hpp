@@ -116,12 +116,12 @@ public:
             //   - 0                 = vertex participates only at the
             //                         base (level 0).
             //   - 1..max_restrict   = also participates in upper r-net
-            //                         levels 1..max_restrict (= paper
-            //                         L_1..L_{max_restrict}).
-            // Level 0 capacity is 2 * max_nbr_size; upper levels use
-            // exactly max_nbr_size.
+            //                         levels 1..max_restrict.
+            // Upper layers use ul_max_nbr_size; L0 uses bl_max_nbr_size —
+            // fully independent, no hardcoded ratio.
             _max_restrict_level,
-            rgraph_config.max_nbr_size(),
+            rgraph_config.ul_max_nbr_size(),
+            rgraph_config.bl_max_nbr_size(),
             total_vertices)),
         _rgraph_config(rgraph_config),
         _pruning_config(pruning_config),
@@ -213,14 +213,19 @@ public:
         return _hierarchical_graph->get_num_vertices();
     }
 
-    /** @brief Per-vertex neighbor capacity at upper levels (level 0
-     *         capacity is 2x this). */
+    /** @brief Per-vertex neighbor capacity at every upper layer. */
     __attribute__((always_inline))
-    auto max_nbr_size() const -> vertex_num_t {
-        return _hierarchical_graph->max_nbr_size();
+    auto ul_max_nbr_size() const -> vertex_num_t {
+        return _hierarchical_graph->ul_max_nbr_size();
     }
 
-    /** @brief Per-vertex capacity at @p l (2 * max_nbr_size for L0). */
+    /** @brief Per-vertex neighbor capacity at the bottom layer (L0). */
+    __attribute__((always_inline))
+    auto bl_max_nbr_size() const -> vertex_num_t {
+        return _hierarchical_graph->bl_max_nbr_size();
+    }
+
+    /** @brief Per-vertex capacity at @p l (bl for L0, ul elsewhere). */
     __attribute__((always_inline))
     auto max_nbr_size(const layer_id_t l) const -> vertex_num_t {
         return _hierarchical_graph->max_nbr_size(l);

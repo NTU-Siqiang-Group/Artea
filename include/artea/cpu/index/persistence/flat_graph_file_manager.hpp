@@ -90,13 +90,11 @@ public:
         const uint32_t magic = k_file_magic;
         const uint32_t version = k_file_version;
         const vertex_num_t num_vertices = refining_graph.get_num_vertices();
-        const vertex_num_t reserved_nbr_size = refining_graph.layer_config().reserved_nbr_size();
         const vertex_num_t max_nbr_size = refining_graph.layer_config().max_nbr_size();
 
         ofs.write(reinterpret_cast<const char*>(&magic), sizeof(magic));
         ofs.write(reinterpret_cast<const char*>(&version), sizeof(version));
         ofs.write(reinterpret_cast<const char*>(&num_vertices), sizeof(num_vertices));
-        ofs.write(reinterpret_cast<const char*>(&reserved_nbr_size), sizeof(reserved_nbr_size));
         ofs.write(reinterpret_cast<const char*>(&max_nbr_size), sizeof(max_nbr_size));
 
         // Write neighbor arrays
@@ -161,13 +159,11 @@ public:
         uint32_t magic = 0;
         uint32_t version = 0;
         vertex_num_t num_vertices = 0;
-        vertex_num_t reserved_nbr_size = 0;
         vertex_num_t max_nbr_size = 0;
 
         ifs.read(reinterpret_cast<char*>(&magic), sizeof(magic));
         ifs.read(reinterpret_cast<char*>(&version), sizeof(version));
         ifs.read(reinterpret_cast<char*>(&num_vertices), sizeof(num_vertices));
-        ifs.read(reinterpret_cast<char*>(&reserved_nbr_size), sizeof(reserved_nbr_size));
         ifs.read(reinterpret_cast<char*>(&max_nbr_size), sizeof(max_nbr_size));
 
         if (!ifs.good()) {
@@ -182,7 +178,7 @@ public:
             ARTEA_ERROR(fmt::format("Unsupported descent graph file version: {}", graph_bin_path));
         }
 
-        layer_config_t layer_config(max_nbr_size, reserved_nbr_size);
+        layer_config_t layer_config(max_nbr_size);
 
         // Construct IndexStructure from metadata using subclass hook
         RefiningGraphT graph_index = RefiningGraphT::from_metadata(meta, vecs_data, layer_config);
@@ -219,7 +215,7 @@ public:
 
 private:
     static constexpr uint32_t k_file_magic = 0x46474152;   // "FGRA"
-    static constexpr uint32_t k_file_version = 1;
+    static constexpr uint32_t k_file_version = 2;
 
 };  // class FlatGraphFileManager
 

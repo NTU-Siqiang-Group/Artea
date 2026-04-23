@@ -31,7 +31,7 @@ using namespace artea::cpu;
 struct TestConfig {
     std::string config_path;
     std::string dataset_name;
-    layer_config_t layer_config{16, 32};
+    layer_config_t layer_config{16};
     conv_graph::pruning_config_t pruning_config{1.0f, 0.0f};
     conv_graph::propagate_config_t propagate_config{4, 14};
     uint32_t extracted_nbr_size;
@@ -219,7 +219,7 @@ int main(int argc, char** argv) {
     g_config.dataset_name = program.get<std::string>("--dataset");
 
     uint32_t max_nbr_size = program.get<uint32_t>("--max-nbr-size");
-    g_config.layer_config = layer_config_t(max_nbr_size, static_cast<uint32_t>(max_nbr_size * 1.5));
+    g_config.layer_config = layer_config_t(max_nbr_size);
     g_config.pruning_config = conv_graph::pruning_config_t(
         program.get<float>("--scale-coeffs"),
         program.get<float>("--shifted-coeffs")

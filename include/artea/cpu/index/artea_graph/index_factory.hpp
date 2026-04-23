@@ -221,7 +221,9 @@ public:
     ) -> void {
         auto& hier_graph                = index.get_hierarchical_graph();
         auto& vecs_storage              = index.get_vecs_storage();
-        auto& layer_config              = index.refining_layer_config();
+        // Per-level RefiningGraph layer_config: bl for L0, ul for L1+.
+        // Derived in the IndexStructure ctor as rgraph max_nbr_size × 1.5.
+        auto& layer_config              = index.refining_layer_config(level_id);
         const auto& pruning_config      = index.pruning_config();
         const auto& propagate_config    = index.propagate_config();
         const vertex_num_t max_nbr_size = layer_config.max_nbr_size();

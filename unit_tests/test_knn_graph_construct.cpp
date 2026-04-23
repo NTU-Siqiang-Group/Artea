@@ -32,7 +32,7 @@ using namespace artea::cpu;
 struct TestConfig {
     std::string config_path;
     std::string dataset_name;
-    layer_config_t layer_config{16, 32};
+    layer_config_t layer_config{16};
     knn_graph::propagate_config_t propagate_config{4, 14};
     uint32_t extracted_nbr_size;
     uint32_t topk;
@@ -79,7 +79,6 @@ public:
         if (g_config.verbose) {
             ARTEA_INFO(fmt::format("Base vectors size: {}", base_vecs.get_num_vecs()));
             ARTEA_INFO(fmt::format("Max nbr size: {}", g_config.layer_config.max_nbr_size()));
-            ARTEA_INFO(fmt::format("Reserved nbr size: {}", g_config.layer_config.reserved_nbr_size()));
             ARTEA_INFO(fmt::format("Extracted nbr size: {}", g_config.extracted_nbr_size));
             ARTEA_INFO(fmt::format("Build loops: {}", g_config.propagate_config.num_build_loops()));
             ARTEA_INFO(fmt::format("Triangle updater iterations: {}", g_config.propagate_config.num_triu_iters()));
@@ -263,9 +262,8 @@ int main(int argc, char** argv) {
     g_config.dataset_name = program.get<std::string>("--dataset");
 
     uint32_t max_nbr_size = program.get<uint32_t>("--max-nbr-size");
-    uint32_t reserved_nbr_size = static_cast<uint32_t>(max_nbr_size * 1.5);
 
-    g_config.layer_config = layer_config_t(max_nbr_size, reserved_nbr_size);
+    g_config.layer_config = layer_config_t(max_nbr_size);
     g_config.propagate_config = knn_graph::propagate_config_t(
         program.get<uint32_t>("--num-build-loops"),
         program.get<uint32_t>("--num-triu-iters"),

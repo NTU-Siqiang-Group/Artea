@@ -43,7 +43,7 @@ public:
     /**
      * @brief Construct a new KNN graph index.
      * @param vecs_data        Reference to the vector data.
-     * @param layer_config     Layer configuration (max_nbr_size, reserved_nbr_size).
+     * @param layer_config     Layer configuration (max_nbr_size).
      * @param propagate_config Propagation configuration.
      */
     IndexStructure(

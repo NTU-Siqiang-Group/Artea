@@ -48,10 +48,10 @@ namespace compact {
  * @c highest_level_id plus a @c slot_offset (in @c vertex_id_t units)
  * into its group's arena, preserved verbatim from the dynamic source.
  *
- * Level layout inside a slot (high → low, L0 doubled):
+ * Level layout inside a slot (high → low, ul vs bl independent):
  *
- *   [ level H vids | level H-1 vids | ... | level 1 vids | level 0 vids ]
- *     max_nbr_size   max_nbr_size           max_nbr_size   2*max_nbr_size
+ *   [ level H vids   | level H-1 vids  | ... | level 1 vids   | level 0 vids  ]
+ *     ul_max_nbr_size  ul_max_nbr_size         ul_max_nbr_size  bl_max_nbr_size
  *
  * Neighbor arrays are sentinel-terminated with @c invalid_vertex_id.
  *
@@ -102,8 +102,11 @@ public:
      *
      * @param max_restrict_level          Inclusive upper bound of
      *                                      per-vertex @c highest_level_id.
-     * @param max_nbr_size                  Per-vertex capacity at upper
-     *                                      levels; level 0 uses 2x this.
+     * @param ul_max_nbr_size               Per-vertex capacity at upper
+     *                                      levels (level_id > 0).
+     * @param bl_max_nbr_size               Per-vertex capacity at the
+     *                                      bottom level (L0). Independent
+     *                                      of @p ul_max_nbr_size.
      * @param num_vertices                  Total vertex count
      *                                      (sizes @c _vertex_info_table).
      * @param arena_vid_capacity_per_group  Per-arena size in
@@ -114,12 +117,14 @@ public:
      */
     HierarchicalGraph(
         const layer_num_t              max_restrict_level,
-        const vertex_num_t             max_nbr_size,
+        const vertex_num_t             ul_max_nbr_size,
+        const vertex_num_t             bl_max_nbr_size,
         const vertex_num_t             num_vertices,
         std::vector<std::size_t>       arena_vid_capacity_per_group
     ) :
         _max_restrict_level(max_restrict_level),
-        _max_nbr_size(max_nbr_size),
+        _ul_max_nbr_size(ul_max_nbr_size),
+        _bl_max_nbr_size(bl_max_nbr_size),
         _num_vertices(num_vertices),
         _entry_point_vid(invalid_vertex_id),
         _arenas(static_cast<std::size_t>(max_restrict_level) + 1),
@@ -154,16 +159,22 @@ public:
         return _max_restrict_level;
     }
 
+    /** @brief Per-vertex capacity at every upper layer. */
     __attribute__((always_inline))
-    auto max_nbr_size() const -> vertex_num_t {
-        return _max_nbr_size;
+    auto ul_max_nbr_size() const -> vertex_num_t {
+        return _ul_max_nbr_size;
     }
 
-    /** @brief Per-vertex capacity at @p l (level 0 is doubled). */
+    /** @brief Per-vertex capacity at the bottom layer (L0). */
+    __attribute__((always_inline))
+    auto bl_max_nbr_size() const -> vertex_num_t {
+        return _bl_max_nbr_size;
+    }
+
+    /** @brief Per-vertex capacity at @p l (bl for L0, ul elsewhere). */
     __attribute__((always_inline))
     auto max_nbr_size(const layer_id_t l) const -> vertex_num_t {
-        return _max_nbr_size +
-               _max_nbr_size * static_cast<vertex_num_t>(l == 0);
+        return (l == 0) ? _bl_max_nbr_size : _ul_max_nbr_size;
     }
 
     __attribute__((always_inline))
@@ -187,9 +198,12 @@ public:
         const layer_id_t H = vinfo.highest_level_id;
         const vertex_id_t* slot_base = _arenas[H].data() + vinfo.slot_offset;
 
-        const std::size_t level_offset = static_cast<std::size_t>(H - level_id) * _max_nbr_size;
-        const std::size_t level_nbrs_count = static_cast<std::size_t>(_max_nbr_size) +
-            static_cast<std::size_t>(_max_nbr_size) * static_cast<std::size_t>(level_id == 0);
+        const std::size_t level_offset =
+            static_cast<std::size_t>(H - level_id) * _ul_max_nbr_size;
+        const std::size_t level_nbrs_count =
+            (level_id == 0)
+                ? static_cast<std::size_t>(_bl_max_nbr_size)
+                : static_cast<std::size_t>(_ul_max_nbr_size);
         return std::span<const vertex_id_t>(slot_base + level_offset, level_nbrs_count);
     }
 
@@ -292,7 +306,8 @@ public:
 
 private:
     layer_num_t  _max_restrict_level;
-    vertex_num_t _max_nbr_size;
+    vertex_num_t _ul_max_nbr_size;
+    vertex_num_t _bl_max_nbr_size;
     vertex_num_t _num_vertices;
 
     /** @brief Cached hierarchical entry point — the vid closest to the

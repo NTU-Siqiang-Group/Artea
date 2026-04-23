@@ -48,7 +48,7 @@ public:
     /**
      * @brief Construct a new Descent Graph object.
      * @param vecs_data Reference to the vector data for this layer.
-     * @param layer_config Layer configuration (max_nbr_size and reserved_nbr_size).
+     * @param layer_config Layer configuration (max_nbr_size).
      */
     /**
      * @brief Dense (identity-mapped) constructor. Every global vid in
@@ -65,7 +65,7 @@ public:
     {
         _nbrs_arr.resize(_num_vertices);
         for (vertex_num_t i = 0; i < _num_vertices; ++i) {
-            _nbrs_arr[i].reserve(layer_config.reserved_nbr_size());
+            _nbrs_arr[i].reserve(layer_config.max_nbr_size());
         }
     }
 
@@ -100,7 +100,7 @@ public:
     {
         _nbrs_arr.resize(_num_vertices);
         for (vertex_num_t i = 0; i < _num_vertices; ++i) {
-            _nbrs_arr[i].reserve(layer_config.reserved_nbr_size());
+            _nbrs_arr[i].reserve(layer_config.max_nbr_size());
         }
     }
 
@@ -205,8 +205,7 @@ public:
         meta["version"] = "1.0";
         meta["num_vertices"] = _num_vertices;
         meta["layer_config"] = {
-            {"max_nbr_size", _layer_config.max_nbr_size()},
-            {"reserved_nbr_size", _layer_config.reserved_nbr_size()}
+            {"max_nbr_size", _layer_config.max_nbr_size()}
         };
         return meta;
     }
@@ -215,7 +214,7 @@ protected:
     /** @brief Number of vertices in the graph. */
     vertex_num_t _num_vertices;
 
-    /** @brief Layer configuration (max_nbr_size and reserved_nbr_size). */
+    /** @brief Layer configuration (max_nbr_size). */
     layer_config_t _layer_config;
 
     /** @brief Array of neighbors for each vertex. */
