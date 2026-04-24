@@ -310,14 +310,21 @@ public:
             }
         }
 
+        // R-net covering radius at this layer. Passed to the triangle /
+        // pruning updaters so the shift term scales as
+        // @c shifted_coeffs * R_h instead of bare @c shifted_coeffs —
+        // matches the geometric growth of layer spacing.
+        const distance_t layer_radius = index.radius_at(level_id);
+
         auto triangle_updater = propagate_engine.template make_updater<triangle_updater_t>(
-            pruning_config.scale_coeffs(), pruning_config.shifted_coeffs());
+            pruning_config.scale_coeffs(), pruning_config.shifted_coeffs(), layer_radius);
         auto reverse_updater  = propagate_engine.template make_updater<reverse_updater_t>();
         const vertex_num_t routing_topk = propagate_config.resolve_routing_topk(max_nbr_size);
         const vertex_num_t routing_queue_size = propagate_config.resolve_routing_queue_size(max_nbr_size);
         auto routing_updater  = propagate_engine.template make_updater<routing_updater_t>(routing_topk, routing_queue_size);
         auto truncate_updater = propagate_engine.template make_updater<truncate_updater_t>();
-        auto pruning_updater = propagate_engine.template make_updater<pruning_updater_t>(pruning_config.scale_coeffs(), pruning_config.shifted_coeffs());
+        auto pruning_updater = propagate_engine.template make_updater<pruning_updater_t>(
+            pruning_config.scale_coeffs(), pruning_config.shifted_coeffs(), layer_radius);
 
         // propagate_engine.next(reverse_updater).next(truncate_updater);
         for (iter_t build_loop = 0; build_loop < propagate_config.num_build_loops(); ++build_loop) {
@@ -347,7 +354,6 @@ public:
         //      radius. Skipped entirely when
         //      @c pruning_config.perform_arc() is false.
         if (pruning_config.perform_arc()) {
-            const distance_t layer_radius = index.radius_at(level_id);
             const distance_t arc_threshold = static_cast<distance_t>(
                 layer_radius * pruning_config.aspect_ratio_constraint());
             ARTEA_INFO(fmt::format(

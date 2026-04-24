@@ -77,10 +77,12 @@ public:
         log_table_t&              log_table,
         const refining_graph_t&   refining_graph,
         const ratio_t             scale_coeffs,
-        const ratio_t             shifted_coeffs = 0.0
+        const ratio_t             shifted_coeffs = 0.0,
+        const distance_t          layer_radius = distance_t(1)
     ) : base_class_t(dist_func, vecs_data, log_table, refining_graph),
         _inv_scale_coeffs(static_cast<ratio_t>(1.0) / scale_coeffs),
-        _shifted_coeffs(shifted_coeffs) {}
+        _shifted_coeffs(shifted_coeffs),
+        _layer_radius(layer_radius) {}
 
     __attribute__((always_inline))
     auto get_max_nbr_size() const -> vertex_num_t {
@@ -137,8 +139,16 @@ private:
     /** @brief Inverse of scale coefficient for RNG Triangle Inequality. */
     const ratio_t _inv_scale_coeffs;
 
-    /** @brief Shifted coefficient for RNG Triangle Inequality. */
+    /** @brief Shifted coefficient for RNG Triangle Inequality.
+     *         Applied as @c _shifted_coeffs * @c _layer_radius in every
+     *         threshold variant that consumes the shift, so the shift
+     *         term scales with the layer's r-net covering radius. */
     const ratio_t _shifted_coeffs;
+
+    /** @brief R-net covering radius at the layer being refined.
+     *         Defaults to 1 for non-hierarchical callers, which
+     *         collapses the shift back to plain @c _shifted_coeffs. */
+    const distance_t _layer_radius;
 
     template <PruningConditionT ConditionType>
     __attribute__((always_inline))
@@ -146,9 +156,9 @@ private:
         if constexpr (ConditionType == PruningConditionT::scaled_ineq) {
             return ori_dist * _inv_scale_coeffs;
         } else if constexpr (ConditionType == PruningConditionT::scaled_shifted_ineq) {
-            return ori_dist * _inv_scale_coeffs - _shifted_coeffs;
+            return ori_dist * _inv_scale_coeffs - _shifted_coeffs * _layer_radius;
         } else if constexpr (ConditionType == PruningConditionT::shifted_ineq) {
-            return ori_dist - _shifted_coeffs;
+            return ori_dist - _shifted_coeffs * _layer_radius;
         } else if constexpr (ConditionType == PruningConditionT::origin_rng_ineq) {
             return ori_dist;
         }
