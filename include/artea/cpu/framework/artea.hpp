@@ -117,6 +117,7 @@
 #include <artea/cpu/refiner/ivf_partitions.hpp>
 #include <artea/cpu/refiner/updaters/routing_updater.hpp>
 #include <artea/cpu/refiner/updaters/truncate_updater.hpp>
+#include <artea/cpu/refiner/updaters/arc_updater.hpp>
 #include <artea/cpu/refiner/refiner_utils.hpp>
 
 #include <artea/cpu/utils/bit_ops.hpp>
@@ -134,3 +135,4 @@
 #include <artea/cpu/utils/simd_linear.hpp>
 #include <artea/cpu/utils/vector_sampler.hpp>
 #include <artea/cpu/utils/recall_estimator.hpp>
+#include <artea/cpu/utils/adr_estimator.hpp>

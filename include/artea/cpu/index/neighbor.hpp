@@ -99,15 +99,28 @@ public:
 
     // ---- Factories ----
 
+    /**
+     * @brief Build a sentinel neighbor with @c vid = @c invalid_vertex_id
+     *        and @c distance = @c max_distance (i.e.
+     *        @c std::numeric_limits<distance_t>::max(), NOT NaN).
+     *
+     * @note The @c max_distance choice is load-bearing — not a mere
+     *       placeholder. @c TriangleUpdater::_internal_check in
+     *       @c artea/cpu/refiner/updaters/triangle_updater.hpp relies
+     *       on @c make_invalid_nbr().get_distance() being a comparable,
+     *       strictly-larger-than-any-real-distance value: it uses the
+     *       sentinel as the initial @c recommend_to and picks the
+     *       closest soft-conflict retained via
+     *       @c (dist_to_retained < recommend_to.get_distance()). A NaN
+     *       sentinel would silently break that first-write branch,
+     *       since @c x < NaN is always @c false.
+     */
     static constexpr auto make_invalid_nbr() -> Neighbor {
         return Neighbor{invalid_vertex_id, max_distance};
     }
 
     __attribute__((always_inline))
-    static auto make_new_nbr(
-        const vertex_id_t nbr_vid,
-        const distance_t  dist
-    ) -> Neighbor {
+    static auto make_new_nbr(const vertex_id_t nbr_vid, const distance_t dist) -> Neighbor {
         return Neighbor{nbr_vid, dist, /*is_new=*/true};
     }
 

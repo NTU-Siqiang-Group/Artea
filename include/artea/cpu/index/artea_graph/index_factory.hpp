@@ -60,6 +60,7 @@ class IndexFactory : public stacked_rgraph::IndexFactory<GraphFactoryTraitsT> {
     using layer_id_t      = typename GraphFactoryTraitsT::layer_id_t;
     using iter_t          = typename GraphFactoryTraitsT::iter_t;
     using ratio_t         = typename GraphFactoryTraitsT::ratio_t;
+    using distance_t      = typename GraphFactoryTraitsT::distance_t;
     using vector_array_t  = typename GraphFactoryTraitsT::vector_array_t;
     using dist_func_t     = typename GraphFactoryTraitsT::dist_func_t;
 
@@ -82,6 +83,7 @@ class IndexFactory : public stacked_rgraph::IndexFactory<GraphFactoryTraitsT> {
     using routing_updater_t  = typename GraphFactoryTraitsT::routing_updater_t;
     using random_updater_t   = typename GraphFactoryTraitsT::random_updater_t;
     using truncate_updater_t = typename GraphFactoryTraitsT::truncate_updater_t;
+    using arc_updater_t      = typename GraphFactoryTraitsT::arc_updater_t;
     using refiner_utils_t    = typename GraphFactoryTraitsT::refiner_utils_t;
 
 public:
@@ -319,8 +321,12 @@ public:
 
         // propagate_engine.next(reverse_updater).next(truncate_updater);
         for (iter_t build_loop = 0; build_loop < propagate_config.num_build_loops(); ++build_loop) {
-            propagate_engine.run(propagate_config.num_triu_iters(), triangle_updater).next(truncate_updater)
-                            .next(reverse_updater).next(truncate_updater);
+            // propagate_engine.run(propagate_config.num_triu_iters(), triangle_updater).next(truncate_updater)
+            //                 .next(reverse_updater).next(truncate_updater);
+            for (iter_t triu_iter = 0; triu_iter < propagate_config.num_triu_iters(); ++triu_iter) {
+                propagate_engine.next(triangle_updater).next(truncate_updater);
+            }
+            propagate_engine.next(reverse_updater).next(truncate_updater);
         }
 
         // /** -------------------- Optimization --------------------------------------- ***/
@@ -331,6 +337,26 @@ public:
         for (iter_t routing_loop = 0; routing_loop < propagate_config.num_routing_loops(); ++routing_loop) {
             propagate_engine.next(routing_updater).next(pruning_updater)
                             .next(reverse_updater).next(truncate_updater);
+        }
+
+        // ---- Step 3.5: optional aspect-ratio-constrained (ARC) sweep.
+        //      Drops every edge longer than
+        //      @c aspect_ratio_constraint * @c radius_at(level_id) at
+        //      this layer. Applied uniformly across every refined level,
+        //      with the threshold scaled per-layer by the r-net covering
+        //      radius. Skipped entirely when
+        //      @c pruning_config.perform_arc() is false.
+        if (pruning_config.perform_arc()) {
+            const distance_t layer_radius = index.radius_at(level_id);
+            const distance_t arc_threshold = static_cast<distance_t>(
+                layer_radius * pruning_config.aspect_ratio_constraint());
+            ARTEA_INFO(fmt::format(
+                "[artea_graph] refine_layer ARC sweep: level_id={}, "
+                "radius={:.6f}, aspect_ratio_constraint={}, arc_threshold={:.6f}",
+                level_id, layer_radius,
+                pruning_config.aspect_ratio_constraint(), arc_threshold));
+            auto arc_updater = propagate_engine.template make_updater<arc_updater_t>(arc_threshold);
+            propagate_engine.next(arc_updater);
         }
 
         // ---- Step 4: write refined edges back ----

@@ -67,7 +67,7 @@ struct IndexTraits : virtual public BaseTraitsT {
      *         for a top bucket to survive @c HierarchicalGraphCompactor
      *         trimming. Consumed by @c stacked_rgraph::RGraphConfig and
      *         @c HierarchicalGraphCompactor. */
-    static constexpr typename BaseTraitsT::vertex_num_t min_layer_cap = 128;
+    static constexpr typename BaseTraitsT::vertex_num_t min_layer_cap = 512;
 
     /** @brief Layer configuration type. */
     using layer_config_t = LayerConfig<index_traits_t>;

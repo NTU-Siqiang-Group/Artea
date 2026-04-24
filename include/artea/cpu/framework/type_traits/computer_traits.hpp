@@ -32,6 +32,7 @@ template <typename ComputerTraitsT, std::size_t UnrollSize> class SIMDDistance;
 template <typename ComputerTraitsT, std::size_t UnrollSize> class SIMDFMA;
 template <typename ComputerTraitsT, std::size_t UnrollSize> class SIMDLinear;
 template <typename ComputerTraitsT> class RecallEstimator;
+template <typename ComputerTraitsT> class ADREstimator;
 template <typename ComputerTraitsT> class DistanceProber;
 template <typename ComputerTraitsT> class DatasetProber;
 
@@ -85,6 +86,7 @@ public:
     using fma_t = SIMDFMA<computer_traits_t, UnrollSize>;
 
     using recall_estimator_t = RecallEstimator<computer_traits_t>;
+    using adr_estimator_t = ADREstimator<computer_traits_t>;
 
     using distance_prober_t = DistanceProber<computer_traits_t>;
     using dataset_prober_t = DatasetProber<computer_traits_t>;

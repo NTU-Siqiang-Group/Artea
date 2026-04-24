@@ -285,6 +285,7 @@ public:
         using random_updater_t   = typename RefinerTraitsT::random_updater_t;
         using routing_updater_t  = typename RefinerTraitsT::routing_updater_t;
         using truncate_updater_t = typename RefinerTraitsT::truncate_updater_t;
+        using arc_updater_t      = typename RefinerTraitsT::arc_updater_t;
 
         const auto& vecs_arr = _refining_graph->get_vecs_data();
         auto& log_table = _log_table;
@@ -302,6 +303,8 @@ public:
         } else if constexpr (std::is_same_v<UpdaterT, routing_updater_t>) {
             return UpdaterT(_dist_func, vecs_arr, log_table, *_refining_graph, std::forward<Args>(args)...);
         } else if constexpr (std::is_same_v<UpdaterT, truncate_updater_t>) {
+            return UpdaterT(_dist_func, vecs_arr, log_table, *_refining_graph, std::forward<Args>(args)...);
+        } else if constexpr (std::is_same_v<UpdaterT, arc_updater_t>) {
             return UpdaterT(_dist_func, vecs_arr, log_table, *_refining_graph, std::forward<Args>(args)...);
         } else {
             ARTEA_ERROR("Unsupported updater type");

@@ -91,6 +91,7 @@ using simdu1_linear_t = typename computer_traits_t::simdu1_linear_t;
 using simdu2_linear_t = typename computer_traits_t::simdu2_linear_t;
 using simdu4_linear_t = typename computer_traits_t::simdu4_linear_t;
 using recall_estimator_t = typename computer_traits_t::recall_estimator_t;
+using adr_estimator_t = typename computer_traits_t::adr_estimator_t;
 using distance_prober_t = typename computer_traits_t::distance_prober_t;
 using dataset_prober_t = typename computer_traits_t::dataset_prober_t;
 

@@ -16,18 +16,22 @@
  * @FilePath: /Artea/include/artea/cpu/refiner/updaters/triangle_updater.hpp
  * @Author: Chandler (Weitang Ye) <weitang.ye@ntu.edu.sg>
  * @Description: Triangle-based neighbor updater for edge generation.
- *               Threshold mirrors @c PruningUpdater's @c scaled_shifted
- *               form: @c ori_dist * inv_scale - shift. Defaults
- *               (@c scale_coeffs=1, @c shifted_coeffs=0) collapse back
- *               to plain @c ori_dist. Conflicts write reverse-edge
- *               entries to the log table.
+ *               Uses two decoupled thresholds derived from the same
+ *               distance: @c recommend_threshold = @c ori_dist
+ *               (plain RNG) controls reverse-edge log emission, and
+ *               @c prune_threshold = @c ori_dist * inv_scale - shift
+ *               (scaled_shifted, same as @c PruningUpdater) controls
+ *               whether @c ori_nbr is dropped from the pivot's
+ *               neighbor list. Defaults (@c scale_coeffs=1,
+ *               @c shifted_coeffs=0) collapse both to plain
+ *               @c ori_dist.
  */
 
 #pragma once
 
 #include <cstddef>
 #include <cstdint>
-#include <tuple>
+#include <utility>
 #include <vector>
 #include <stdexcept>
 #include <artea/cpu/utils/nbr_arr_checker.hpp>
@@ -54,8 +58,6 @@ class TriangleUpdater :
     static constexpr vertex_id_t invalid_vertex_id = RefinerTraitsT::invalid_vertex_id;
     static constexpr distance_t nan_distance = RefinerTraitsT::nan_distance;
     static constexpr distance_t max_distance = RefinerTraitsT::max_distance;
-    static constexpr bool accepted = true;
-    static constexpr bool rejected = false;
 
 public:
     static constexpr const char* updater_name = "triangle_updater";
@@ -77,16 +79,19 @@ public:
     }
 
     /**
-     * @brief Apply triangle-inequality pruning to the neighbor array of
-     *        a pivot vertex.
+     * @brief Apply triangle-inequality pruning with decoupled
+     *        recommendation logging.
      *
-     * For each candidate, the threshold is
-     * @c ori_dist * inv_scale - shift (the scaled_shifted form borrowed
-     * from @c PruningUpdater): a candidate is rejected iff some already-
-     * retained neighbor is closer to it than the threshold. Defaults
-     * (@c scale_coeffs=1, @c shifted_coeffs=0) collapse the threshold to
-     * plain @c ori_dist. Rejected candidates log a reverse-edge entry
-     * rather than being silently discarded.
+     * Two independent thresholds are derived from the same candidate
+     * distance:
+     *   - @c recommend_threshold = @c ori_dist (plain RNG). Any already-
+     *     retained neighbor closer than this receives a reverse-edge
+     *     log entry naming @c ori_nbr as a candidate.
+     *   - @c prune_threshold    = @c ori_dist * inv_scale - shift
+     *     (scaled_shifted). A retained neighbor closer than this
+     *     rejects @c ori_nbr from the pivot's list.
+     * Under defaults (@c scale=1, @c shift=0) both thresholds collapse
+     * to @c ori_dist, recovering the plain-RNG log-on-reject behavior.
      *
      * @param pivot_vid   Unused; retained only for the updater interface.
      * @param origin_nbrs The neighbor array to be pruned. On return it
@@ -98,11 +103,13 @@ public:
      *
      * Algorithm:
      * 1. The first (closest) neighbor is always retained.
-     * 2. For each subsequent neighbor, check if it conflicts with any
-     *    already-retained neighbor under the plain RNG rule.
-     * 3. Retain on success; otherwise log a reverse edge and reject.
-     * 4. Stop early once max_nbr_size is reached.
-     * 5. Mark retained as old and swap into origin_nbrs.
+     * 2. For each subsequent @c ori_nbr, iterate retained neighbors;
+     *    per retained @c r compute one distance and check both
+     *    thresholds: emit a recommendation log on soft conflict,
+     *    early-return @c rejected on a pruning conflict.
+     * 3. Continue iterating even after @c max_nbr_size is reached so
+     *    over-cap candidates can still contribute recommendations.
+     * 4. Mark retained as old and swap into origin_nbrs.
      */
     auto update_impl(
         const vertex_id_t /*layer_vid*/,
@@ -121,28 +128,23 @@ public:
 
         for (vertex_num_t i = 1; i < origin_nbrs.size(); ++i) {
             const nbr_t& ori_nbr = origin_nbrs[i];
-            auto [passed, conflict_vid, conflict_dist] = _internal_check(ori_nbr, retained_nbrs);
+            const auto [recommend_to, will_prune] = _internal_check(ori_nbr, retained_nbrs);
 
-            if (passed) {
+            if (!recommend_to.is_invalid()) {
+                this->_log_table.write_log(
+                    this->_refining_graph.local_id_of(recommend_to.get_vid()),
+                    ori_nbr.get_vid(),
+                    recommend_to.get_distance()
+                );
+            }
+
+            if (!will_prune) {
                 retained_nbrs.push_back(ori_nbr);
                 // Do not accept because we've reached the maximum neighbor size
                 if (retained_nbrs.size() >= max_sz) {
                     // break;
                     continue;
                 }
-            }
-            else {
-                // conflict_vid is a global nbr vid; translate to local for
-                // the log_table (row index into the RG). Logs both
-                // directions (conflict_vid <-> ori_nbr) so downstream
-                // propagation sees a symmetric edge hint.
-                this->_log_table.write_log(
-                    this->_refining_graph.local_id_of(conflict_vid),
-                    ori_nbr.get_vid(), conflict_dist);
-                // This will make refiner very slow!
-                // this->_log_table.write_log(
-                //     this->_refining_graph.local_id_of(ori_nbr.get_vid()),
-                //     conflict_vid, conflict_dist);
             }
         }
 
@@ -162,34 +164,72 @@ private:
     /** @brief Shifted coefficient for RNG Triangle Inequality. */
     const ratio_t _shifted_coeffs;
 
+    /**
+     * @brief Pure conflict scan. No side effects: the caller owns all
+     *        log-table writes.
+     *
+     *        Two decoupled thresholds derived from
+     *        @c checking_nbr.get_distance() :
+     *          - @c recommend_threshold = @c checking_dist
+     *          - @c prune_threshold     = @c checking_dist * inv_scale - shift
+     *
+     *        Iterates @p retained_nbrs once. At most one recommendation
+     *        target is reported per call — the retained neighbor with
+     *        the smallest @c dist_to_retained among those crossing
+     *        @c recommend_threshold (up to the point the scan stops).
+     *        Any retained with @c dist_to_retained < prune_threshold
+     *        flips the prune flag and stops the scan.
+     *
+     *        Old-old pairs short-circuit without a distance call — they
+     *        were fully evaluated in a prior iteration. This is also
+     *        what prevents re-emitting the same recommendation across
+     *        iterations, since @c update_impl marks every retained
+     *        neighbor old before returning.
+     *
+     * @param checking_nbr  Candidate being checked.
+     * @param retained_nbrs Already-retained neighbors to scan against.
+     * @return @c {recommend_to, will_prune}
+     *           - @c recommend_to : target of the reverse-edge
+     *             recommendation, carrying (vid, dist_to_retained).
+     *             @c is_invalid() means no recommendation was found.
+     *           - @c will_prune   : @c true iff some retained had
+     *             @c dist_to_retained < prune_threshold (drop @c checking_nbr).
+     */
+    __attribute__((always_inline))
     auto _internal_check(
-        const nbr_t& ori_nbr,
+        const nbr_t&     checking_nbr,
         const nbr_arr_t& retained_nbrs
-    ) -> std::tuple<bool, vertex_id_t, distance_t> {
-        const vec_ele_t* ori_vec = this->_vecs_data.get(ori_nbr.get_vid());
-        // scaled_shifted form (matches PruningUpdater): defaults
-        // (scale=1, shift=0) reduce to plain ori_dist.
-        const distance_t threshold = ori_nbr.get_distance() * _inv_scale_coeffs - _shifted_coeffs;
+    ) -> std::pair<nbr_t, bool> {
+        const vec_ele_t* checking_vec = this->_vecs_data.get(checking_nbr.get_vid());
+        const distance_t recommend_threshold = checking_nbr.get_distance();
+        const distance_t prune_threshold     = checking_nbr.get_distance() * _inv_scale_coeffs - _shifted_coeffs;
 
-        // Check conflict with all retained neighbors
+        // recommend_to starts invalid (distance = max_distance), so the
+        // "closer-than-current" test below picks up the first soft
+        // conflict automatically and then only updates on strictly
+        // closer retained neighbors.
+        nbr_t recommend_to = nbr_t::make_invalid_nbr();
+        bool  will_prune   = false;
+
         for (vertex_num_t i = 0; i < retained_nbrs.size(); ++i) {
-            // Skip distance calculation for old-old pairs
-            if (ori_nbr.is_old() && retained_nbrs[i].is_old()) {
+            if (checking_nbr.is_old() && retained_nbrs[i].is_old()) {
                 continue;
             }
 
             const nbr_t& retained_nbr = retained_nbrs[i];
             const vec_ele_t* retained_vec = this->_vecs_data.get(retained_nbr.get_vid());
-            distance_t dist_to_retained = this->_dist_func(ori_vec, retained_vec);
+            const distance_t dist_to_retained = this->_dist_func(checking_vec, retained_vec);
 
-            if (dist_to_retained < threshold) {
-                // RNG conflict detected, rejected
-                return std::make_tuple(rejected, retained_nbr.get_vid(), dist_to_retained);
+            if (dist_to_retained < recommend_threshold && dist_to_retained < recommend_to.get_distance()) {
+                recommend_to = nbr_t(retained_nbr.get_vid(), dist_to_retained);
+            }
+            if (dist_to_retained < prune_threshold) {
+                will_prune = true;
+                break;
             }
         }
 
-        // NO RNG conflict, accepted
-        return std::make_tuple(accepted, invalid_vertex_id, nan_distance);
+        return {recommend_to, will_prune};
     }
 
 };  // class TriangleUpdater

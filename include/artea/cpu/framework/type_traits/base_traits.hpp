@@ -75,7 +75,9 @@ namespace stacked_rgraph {
 
 namespace artea_graph {
     template <typename IndexTraitsT> using PropagateConfig = conv_graph::PropagateConfig<IndexTraitsT>;
-    template <typename IndexTraitsT> using PruningConfig = conv_graph::PruningConfig<IndexTraitsT>;
+    // artea_graph owns its own PruningConfig (scale/shift + arc policy) —
+    // not an alias of conv_graph's.
+    template <typename IndexTraitsT> struct PruningConfig;
     template <typename IndexTraitsT> using RGraphConfig = stacked_rgraph::RGraphConfig<IndexTraitsT>;
 }
 

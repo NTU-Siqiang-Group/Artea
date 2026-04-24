@@ -69,12 +69,12 @@ public:
      *                          1.5.
      * @param propagate_config  Conv-graph propagate config used when
      *                          @c refine_layer is invoked.
-     * @param pruning_config    PruningConfig (scale + shift) used by
-     *                          both (a) stacked-rgraph upper-layer
-     *                          insert-time pruning — only scale_coeffs
-     *                          is consumed there — and (b) the
-     *                          per-layer refinement PruningUpdater
-     *                          routing loop.
+     * @param pruning_config    artea_graph PruningConfig. Carries RNG
+     *                          scale/shift (both consumed by per-layer
+     *                          refinement; insertion reads scale_coeffs
+     *                          only) plus ARC policy (@c perform_arc /
+     *                          @c aspect_ratio_constraint) consumed by
+     *                          the final refine_layer sweep.
      */
     IndexStructure(
         const vertex_num_t        total_vertices,
@@ -82,15 +82,17 @@ public:
         const propagate_config_t  propagate_config,
         const pruning_config_t    pruning_config
     ) :
-        // Both the stacked-rgraph upper-layer insertion and the per-layer
-        // refinement pull from the same PruningConfig instance owned by
-        // the base class. The insertion path ignores shifted_coeffs.
-        base_t(total_vertices, rgraph_config, pruning_config),
+        // Base owns a scale/shift-only PruningConfig (conv_graph shape) —
+        // that's what the stacked-rgraph insertion path reads. We project
+        // the richer artea_graph config down to that view for the base,
+        // and keep the full config locally for refine_layer's ARC sweep.
+        base_t(total_vertices, rgraph_config, pruning_config.to_rng_only()),
         _ul_refining_layer_config(
             _refining_max_nbr_size(rgraph_config.ul_max_nbr_size())),
         _bl_refining_layer_config(
             _refining_max_nbr_size(rgraph_config.bl_max_nbr_size())),
-        _propagate_config(propagate_config)
+        _propagate_config(propagate_config),
+        _pruning_config(pruning_config)
     {}
 
     IndexStructure(const IndexStructure&)            = delete;
@@ -138,7 +140,16 @@ public:
         return _propagate_config;
     }
 
-    // pruning_config() is inherited from stacked_rgraph::IndexStructure.
+    /** @brief Override the base's scale/shift-only accessor: return the
+     *         richer artea_graph PruningConfig (scale + shift + ARC
+     *         policy) stored in this derived class. Hides the base
+     *         method via name lookup. The base's conv-shape config is
+     *         still accessible internally via @c base_t::pruning_config
+     *         for the stacked-rgraph insertion path. */
+    __attribute__((always_inline))
+    auto pruning_config() const -> const pruning_config_t& {
+        return _pruning_config;
+    }
 
 private:
     /** @brief Layer config used to size the RefiningGraph built for
@@ -151,6 +162,11 @@ private:
 
     /** @brief Conv-graph propagate config for per-layer refinement. */
     propagate_config_t _propagate_config;
+
+    /** @brief Full artea_graph PruningConfig (scale/shift + ARC).
+     *         Consumed by @c refine_layer. The base owns a separate
+     *         scale/shift-only copy for the insertion path. */
+    pruning_config_t   _pruning_config;
 
 };  // class IndexStructure
 

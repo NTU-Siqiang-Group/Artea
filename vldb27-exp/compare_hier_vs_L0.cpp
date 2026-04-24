@@ -13,21 +13,22 @@
 // limitations under the License.
 
 /*
- * @FilePath: /Artea/unit_tests/test_artea_graph.cpp
+ * @FilePath: /Artea/vldb27-exp/compare_hier_vs_L0.cpp
  * @Author: Chandler (Weitang Ye) <weitang.ye@ntu.edu.sg>
- * @Description: End-to-end test for artea_graph. Builds the index via the
- *               3-step pipeline (stacked r-net insertion → per-layer
- *               refinement → hierarchical writeback), then measures
- *               search recall and throughput via the compact
- *               hierarchical graph router. The L0-only single-layer
- *               baseline comparison has been moved to the dedicated
- *               vldb27-exp/compare_hier_vs_L0 binary; this test only
- *               exercises the hierarchical path.
+ * @Description: Head-to-head benchmark comparing the hierarchical-router
+ *               path (greedy-upper + beam-L0 over the compact hierarchy
+ *               from @c entry_point_vid) against the L0-only single-layer
+ *               baseline (flat beam on compact L0 from a random entry
+ *               vertex). Mirrors the build pipeline of test_artea_graph,
+ *               but focuses on the hier-vs-L0 comparison and lives under
+ *               vldb27-exp so it can be driven by its own experiment
+ *               scripts independently of the unit-test target.
  */
 
 #include <chrono>
 #include <cstdint>
 #include <filesystem>
+#include <fstream>
 #include <iostream>
 #include <memory>
 #include <sstream>
@@ -40,6 +41,7 @@
 #include <argparse/argparse.hpp>
 #include <fmt/format.h>
 #include <gtest/gtest.h>
+#include <nlohmann/json.hpp>
 
 #include <artea/cpu/framework/artea.hpp>
 #include <artea/cpu/framework/type_context/default_context.hpp>
@@ -97,6 +99,9 @@ struct TestConfig {
     uint32_t queue_size_step;
     uint32_t warmup_runs;
     uint32_t test_runs;
+
+    // Result output
+    std::string output_json;
 } g_config;
 
 namespace {
@@ -406,25 +411,34 @@ TEST_F(ArteaGraphTest, SearchRecallAndThroughput) {
         g_config.warmup_runs, g_config.test_runs));
 
     recall_estimator_t re;
+    adr_estimator_t    ae;
+
     struct Row {
         uint32_t queue_size;
         // Static artea: compact hierarchical graph, greedy-upper + beam-L0.
         double   s_batch_ms;
         double   s_qps;
         float    s_recall;
+        float    s_adr;
+        // Static artea L0-only baseline: flat beam on compact L0 from a random entry vertex.
+        double   l0_batch_ms;
+        double   l0_qps;
+        float    l0_recall;
+        float    l0_adr;
     };
     std::vector<Row> rows;
 
     // Runs @p batch_call (a batch query closure) over warmup + test_runs
-    // iterations, averages latency/recall, and returns them.
+    // iterations, averages latency/recall/ADR, and returns them.
     auto time_batch = [&](auto&& batch_call)
-        -> std::tuple<double, float, knn_results_t>
+        -> std::tuple<double, float, float, knn_results_t>
     {
         for (uint32_t w = 0; w < g_config.warmup_runs; ++w) {
             [[maybe_unused]] auto _ = batch_call();
         }
-        double total_us = 0.0;
+        double total_us     = 0.0;
         float  total_recall = 0.0f;
+        float  total_adr    = 0.0f;
         knn_results_t last_results;
         for (uint32_t r = 0; r < g_config.test_runs; ++r) {
             auto t0 = std::chrono::high_resolution_clock::now();
@@ -434,10 +448,13 @@ TEST_F(ArteaGraphTest, SearchRecallAndThroughput) {
                 t1 - t0).count();
             total_recall += re.calculate_recall_at_k(
                 last_results, gt, topk, num_queries);
+            total_adr += static_cast<float>(ae.calculate_adr_at_1(
+                last_results, topk, gt, query_vecs, base_vecs, dist_func, num_queries));
         }
         return {
-            total_us    / g_config.test_runs,
+            total_us     / g_config.test_runs,
             total_recall / g_config.test_runs,
+            total_adr    / g_config.test_runs,
             std::move(last_results)
         };
     };
@@ -457,47 +474,115 @@ TEST_F(ArteaGraphTest, SearchRecallAndThroughput) {
 
         // --- Hierarchical router: compact hier_graph, greedy-upper + beam-L0
         //     (RandomSeeding=false uses compact_hg.entry_point_vid()) ---
-        auto [s_avg_us, s_recall, s_last] = time_batch([&]() {
+        auto [s_avg_us, s_recall, s_adr, s_last] = time_batch([&]() {
             return s_router.template batch_query</*RandomSeeding=*/false, /*UpperLevelBeamSearch=*/false>(
                 query_vecs, compact_hg);
         });
         ASSERT_EQ(s_last.size(), static_cast<std::size_t>(num_queries) * topk);
+
+        // --- L0-only single-layer router (flat beam on compact L0 from a random entry vertex) ---
+        auto [l0_avg_us, l0_recall, l0_adr, l0_last] = time_batch(
+            [&]() {
+                return s_router.template batch_query_l0_only</*RandomSeeding=*/true>(
+                    query_vecs, compact_hg);
+            });
+        ASSERT_EQ(l0_last.size(),
+                  static_cast<std::size_t>(num_queries) * topk);
 
         Row row;
         row.queue_size  = effective_queue_size;
         row.s_batch_ms  = s_avg_us  / 1000.0;
         row.s_qps       = num_queries * 1e6 / s_avg_us;
         row.s_recall    = s_recall;
+        row.s_adr       = s_adr;
+        row.l0_batch_ms = l0_avg_us / 1000.0;
+        row.l0_qps      = num_queries * 1e6 / l0_avg_us;
+        row.l0_recall   = l0_recall;
+        row.l0_adr      = l0_adr;
         rows.push_back(row);
 
         ARTEA_INFO(fmt::format(
             "CandidateQueue={:4}: "
-            "hierarchical [R@{}={:.4f}, QPS={:8.1f}, batch={:.2f} ms]",
+            "hierarchical [R@{}={:.4f}, ADR={:.6f}, QPS={:8.1f}, batch={:.2f} ms] | "
+            "L0-only      [R@{}={:.4f}, ADR={:.6f}, QPS={:8.1f}, batch={:.2f} ms]",
             effective_queue_size,
-            topk, row.s_recall,  row.s_qps,  row.s_batch_ms));
+            topk, row.s_recall,  row.s_adr,  row.s_qps,  row.s_batch_ms,
+            topk, row.l0_recall, row.l0_adr, row.l0_qps, row.l0_batch_ms));
     }
 
-    ARTEA_INFO("=== hierarchical router summary ===");
+    ARTEA_INFO("=== hierarchical router vs. L0-only single-layer router summary ===");
     ARTEA_INFO(fmt::format("  build_time    : {} ms", _build_ms));
     ARTEA_INFO(fmt::format("  compact_time  : {} ms", compact_ms));
     ARTEA_INFO(fmt::format("  num_queries   : {}", num_queries));
     ARTEA_INFO(fmt::format("  topk          : {}", topk));
     ARTEA_INFO(fmt::format(
-        "{:<8} | {:<10} {:<10} {:<10}",
-        "Queue", "H.Recall@k", "H.QPS", "H.batch(ms)"));
-    ARTEA_INFO(std::string(8 + 3 + 10 + 10 + 10, '-'));
+        "{:<8} | {:<10} {:<10} {:<10} {:<10} | {:<10} {:<10} {:<10} {:<10}",
+        "Queue",
+        "H.Recall@k",  "H.ADR",  "H.QPS",  "H.batch(ms)",
+        "L0.Recall@k", "L0.ADR", "L0.QPS", "L0.batch(ms)"));
+    ARTEA_INFO(std::string(
+        8 + 3 + 10 + 10 + 10 + 10 + 3 + 10 + 10 + 10 + 10, '-'));
     for (const auto& row : rows) {
         ARTEA_INFO(fmt::format(
-            "{:<8} | {:<10.4f} {:<10.1f} {:<10.2f}",
-            row.queue_size, row.s_recall, row.s_qps, row.s_batch_ms));
+            "{:<8} | {:<10.4f} {:<10.6f} {:<10.1f} {:<10.2f} | "
+            "{:<10.4f} {:<10.6f} {:<10.1f} {:<10.2f}",
+            row.queue_size,
+            row.s_recall,  row.s_adr,  row.s_qps,  row.s_batch_ms,
+            row.l0_recall, row.l0_adr, row.l0_qps, row.l0_batch_ms));
+    }
+
+    // ---- Dump one row per queue-size so the companion plotter can draw
+    //      Recall-vs-QPS for both routers. Writes unconditionally; done
+    //      before the EXPECT_TRUE assertions so the JSON survives an
+    //      assertion failure.
+    if (!g_config.output_json.empty()) {
+        nlohmann::json out;
+        out["dataset"]     = g_config.dataset_name;
+        out["topk"]        = topk;
+        out["num_queries"] = num_queries;
+        out["build_ms"]    = _build_ms;
+        out["compact_ms"]  = compact_ms;
+        out["rows"] = nlohmann::json::array();
+        for (const auto& row : rows) {
+            out["rows"].push_back({
+                {"queue_size", row.queue_size},
+                {"hier", {
+                    {"recall",   row.s_recall},
+                    {"adr",      row.s_adr},
+                    {"qps",      row.s_qps},
+                    {"batch_ms", row.s_batch_ms},
+                }},
+                {"l0", {
+                    {"recall",   row.l0_recall},
+                    {"adr",      row.l0_adr},
+                    {"qps",      row.l0_qps},
+                    {"batch_ms", row.l0_batch_ms},
+                }},
+            });
+        }
+        const std::filesystem::path out_path(g_config.output_json);
+        if (out_path.has_parent_path()) {
+            std::filesystem::create_directories(out_path.parent_path());
+        }
+        std::ofstream ofs(out_path);
+        if (ofs.is_open()) {
+            ofs << out.dump(2);
+            ARTEA_INFO(fmt::format("Results written to {}", g_config.output_json));
+        } else {
+            ARTEA_INFO(fmt::format("WARNING: failed to open {} for write", g_config.output_json));
+        }
     }
 
     bool has_any_hier = false;
+    bool has_any_l0   = false;
     for (const auto& row : rows) {
-        if (row.s_recall > 0.0f) has_any_hier = true;
+        if (row.s_recall  > 0.0f) has_any_hier = true;
+        if (row.l0_recall > 0.0f) has_any_l0   = true;
     }
     EXPECT_TRUE(has_any_hier)
         << "At least one queue-size should return hierarchical router results";
+    EXPECT_TRUE(has_any_l0)
+        << "At least one queue-size should return L0-only results";
 }
 
 // ============================================================
@@ -507,7 +592,7 @@ TEST_F(ArteaGraphTest, SearchRecallAndThroughput) {
 int main(int argc, char** argv) {
     ::testing::InitGoogleTest(&argc, argv);
 
-    argparse::ArgumentParser program("test_artea_graph");
+    argparse::ArgumentParser program("compare_hier_vs_L0");
     program.add_argument("-c", "--config")
         .default_value(std::string("./configs/datasets.json"))
         .help("Path to datasets.json config file");
@@ -599,6 +684,11 @@ int main(int argc, char** argv) {
     program.add_argument("--test-runs")
         .default_value(3u).scan<'u', uint32_t>();
 
+    program.add_argument("-o", "--output")
+        .default_value(std::string(""))
+        .help("Path to write the per-queue-size Recall/QPS JSON consumed by "
+              "plot_compare_hier_vs_L0.py. Empty = skip JSON dump.");
+
     try {
         program.parse_args(argc, argv);
     } catch (const std::exception& err) {
@@ -631,6 +721,7 @@ int main(int argc, char** argv) {
     g_config.query_topk                = program.get<uint32_t>("--query-topk");
     g_config.warmup_runs               = program.get<uint32_t>("--warmup-runs");
     g_config.test_runs                 = program.get<uint32_t>("--test-runs");
+    g_config.output_json               = program.get<std::string>("--output");
 
     // Parse candidate-queue-config: "start,end,step"
     {

@@ -1,0 +1,339 @@
+// Copyright 2026 Weitang Ye
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     https://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+/*
+ * @FilePath: /Artea/vldb27-exp/latency_profile.cpp
+ * @Author: Chandler (Weitang Ye) <weitang.ye@ntu.edu.sg>
+ * @Description: Build an artea_graph index, compact it, then measure
+ *               per-query 1-NN latency over the full query set for
+ *               both the hierarchical router and the L0-only router.
+ *               Emits pXX percentiles to JSON for the companion
+ *               plotter.
+ */
+
+#include <chrono>
+#include <cstdint>
+#include <filesystem>
+#include <fstream>
+#include <iostream>
+#include <memory>
+#include <stdexcept>
+#include <string>
+#include <utility>
+#include <vector>
+
+#include <argparse/argparse.hpp>
+#include <fmt/format.h>
+#include <nlohmann/json.hpp>
+
+#include <artea/cpu/framework/artea.hpp>
+#include <artea/cpu/framework/type_context/default_context.hpp>
+
+using namespace artea;
+using namespace artea::cpu;
+
+// ============================================================
+//  Config
+// ============================================================
+
+struct ExpConfig {
+    std::string config_path;
+    std::string dataset_name;
+
+    float    rnet_beta;
+    bool     l0_radius_provided;
+    float    l0_rnet_radius;
+    uint32_t ul_max_nbr_size;
+    uint32_t bl_max_nbr_size;
+    uint32_t search_nn_qs;
+    uint32_t ul_select_nbrs_qs;
+    uint32_t bl_select_nbrs_qs;
+    float    scale_coeffs;
+    float    shifted_coeffs;
+    bool     perform_arc;
+    float    aspect_ratio_constraint;
+    uint32_t probe_num_samples;
+    float    probe_quantile;
+
+    uint32_t num_build_loops;
+    uint32_t num_triu_iters;
+    float    prefill_ratio;
+    uint32_t num_routing_loops;
+    uint32_t routing_topk;
+    uint32_t routing_queue_size;
+    bool     shuffle_insertion_order;
+    bool     insert_on_L0;
+
+    uint32_t candidate_queue_size;
+
+    std::string output_json;
+} g_config;
+
+// ============================================================
+//  Dataset loader
+// ============================================================
+
+class DataProvider {
+public:
+    static DataProvider& instance() { static DataProvider inst; return inst; }
+
+    void init() {
+        if (!std::filesystem::exists(g_config.config_path)) {
+            throw std::runtime_error("Config file not found: " + g_config.config_path);
+        }
+        ARTEA_INFO(fmt::format("Loading dataset: {} from {}", g_config.dataset_name, g_config.config_path));
+        _dataset = std::make_unique<vector_dataset_t>(g_config.config_path, g_config.dataset_name);
+
+        const auto& base_vecs = _dataset->get_base_vecs();
+        ARTEA_INFO(fmt::format("Dataset: {} vectors, {} dims", base_vecs.get_num_vecs(), base_vecs.get_vec_dim()));
+
+        _dist_func = std::make_unique<dist_func_t>(base_vecs.get_vec_dim());
+
+        if (g_config.l0_radius_provided) {
+            _l0_radius = g_config.l0_rnet_radius;
+            ARTEA_INFO(fmt::format("Using user-provided L0 rnet_radius = {:.6f}", _l0_radius));
+        } else {
+            dataset_prober_t prober(base_vecs, *_dist_func);
+            const std::vector<float> quantiles = { g_config.probe_quantile };
+            ARTEA_INFO(fmt::format(
+                "Probing L0 rnet_radius ({}th pct, {} samples)...",
+                static_cast<int>(g_config.probe_quantile * 100.0f),
+                g_config.probe_num_samples));
+            auto result = prober.probe(quantiles, g_config.probe_num_samples);
+            _l0_radius = static_cast<float>(result.table[0][0]);
+            ARTEA_INFO(fmt::format("Auto-probed L0 rnet_radius = {:.6f}", _l0_radius));
+        }
+    }
+
+    auto get_dataset()   -> vector_dataset_t& { return *_dataset; }
+    auto get_dist_func() -> dist_func_t&      { return *_dist_func; }
+    auto get_l0_radius() const -> float       { return _l0_radius; }
+
+private:
+    DataProvider() = default;
+    std::unique_ptr<vector_dataset_t> _dataset;
+    std::unique_ptr<dist_func_t>      _dist_func;
+    float                             _l0_radius = 0.0f;
+};
+
+// ============================================================
+//  JSON serialization
+// ============================================================
+
+auto latency_to_json(const LatencyProfileResult& r) -> nlohmann::json {
+    return nlohmann::json{
+        {"num_queries", r.num_queries},
+        {"p50_us",      r.p50_us},
+        {"p90_us",      r.p90_us},
+        {"p95_us",      r.p95_us},
+        {"p99_us",      r.p99_us}
+    };
+}
+
+// ============================================================
+//  Main
+// ============================================================
+
+int main(int argc, char** argv) {
+    argparse::ArgumentParser program("latency_profile");
+    program.add_argument("-c", "--config").default_value(std::string("./configs/datasets.json"));
+    program.add_argument("-d", "--dataset").default_value(std::string("sift-1m"));
+
+    program.add_argument("--beta").default_value(2.0f).scan<'g', float>();
+    program.add_argument("--l0-radius").default_value(-1.0f).scan<'g', float>();
+    program.add_argument("--ul-max-nbr-size").default_value(32u).scan<'u', uint32_t>();
+    program.add_argument("--bl-max-nbr-size").default_value(64u).scan<'u', uint32_t>();
+    program.add_argument("--search-nn-qs").default_value(40u).scan<'u', uint32_t>();
+    program.add_argument("--ul-select-nbrs-qs").default_value(100u).scan<'u', uint32_t>();
+    program.add_argument("--bl-select-nbrs-qs").default_value(100u).scan<'u', uint32_t>();
+    program.add_argument("--scale-coeffs").default_value(1.1f).scan<'g', float>();
+    program.add_argument("--shifted-coeffs").default_value(0.0f).scan<'g', float>();
+    program.add_argument("--perform-arc").default_value(false).implicit_value(true)
+        .help("Enable ARC pruning sweep at end of refine_layer.");
+    program.add_argument("--aspect-ratio-constraint").default_value(1.0f).scan<'g', float>()
+        .help("Multiplier on radius_at(h) for the ARC threshold (consumed when --perform-arc).");
+    program.add_argument("--probe-num-samples").default_value(500u).scan<'u', uint32_t>();
+    program.add_argument("--probe-quantile").default_value(0.9f).scan<'g', float>();
+
+    program.add_argument("--num-build-loops").default_value(4u).scan<'u', uint32_t>();
+    program.add_argument("--num-triu-iters").default_value(14u).scan<'u', uint32_t>();
+    program.add_argument("--prefill-ratio").default_value(0.34f).scan<'g', float>();
+    program.add_argument("--num-routing-loops").default_value(1u).scan<'u', uint32_t>();
+    program.add_argument("--routing-topk").default_value(64u).scan<'u', uint32_t>();
+    program.add_argument("--routing-queue-size").default_value(96u).scan<'u', uint32_t>();
+    program.add_argument("--shuffle").default_value(false).implicit_value(true);
+    program.add_argument("--insert-on-l0").default_value(false).implicit_value(true);
+
+    program.add_argument("--candidate-queue-size").default_value(1u).scan<'u', uint32_t>()
+        .help("Beam-search candidate queue size for both profilers.");
+
+    program.add_argument("-o", "--output")
+        .default_value(std::string("./vldb27-exp/results/latency_profile_results.json"))
+        .help("Output JSON file path.");
+
+    try {
+        program.parse_args(argc, argv);
+    } catch (const std::exception& err) {
+        std::cerr << err.what() << "\n" << program;
+        return 1;
+    }
+
+    g_config.config_path             = program.get<std::string>("--config");
+    g_config.dataset_name            = program.get<std::string>("--dataset");
+    g_config.rnet_beta               = program.get<float>("--beta");
+    const float l0_arg               = program.get<float>("--l0-radius");
+    g_config.l0_radius_provided      = (l0_arg >= 0.0f);
+    g_config.l0_rnet_radius          = l0_arg;
+    g_config.ul_max_nbr_size         = program.get<uint32_t>("--ul-max-nbr-size");
+    g_config.bl_max_nbr_size         = program.get<uint32_t>("--bl-max-nbr-size");
+    g_config.search_nn_qs            = program.get<uint32_t>("--search-nn-qs");
+    g_config.ul_select_nbrs_qs       = program.get<uint32_t>("--ul-select-nbrs-qs");
+    g_config.bl_select_nbrs_qs       = program.get<uint32_t>("--bl-select-nbrs-qs");
+    g_config.scale_coeffs            = program.get<float>("--scale-coeffs");
+    g_config.shifted_coeffs          = program.get<float>("--shifted-coeffs");
+    g_config.perform_arc             = program.get<bool>("--perform-arc");
+    g_config.aspect_ratio_constraint = program.get<float>("--aspect-ratio-constraint");
+    g_config.probe_num_samples       = program.get<uint32_t>("--probe-num-samples");
+    g_config.probe_quantile          = program.get<float>("--probe-quantile");
+    g_config.num_build_loops         = program.get<uint32_t>("--num-build-loops");
+    g_config.num_triu_iters          = program.get<uint32_t>("--num-triu-iters");
+    g_config.prefill_ratio           = program.get<float>("--prefill-ratio");
+    g_config.num_routing_loops       = program.get<uint32_t>("--num-routing-loops");
+    g_config.routing_topk            = program.get<uint32_t>("--routing-topk");
+    g_config.routing_queue_size      = program.get<uint32_t>("--routing-queue-size");
+    g_config.shuffle_insertion_order = program.get<bool>("--shuffle");
+    g_config.insert_on_L0            = program.get<bool>("--insert-on-l0");
+    g_config.candidate_queue_size    = program.get<uint32_t>("--candidate-queue-size");
+    g_config.output_json             = program.get<std::string>("--output");
+
+    DataProvider::instance().init();
+
+    auto& provider = DataProvider::instance();
+    auto& dataset  = provider.get_dataset();
+    const auto& base_vecs  = dataset.get_base_vecs();
+    const auto& query_vecs = dataset.get_query_vecs();
+    auto& dist_func        = provider.get_dist_func();
+
+    const vertex_num_t total_vertices = static_cast<vertex_num_t>(base_vecs.get_num_vecs());
+    const vertex_num_t total_queries  = static_cast<vertex_num_t>(query_vecs.get_num_vecs());
+
+    artea_graph::rgraph_config_t rgraph_config(
+        g_config.rnet_beta,
+        provider.get_l0_radius(),
+        static_cast<vertex_num_t>(g_config.search_nn_qs),
+        static_cast<vertex_num_t>(g_config.ul_select_nbrs_qs),
+        static_cast<vertex_num_t>(g_config.bl_select_nbrs_qs),
+        g_config.ul_max_nbr_size,
+        g_config.bl_max_nbr_size);
+
+    artea_graph::propagate_config_t propagate_config(
+        static_cast<iter_t>(g_config.num_build_loops),
+        static_cast<iter_t>(g_config.num_triu_iters),
+        static_cast<ratio_t>(g_config.prefill_ratio),
+        static_cast<iter_t>(g_config.num_routing_loops),
+        static_cast<vertex_num_t>(g_config.routing_topk),
+        static_cast<vertex_num_t>(g_config.routing_queue_size));
+
+    artea_graph::pruning_config_t pruning_config(
+        static_cast<ratio_t>(g_config.scale_coeffs),
+        static_cast<ratio_t>(g_config.shifted_coeffs),
+        g_config.perform_arc,
+        static_cast<ratio_t>(g_config.aspect_ratio_constraint));
+
+    auto graph = std::make_unique<artea_graph::index_t>(
+        total_vertices, rgraph_config, propagate_config, pruning_config);
+
+    ARTEA_INFO("Building artea_graph...");
+    auto build_t0 = std::chrono::high_resolution_clock::now();
+    vector_array_t owned_batch = base_vecs.extract_subset(0, total_vertices);
+    artea_graph::factory_t::add_vertices(
+        *graph, std::move(owned_batch), dist_func,
+        g_config.insert_on_L0, g_config.shuffle_insertion_order);
+    auto build_t1 = std::chrono::high_resolution_clock::now();
+    const int64_t build_ms = std::chrono::duration_cast<std::chrono::milliseconds>(build_t1 - build_t0).count();
+    ARTEA_INFO(fmt::format("artea_graph built in {} ms", build_ms));
+
+    ARTEA_INFO("Compacting hierarchical graph...");
+    auto compact_t0 = std::chrono::high_resolution_clock::now();
+    auto compact_hg = hierarchical_graph_compactor_t::compact_graph(
+        graph->get_hierarchical_graph(), base_vecs, dist_func);
+    auto compact_t1 = std::chrono::high_resolution_clock::now();
+    const int64_t compact_ms = std::chrono::duration_cast<std::chrono::milliseconds>(compact_t1 - compact_t0).count();
+    ARTEA_INFO(fmt::format("Compaction done in {} ms", compact_ms));
+
+    const vertex_id_t entry_point_vid = compact_hg.entry_point_vid();
+    ARTEA_INFO(fmt::format("entry_point_vid = {}", entry_point_vid));
+
+    // ---- Curve 1: Hierarchical latency ----
+    ARTEA_INFO(fmt::format(
+        "Measuring hierarchical latency (HGRouterProfiler, L0 beam_size={})...",
+        g_config.candidate_queue_size));
+    hg_router_profiler_t hg_profiler(base_vecs, dist_func, g_config.candidate_queue_size);
+    hg_profiler.initialize();
+    auto hg_t0 = std::chrono::high_resolution_clock::now();
+    LatencyProfileResult hg_result =
+        hg_profiler.profile_latency(query_vecs, compact_hg, entry_point_vid);
+    auto hg_t1 = std::chrono::high_resolution_clock::now();
+    const int64_t hg_ms = std::chrono::duration_cast<std::chrono::milliseconds>(hg_t1 - hg_t0).count();
+    ARTEA_INFO(fmt::format(
+        "Hierarchical: n={}, p50={:.2f}us p90={:.2f}us p95={:.2f}us p99={:.2f}us, wall {} ms",
+        hg_result.num_queries, hg_result.p50_us, hg_result.p90_us,
+        hg_result.p95_us, hg_result.p99_us, hg_ms));
+
+    // ---- Curve 2: L0-only latency, random entry per query ----
+    //      A fresh random vid is sampled per query so the baseline
+    //      measures "expected L0 beam-search latency from an arbitrary
+    //      starting point" rather than "latency given the hierarchical
+    //      router already handed us its good descent target".
+    ARTEA_INFO(fmt::format(
+        "Measuring L0-only latency (SLRouterProfiler, beam_size={}, random entry)...",
+        g_config.candidate_queue_size));
+    sl_router_profiler_t sl_profiler(base_vecs, dist_func, g_config.candidate_queue_size);
+    sl_profiler.initialize();
+    auto sl_t0 = std::chrono::high_resolution_clock::now();
+    LatencyProfileResult sl_result = sl_profiler.profile_latency_random_entry(
+        query_vecs, compact_hg, layer_id_t{0}, /*random_seed=*/42u);
+    auto sl_t1 = std::chrono::high_resolution_clock::now();
+    const int64_t sl_ms = std::chrono::duration_cast<std::chrono::milliseconds>(sl_t1 - sl_t0).count();
+    ARTEA_INFO(fmt::format(
+        "L0-only:       n={}, p50={:.2f}us p90={:.2f}us p95={:.2f}us p99={:.2f}us, wall {} ms",
+        sl_result.num_queries, sl_result.p50_us, sl_result.p90_us,
+        sl_result.p95_us, sl_result.p99_us, sl_ms));
+
+    nlohmann::json out;
+    out["dataset"]              = g_config.dataset_name;
+    out["num_base_vectors"]     = base_vecs.get_num_vecs();
+    out["total_queries"]        = total_queries;
+    out["candidate_queue_size"] = g_config.candidate_queue_size;
+    out["entry_point_vid"]      = entry_point_vid;
+    out["build_ms"]             = build_ms;
+    out["compact_ms"]           = compact_ms;
+    out["latency_us"] = {
+        {"hierarchical_artea", latency_to_json(hg_result)},
+        {"l0_only",            latency_to_json(sl_result)}
+    };
+
+    const std::filesystem::path out_path(g_config.output_json);
+    if (out_path.has_parent_path()) std::filesystem::create_directories(out_path.parent_path());
+    std::ofstream ofs(out_path);
+    if (!ofs.is_open()) {
+        std::cerr << "Failed to open output file: " << g_config.output_json << "\n";
+        return 1;
+    }
+    ofs << out.dump(2);
+    ofs.close();
+
+    ARTEA_INFO(fmt::format("Results written to {}", g_config.output_json));
+    return 0;
+}

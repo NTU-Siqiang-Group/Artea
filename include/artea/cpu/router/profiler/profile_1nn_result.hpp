@@ -15,53 +15,75 @@
 /*
  * @FilePath: /Artea/include/artea/cpu/router/profiler/profile_1nn_result.hpp
  * @Author: Chandler (Weitang Ye) <weitang.ye@ntu.edu.sg>
- * @Description: Aggregate per-hop profiling result for pure greedy 1-NN
- *               routing. Returned by @c SLRouterProfiler::profile and
- *               @c HGRouterProfiler::profile.
+ * @Description: Per-query 1-NN profiling result types:
+ *                 - Profile1NNResult: raw (NDC, ADR) trajectories, one
+ *                   per sampled query, used by
+ *                   @c profile_adr_vs_ndc.
+ *                 - LatencyProfileResult: per-query wall-clock
+ *                   latencies + pXX summary, used by
+ *                   @c profile_latency.
  */
 
 #pragma once
 
 #include <cstdint>
+#include <utility>
 #include <vector>
 
 namespace artea {
 namespace cpu {
 
 /**
- * @brief One hop's aggregate across the query set.
+ * @brief Raw per-query 1-NN profiling result.
  *
- * @c avg_ndc   Mean cumulative number of distance computations across
- *              queries at this hop, using sticky-last-value for queries
- *              that have already terminated at a smaller hop index.
- * @c adr       Average Distance Ratio for 1-NN at this hop:
- *              @c (1/|Q|) * sum_q d(q, best_at_hop) / d(q, true_nn).
- *              Always >= 1; equals 1 iff every non-skipped query's
- *              retrieved vertex has the same distance as its true NN.
+ * @c trajectories    One entry per sampled query, in the order the
+ *                    caller passed them in. Each inner vector holds
+ *                    @c (cumulative_NDC, ADR) pairs — one per
+ *                    successful cursor move (plus the seed). Skipped
+ *                    queries (those with @c d(q, true_nn) == 0) keep
+ *                    an empty trajectory.
+ * @c num_skipped     Count of skipped queries within the sample.
  */
-struct HopProfilePoint {
-    double avg_ndc;
-    double adr;
+struct Profile1NNResult {
+    using trajectory_t = std::vector<std::pair<uint64_t, double>>;
+    std::vector<trajectory_t> trajectories;
+    uint32_t num_skipped = 0;
 };
 
 /**
- * @brief Result of @c SLRouterProfiler::profile /
- *        @c HGRouterProfiler::profile.
+ * @brief Per-query wall-clock latency result + summary percentiles.
  *
- * @c per_hop_statistics  Indexed by hop (0 = seed-only state). Length
- *                        equals the longest per-query trajectory; by
- *                        sticky-last-value, every index in range is
- *                        defined for every contributing query.
- * @c num_queries         Number of queries that contributed to the
- *                        aggregates (excludes @c skipped_queries).
- * @c skipped_queries     Queries dropped because @c d(q, true_nn) == 0
- *                        (ADR is undefined there; common when the query
- *                        set contains exact duplicates of base vectors).
+ * @c latencies_us   Per-query latency in microseconds, one per query
+ *                   in the query set (in query_vid order).
+ * @c num_queries    Total queries measured (== @c latencies_us.size()).
+ * @c p50_us .. p99_us Summary percentiles over @c latencies_us
+ *                   (linear index, nearest-rank).
  */
-struct Profile1NNResult {
-    std::vector<HopProfilePoint> per_hop_statistics;
+struct LatencyProfileResult {
+    std::vector<double> latencies_us;
     uint32_t num_queries = 0;
-    uint32_t skipped_queries = 0;
+    double   p50_us = 0.0;
+    double   p90_us = 0.0;
+    double   p95_us = 0.0;
+    double   p99_us = 0.0;
+};
+
+/**
+ * @brief Distribution of edge distances adopted by the router.
+ *
+ * An "adopted" edge is one the search actually traverses as its next
+ * step — the greedy cursor advance @c (u, v) at upper layers, or an
+ * edge whose head neighbor is accepted (@c try_push returns true) into
+ * the beam queue at L0.
+ *
+ * @c edges_by_level   One bucket per layer, indexed by @c layer_id.
+ *                     Each entry is the edge distance @c d(u, v)
+ *                     between the endpoints of the adopted edge.
+ * @c num_queries      Number of queries profiled.
+ */
+struct EdgeLengthProfileResult {
+    std::vector<std::vector<double>> edges_by_level;
+    uint32_t num_queries = 0;
 };
 
 }   // namespace cpu

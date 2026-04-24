@@ -185,13 +185,56 @@ protected:
                 ::unassigned_highest_level_id)
                 ? -1 : static_cast<int>(top_level_id),
             graph.max_restrict_level()));
-        for (layer_id_t h = 0; h <= graph.max_restrict_level(); ++h) {
-            const auto& bucket = graph.get_vids_with_highest_level(h);
-            const float ratio = 100.0f * bucket.size() /
-                base_vecs.get_num_vecs();
+        // Preview what HierarchicalGraphCompactor would trim, using the
+        // same rule it applies in compact_graph(): walk from the top
+        // down and take the first bucket with >= min_layer_cap vids as
+        // the new top. Anything above that gets demoted; the entry
+        // point is the bucket-centroid argmin on (new_top bucket +
+        // demoted vids).
+        constexpr vertex_num_t min_cap =
+            hierarchical_graph_compactor_t::min_layer_cap;
+        const bool has_vertices = (top_level_id !=
+            dynamic::hierarchical_graph_t::unassigned_highest_level_id);
+        layer_id_t compactor_new_top = 0;
+        if (has_vertices) {
+            for (layer_id_t h = top_level_id; ; --h) {
+                if (graph.get_vids_with_highest_level(h).size() >= min_cap) {
+                    compactor_new_top = h;
+                    break;
+                }
+                if (h == 0) { compactor_new_top = 0; break; }
+            }
             ARTEA_INFO(fmt::format(
-                "  highest_level_id={}: {} vertices ({:.2f}% of base)",
-                h, bucket.size(), ratio));
+                "[{}] Compactor trim preview: min_layer_cap={}, new_top=L{} "
+                "(entry-point = argmin dist-to-centroid over this bucket + demoted vids)",
+                label, min_cap, compactor_new_top));
+        }
+
+        // A vertex with highest_level_id=h' participates in every level
+        // 0..h', so the count *assigned to* level h is the cumulative
+        // sum of bucket sizes from h to the top. Compute top-down.
+        const layer_id_t max_level = graph.max_restrict_level();
+        std::vector<vertex_num_t> num_at_level(max_level + 1, 0);
+        {
+            vertex_num_t running = 0;
+            for (layer_id_t h = max_level; ; --h) {
+                running += graph.get_vids_with_highest_level(h).size();
+                num_at_level[h] = running;
+                if (h == 0) break;
+            }
+        }
+
+        for (layer_id_t h = 0; h <= max_level; ++h) {
+            const vertex_num_t count = num_at_level[h];
+            const float ratio = 100.0f * count / base_vecs.get_num_vecs();
+            const char* tag;
+            if (!has_vertices)               tag = "-";
+            else if (h < compactor_new_top)  tag = "kept";
+            else if (h == compactor_new_top) tag = "kept, compactor new-top";
+            else                             tag = "trimmed -> demoted";
+            ARTEA_INFO(fmt::format(
+                "  level_id={}: {} vertices ({:.2f}% of base) [{}]",
+                h, count, ratio, tag));
         }
     }
 
