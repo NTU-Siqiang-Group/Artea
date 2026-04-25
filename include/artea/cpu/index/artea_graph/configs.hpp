@@ -42,12 +42,17 @@ using RGraphConfig = stacked_rgraph::RGraphConfig<IndexTraitsT>;
 /**
  * @brief Pruning config for artea_graph.
  *
- * Carries the usual RNG scale/shift coefficients (consumed by the
- * stacked-rgraph upper-layer insertion path — reads @c scale_coeffs
- * only — and the per-layer refinement @c TriangleUpdater /
- * @c PruningUpdater which read both), plus an aspect-ratio-constrained
- * (ARC) pruning toggle applied as a final sweep at the end of
- * @c refine_layer:
+ * Carries the usual RNG scale/shift coefficients:
+ *   - @c scale_coeffs is applied uniformly at every layer, both in the
+ *     stacked-rgraph insertion path and the per-layer refinement
+ *     pipeline.
+ *   - @c shifted_coeffs is applied only at L0 during refinement. Upper
+ *     layers (level_id > 0) force the effective shift to 0; stacked-
+ *     rgraph insertion never consumes the shift regardless of layer.
+ *     See @c artea_graph::IndexFactory::refine_layer for the gate.
+ *
+ * Also carries an aspect-ratio-constrained (ARC) pruning toggle applied
+ * as a final sweep at the end of @c refine_layer:
  *   - When @c perform_arc is true, every edge longer than
  *     @c aspect_ratio_constraint * @c radius_at(level_id) is dropped
  *     at layer @p level_id.
@@ -61,7 +66,10 @@ struct PruningConfig {
 
     /**
      * @param scale_coeffs            RNG scale coefficient (>= 1).
+     *                                Applied uniformly at every layer.
      * @param shifted_coeffs          RNG shift coefficient (>= 0).
+     *                                Applied only at L0 during refinement;
+     *                                upper layers force effective shift to 0.
      * @param perform_arc             Whether refine_layer runs the final
      *                                ARC sweep. Default false.
      * @param aspect_ratio_constraint Multiplier applied to the per-layer
