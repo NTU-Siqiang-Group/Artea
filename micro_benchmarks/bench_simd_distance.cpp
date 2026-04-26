@@ -286,7 +286,7 @@ BENCHMARK_TEMPLATE(BM_Artea_Parallel, 4)->Name("Par_Artea_L2_U4")->UseRealTime()
 
 int main(int argc, char** argv) {
     argparse::ArgumentParser program("bench_simd_distance");
-    program.add_argument("-c", "--config").default_value(std::string("./configs/datasets.json"));
+    program.add_argument("-c", "--config").default_value(artea::default_dataset_config_path());
     program.add_argument("-d", "--dataset").default_value(std::string("sift-1m"));
     try { program.parse_args(argc, argv); } catch (...) { return 1; }
     g_config.config_path = program.get<std::string>("--config");

@@ -15,6 +15,8 @@
 // Reference: https://github.com/ikaln/termcolor/blob/master/include/termcolor/termcolor.hpp
 #include <termcolor/termcolor.hpp>
 
+#include <artea/common/default_paths.hpp>
+
 namespace artea {
 
 enum class LogLevelT {

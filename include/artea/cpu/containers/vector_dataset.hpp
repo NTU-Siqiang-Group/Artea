@@ -184,7 +184,8 @@ private:
     auto _load_datasets(const std::string& dataset_name) -> void {
         auto dataset_config = _config["datasets"][dataset_name];
 
-        std::filesystem::path root_dir = _config["root_dir"];
+        std::filesystem::path root_dir =
+            artea::expand_home(_config["root_dir"].get<std::string>());
         std::filesystem::path dataset_dir = root_dir / dataset_config["dataset_dir"];
         std::filesystem::path base_vecs_path = dataset_dir / dataset_config["base_path"];
         std::filesystem::path query_vecs_path = dataset_dir / dataset_config["query_path"];

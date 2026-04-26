@@ -462,7 +462,7 @@ int main(int argc, char* argv[]) {
 
     program.add_argument("-c", "--config")
         .help("Path to the datasets.json configuration file")
-        .default_value(std::string("./configs/datasets.json"));
+        .default_value(artea::default_dataset_config_path());
 
     program.add_argument("-d", "--dataset")
         .help("Name of the dataset to verify (must exist in json)")

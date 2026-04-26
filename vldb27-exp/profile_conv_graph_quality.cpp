@@ -189,7 +189,7 @@ int main(int argc, char** argv) {
     ::testing::InitGoogleTest(&argc, argv);
 
     argparse::ArgumentParser program("test_conv_graph_quality");
-    program.add_argument("-c", "--config").default_value(std::string("./configs/datasets.json"));
+    program.add_argument("-c", "--config").default_value(artea::default_dataset_config_path());
     program.add_argument("-d", "--dataset").default_value(std::string("sift-1m"));
     program.add_argument("--max-nbr-size").default_value(32u).scan<'u', uint32_t>();
     program.add_argument("--extracted-nbr-size").default_value(32u).scan<'u', uint32_t>();

@@ -509,7 +509,7 @@ int main(int argc, char** argv) {
 
     argparse::ArgumentParser program("test_artea_graph");
     program.add_argument("-c", "--config")
-        .default_value(std::string("./configs/datasets.json"))
+        .default_value(artea::default_dataset_config_path())
         .help("Path to datasets.json config file");
     program.add_argument("-d", "--dataset")
         .default_value(std::string("sift-1m"))

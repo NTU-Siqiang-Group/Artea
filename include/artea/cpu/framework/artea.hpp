@@ -54,6 +54,7 @@
 #include <artea/cpu/index/compactor/hierarchical_graph_compactor.hpp>
 #include <artea/cpu/index/index_size_calculator.hpp>
 #include <artea/cpu/index/persistence/flat_graph_file_manager.hpp>
+#include <artea/cpu/index/persistence/hierarchical_graph_file_manager.hpp>
 
 #include <artea/cpu/index/conv_graph/configs.hpp>
 #include <artea/cpu/index/conv_graph/index_structure.hpp>

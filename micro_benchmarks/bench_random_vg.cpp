@@ -184,7 +184,7 @@ int main(int argc, char** argv) {
     argparse::ArgumentParser program("bench_random_vg");
     program.add_argument("-c", "--config")
         .help("Path to the dataset configuration JSON file")
-        .default_value(std::string("./configs/datasets.json"));
+        .default_value(artea::default_dataset_config_path());
     program.add_argument("-d", "--dataset")
         .help("Name of the dataset to use")
         .default_value(std::string("sift-1m"));

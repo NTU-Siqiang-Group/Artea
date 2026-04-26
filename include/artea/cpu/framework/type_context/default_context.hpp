@@ -107,6 +107,7 @@ using layer_config_t = typename index_traits_t::layer_config_t;
 // Index types from IndexTraits
 using refining_graph_compactor_t = typename index_traits_t::refining_graph_compactor_t;
 using flat_graph_file_manager_t = typename index_traits_t::flat_graph_file_manager_t;
+using hierarchical_graph_file_manager_t = typename index_traits_t::hierarchical_graph_file_manager_t;
 using index_size_calculator_t = typename index_traits_t::index_size_calculator_t;
 using radius_prober_t = typename index_traits_t::radius_prober_t;
 using hierarchical_graph_compactor_t = typename index_traits_t::hierarchical_graph_compactor_t;

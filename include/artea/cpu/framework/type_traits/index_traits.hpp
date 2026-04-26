@@ -44,6 +44,7 @@ namespace dynamic {
 }
 template <typename IndexTraitsT> class RefiningGraphCompactor;
 template <typename IndexTraitsT> class FlatGraphFileManager;
+template <typename IndexTraitsT> class HierarchicalGraphFileManager;
 template <typename IndexTraitsT> class IndexSizeCalculator;
 template <typename IndexTraitsT> class RadiusProber;
 template <typename IndexTraitsT> class HierarchicalGraphCompactor;
@@ -111,6 +112,9 @@ struct IndexTraits : virtual public BaseTraitsT {
 
     /** @brief Flat graph file manager type. */
     using flat_graph_file_manager_t = FlatGraphFileManager<index_traits_t>;
+
+    /** @brief Hierarchical graph file manager type. */
+    using hierarchical_graph_file_manager_t = HierarchicalGraphFileManager<index_traits_t>;
 
     /** @brief Index size calculator type. */
     using index_size_calculator_t = IndexSizeCalculator<index_traits_t>;

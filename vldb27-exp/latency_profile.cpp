@@ -147,7 +147,7 @@ auto latency_to_json(const LatencyProfileResult& r) -> nlohmann::json {
 
 int main(int argc, char** argv) {
     argparse::ArgumentParser program("latency_profile");
-    program.add_argument("-c", "--config").default_value(std::string("./configs/datasets.json"));
+    program.add_argument("-c", "--config").default_value(artea::default_dataset_config_path());
     program.add_argument("-d", "--dataset").default_value(std::string("sift-1m"));
 
     program.add_argument("--beta").default_value(2.0f).scan<'g', float>();
