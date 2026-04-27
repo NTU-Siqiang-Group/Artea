@@ -87,6 +87,24 @@ class IndexFactory : public stacked_rgraph::IndexFactory<GraphFactoryTraitsT> {
     using refiner_utils_t    = typename GraphFactoryTraitsT::refiner_utils_t;
 
 public:
+    /** @brief Wall-clock breakdown returned by @ref add_vertices. The
+     *         two phases match the algorithm's two passes:
+     *           - @c upper_layer_time_ms: r-net insertion (the inherited
+     *             stacked_rgraph backbone build that produces the upper-
+     *             layer hierarchy and, when @c insert_on_L0 == true, the
+     *             initial L0 edges).
+     *           - @c bottom_layer_time_ms: per-layer refinement loop
+     *             (densify + RNG-prune every occupied layer; dominated
+     *             by L0 cost since L0 holds the full vertex set).
+     *           - @c total_time_ms: end-to-end wall clock of
+     *             @ref add_vertices (== upper + bottom modulo trivial
+     *             scaffolding around the two phases). */
+    struct BuildTime {
+        double upper_layer_time_ms  = 0.0;
+        double bottom_layer_time_ms = 0.0;
+        double total_time_ms        = 0.0;
+    };
+
     /**
      * @brief Append a vector batch to the index and build the artea_graph
      *        end-to-end:
@@ -127,7 +145,7 @@ public:
         const dist_func_t& dist_func,
         const bool         insert_on_L0 = true,
         const bool         shuffle_insertion_order = false
-    ) -> void {
+    ) -> BuildTime {
         // Capture the vid window owned by this batch. refine_layer uses
         // it to scope the L0 random top-up pass to exactly the new
         // vertices — earlier batches' L0 rows stay untouched, and rows
@@ -140,17 +158,18 @@ public:
         // is governed by @p insert_on_L0. Either way, refine_layer's
         // random top-up pass will fill L0 rows that still sit below
         // the prefill threshold — no extra orchestration needed here.
-        const auto rnet_t0 = std::chrono::high_resolution_clock::now();
-        base_t::add_vertices(
+        // The base factory already measures wall-clock and returns it
+        // via BuildTime; reuse that instead of re-instrumenting here.
+        const auto rnet_build_time = base_t::add_vertices(
             index,
             std::move(batch_vecs),
             dist_func,
             /*insert_on_L0=*/insert_on_L0,
             shuffle_insertion_order
         );
-        const auto rnet_t1 = std::chrono::high_resolution_clock::now();
-        const int64_t rnet_ms = std::chrono::duration_cast<std::chrono::milliseconds>(rnet_t1 - rnet_t0).count();
-        ARTEA_INFO(fmt::format("[artea_graph] r-net insertion done (insert_on_L0={}) in {} ms", insert_on_L0, rnet_ms));
+        const double upper_layer_time_ms = rnet_build_time.total_time_ms;
+        ARTEA_INFO(fmt::format("[artea_graph] r-net insertion done (insert_on_L0={}) in {:.2f} ms",
+            insert_on_L0, upper_layer_time_ms));
 
         const vertex_id_t new_vid_end = static_cast<vertex_id_t>(index.get_num_vertices());
 
@@ -165,9 +184,36 @@ public:
                 new_vid_start, new_vid_end);
         }
         const auto refine_t1 = std::chrono::high_resolution_clock::now();
-        const int64_t refine_ms = std::chrono::duration_cast<std::chrono::milliseconds>(refine_t1 - refine_t0).count();
-        ARTEA_INFO(fmt::format("[artea_graph] per-layer refinement done in {} ms (total add_vertices: {} ms)",
-            refine_ms, rnet_ms + refine_ms));
+        const double bottom_layer_time_ms = std::chrono::duration<double, std::milli>(refine_t1 - refine_t0).count();
+        const double total_time_ms = upper_layer_time_ms + bottom_layer_time_ms;
+        ARTEA_INFO(fmt::format("[artea_graph] per-layer refinement done in {:.2f} ms (total add_vertices: {:.2f} ms)",
+            bottom_layer_time_ms, total_time_ms));
+
+        // Per-layer vertex count breakdown. A vertex with
+        // highest_level=h' participates in every layer 0..h', so
+        // count(h) = total - sum(bucket(0..h-1).size()). Walk bottom-up
+        // and decrement `running` by each bucket as we print, no
+        // intermediate buffer needed.
+        const layer_id_t max_level = index.max_restrict_level();
+        const vertex_num_t total_vertices = index.get_num_vertices();
+        ARTEA_INFO("[artea_graph] per-layer vertex counts:");
+        vertex_num_t running = total_vertices;
+        for (layer_id_t h = 0; h <= max_level; ++h) {
+            const float ratio = total_vertices > 0
+                ? 100.0f * running / static_cast<float>(total_vertices)
+                : 0.0f;
+            ARTEA_INFO(fmt::format(
+                "[artea_graph]   level_id={}: {} vertices ({:.2f}% of base)",
+                h, running, ratio));
+            running -= static_cast<vertex_num_t>(
+                index.get_vids_with_highest_level(h).size());
+        }
+
+        return BuildTime{
+            upper_layer_time_ms,
+            bottom_layer_time_ms,
+            total_time_ms
+        };
     }
 
     /**
@@ -310,32 +356,40 @@ public:
             }
         }
 
-        // R-net covering radius at this layer. Passed to the triangle /
-        // pruning updaters so the shift term scales as
-        // @c effective_shift * R_h instead of bare @c effective_shift —
-        // matches the geometric growth of layer spacing.
+        // R-net covering radius at this layer. Used only by the ARC
+        // sweep below to scale its per-layer edge-length cutoff; the
+        // shift term consumed by the triangle / pruning updaters is
+        // scaled by @c pruning_config.l0_min_distance() instead — see
+        // @c effective_shift below.
         const distance_t layer_radius = index.radius_at(level_id);
 
         // L0-only shift policy: apply @c pruning_config.shifted_coeffs()
         // on the bottom layer only; force shift to 0 at every upper
         // layer. Upper layers' inter-vertex distances are already spread
         // out by the r-net geometry (R_h = R_0 * beta^h), and applying
-        // the shift there on top of the radius scaling was empirically
-        // over-pruning. Scale coefficient still applies uniformly at
-        // every layer; only the shift is gated.
+        // the shift there was empirically over-pruning. Scale coefficient
+        // still applies uniformly at every layer; only the shift is gated.
+        //
+        // The L0 shift is scaled by @c l0_min_distance — a per-dataset
+        // characteristic L0 distance, distinct from @c l0_rnet_radius
+        // (the r-net L0 covering radius). This lets a single unit-less
+        // @c shifted_coeffs grid stay comparable across datasets whose
+        // L0 distance scales differ by orders of magnitude. The scaled
+        // value is folded into @c effective_shift here so the updaters
+        // keep their bare-shift signature.
         const ratio_t effective_shift = (level_id == 0)
-            ? pruning_config.shifted_coeffs()
+            ? pruning_config.shifted_coeffs() * pruning_config.l0_min_distance()
             : ratio_t(0);
 
         auto triangle_updater = propagate_engine.template make_updater<triangle_updater_t>(
-            pruning_config.scale_coeffs(), effective_shift, layer_radius);
+            pruning_config.scale_coeffs(), effective_shift);
         auto reverse_updater  = propagate_engine.template make_updater<reverse_updater_t>();
         const vertex_num_t routing_topk = propagate_config.resolve_routing_topk(max_nbr_size);
         const vertex_num_t routing_queue_size = propagate_config.resolve_routing_queue_size(max_nbr_size);
         auto routing_updater  = propagate_engine.template make_updater<routing_updater_t>(routing_topk, routing_queue_size);
         auto truncate_updater = propagate_engine.template make_updater<truncate_updater_t>();
         auto pruning_updater = propagate_engine.template make_updater<pruning_updater_t>(
-            pruning_config.scale_coeffs(), effective_shift, layer_radius);
+            pruning_config.scale_coeffs(), effective_shift);
 
         // propagate_engine.next(reverse_updater).next(truncate_updater);
         for (iter_t build_loop = 0; build_loop < propagate_config.num_build_loops(); ++build_loop) {

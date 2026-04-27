@@ -19,16 +19,12 @@
  *               Uses two decoupled thresholds derived from the same
  *               distance: @c recommend_threshold = @c ori_dist
  *               (plain RNG) controls reverse-edge log emission, and
- *               @c prune_threshold = @c ori_dist * inv_scale
- *                                    - shift * layer_radius
+ *               @c prune_threshold = @c ori_dist * inv_scale - shift
  *               (scaled_shifted, same as @c PruningUpdater) controls
  *               whether @c ori_nbr is dropped from the pivot's
- *               neighbor list. @c layer_radius is the r-net covering
- *               radius of the layer being refined; defaults to 1 so
- *               non-hierarchical callers recover the original
- *               @c ori_dist * inv_scale - shift form.
- *               Defaults (@c scale_coeffs=1, @c shifted_coeffs=0)
- *               collapse both thresholds to plain @c ori_dist.
+ *               neighbor list. Defaults (@c scale_coeffs=1,
+ *               @c shifted_coeffs=0) collapse both thresholds to
+ *               plain @c ori_dist.
  */
 
 #pragma once
@@ -72,12 +68,10 @@ public:
         log_table_t&              log_table,
         const refining_graph_t&   refining_graph,
         const ratio_t             scale_coeffs,
-        const ratio_t             shifted_coeffs,
-        const distance_t          layer_radius = distance_t(1)
+        const ratio_t             shifted_coeffs
     ) : base_class_t(dist_func, vecs_data, log_table, refining_graph),
         _inv_scale_coeffs(static_cast<ratio_t>(1.0) / scale_coeffs),
-        _shifted_coeffs(shifted_coeffs),
-        _layer_radius(layer_radius) {}
+        _shifted_coeffs(shifted_coeffs) {}
 
     __attribute__((always_inline))
     auto get_max_nbr_size() const -> vertex_num_t {
@@ -168,17 +162,9 @@ private:
     const ratio_t _inv_scale_coeffs;
 
     /** @brief Shifted coefficient for RNG Triangle Inequality.
-     *         Applied as @c _shifted_coeffs * @c _layer_radius in the
-     *         prune-threshold formula — the shift scales with the
-     *         covering radius of the layer currently being refined. */
+     *         Subtracted as a bare term from the scaled distance in the
+     *         prune-threshold formula. */
     const ratio_t _shifted_coeffs;
-
-    /** @brief R-net covering radius at the layer being refined.
-     *         Defaults to 1 when the updater is used outside a
-     *         hierarchical r-net context (conv_graph / knn_graph /
-     *         symmetric_knn_graph), which collapses the shift term to
-     *         plain @c _shifted_coeffs. */
-    const distance_t _layer_radius;
 
     /**
      * @brief Pure conflict scan. No side effects: the caller owns all
@@ -187,7 +173,7 @@ private:
      *        Two decoupled thresholds derived from
      *        @c checking_nbr.get_distance() :
      *          - @c recommend_threshold = @c checking_dist
-     *          - @c prune_threshold     = @c checking_dist * inv_scale - shift * layer_radius
+     *          - @c prune_threshold     = @c checking_dist * inv_scale - shift
      *
      *        Iterates @p retained_nbrs once. At most one recommendation
      *        target is reported per call — the retained neighbor with
@@ -218,7 +204,7 @@ private:
     ) -> std::pair<nbr_t, bool> {
         const vec_ele_t* checking_vec = this->_vecs_data.get(checking_nbr.get_vid());
         const distance_t recommend_threshold = checking_nbr.get_distance();
-        const distance_t prune_threshold     = checking_nbr.get_distance() * _inv_scale_coeffs - _shifted_coeffs * _layer_radius;
+        const distance_t prune_threshold     = checking_nbr.get_distance() * _inv_scale_coeffs - _shifted_coeffs;
 
         // recommend_to starts invalid (distance = max_distance), so the
         // "closer-than-current" test below picks up the first soft
