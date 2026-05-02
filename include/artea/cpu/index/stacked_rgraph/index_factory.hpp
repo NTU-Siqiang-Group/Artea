@@ -42,6 +42,7 @@
 #pragma once
 
 #include <algorithm>
+#include <chrono>
 #include <cmath>
 #include <cstdint>
 #include <limits>
@@ -117,6 +118,17 @@ public:
      *         before switching to @c tbb::parallel_for. */
     static constexpr vertex_num_t startup_points = 0;
 
+    /** @brief Wall-clock time taken by @ref add_vertices, returned by
+     *         value so callers can log it without re-instrumenting.
+     *         Stacked r-net insertion does not have a meaningful
+     *         per-layer split (each @c _insert_one writes to all of a
+     *         vid's layers in one interleaved pass), so we report a
+     *         single total. Empty-batch and serial-only calls report
+     *         the elapsed wall-clock of whatever they actually did. */
+    struct BuildTime {
+        double total_time_ms = 0.0;
+    };
+
     /**
      * @brief Append @p batch_vecs to @p index's owned storage, then
      *        insert every newly-appended vector as a new vertex. The
@@ -151,7 +163,14 @@ public:
         const dist_func_t& dist_func,
         const bool         insert_on_L0 = true,
         const bool         shuffle_insertion_order = false
-    ) -> void {
+    ) -> BuildTime {
+        const auto t_start = std::chrono::high_resolution_clock::now();
+        const auto elapsed_ms = [&]() -> double {
+            const auto t_now = std::chrono::high_resolution_clock::now();
+            return std::chrono::duration<double, std::milli>(
+                t_now - t_start).count();
+        };
+
         // bl_select_nbrs_qs only drives the L0 select phase in Step D.
         // When insert_on_L0 == false that phase is skipped, so whatever
         // value the caller stored on the index config is dead weight.
@@ -163,7 +182,7 @@ public:
         }
 
         const vertex_num_t batch_size = static_cast<vertex_num_t>(batch_vecs.get_num_vecs());
-        if (batch_size == 0) return;
+        if (batch_size == 0) return BuildTime{ elapsed_ms() };
 
         index.append_vecs(std::move(batch_vecs));
         const vertex_id_t first_new_vid = index.add_vertices(batch_size);
@@ -210,7 +229,7 @@ public:
             _insert_one(index, router, vid, dist_func,
                         pruning_updater, visited, insert_on_L0);
         }
-        if (serial_count == batch_size) return;
+        if (serial_count == batch_size) return BuildTime{ elapsed_ms() };
 
         tbb::parallel_for(
             tbb::blocked_range<vertex_num_t>(serial_count, batch_size),
@@ -226,6 +245,7 @@ public:
                 }
             }
         );
+        return BuildTime{ elapsed_ms() };
     }
 
 private:

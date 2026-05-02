@@ -86,10 +86,12 @@ public:
         ARTEA_INFO("Part 1: Building KNN graph...");
         auto t0 = std::chrono::high_resolution_clock::now();
 
-        knn_graph::index_t knn_index = knn_graph::factory_t::construct_graph(
-            base_vecs,
-            g_config.knn_layer_config,
-            g_config.knn_propagate_config
+        knn_graph::index_t knn_index = std::move(
+            knn_graph::factory_t::construct_graph(
+                base_vecs,
+                g_config.knn_layer_config,
+                g_config.knn_propagate_config
+            ).graph
         );
 
         auto t1 = std::chrono::high_resolution_clock::now();
@@ -101,9 +103,11 @@ public:
         ARTEA_INFO("Part 2: Converting KNN graph to conv_graph (move + triangle/reverse pruning)...");
         t0 = std::chrono::high_resolution_clock::now();
 
-        conv_graph_ = std::make_unique<conv_graph::index_t>(conv_graph::factory_t::construct_graph(
-            std::move(knn_index.get_refining_graph()),
-            g_config.conv_pruning_config
+        conv_graph_ = std::make_unique<conv_graph::index_t>(std::move(
+            conv_graph::factory_t::construct_graph(
+                std::move(knn_index.get_refining_graph()),
+                g_config.conv_pruning_config
+            ).graph
         ));
 
         t1 = std::chrono::high_resolution_clock::now();

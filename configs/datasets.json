@@ -42,6 +42,18 @@
       "base_path": "deep1m_base.fvecs",
       "query_path": "deep1m_query.fvecs",
       "gt_path": "deep1m_groundtruth.ivecs"
+    },
+    "yandex-t2i-10m": {
+      "dataset_dir": "yandex-t2i-10m",
+      "base_path": "t2i10m_base.fvecs",
+      "query_path": "t2i10m_query.fvecs",
+      "gt_path": "t2i10m_groundtruth.ivecs"
+    },
+    "spacev-10m": {
+      "dataset_dir": "spacev-10m",
+      "base_path": "spacev10m_base.fvecs",
+      "query_path": "spacev10m_query.fvecs",
+      "gt_path": "spacev10m_groundtruth.ivecs"
     }
   }
 }

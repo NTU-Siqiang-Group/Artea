@@ -91,10 +91,12 @@ public:
         ARTEA_INFO("Building KNN graph...");
         auto start_time = std::chrono::high_resolution_clock::now();
 
-        refining_graph_ = std::make_unique<knn_graph::index_t>(knn_graph::factory_t::construct_graph(
-            base_vecs,
-            g_config.layer_config,
-            g_config.propagate_config
+        refining_graph_ = std::make_unique<knn_graph::index_t>(std::move(
+            knn_graph::factory_t::construct_graph(
+                base_vecs,
+                g_config.layer_config,
+                g_config.propagate_config
+            ).graph
         ));
 
         auto end_time = std::chrono::high_resolution_clock::now();

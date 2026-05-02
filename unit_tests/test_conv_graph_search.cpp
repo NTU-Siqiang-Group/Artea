@@ -94,9 +94,9 @@ public:
         layer_config_t layer_cfg(16);
         conv_graph::pruning_config_t pruning_cfg(1.0f, 0.0f);
         conv_graph::propagate_config_t propagate_cfg(4, 14, 0.6f);
-        graph_index_ = std::make_unique<conv_graph::index_t>(
-            conv_graph::factory_t::construct_graph(base_vecs, layer_cfg, pruning_cfg, propagate_cfg)
-        );
+        graph_index_ = std::make_unique<conv_graph::index_t>(std::move(
+            conv_graph::factory_t::construct_graph(base_vecs, layer_cfg, pruning_cfg, propagate_cfg).graph
+        ));
 
         // Convert to search graph
         compact_refining_graph_ = std::make_unique<compact::refining_graph_t>(

@@ -69,17 +69,30 @@ class IndexFactory {
     using single_layer_router_t = typename GraphFactoryTraitsT::single_layer_router_t;
 
 public:
+    /** @brief Wall-clock breakdown returned by @ref construct_graph.
+     *         conv_graph is a single-layer flat graph with no upper /
+     *         bottom split, so we report end-to-end wall-clock only. */
+    struct ConstructResult {
+        this_index_t graph;
+        double total_time_ms = 0.0;
+    };
+
     /** @brief construct a new convergent graph from vector array */
     static auto construct_graph(
         const vector_array_t& base_vecs,
         const layer_config_t layer_config,
         const pruning_config_t pruning_config,
         const propagate_config_t propagate_config
-    ) -> this_index_t {
+    ) -> ConstructResult {
+        const auto t_start = std::chrono::high_resolution_clock::now();
         this_index_t graph_index(base_vecs, layer_config, pruning_config, propagate_config);
         dist_func_t dist_func(base_vecs.get_vec_dim());
         _build_loop(graph_index, dist_func, pruning_config, propagate_config);
-        return graph_index;
+        const auto t_end = std::chrono::high_resolution_clock::now();
+        return ConstructResult{
+            std::move(graph_index),
+            std::chrono::duration<double, std::milli>(t_end - t_start).count()
+        };
     }
 
     /**
@@ -101,7 +114,8 @@ public:
     static auto construct_graph(
         refining_graph_t&&     src_graph,
         const pruning_config_t pruning_config
-    ) -> this_index_t {
+    ) -> ConstructResult {
+        const auto t_start = std::chrono::high_resolution_clock::now();
         // Build a conv_graph shell with the same topology, then steal
         // the neighbor arrays from the source graph.
         const auto& vecs_data = src_graph.get_vecs_data();
@@ -124,7 +138,11 @@ public:
         propagate_engine.next(pruning_updater)
                         .next(reverse_updater).next(truncate_updater);
 
-        return graph_index;
+        const auto t_end = std::chrono::high_resolution_clock::now();
+        return ConstructResult{
+            std::move(graph_index),
+            std::chrono::duration<double, std::milli>(t_end - t_start).count()
+        };
     }
 
     /** @brief construct a new convergent graph from dataset, with per-build-loop recall/throughput profiling */

@@ -95,11 +95,13 @@ TEST_F(FlatGraphPersistenceTest, RefiningGraphSnapshotRestore) {
     ARTEA_INFO("Building descent graph for persistence test...");
 
     // Build original flat graph
-    conv_graph::index_t original_graph = conv_graph::factory_t::construct_graph(
-        base_vecs,
-        g_config.layer_config,
-        g_config.pruning_config,
-        g_config.propagate_config
+    conv_graph::index_t original_graph = std::move(
+        conv_graph::factory_t::construct_graph(
+            base_vecs,
+            g_config.layer_config,
+            g_config.pruning_config,
+            g_config.propagate_config
+        ).graph
     );
 
     ARTEA_INFO(fmt::format("Original graph built with {} vertices", original_graph.get_num_vertices()));

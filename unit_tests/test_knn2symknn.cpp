@@ -75,10 +75,12 @@ public:
         ARTEA_INFO("Part 1: Building KNN graph...");
         auto t0 = std::chrono::high_resolution_clock::now();
 
-        knn_graph::index_t knn_index = knn_graph::factory_t::construct_graph(
-            base_vecs,
-            g_config.knn_layer_config,
-            g_config.knn_propagate_config
+        knn_graph::index_t knn_index = std::move(
+            knn_graph::factory_t::construct_graph(
+                base_vecs,
+                g_config.knn_layer_config,
+                g_config.knn_propagate_config
+            ).graph
         );
 
         auto t1 = std::chrono::high_resolution_clock::now();
@@ -90,9 +92,9 @@ public:
         ARTEA_INFO("Part 2: Converting KNN graph to symmetric KNN graph (move + reverse)...");
         t0 = std::chrono::high_resolution_clock::now();
 
-        symknn_graph_ = std::make_unique<symmetric_knn_graph::index_t>(
-            symmetric_knn_graph::factory_t::construct_graph(std::move(knn_index))
-        );
+        symknn_graph_ = std::make_unique<symmetric_knn_graph::index_t>(std::move(
+            symmetric_knn_graph::factory_t::construct_graph(std::move(knn_index)).graph
+        ));
 
         t1 = std::chrono::high_resolution_clock::now();
         g_test_results.symknn_build_time_s =

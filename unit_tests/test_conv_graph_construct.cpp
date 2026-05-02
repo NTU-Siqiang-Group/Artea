@@ -93,11 +93,13 @@ public:
         ARTEA_INFO("Building convergent graph...");
         auto start_time = std::chrono::high_resolution_clock::now();
 
-        graph_index_ = std::make_unique<conv_graph::index_t>(conv_graph::factory_t::construct_graph(
-            base_vecs,
-            g_config.layer_config,
-            g_config.pruning_config,
-            g_config.propagate_config
+        graph_index_ = std::make_unique<conv_graph::index_t>(std::move(
+            conv_graph::factory_t::construct_graph(
+                base_vecs,
+                g_config.layer_config,
+                g_config.pruning_config,
+                g_config.propagate_config
+            ).graph
         ));
 
         auto end_time = std::chrono::high_resolution_clock::now();

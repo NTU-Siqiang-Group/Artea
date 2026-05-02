@@ -59,8 +59,10 @@ public:
 
         ARTEA_INFO("Building KNN graph...");
         auto t0 = std::chrono::high_resolution_clock::now();
-        knn_graph_ = std::make_unique<knn_graph::index_t>(knn_graph::factory_t::construct_graph(
-            base_vecs, layer_config, propagate_config
+        knn_graph_ = std::make_unique<knn_graph::index_t>(std::move(
+            knn_graph::factory_t::construct_graph(
+                base_vecs, layer_config, propagate_config
+            ).graph
         ));
         auto t1 = std::chrono::high_resolution_clock::now();
         double build_time_s = std::chrono::duration_cast<std::chrono::microseconds>(t1 - t0).count() / 1e6;

@@ -153,11 +153,13 @@ int main(int argc, char** argv) {
         params.num_routing_loops
     );
 
-    conv_graph::index_t graph_index = conv_graph::factory_t::construct_graph(
-        dataset.get_base_vecs(),
-        layer_config,
-        pruning_config,
-        propagate_config
+    conv_graph::index_t graph_index = std::move(
+        conv_graph::factory_t::construct_graph(
+            dataset.get_base_vecs(),
+            layer_config,
+            pruning_config,
+            propagate_config
+        ).graph
     );
 
     auto end_time = std::chrono::high_resolution_clock::now();

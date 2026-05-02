@@ -96,8 +96,7 @@ inline auto greedy_loop_body(
     typename RouterTraitsT::visited_table_t&           visited,
     const typename RouterTraitsT::dist_func_t&         dist_func,
     const typename RouterTraitsT::vector_array_t&      vecs_data
-) -> std::pair<typename RouterTraitsT::vertex_id_t,
-               typename RouterTraitsT::distance_t> {
+) -> std::pair<typename RouterTraitsT::vertex_id_t, typename RouterTraitsT::distance_t> {
     using vertex_id_t = typename RouterTraitsT::vertex_id_t;
     using distance_t  = typename RouterTraitsT::distance_t;
 

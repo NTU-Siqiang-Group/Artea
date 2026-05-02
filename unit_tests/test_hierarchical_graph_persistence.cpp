@@ -368,7 +368,7 @@ int main(int argc, char** argv) {
     program.add_argument("--beta")
         .default_value(2.0f).scan<'g', float>();
     program.add_argument("--l0-radius")
-        .default_value(25000f).scan<'g', float>()
+        .default_value(25000.0f).scan<'g', float>()
         .help("If negative, auto-probe via DatasetProber.");
     program.add_argument("--ul-max-nbr-size")
         .default_value(32u).scan<'u', uint32_t>();

@@ -101,9 +101,9 @@ public:
 
         ARTEA_INFO("Building convergent graph...");
         auto t0 = std::chrono::high_resolution_clock::now();
-        graph_index_ = std::make_unique<conv_graph::index_t>(
-            conv_graph::factory_t::construct_graph(base_vecs, layer_cfg, pruning_cfg, propagate_cfg)
-        );
+        graph_index_ = std::make_unique<conv_graph::index_t>(std::move(
+            conv_graph::factory_t::construct_graph(base_vecs, layer_cfg, pruning_cfg, propagate_cfg).graph
+        ));
         auto t1 = std::chrono::high_resolution_clock::now();
         g_results.build_time_s =
             std::chrono::duration_cast<std::chrono::microseconds>(t1 - t0).count() / 1e6;

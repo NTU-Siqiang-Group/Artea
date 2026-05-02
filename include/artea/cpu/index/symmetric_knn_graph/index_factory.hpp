@@ -51,16 +51,31 @@ class IndexFactory {
     using knn_graph = typename GraphFactoryTraitsT::knn_graph;
 
 public:
+    /** @brief Wall-clock breakdown returned by @ref construct_graph.
+     *         symmetric_knn_graph is a single-layer flat graph with no
+     *         upper / bottom split, so we report end-to-end wall-clock
+     *         only (covers both the build loop and the symmetrizing
+     *         reverse-edge pass). */
+    struct ConstructResult {
+        this_index_t graph;
+        double total_time_ms = 0.0;
+    };
+
     /** @brief Construct a symmetric KNN graph from vector array. */
     static auto construct_graph(
         const vector_array_t& base_vecs,
         const layer_config_t layer_config,
         const propagate_config_t propagate_config
-    ) -> this_index_t {
+    ) -> ConstructResult {
+        const auto t_start = std::chrono::high_resolution_clock::now();
         this_index_t graph_index(base_vecs, layer_config, propagate_config);
         dist_func_t dist_func(base_vecs.get_vec_dim());
         _build_loop(graph_index, dist_func, propagate_config);
-        return graph_index;
+        const auto t_end = std::chrono::high_resolution_clock::now();
+        return ConstructResult{
+            std::move(graph_index),
+            std::chrono::duration<double, std::milli>(t_end - t_start).count()
+        };
     }
 
     /**
@@ -75,7 +90,8 @@ public:
      */
     static auto construct_graph(
         typename knn_graph::index_t&& knn_graph_index
-    ) -> this_index_t {
+    ) -> ConstructResult {
+        const auto t_start = std::chrono::high_resolution_clock::now();
         this_index_t graph_index(std::move(knn_graph_index));
 
         const vertex_num_t num_vertices = graph_index.get_num_vertices();
@@ -88,7 +104,11 @@ public:
 
         propagate_engine.next(reverse_updater);
 
-        return graph_index;
+        const auto t_end = std::chrono::high_resolution_clock::now();
+        return ConstructResult{
+            std::move(graph_index),
+            std::chrono::duration<double, std::milli>(t_end - t_start).count()
+        };
     }
 
     /** @brief Construct with per-build-loop recall/throughput profiling. */

@@ -92,13 +92,13 @@ public:
         ARTEA_INFO("Building symmetric KNN graph from scratch...");
         auto start_time = std::chrono::high_resolution_clock::now();
 
-        graph_index_ = std::make_unique<symmetric_knn_graph::index_t>(
+        graph_index_ = std::make_unique<symmetric_knn_graph::index_t>(std::move(
             symmetric_knn_graph::factory_t::construct_graph(
                 base_vecs,
                 g_config.layer_config,
                 g_config.propagate_config
-            )
-        );
+            ).graph
+        ));
 
         auto end_time = std::chrono::high_resolution_clock::now();
         auto duration = std::chrono::duration_cast<std::chrono::microseconds>(end_time - start_time);

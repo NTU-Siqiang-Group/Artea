@@ -157,12 +157,8 @@ public:
      *   - @c true: shared-queue @c beam_search at every level from
      *     @c top..0.
      */
-    template <bool RandomSeeding = false, bool UpperLevelBeamSearch = false,
-              typename HierarchicalGraphT>
-    auto query(
-        const vec_ele_t*          query_vec,
-        const HierarchicalGraphT& hier_graph
-    ) const -> knn_results_t {
+    template <bool RandomSeeding = false, bool UpperLevelBeamSearch = false, typename HierarchicalGraphT>
+    auto query(const vec_ele_t* query_vec, const HierarchicalGraphT& hier_graph) const -> knn_results_t {
         const layer_id_t top_level_id = hier_graph.top_occupied_level_id();
         if (top_level_id == HierarchicalGraphT::unassigned_highest_level_id) {
             return knn_results_t{};
@@ -179,15 +175,13 @@ public:
         } else {
             // Either RandomSeeding=true, or the graph is dynamic (no
             // precomputed entry point) — sample one fresh from the apex.
-            std::tie(entry_vid, entry_dist) =
-                candidate_sample_utils_t::sample_single_entry(
+            std::tie(entry_vid, entry_dist) = candidate_sample_utils_t::sample_single_entry(
                     this->_vecs_data, this->_dist_func, hier_graph, query_vec);
         }
 
         // ---- Search phase ----
         if constexpr (UpperLevelBeamSearch) {
-            std_candidate_queue_t candidate_queue(
-                static_cast<std::size_t>(_candidate_queue_size));
+            std_candidate_queue_t candidate_queue(static_cast<std::size_t>(_candidate_queue_size));
             candidate_queue.try_push(entry_vid, entry_dist);
 
             for (layer_id_t cur_level_id = top_level_id; ; --cur_level_id) {
@@ -215,29 +209,22 @@ public:
             // while L0 beam targets top-K; some L1-rejected vids could
             // legitimately enter L0 top-K. O(1) per clear with
             // VersionTagTable.
-            for (layer_id_t cur_level_id = top_level_id;
-                 cur_level_id >= 1;
-                 --cur_level_id)
-            {
-                std::tie(cursor_vid, cursor_dist) =
-                    _single_layer_router.greedy_search(
-                        query_vec,
-                        detail::make_layer_range(hier_graph, cur_level_id),
-                        cursor_vid, cursor_dist, visited);
+            for (layer_id_t cur_level_id = top_level_id; cur_level_id >= 1; --cur_level_id) {
+                std::tie(cursor_vid, cursor_dist) = _single_layer_router.greedy_search(
+                    query_vec,
+                    detail::make_layer_range(hier_graph, cur_level_id),
+                    cursor_vid, cursor_dist, visited);
                 visited.clear();
             }
 
-            std_candidate_queue_t candidate_queue(
-                static_cast<std::size_t>(_candidate_queue_size));
+            std_candidate_queue_t candidate_queue(static_cast<std::size_t>(_candidate_queue_size));
             candidate_queue.try_push(cursor_vid, cursor_dist);
             _single_layer_router.beam_search(
                 query_vec,
                 detail::make_layer_range(hier_graph, layer_id_t{0}),
                 candidate_queue, visited);
 
-            const std::size_t k = std::min<std::size_t>(
-                static_cast<std::size_t>(this->_topk),
-                candidate_queue.get_result_size());
+            const std::size_t k = std::min<std::size_t>(static_cast<std::size_t>(this->_topk), candidate_queue.get_result_size());
             if (k == 0) return knn_results_t{};
             return candidate_queue.extract_results(k);
         }
@@ -255,22 +242,18 @@ public:
         const vec_ele_t*          query_vec,
         const HierarchicalGraphT& hier_graph
     ) const -> knn_results_t {
-        static_assert(HierarchicalGraphT::is_compacted,
-                      "query_l0_only is only defined for compact graphs.");
+        static_assert(HierarchicalGraphT::is_compacted, "query_l0_only is only defined for compact graphs.");
 
         auto& visited = _visited_table_pool.acquire();
 
-        std_candidate_queue_t candidate_queue(
-            static_cast<std::size_t>(_candidate_queue_size));
+        std_candidate_queue_t candidate_queue(static_cast<std::size_t>(_candidate_queue_size));
 
         if constexpr (RandomSeeding) {
-            candidate_queue.random_initialize(
-                _random_seq, this->_dist_func, query_vec,
+            candidate_queue.random_initialize(_random_seq, this->_dist_func, query_vec,
                 this->_vecs_data, visited);
         } else {
             const vertex_id_t entry_vid  = hier_graph.entry_point_vid();
-            const distance_t  entry_dist = this->_dist_func(
-                query_vec, this->_vecs_data.get(entry_vid));
+            const distance_t  entry_dist = this->_dist_func(query_vec, this->_vecs_data.get(entry_vid));
             candidate_queue.try_push(entry_vid, entry_dist);
         }
 
@@ -279,9 +262,7 @@ public:
             detail::make_layer_range(hier_graph, layer_id_t{0}),
             candidate_queue, visited);
 
-        const std::size_t k = std::min<std::size_t>(
-            static_cast<std::size_t>(this->_topk),
-            candidate_queue.get_result_size());
+        const std::size_t k = std::min<std::size_t>(static_cast<std::size_t>(this->_topk), candidate_queue.get_result_size());
         if (k == 0) return knn_results_t{};
         return candidate_queue.extract_results(k);
     }
@@ -307,16 +288,12 @@ public:
             [&](const tbb::blocked_range<vertex_num_t>& r) {
                 for (vertex_num_t i = r.begin(); i != r.end(); ++i) {
                     const vec_ele_t* q_vec = query_vecs.get(i);
-                    auto topk_results =
-                        this->template query<RandomSeeding, UpperLevelBeamSearch>(
-                            q_vec, hier_graph);
+                    auto topk_results = this->template query<RandomSeeding, UpperLevelBeamSearch>(q_vec, hier_graph);
                     const std::size_t n = topk_results.size();
-                    std::copy(topk_results.begin(), topk_results.end(),
-                              results.begin() + i * k);
-                    for (std::size_t j = n; j < k; ++j) {
-                        results[i * k + j] =
-                            candidate_entry_t::make_invalid_entry();
-                    }
+                    std::copy(topk_results.begin(), topk_results.end(), results.begin() + i * k);
+                    // for (std::size_t j = n; j < k; ++j) {
+                    //     results[i * k + j] = candidate_entry_t::make_invalid_entry();
+                    // }
                 }
             }
         );

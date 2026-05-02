@@ -66,6 +66,7 @@ struct TestConfig {
     uint32_t bl_select_nbrs_qs;
     float    scale_coeffs;
     float    shifted_coeffs;
+    float    l0_min_distance;
     bool     perform_arc;
     float    aspect_ratio_constraint;
 
@@ -126,6 +127,8 @@ auto dump_config(const char* banner) -> void {
        << "shifted_coeffs:             " << g_config.shifted_coeffs
        << " (consumed by refinement pruning only; ul insertion reads "
        << "scale_coeffs only and ignores shift)\n"
+       << "l0_min_distance:            " << g_config.l0_min_distance
+       << " (per-vertex L0 minimum-distance gate; consumed by refinement pruning)\n"
        << "perform_arc:                "
        << (g_config.perform_arc ? "true" : "false") << "\n"
        << "aspect_ratio_constraint:    " << g_config.aspect_ratio_constraint
@@ -265,6 +268,7 @@ protected:
         artea_graph::pruning_config_t pruning_config(
             static_cast<ratio_t>(g_config.scale_coeffs),
             static_cast<ratio_t>(g_config.shifted_coeffs),
+            static_cast<ratio_t>(g_config.l0_min_distance),
             g_config.perform_arc,
             static_cast<ratio_t>(g_config.aspect_ratio_constraint));
 
@@ -322,32 +326,9 @@ protected:
                 min_cap, compactor_new_top));
         }
 
-        // A vertex with highest_level_id=h' participates in every level
-        // 0..h', so the count *assigned to* level h is the cumulative
-        // sum of bucket sizes from h to the top. Compute top-down.
-        const layer_id_t max_level = _graph->max_restrict_level();
-        std::vector<vertex_num_t> num_at_level(max_level + 1, 0);
-        {
-            vertex_num_t running = 0;
-            for (layer_id_t h = max_level; ; --h) {
-                running += _graph->get_vids_with_highest_level(h).size();
-                num_at_level[h] = running;
-                if (h == 0) break;
-            }
-        }
-
-        for (layer_id_t h = 0; h <= max_level; ++h) {
-            const vertex_num_t count = num_at_level[h];
-            const float ratio = 100.0f * count / base_vecs.get_num_vecs();
-            const char* tag;
-            if (!has_vertices)               tag = "-";
-            else if (h < compactor_new_top)  tag = "kept";
-            else if (h == compactor_new_top) tag = "kept, compactor new-top";
-            else                             tag = "trimmed -> demoted";
-            ARTEA_INFO(fmt::format(
-                "  level_id={}: {} vertices ({:.2f}% of base) [{}]",
-                h, count, ratio, tag));
-        }
+        // Per-layer vertex counts are emitted by
+        // artea_graph::IndexFactory::add_vertices itself, so no
+        // duplicate breakdown here.
     }
 
     static void TearDownTestSuite() { _graph.reset(); }
@@ -542,6 +523,10 @@ int main(int argc, char** argv) {
         .default_value(1.1f).scan<'g', float>();
     program.add_argument("--shifted-coeffs")
         .default_value(0.0f).scan<'g', float>();
+    program.add_argument("--l0-min-distance")
+        .default_value(1.0f).scan<'g', float>()
+        .help("Per-vertex L0 minimum-distance gate consumed by refinement "
+              "pruning. Default 1.0.");
     program.add_argument("--perform-arc")
         .default_value(false).implicit_value(true)
         .help("If present, refine_layer runs a final aspect-ratio-constrained "
@@ -568,7 +553,7 @@ int main(int argc, char** argv) {
               "prefill_ratio * (bl_max_nbr_size * 1.5) random neighbors "
               "before the propagate loop.");
     program.add_argument("--num-routing-loops")
-        .default_value(1u).scan<'u', uint32_t>();
+        .default_value(0u).scan<'u', uint32_t>();
     program.add_argument("--routing-topk")
         .default_value(64u).scan<'u', uint32_t>();
     program.add_argument("--routing-queue-size")
@@ -616,6 +601,7 @@ int main(int argc, char** argv) {
     g_config.bl_select_nbrs_qs         = program.get<uint32_t>("--bl-select-nbrs-qs");
     g_config.scale_coeffs              = program.get<float>("--scale-coeffs");
     g_config.shifted_coeffs            = program.get<float>("--shifted-coeffs");
+    g_config.l0_min_distance           = program.get<float>("--l0-min-distance");
     g_config.perform_arc               = program.get<bool>("--perform-arc");
     g_config.aspect_ratio_constraint   = program.get<float>("--aspect-ratio-constraint");
     g_config.probe_num_samples         = program.get<uint32_t>("--probe-num-samples");
