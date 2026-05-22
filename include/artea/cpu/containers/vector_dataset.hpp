@@ -9,11 +9,14 @@
 
 #include <fstream>
 #include <filesystem>
+#include <type_traits>
 #include <utility> // For std::move, though it's implicitly used in assignment
 #include <unordered_map>
 
 #include <fmt/format.h>
 #include <nlohmann/json.hpp>
+#include <tbb/parallel_for.h>
+#include <tbb/blocked_range.h>
 #include <artea/common/logger.hpp>
 #include <artea/cpu/utils/random_seq_nr.hpp>
 
@@ -197,6 +200,13 @@ private:
         _query_vecs = query_vecs_t(query_vecs_path.string());
         _gt_vecs = ground_truth_t(gt_vecs_path.string());
 
+        // Pad base/query vectors to a multiple of SIMD_LANES floats. Tail
+        // lanes are zero-initialized by VectorArray's constructor, which is
+        // safe for L2/dot/cosine (zero contributions). Lets SIMDDistance
+        // drop its masked-tail path.
+        _pad_to_simd_alignment(_base_vecs);
+        _pad_to_simd_alignment(_query_vecs);
+
         ARTEA_SUCCESS(
             fmt::format(
                 "Successfully loaded {} base vectors ({} dims), {} query vectors ({} dims), and {} ground truth vectors ({} dims).",
@@ -208,6 +218,33 @@ private:
                 _gt_vecs.get_vec_dim()
             )
         );
+    }
+
+    template <typename VecArrayT>
+    static auto _pad_to_simd_alignment(VecArrayT& vecs) -> void {
+        // AVX-512 float32 lane count; SIMDDistance also uses 16.
+        constexpr uint32_t SIMD_LANES = 16;
+        const auto orig_dim = vecs.get_vec_dim();
+        const auto num_vecs = vecs.get_num_vecs();
+        const auto padded_dim =
+            ((orig_dim + SIMD_LANES - 1) / SIMD_LANES) * SIMD_LANES;
+        if (padded_dim == orig_dim || num_vecs == 0) return;
+
+        VecArrayT padded(num_vecs, padded_dim);
+        using range_t = tbb::blocked_range<std::decay_t<decltype(num_vecs)>>;
+        tbb::parallel_for(
+            range_t(0, num_vecs),
+            [&](const range_t& r) {
+                for (auto i = r.begin(); i != r.end(); ++i) {
+                    const auto* src = vecs.get(i);
+                    auto* dst = padded.get(i);
+                    std::copy(src, src + orig_dim, dst);
+                }
+            });
+        vecs = std::move(padded);
+        ARTEA_INFO(fmt::format(
+            "Padded vectors from dim={} to dim={} (SIMD alignment)",
+            orig_dim, padded_dim));
     }
 };  // class VectorDataset
 
