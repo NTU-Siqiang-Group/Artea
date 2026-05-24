@@ -55,35 +55,31 @@ public:
         }
         ARTEA_INFO(fmt::format("Loading Dataset: {} from {}", g_config.dataset_name, g_config.config_path));
         dataset_ = std::make_unique<vector_dataset_t>(g_config.config_path, g_config.dataset_name);
-        dist_func_ = std::make_unique<dist_func_t>(dataset_->get_base_vecs().get_vec_dim());
+        dispatcher_ = std::make_unique<simd_dispatcher_t>(dataset_->get_base_vecs().get_vec_dim());
         // Populate the per-base ||p||^2 cache so the FastL2 equivalence
         // test can call BruteforceRouter::query_fast / batch_query_fast.
         dataset_->enable_fast_L2();
     }
 
-    vector_dataset_t& get_dataset() { return *dataset_; }
-    dist_func_t& get_dist_func() { return *dist_func_; }
+    vector_dataset_t&   get_dataset()    { return *dataset_; }
+    simd_dispatcher_t&  get_dispatcher() { return *dispatcher_; }
 
 private:
     DataProvider() = default;
-    std::unique_ptr<vector_dataset_t> dataset_;
-    std::unique_ptr<dist_func_t> dist_func_;
+    std::unique_ptr<vector_dataset_t>  dataset_;
+    std::unique_ptr<simd_dispatcher_t> dispatcher_;
 };
 
 class BruteforceCorrectnessTest : public ::testing::Test {};
 
 TEST_F(BruteforceCorrectnessTest, VerifyRecallAccuracy) {
-    auto& provider = DataProvider::instance();
-    auto& dataset = provider.get_dataset();
-    auto& dist_func = provider.get_dist_func();
+    auto& provider   = DataProvider::instance();
+    auto& dataset    = provider.get_dataset();
+    auto& dispatcher = provider.get_dispatcher();
 
     const auto& base_vecs = dataset.get_base_vecs();
     const auto& query_vecs = dataset.get_query_vecs();
     const auto& gt_vecs = dataset.get_gt_vecs();
-
-    // 1. Initialize Artea Bruteforce Router with topk=1
-    const uint32_t topk = 1;
-    bruteforce_router_t router(base_vecs, dist_func, topk);
 
     // Subset queries to g_config.num_samples to keep the test bounded
     // (full query set on large datasets is far more than we need to
@@ -95,29 +91,34 @@ TEST_F(BruteforceCorrectnessTest, VerifyRecallAccuracy) {
     auto gt_subset    = gt_vecs.extract_subset(0, num_queries);
 
     ARTEA_INFO(fmt::format(
-        "VerifyRecallAccuracy: dataset={}, base={}, queries={}/{}  (subset), topk={}",
+        "VerifyRecallAccuracy: dataset={}, base={}, queries={}/{}  (subset), topk=1",
         g_config.dataset_name, base_vecs.get_num_vecs(),
-        num_queries, query_vecs.get_num_vecs(), topk));
+        num_queries, query_vecs.get_num_vecs()));
 
-    // 2. Execute Batch Query
-    knn_results_t predictions = router.batch_query(query_subset);
+    ARTEA_WITH_DIM(dispatcher, DistFunc, dist_func) {
+        // 1. Initialize Artea Bruteforce Router with topk=1
+        const uint32_t topk = 1;
+        bruteforce_router_t<DistFunc> router(base_vecs, dist_func, topk);
 
-    // 3. Verify against Ground Truth using calculate_recall_at_k with k=1
-    recall_estimator_t estimator;
-    auto recall = estimator.calculate_recall_at_k(
-        predictions, gt_subset, topk, num_queries
-    );
+        // 2. Execute Batch Query
+        knn_results_t predictions = router.batch_query(query_subset);
 
-    ARTEA_INFO(fmt::format("Artea Recall@1: {:.4f}", recall));
+        // 3. Verify against Ground Truth using calculate_recall_at_k with k=1
+        recall_estimator_t estimator;
+        auto recall = estimator.calculate_recall_at_k(
+            predictions, gt_subset, topk, num_queries);
 
-    // Bruteforce should theoretically be 100% (or extremely close due to float precision)
-    EXPECT_GE(recall, 0.99f) << "Bruteforce router recall is lower than 0.99!";
+        ARTEA_INFO(fmt::format("Artea Recall@1: {:.4f}", recall));
+
+        // Bruteforce should theoretically be 100% (or extremely close due to float precision)
+        EXPECT_GE(recall, 0.99f) << "Bruteforce router recall is lower than 0.99!";
+    } ARTEA_END_DIM(dispatcher);
 }
 
 TEST(BruteforceRouterTest, BatchTopKQuery) {
-    auto& data = DataProvider::instance();
-    auto& dataset = data.get_dataset();
-    auto& dist_func = data.get_dist_func();
+    auto& data       = DataProvider::instance();
+    auto& dataset    = data.get_dataset();
+    auto& dispatcher = data.get_dispatcher();
 
     const auto& base_vecs = dataset.get_base_vecs();
     const auto& query_vecs = dataset.get_query_vecs();
@@ -126,41 +127,43 @@ TEST(BruteforceRouterTest, BatchTopKQuery) {
     // Test with different k values
     std::vector<uint32_t> k_values = {1, 5, 10, 20};
 
-    for (uint32_t k : k_values) {
-        ARTEA_INFO(fmt::format("Testing batch top-{} query", k));
+    ARTEA_WITH_DIM(dispatcher, DistFunc, dist_func) {
+        for (uint32_t k : k_values) {
+            ARTEA_INFO(fmt::format("Testing batch top-{} query", k));
 
-        // Create router with specific topk value
-        bruteforce_router_t router(base_vecs, dist_func, k);
-        router.initialize();
+            // Create router with specific topk value
+            bruteforce_router_t<DistFunc> router(base_vecs, dist_func, k);
+            router.initialize();
 
-        // Determine number of queries to test
-        const uint32_t num_queries = std::min(
-            static_cast<uint32_t>(query_vecs.get_num_vecs()),
-            static_cast<uint32_t>(g_config.num_samples)
-        );
+            // Determine number of queries to test
+            const uint32_t num_queries = std::min(
+                static_cast<uint32_t>(query_vecs.get_num_vecs()),
+                static_cast<uint32_t>(g_config.num_samples)
+            );
 
-        // Create subset of query vectors if needed
-        auto query_subset = query_vecs.extract_subset(0, num_queries);
-        auto gt_subset = gt_vecs.extract_subset(0, num_queries);
+            // Create subset of query vectors if needed
+            auto query_subset = query_vecs.extract_subset(0, num_queries);
+            auto gt_subset = gt_vecs.extract_subset(0, num_queries);
 
-        // Use batch_query - returns knn_results_t flat array of num_queries * k entries
-        auto batch_results = router.batch_query(query_subset);
+            // Use batch_query - returns knn_results_t flat array of num_queries * k entries
+            auto batch_results = router.batch_query(query_subset);
 
-        // Verify dimensions
-        EXPECT_EQ(batch_results.size(), num_queries * k)
-            << "Batch results should have num_queries * k entries";
+            // Verify dimensions
+            EXPECT_EQ(batch_results.size(), num_queries * k)
+                << "Batch results should have num_queries * k entries";
 
-        // Calculate Recall@K
-        recall_estimator_t estimator;
-        auto recall = estimator.calculate_recall_at_k(batch_results, gt_subset, k, num_queries);
+            // Calculate Recall@K
+            recall_estimator_t estimator;
+            auto recall = estimator.calculate_recall_at_k(batch_results, gt_subset, k, num_queries);
 
-        // Bruteforce should achieve perfect recall
-        EXPECT_GE(recall, 0.99)
-            << fmt::format("Bruteforce router batch Recall@{} is too low: {:.4f}", k, recall);
+            // Bruteforce should achieve perfect recall
+            EXPECT_GE(recall, 0.99)
+                << fmt::format("Bruteforce router batch Recall@{} is too low: {:.4f}", k, recall);
 
-        ARTEA_INFO(fmt::format("Batch top-{} query test passed:", k));
-        ARTEA_INFO(fmt::format("   -> Recall@{}: {:.2f}%", k, recall * 100.0));
-    }
+            ARTEA_INFO(fmt::format("Batch top-{} query test passed:", k));
+            ARTEA_INFO(fmt::format("   -> Recall@{}: {:.2f}%", k, recall * 100.0));
+        }
+    } ARTEA_END_DIM(dispatcher);
 
     ARTEA_INFO("Batch top-k query test passed");
 }
@@ -173,9 +176,9 @@ TEST(BruteforceRouterTest, BatchTopKQuery) {
  *        UNORDERED vid sets must match exactly.
  */
 TEST(BruteforceFastL2EquivalenceTest, TopKMatchesL2) {
-    auto& provider = DataProvider::instance();
-    auto& dataset = provider.get_dataset();
-    auto& dist_func = provider.get_dist_func();
+    auto& provider   = DataProvider::instance();
+    auto& dataset    = provider.get_dataset();
+    auto& dispatcher = provider.get_dispatcher();
 
     const auto& base_vecs = dataset.get_base_vecs();
     const auto& query_vecs = dataset.get_query_vecs();
@@ -192,11 +195,12 @@ TEST(BruteforceFastL2EquivalenceTest, TopKMatchesL2) {
     auto query_subset = query_vecs.extract_subset(0, num_queries);
     auto gt_subset    = gt_vecs.extract_subset(0, num_queries);
 
+    ARTEA_WITH_DIM(dispatcher, DistFunc, dist_func) {
     for (uint32_t k : {1u, 10u, 100u}) {
         if (k > base_vecs.get_num_vecs()) continue;
         ARTEA_INFO(fmt::format("FastL2 equivalence: k={}, num_queries={}", k, num_queries));
 
-        bruteforce_router_t router(base_vecs, dist_func, k);
+        bruteforce_router_t<DistFunc> router(base_vecs, dist_func, k);
         router.initialize();
 
         auto preds_l2   = router.batch_query(query_subset);
@@ -237,6 +241,7 @@ TEST(BruteforceFastL2EquivalenceTest, TopKMatchesL2) {
         ARTEA_INFO(fmt::format(
             "  k={:>3}  recall L2={:.4f} fast={:.4f}", k, r_l2, r_fast));
     }
+    } ARTEA_END_DIM(dispatcher);
 }
 
 int main(int argc, char** argv) {

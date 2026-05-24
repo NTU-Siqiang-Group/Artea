@@ -100,6 +100,27 @@ public:
     __attribute__((always_inline))
     auto variant() const -> const simd_distance_variant_t& { return _impl; }
 
+    /**
+     * @brief Sugar over @c std::visit + @c variant() — invoke @p body
+     *        with the concrete @c SIMDDistance<...,VecDim> as its only
+     *        argument. Pure-C++ alternative to the ARTEA_WITH_DIM macro
+     *        pair (which is just a syntactic wrapper around this).
+     *
+     *        Example:
+     *        @code
+     *          dispatcher.dispatch([&](const auto& dist_func) {
+     *              using DistFunc = std::decay_t<decltype(dist_func)>;
+     *              bruteforce_router_t<router_traits_t, DistFunc> router(...);
+     *              return router.batch_query(...);
+     *          });
+     *        @endcode
+     */
+    template <typename Body>
+    __attribute__((always_inline))
+    auto dispatch(Body&& body) const {
+        return std::visit(std::forward<Body>(body), _impl);
+    }
+
 private:
     static auto _make_variant(vec_dim_t vec_dim) -> simd_distance_variant_t {
         switch (vec_dim) {
@@ -123,3 +144,33 @@ private:
 
 }   // namespace cpu
 }   // namespace artea
+
+// ----------------------------------------------------------------------
+// Block-style sugar for the dispatcher visit pattern.
+//
+// Usage:
+//   ARTEA_WITH_DIM(dispatcher, DistFunc, dist_func) {
+//       // Inside the block:
+//       //   `dist_func` is a const reference to the chosen
+//       //     SIMDDistance<...,VecDim> instance.
+//       //   `DistFunc`  is its type alias (== decltype of dist_func, decayed).
+//       bruteforce_router_t<router_traits_t, DistFunc> router(base, dist_func, k);
+//       auto results = router.batch_query(...);
+//   } ARTEA_END_DIM(dispatcher);
+//
+// Notes:
+//   - The block body lives inside a lambda. A bare `return` returns from
+//     the lambda only — to propagate values out, capture by reference or
+//     return from the lambda and assign at the call site.
+//   - Throws inside the body propagate through std::visit as expected.
+//   - For pure-C++ usage without macros, call dispatcher.dispatch(lambda)
+//     directly — same code path.
+// ----------------------------------------------------------------------
+
+#define ARTEA_WITH_DIM(dispatcher_expr, dim_alias_name, dist_func_name)         \
+    std::visit([&](const auto& dist_func_name) {                                \
+        using dim_alias_name = std::decay_t<decltype(dist_func_name)>;
+
+#define ARTEA_END_DIM(dispatcher_expr)                                          \
+    }, (dispatcher_expr).variant())
+
