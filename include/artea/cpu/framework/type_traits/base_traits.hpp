@@ -198,6 +198,10 @@ public:
     /** @brief ground truth vector arrays. */
     using ground_truth_t = idlist_array_t;
 
+    /** @brief Per-base-point ||p||^2 cache for FastL2 search.
+     *         One @c distance_t per base vector, cache-line aligned. */
+    using base_norms_t = cache_aligned_container_t<distance_t>;
+
     /** @brief vector samplers. */
     using vector_sampler_t = VectorSampler<base_traits_t>;
 

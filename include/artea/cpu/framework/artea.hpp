@@ -132,6 +132,7 @@
 #include <artea/cpu/utils/radius_prober.hpp>
 #include <artea/cpu/utils/index_register_util.hpp>
 #include <artea/cpu/utils/simd_distance.hpp>
+#include <artea/cpu/utils/simd_distance_dispatcher.hpp>
 #include <artea/cpu/utils/simd_fma.hpp>
 #include <artea/cpu/utils/simd_linear.hpp>
 #include <artea/cpu/utils/vector_sampler.hpp>

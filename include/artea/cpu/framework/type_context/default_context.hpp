@@ -78,10 +78,12 @@ using centroid_computer_t = typename base_traits_t::centroid_computer_t;
 
 // Computer types from ComputerTraits
 using distance_metrics_t = typename computer_traits_t::distance_metrics_t;
-using dist_func_t = typename computer_traits_t::dist_func_t;
-using simdu1_dist_t = typename computer_traits_t::simdu1_dist_t;
-using simdu2_dist_t = typename computer_traits_t::simdu2_dist_t;
-using simdu4_dist_t = typename computer_traits_t::simdu4_dist_t;
+// dist_func_t is now a template alias requiring VecDim — pass it through.
+// Most consumers don't reach for this directly; they use simd_dispatcher_t
+// and let std::visit hand them a concrete instance.
+template <std::size_t VecDim, std::size_t UnrollSize = 1>
+using dist_func_t = typename computer_traits_t::template dist_func_t<VecDim, UnrollSize>;
+using simd_dispatcher_t = typename computer_traits_t::simd_dispatcher_t;
 using fma_func_t = typename computer_traits_t::fma_func_t;
 using simdu1_fma_t = typename computer_traits_t::simdu1_fma_t;
 using simdu2_fma_t = typename computer_traits_t::simdu2_fma_t;
@@ -113,8 +115,12 @@ using radius_prober_t = typename index_traits_t::radius_prober_t;
 using hierarchical_graph_compactor_t = typename index_traits_t::hierarchical_graph_compactor_t;
 
 // Unified routers — graph-storage-agnostic at the class level.
-using single_layer_router_t       = router_traits_t::single_layer_router_t;
-using hierarchical_graph_router_t = router_traits_t::hierarchical_graph_router_t;
+// Both carry a DistFuncT template arg: the concrete SIMDDistance type
+// the consumer obtained via std::visit on its dispatcher.
+template <typename DistFuncT>
+using single_layer_router_t       = typename router_traits_t::template single_layer_router_t<DistFuncT>;
+template <typename DistFuncT>
+using hierarchical_graph_router_t = typename router_traits_t::template hierarchical_graph_router_t<DistFuncT>;
 
 namespace compact {
     using refining_graph_t            = index_traits_t::compact::refining_graph_t;
@@ -124,17 +130,19 @@ namespace dynamic {
     using hierarchical_graph_t        = index_traits_t::dynamic::hierarchical_graph_t;
 }   // namespace dynamic
 
-// Refiner types from RefinerTraits
-using triangle_updater_t = typename refiner_traits_t::triangle_updater_t;
-using hierarchical_pruning_updater_t = typename refiner_traits_t::hierarchical_pruning_updater_t;
-using reverse_updater_t  = typename refiner_traits_t::reverse_updater_t;
-using random_updater_t   = typename refiner_traits_t::random_updater_t;
-using routing_updater_t  = typename refiner_traits_t::routing_updater_t;
-using truncate_updater_t = typename refiner_traits_t::truncate_updater_t;
-using random_eg_t = typename refiner_traits_t::random_eg_t;
-using ivf_partitions_t = typename refiner_traits_t::ivf_partitions_t;
+// Refiner types from RefinerTraits.
+// Updaters and edge-generators that hold/call dist_func are template
+// aliases on DistFuncT; consumers must supply the concrete type.
+template <typename DistFuncT> using triangle_updater_t             = typename refiner_traits_t::template triangle_updater_t<DistFuncT>;
+template <typename DistFuncT> using hierarchical_pruning_updater_t = typename refiner_traits_t::template hierarchical_pruning_updater_t<DistFuncT>;
+template <typename DistFuncT> using reverse_updater_t              = typename refiner_traits_t::template reverse_updater_t<DistFuncT>;
+template <typename DistFuncT> using random_updater_t               = typename refiner_traits_t::template random_updater_t<DistFuncT>;
+template <typename DistFuncT> using routing_updater_t              = typename refiner_traits_t::template routing_updater_t<DistFuncT>;
+template <typename DistFuncT> using truncate_updater_t             = typename refiner_traits_t::template truncate_updater_t<DistFuncT>;
+template <typename DistFuncT> using random_eg_t                    = typename refiner_traits_t::template random_eg_t<DistFuncT>;
+using ivf_partitions_t       = typename refiner_traits_t::ivf_partitions_t;
 using ivf_construct_policy_t = typename refiner_traits_t::ivf_construct_policy_t;
-using refiner_utils_t = typename refiner_traits_t::refiner_utils_t;
+using refiner_utils_t        = typename refiner_traits_t::refiner_utils_t;
 
 // Vertex generator types from VertexGeneratorTraits
 using approx_rnet_t = typename vertex_generator_traits_t::approx_rnet_t;
@@ -157,15 +165,16 @@ using boost_candidate_queue_t = typename router_traits_t::boost_candidate_queue_
 using candidate_queue_t = typename router_traits_t::candidate_queue_t;
 using visited_table_pool_t = typename router_traits_t::visited_table_pool_t;
 using candidate_sample_utils_t = typename router_traits_t::candidate_sample_utils_t;
-using bruteforce_router_t = typename router_traits_t::bruteforce_router_t;
-using sl_router_profiler_t = typename router_traits_t::sl_router_profiler_t;
-using hg_router_profiler_t = typename router_traits_t::hg_router_profiler_t;
+template <typename DistFuncT> using bruteforce_router_t  = typename router_traits_t::template bruteforce_router_t<DistFuncT>;
+template <typename DistFuncT> using sl_router_profiler_t = typename router_traits_t::template sl_router_profiler_t<DistFuncT>;
+template <typename DistFuncT> using hg_router_profiler_t = typename router_traits_t::template hg_router_profiler_t<DistFuncT>;
 
 // Utility types
 using index_register_util_t = IndexRegisterUtil;
 
 // Propagate engine from RefinerTraits
-using propagate_engine_t = typename refiner_traits_t::propagate_engine_t;
+template <typename DistFuncT>
+using propagate_engine_t = typename refiner_traits_t::template propagate_engine_t<DistFuncT>;
 
 // Namespace-scoped types from GraphFactoryTraits (index_t, factory_t, config types)
 namespace conv_graph {

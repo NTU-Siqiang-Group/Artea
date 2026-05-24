@@ -32,17 +32,20 @@ enum class IVFConstructPolicyT {
 };
 
 // ----- Forward Declaration  ------ //
-template <typename RefinerTraitsT, typename DerivedClassT> class NeighborUpdater;
-template <typename RefinerTraitsT> class TriangleUpdater;
-template <typename RefinerTraitsT> class PruningUpdater;
-template <typename RefinerTraitsT> class HierarchicalPruningUpdater;
-template <typename RefinerTraitsT> class ReverseUpdater;
-template <typename RefinerTraitsT> class RandomUpdater;
-template <typename RefinerTraitsT> class RoutingUpdater;
-template <typename RefinerTraitsT> class TruncateUpdater;
-template <typename RefinerTraitsT> class ARCUpdater;
-template <typename RefinerTraitsT> class RandomEG;
-template <typename RefinerTraitsT> class PropagateEngine;
+// Refiners that hold or call dist_func carry a DistFuncT template
+// parameter (the concrete SIMDDistance type from the consumer's
+// std::visit lambda). IVFPartitions and RefinerUtils are dim-agnostic.
+template <typename RefinerTraitsT, typename DistFuncT, typename DerivedClassT> class NeighborUpdater;
+template <typename RefinerTraitsT, typename DistFuncT> class TriangleUpdater;
+template <typename RefinerTraitsT, typename DistFuncT> class PruningUpdater;
+template <typename RefinerTraitsT, typename DistFuncT> class HierarchicalPruningUpdater;
+template <typename RefinerTraitsT, typename DistFuncT> class ReverseUpdater;
+template <typename RefinerTraitsT, typename DistFuncT> class RandomUpdater;
+template <typename RefinerTraitsT, typename DistFuncT> class RoutingUpdater;
+template <typename RefinerTraitsT, typename DistFuncT> class TruncateUpdater;
+template <typename RefinerTraitsT, typename DistFuncT> class ARCUpdater;
+template <typename RefinerTraitsT, typename DistFuncT> class RandomEG;
+template <typename RefinerTraitsT, typename DistFuncT> class PropagateEngine;
 template <typename RefinerTraitsT> class IVFPartitions;
 template <typename RefinerTraitsT> class RefinerUtils;
 
@@ -60,42 +63,55 @@ struct RefinerTraits :
     /** @brief IVF construction policy type. */
     using ivf_construct_policy_t = IVFConstructPolicyT;
 
-    template <typename DerivedClassT>
-    using neighbor_updater_t = NeighborUpdater<refiner_traits_t, DerivedClassT>;
+    // Refiner template aliases. Each refiner that holds or calls dist_func
+    // carries a DistFuncT template param. Consumers obtain DistFuncT from
+    // their std::visit lambda over a SIMDDistanceDispatcher.
+    template <typename DistFuncT, typename DerivedClassT>
+    using neighbor_updater_t = NeighborUpdater<refiner_traits_t, DistFuncT, DerivedClassT>;
 
     /** @brief Triangle updater. */
-    using triangle_updater_t = TriangleUpdater<refiner_traits_t>;
+    template <typename DistFuncT>
+    using triangle_updater_t = TriangleUpdater<refiner_traits_t, DistFuncT>;
 
     /** @brief Pruning updater (no log writes). */
-    using pruning_updater_t = PruningUpdater<refiner_traits_t>;
+    template <typename DistFuncT>
+    using pruning_updater_t = PruningUpdater<refiner_traits_t, DistFuncT>;
 
     /** @brief Hierarchical pruning updater — operates on nbr_t, not
      *         nbr_t, and takes max_nbr_size as a per-call argument.
      *         Consumed by stacked_rgraph::IndexFactory. */
+    template <typename DistFuncT>
     using hierarchical_pruning_updater_t =
-        HierarchicalPruningUpdater<refiner_traits_t>;
+        HierarchicalPruningUpdater<refiner_traits_t, DistFuncT>;
 
     /** @brief Reverse edge updater. */
-    using reverse_updater_t = ReverseUpdater<refiner_traits_t>;
+    template <typename DistFuncT>
+    using reverse_updater_t = ReverseUpdater<refiner_traits_t, DistFuncT>;
 
     /** @brief Random neighbor updater. */
-    using random_updater_t = RandomUpdater<refiner_traits_t>;
+    template <typename DistFuncT>
+    using random_updater_t = RandomUpdater<refiner_traits_t, DistFuncT>;
 
     /** @brief Routing-based neighbor updater (uses construct-mode router). */
-    using routing_updater_t = RoutingUpdater<refiner_traits_t>;
+    template <typename DistFuncT>
+    using routing_updater_t = RoutingUpdater<refiner_traits_t, DistFuncT>;
 
     /** @brief Truncate updater: trims neighbor arrays to max_nbr_size. */
-    using truncate_updater_t = TruncateUpdater<refiner_traits_t>;
+    template <typename DistFuncT>
+    using truncate_updater_t = TruncateUpdater<refiner_traits_t, DistFuncT>;
 
     /** @brief Arc-radius pruning updater: drops edges longer than the
      *         configured arc_radius. */
-    using arc_updater_t = ARCUpdater<refiner_traits_t>;
+    template <typename DistFuncT>
+    using arc_updater_t = ARCUpdater<refiner_traits_t, DistFuncT>;
 
     /** @brief Random edge generator. */
-    using random_eg_t = RandomEG<refiner_traits_t>;
+    template <typename DistFuncT>
+    using random_eg_t = RandomEG<refiner_traits_t, DistFuncT>;
 
     /** @brief Type for propagation engine. */
-    using propagate_engine_t = PropagateEngine<refiner_traits_t>;
+    template <typename DistFuncT>
+    using propagate_engine_t = PropagateEngine<refiner_traits_t, DistFuncT>;
 
     /** @brief Neighbor array checker. */
     using nbr_arr_checker_t = typename IndexTraitsT::nbr_arr_checker_t;

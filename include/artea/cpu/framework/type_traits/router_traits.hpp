@@ -27,12 +27,19 @@ namespace artea {
 namespace cpu {
 
 /** ------ Forward Declaration  ------ **/
-template <typename RouterTraitsT, typename DerivedClassT> class VectorRouter;
-template <typename RouterTraitsT> class BruteforceRouter;
-template <typename RouterTraitsT> class SingleLayerRouter;
-template <typename RouterTraitsT> class HierarchicalGraphRouter;
-template <typename RouterTraitsT> class SLRouterProfiler;
-template <typename RouterTraitsT> class HGRouterProfiler;
+// Router classes carry a DistFuncT template parameter (the concrete
+// SIMDDistance<...,VecDim> they're instantiated with). Consumers obtain
+// this type by calling std::visit on a SIMDDistanceDispatcher's variant.
+template <typename RouterTraitsT, typename DistFuncT, typename DerivedClassT> class VectorRouter;
+template <typename RouterTraitsT, typename DistFuncT> class BruteforceRouter;
+template <typename RouterTraitsT, typename DistFuncT> class SingleLayerRouter;
+template <typename RouterTraitsT, typename DistFuncT> class HierarchicalGraphRouter;
+template <typename RouterTraitsT, typename DistFuncT> class SLRouterProfiler;
+template <typename RouterTraitsT, typename DistFuncT> class HGRouterProfiler;
+// Candidate entries, queues, visited-table pool and the stateless
+// sample-utils class do NOT hold a dist_func member — they take it (when
+// needed) via per-method template parameters. Their class templates stay
+// dim-agnostic.
 template <typename RouterTraitsT> struct CandidateEntry;
 template <typename RouterTraitsT, typename EntryT> class StdCandidateQueue;
 template <typename RouterTraitsT, typename EntryT> class LinearCandidateQueue;
@@ -74,11 +81,15 @@ struct RouterTraits : virtual public ComputerTraitsT, virtual public IndexTraits
     template <typename Compare>
     using four_ary_heap_t = FourAryHeap<candidate_entry_t, cache_aligned_container_t<candidate_entry_t>, Compare>;
 
-    template <typename DerivedClassT>
-    using vector_router_t = VectorRouter<router_traits_t, DerivedClassT>;
+    // Router class template aliases. Every router carries a DistFuncT
+    // template param — consumers must supply the concrete SIMDDistance
+    // type, obtained by std::visit on a SIMDDistanceDispatcher's variant.
+    template <typename DistFuncT, typename DerivedClassT>
+    using vector_router_t = VectorRouter<router_traits_t, DistFuncT, DerivedClassT>;
 
     /** @brief Type for bruteforce router. */
-    using bruteforce_router_t = BruteforceRouter<router_traits_t>;
+    template <typename DistFuncT>
+    using bruteforce_router_t = BruteforceRouter<router_traits_t, DistFuncT>;
 
     // --- Candidate queues (all use unified candidate_entry_t) ---
 
@@ -111,17 +122,20 @@ struct RouterTraits : virtual public ComputerTraitsT, virtual public IndexTraits
     /** @brief Unified single-level router. Graph-storage-agnostic at the
      *         class level — the graph type enters as a per-method
      *         template parameter. */
-    using single_layer_router_t = cpu::SingleLayerRouter<router_traits_t>;
+    template <typename DistFuncT>
+    using single_layer_router_t = cpu::SingleLayerRouter<router_traits_t, DistFuncT>;
 
     /** @brief Unified multi-level router. Same graph-agnostic design. */
-    using hierarchical_graph_router_t =
-        cpu::HierarchicalGraphRouter<router_traits_t>;
+    template <typename DistFuncT>
+    using hierarchical_graph_router_t = cpu::HierarchicalGraphRouter<router_traits_t, DistFuncT>;
 
     /** @brief Standalone per-hop 1-NN profiler for a single flat layer. */
-    using sl_router_profiler_t = cpu::SLRouterProfiler<router_traits_t>;
+    template <typename DistFuncT>
+    using sl_router_profiler_t = cpu::SLRouterProfiler<router_traits_t, DistFuncT>;
 
     /** @brief Standalone per-hop 1-NN profiler for the full hierarchy. */
-    using hg_router_profiler_t = cpu::HGRouterProfiler<router_traits_t>;
+    template <typename DistFuncT>
+    using hg_router_profiler_t = cpu::HGRouterProfiler<router_traits_t, DistFuncT>;
 
     /** @brief Pass-through of the per-mode graph types from IndexTraits;
      *         router types are no longer per-mode (lifted to top-level). */

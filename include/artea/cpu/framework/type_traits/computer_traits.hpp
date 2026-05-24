@@ -28,7 +28,8 @@ namespace artea {
 namespace cpu {
 
 /** ------ Forward Declaration  ------ **/
-template <typename ComputerTraitsT, std::size_t UnrollSize> class SIMDDistance;
+template <typename ComputerTraitsT, std::size_t VecDim, std::size_t UnrollSize = 1> class SIMDDistance;
+template <typename ComputerTraitsT, std::size_t UnrollSize> class SIMDDistanceDispatcher;
 template <typename ComputerTraitsT, std::size_t UnrollSize> class SIMDFMA;
 template <typename ComputerTraitsT, std::size_t UnrollSize> class SIMDLinear;
 template <typename ComputerTraitsT> class RecallEstimator;
@@ -59,14 +60,24 @@ public:
 
     using distance_metrics_t = DistanceMetricsT;
 
-    // Distance function type selection
-    template <std::size_t UnrollSize = 1>
-    using simd_dist_t = SIMDDistance<computer_traits_t, UnrollSize>;
+    // Distance function type selection.
+    //
+    // dist_func_t<VecDim>:
+    //   Template alias for the static-dim SIMDDistance kernel. VecDim must
+    //   be specified at the use site (e.g. typename CT::template dist_func_t<128>).
+    //   Inside a std::visit lambda over a dispatcher's variant, the
+    //   auto-deduced parameter type is exactly this alias for the chosen
+    //   alternative — callers rarely need to spell the alias explicitly.
+    //
+    // simd_dispatcher_t:
+    //   Concrete alias for the runtime-dim adapter. ctor takes vec_dim_t
+    //   and selects one variant alternative; only exposes variant() for
+    //   per-loop std::visit. This is what every consumer that previously
+    //   held a dist_func_t now holds instead.
+    template <std::size_t VecDim, std::size_t UnrollSize = 1>
+    using dist_func_t = SIMDDistance<computer_traits_t, VecDim, UnrollSize>;
 
-    using simdu1_dist_t = SIMDDistance<computer_traits_t, 1>;
-    using simdu2_dist_t = SIMDDistance<computer_traits_t, 2>;
-    using simdu4_dist_t = SIMDDistance<computer_traits_t, 4>;
-    using dist_func_t = SIMDDistance<computer_traits_t, 1>;
+    using simd_dispatcher_t = SIMDDistanceDispatcher<computer_traits_t, 1>;
 
     template <std::size_t UnrollSize = 1>
     using simd_fma_t = SIMDFMA<computer_traits_t, UnrollSize>;

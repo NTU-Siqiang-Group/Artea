@@ -13,11 +13,14 @@
 #include <utility> // For std::move, though it's implicitly used in assignment
 #include <unordered_map>
 
+#include <immintrin.h>
+
 #include <fmt/format.h>
 #include <nlohmann/json.hpp>
 #include <tbb/parallel_for.h>
 #include <tbb/blocked_range.h>
 #include <artea/common/logger.hpp>
+#include <artea/cpu/containers/allocator.hpp>
 #include <artea/cpu/utils/random_seq_nr.hpp>
 
 namespace artea {
@@ -30,9 +33,11 @@ class VectorDataset {
     using vec_id_t = typename BaseTraitsT::vec_id_t;
     using vec_num_t = typename BaseTraitsT::vec_num_t;
     using vec_ele_t = typename BaseTraitsT::vec_ele_t;
+    using distance_t = typename BaseTraitsT::distance_t;
     using base_vecs_t = typename BaseTraitsT::base_vecs_t;
     using query_vecs_t = typename BaseTraitsT::query_vecs_t;
     using ground_truth_t = typename BaseTraitsT::ground_truth_t;
+    using base_norms_t = typename BaseTraitsT::base_norms_t;
     using random_seq_nr_t = RandomSeqNR<BaseTraitsT>;
 
 public:
@@ -109,10 +114,39 @@ public:
         return static_cast<vec_num_t>(_base_vecs.get_vec_dim());
     }
 
+    /** @brief Precomputed ||p||^2 for every base point p, indexed by vid.
+     *         Padding lanes (zero-initialized) contribute nothing, so the
+     *         value equals the norm of the original-dim vector.
+     *         Empty until @c enable_fast_L2() is called. */
+    __attribute__((always_inline))
+    auto get_base_norms() const -> const base_norms_t& {
+        return _base_norms;
+    }
+
+    /**
+     * @brief Opt in to FastL2 search: compute and cache ||p||^2 for every
+     *        base point p. Must be called once before any FastL2-enabled
+     *        router consumes @c get_base_norms(). Idempotent — calling
+     *        twice just recomputes.
+     *
+     * @note Must be called AFTER @c shuffle_in_place if both are used;
+     *       see the note on @c shuffle_in_place.
+     */
+    __attribute__((always_inline))
+    auto enable_fast_L2() -> void {
+        _compute_base_norms();
+    }
+
     /**
      * @brief Shuffle the dataset in-place using Fisher-Yates algorithm.
      *        Updates base vectors and ground truth IDs accordingly.
      * @param seed Random seed for reproducibility (default: random_device).
+     *
+     * @note If you intend to use FastL2 (via @c enable_fast_L2()), call
+     *       @c shuffle_in_place BEFORE @c enable_fast_L2 — otherwise the
+     *       precomputed @c _base_norms cache becomes stale (it is keyed by
+     *       vid, and shuffle changes the vid -> vector mapping). This
+     *       function intentionally does NOT auto-recompute norms.
      *
      * TODO: Optimize memory usage by implementing true in-place shuffle.
      *       Current implementation uses extract_subset which creates a full copy,
@@ -172,6 +206,8 @@ private:
     base_vecs_t _base_vecs;
     query_vecs_t _query_vecs;
     ground_truth_t _gt_vecs;
+    /** @brief ||p||^2 cache for FastL2; empty unless enable_fast_L2() ran. */
+    base_norms_t _base_norms;
 
     auto _load_config(const std::string& config_path) -> void {
         std::ifstream config_file(config_path);
@@ -218,6 +254,44 @@ private:
                 _gt_vecs.get_vec_dim()
             )
         );
+    }
+
+    /**
+     * @brief Compute ||p||^2 for every base point and store into _base_norms.
+     *        Uses a single-unroll AVX-512 dot(p,p) over the padded data —
+     *        zero padding contributes nothing. Parallel over base vectors
+     *        via TBB.
+     */
+    auto _compute_base_norms() -> void {
+        const auto num_vecs = _base_vecs.get_num_vecs();
+        const auto padded_dim = _base_vecs.get_vec_dim();
+        constexpr uint32_t SIMD_LANES = 16;
+        if (padded_dim % SIMD_LANES != 0) {
+            ARTEA_ERROR(fmt::format(
+                "_compute_base_norms expects padded dim; got {} (not a multiple of {})",
+                padded_dim, SIMD_LANES));
+        }
+        const std::size_t num_chunks = padded_dim / SIMD_LANES;
+
+        _base_norms.assign(num_vecs, distance_t{0});
+
+        using range_t = tbb::blocked_range<std::decay_t<decltype(num_vecs)>>;
+        tbb::parallel_for(
+            range_t(0, num_vecs),
+            [&](const range_t& r) {
+                for (auto vid = r.begin(); vid != r.end(); ++vid) {
+                    const vec_ele_t* p = _base_vecs.get(vid);
+                    __m512 base_chunk, sum_chunk = _mm512_setzero_ps();
+                    for (std::size_t c = 0; c < num_chunks; ++c) {
+                        base_chunk = _mm512_loadu_ps(p + c * SIMD_LANES);
+                        sum_chunk  = _mm512_fmadd_ps(base_chunk, base_chunk, sum_chunk);
+                    }
+                    _base_norms[vid] = _mm512_reduce_add_ps(sum_chunk);
+                }
+            });
+        ARTEA_SUCCESS(fmt::format(
+            "Base norm computed for {} base vectors (padded_dim={})",
+            num_vecs, padded_dim));
     }
 
     template <typename VecArrayT>
