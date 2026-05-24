@@ -29,6 +29,9 @@
 #include <cstddef>
 #include <span>
 
+#include <tbb/blocked_range.h>
+#include <tbb/parallel_for.h>
+
 #include <artea/common/logger.hpp>
 #include <artea/cpu/refiner/propagate_engine.hpp>
 
@@ -52,7 +55,10 @@ class RefinerUtils {
     using vertex_id_t  = typename RefinerTraitsT::vertex_id_t;
     using layer_id_t   = typename RefinerTraitsT::layer_id_t;
     using nbr_t        = typename RefinerTraitsT::nbr_t;
-    using propagate_engine_t = typename RefinerTraitsT::propagate_engine_t;
+    // propagate_engine_t in RefinerTraits is now a template alias requiring
+    // DistFuncT; we don't actually need any dist_func to iterate vertices
+    // (parallel_for_each_vertex is just a tbb::parallel_for wrapper) — so
+    // expand inline below rather than instantiating PropagateEngine.
 
 public:
     /**
@@ -80,27 +86,31 @@ public:
         const vertex_num_t dest_capacity = refining_graph.layer_config().max_nbr_size();
         const vertex_num_t copy_capacity = std::min(src_capacity, dest_capacity);
 
-        propagate_engine_t::parallel_for_each_vertex(
-            refining_graph,
-            [&](const vertex_id_t /*layer_vid*/, const vertex_id_t storage_vid) {
-                // Skip vids that were never assign_layer'd. Possible when
-                // the caller constructed a dense RG with a vector array
-                // larger than the assigned set (e.g. reusing the global
-                // dataset for a partial fixture). Not produced by the
-                // standard add_vertices → assign_layer flow, so warn.
-                if (!hier_graph.is_vertex_assigned(storage_vid)) {
-                    ARTEA_WARN(fmt::format(
-                        "fill_refining_graph_from_layer: skipping "
-                        "unassigned vid={} (level_id={})",
-                        storage_vid, level_id));
-                    return;
-                }
-                const auto src = hier_graph.fetch_layer_nbrs(storage_vid, level_id);
-                auto& dst = refining_graph.fetch_nbrs(storage_vid);
-                dst.clear();
-                for (vertex_num_t i = 0; i < copy_capacity && i < src.size(); ++i) {
-                    if (src[i].is_invalid()) break;
-                    dst.push_back(src[i]);
+        const vertex_num_t n_vertices = refining_graph.get_num_vertices();
+        tbb::parallel_for(
+            tbb::blocked_range<vertex_num_t>(0, n_vertices),
+            [&](const tbb::blocked_range<vertex_num_t>& range) {
+                for (vertex_num_t i = range.begin(); i != range.end(); ++i) {
+                    const vertex_id_t storage_vid = refining_graph.get_storage_vid(i);
+                    // Skip vids that were never assign_layer'd. Possible when
+                    // the caller constructed a dense RG with a vector array
+                    // larger than the assigned set (e.g. reusing the global
+                    // dataset for a partial fixture). Not produced by the
+                    // standard add_vertices → assign_layer flow, so warn.
+                    if (!hier_graph.is_vertex_assigned(storage_vid)) {
+                        ARTEA_WARN(fmt::format(
+                            "fill_refining_graph_from_layer: skipping "
+                            "unassigned vid={} (level_id={})",
+                            storage_vid, level_id));
+                        continue;
+                    }
+                    const auto src = hier_graph.fetch_layer_nbrs(storage_vid, level_id);
+                    auto& dst = refining_graph.fetch_nbrs(storage_vid);
+                    dst.clear();
+                    for (vertex_num_t k = 0; k < copy_capacity && k < src.size(); ++k) {
+                        if (src[k].is_invalid()) break;
+                        dst.push_back(src[k]);
+                    }
                 }
             });
     }
@@ -121,28 +131,32 @@ public:
         RefiningGraphT&     refining_graph,
         const layer_id_t    level_id
     ) -> void {
-        propagate_engine_t::parallel_for_each_vertex(
-            refining_graph,
-            [&](const vertex_id_t /*layer_vid*/, const vertex_id_t storage_vid) {
-                if (!hier_graph.is_vertex_assigned(storage_vid)) {
-                    ARTEA_WARN(fmt::format(
-                        "writeback_layer_from_refining_graph: skipping "
-                        "unassigned vid={} (level_id={})",
-                        storage_vid, level_id));
-                    return;
+        const vertex_num_t n_vertices = refining_graph.get_num_vertices();
+        tbb::parallel_for(
+            tbb::blocked_range<vertex_num_t>(0, n_vertices),
+            [&](const tbb::blocked_range<vertex_num_t>& range) {
+                for (vertex_num_t i = range.begin(); i != range.end(); ++i) {
+                    const vertex_id_t storage_vid = refining_graph.get_storage_vid(i);
+                    if (!hier_graph.is_vertex_assigned(storage_vid)) {
+                        ARTEA_WARN(fmt::format(
+                            "writeback_layer_from_refining_graph: skipping "
+                            "unassigned vid={} (level_id={})",
+                            storage_vid, level_id));
+                        continue;
+                    }
+                    const auto& src = refining_graph.fetch_nbrs(storage_vid);
+                    hier_graph.with_locked_nbrs(storage_vid, level_id,
+                        [&](std::span<nbr_t> dst, vertex_num_t /*old_cnt*/) {
+                            const std::size_t copy_n =
+                                std::min(src.size(), dst.size());
+                            for (std::size_t k = 0; k < copy_n; ++k) {
+                                dst[k] = src[k];
+                            }
+                            if (copy_n < dst.size()) {
+                                dst[copy_n] = nbr_t::make_invalid_nbr();
+                            }
+                        });
                 }
-                const auto& src = refining_graph.fetch_nbrs(storage_vid);
-                hier_graph.with_locked_nbrs(storage_vid, level_id,
-                    [&](std::span<nbr_t> dst, vertex_num_t /*old_cnt*/) {
-                        const std::size_t copy_n =
-                            std::min(src.size(), dst.size());
-                        for (std::size_t i = 0; i < copy_n; ++i) {
-                            dst[i] = src[i];
-                        }
-                        if (copy_n < dst.size()) {
-                            dst[copy_n] = nbr_t::make_invalid_nbr();
-                        }
-                    });
             });
     }
 

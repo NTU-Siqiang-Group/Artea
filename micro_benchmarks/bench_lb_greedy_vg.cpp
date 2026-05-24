@@ -25,9 +25,8 @@ using base_traits_t = BaseTraits<uint32_t, float>;
 using computer_traits_t = ComputerTraits<base_traits_t, DistanceMetricsT::EUCLIDEAN>;
 using index_traits_t = IndexTraits<base_traits_t>;
 using vg_traits_t = VertexGeneratorTraits<computer_traits_t, index_traits_t>;
-using dist_func_t = typename vg_traits_t::dist_func_t;
+using simd_dispatcher_t = SIMDDistanceDispatcher<computer_traits_t, 1>;
 using vector_array_t = typename vg_traits_t::vector_array_t;
-using lb_greedy_vg_t = typename vg_traits_t::lb_greedy_vg_t;
 
 struct BenchConfig {
     std::string config_path;
@@ -72,28 +71,43 @@ public:
         // Use all base vectors from dataset
         base_vecs_ = std::move(dataset->get_base_vecs());
 
-        // Initialize distance function
-        dist_func_ = std::make_unique<dist_func_t>(dim_);
+        // Initialize distance dispatcher; consumers go through dispatch().
+        dispatcher_ = std::make_unique<simd_dispatcher_t>(dim_);
     }
 
     uint32_t get_dim() const { return dim_; }
     uint32_t get_num_base_vecs() const { return num_base_vecs_; }
     const vector_array_t& get_base_vecs() const { return base_vecs_; }
-    const dist_func_t& get_dist_func() const { return *dist_func_; }
+    const simd_dispatcher_t& get_dispatcher() const { return *dispatcher_; }
 
 private:
     uint32_t dim_;
     uint32_t num_base_vecs_;
     vector_array_t base_vecs_;
-    std::unique_ptr<dist_func_t> dist_func_;
+    std::unique_ptr<simd_dispatcher_t> dispatcher_;
 };
 
 // Benchmark for LBGreedyVG with auto-computed parameters
 static void BM_LBGreedyVG(benchmark::State& state) {
     auto& provider = DataProvider::instance();
-    lb_greedy_vg_t generator(provider.get_dist_func());
+    ARTEA_WITH_DIM(provider.get_dispatcher(), DistFunc, dist_func) {
+        using lb_greedy_vg_t = typename vg_traits_t::template lb_greedy_vg_t<DistFunc>;
+        lb_greedy_vg_t generator(dist_func);
 
-    for (auto _ : state) {
+        for (auto _ : state) {
+            auto result = generator.generate(
+                provider.get_base_vecs(),
+                g_config.min_radius,
+                g_config.max_result_size,
+                g_config.coverage_ratio,
+                g_config.confidence,
+                g_config.batch_size
+            );
+            benchmark::DoNotOptimize(result);
+            benchmark::ClobberMemory();
+        }
+
+        // Report the actual result size in the last iteration
         auto result = generator.generate(
             provider.get_base_vecs(),
             g_config.min_radius,
@@ -102,25 +116,13 @@ static void BM_LBGreedyVG(benchmark::State& state) {
             g_config.confidence,
             g_config.batch_size
         );
-        benchmark::DoNotOptimize(result);
-        benchmark::ClobberMemory();
-    }
-
-    // Report the actual result size in the last iteration
-    auto result = generator.generate(
-        provider.get_base_vecs(),
-        g_config.min_radius,
-        g_config.max_result_size,
-        g_config.coverage_ratio,
-        g_config.confidence,
-        g_config.batch_size
-    );
-    state.counters["result_size"] = benchmark::Counter(
-        static_cast<double>(result.size())
-    );
-    state.counters["approx_rnet_ratio(%)"] = benchmark::Counter(
-        100.0 * result.size() / provider.get_num_base_vecs()
-    );
+        state.counters["result_size"] = benchmark::Counter(
+            static_cast<double>(result.size())
+        );
+        state.counters["approx_rnet_ratio(%)"] = benchmark::Counter(
+            100.0 * result.size() / provider.get_num_base_vecs()
+        );
+    } ARTEA_END_DIM(provider.get_dispatcher());
 }
 BENCHMARK(BM_LBGreedyVG)
     ->Name("LBGreedyVG")
@@ -196,8 +198,12 @@ int main(int argc, char** argv) {
     std::cout << "Loading dataset..." << std::endl;
     DataProvider::instance().init();
 
-    // Compute term_thresh
-    uint32_t computed_term_thresh = lb_greedy_vg_t::compute_term_thresh(
+    // Compute term_thresh — compute_term_thresh is a static method that
+    // doesn't touch dist_func, but lb_greedy_vg_t is now a template alias
+    // requiring DistFuncT; pick any supported SIMDDistance specialization.
+    using any_dist_func_t = SIMDDistance<computer_traits_t, 128, 1>;
+    using any_lb_greedy_vg_t = typename vg_traits_t::template lb_greedy_vg_t<any_dist_func_t>;
+    uint32_t computed_term_thresh = any_lb_greedy_vg_t::compute_term_thresh(
         g_config.coverage_ratio, g_config.confidence, g_config.batch_size
     );
 

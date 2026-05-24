@@ -84,7 +84,7 @@ public:
                 return std::vector<vertex_id_t>(init_nbr_size);
             });
 
-        PropagateEngine<RefinerTraitsT>::parallel_for_each_vertex(
+        PropagateEngine<RefinerTraitsT, DistFuncT>::parallel_for_each_vertex(
             refining_graph,
             [&](const vertex_id_t /*layer_vid*/, const vertex_id_t pivot_vid) {
                 auto& random_local_ids = tls_random_local_ids.local();

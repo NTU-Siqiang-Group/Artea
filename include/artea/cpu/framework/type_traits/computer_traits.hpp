@@ -28,7 +28,7 @@ namespace artea {
 namespace cpu {
 
 /** ------ Forward Declaration  ------ **/
-template <typename ComputerTraitsT, std::size_t VecDim, std::size_t UnrollSize = 1> class SIMDDistance;
+template <typename ComputerTraitsT, std::size_t VecDim, std::size_t UnrollSize> class SIMDDistance;
 template <typename ComputerTraitsT, std::size_t UnrollSize> class SIMDDistanceDispatcher;
 template <typename ComputerTraitsT, std::size_t UnrollSize> class SIMDFMA;
 template <typename ComputerTraitsT, std::size_t UnrollSize> class SIMDLinear;

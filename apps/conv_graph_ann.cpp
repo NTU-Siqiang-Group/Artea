@@ -65,13 +65,14 @@ auto find_latest_index(const std::string& base_dir, const std::string& dataset_n
     return latest_path.string();
 }
 
+template <typename RouterT, typename DistFuncT>
 auto run_benchmark(
-    single_layer_router_t& router,
+    RouterT& router,
     const compact::refining_graph_t& compact_refining_graph,
     const vector_array_t& query_vecs,
     const idlist_array_t& groundtruth,
     const vector_array_t& base_vecs,
-    dist_func_t& dist_func,
+    DistFuncT& dist_func,
     uint32_t topk
 ) -> BenchmarkResult {
     auto start_time = std::chrono::high_resolution_clock::now();
@@ -156,7 +157,7 @@ int main(int argc, char** argv) {
     // Load dataset
     ARTEA_INFO(fmt::format("Loading dataset: {} from {}", dataset_name, config_path));
     vector_dataset_t dataset(config_path, dataset_name);
-    dist_func_t dist_func(dataset.get_base_vecs().get_vec_dim());
+    simd_dispatcher_t dispatcher(dataset.get_base_vecs().get_vec_dim());
 
     const auto& base_vecs = dataset.get_base_vecs();
     const auto& query_vecs = dataset.get_query_vecs();
@@ -209,34 +210,38 @@ int main(int argc, char** argv) {
         extracted_nbr_size
     );
 
-    // Create single-layer router
-    single_layer_router_t router(
-        base_vecs,
-        dist_func,
-        topk,
-        candidate_queue_size
-    );
-    router.initialize();
-
-    ARTEA_INFO(fmt::format("Router initialized: topk={}, candidate_queue_size={}",
-        topk, candidate_queue_size));
-
-    // Run benchmark iterations (200 total, use last 100 for statistics)
-    const uint32_t total_iterations = 200;
+    // Hoist iteration counts outside the visit lambda so the summary
+    // printout below can still reference them.
+    const uint32_t total_iterations  = 200;
     const uint32_t warmup_iterations = 100;
+    // Visit once over the dispatcher; dist_func inside is the concrete
+    // SIMDDistance<...,VecDim> picked by the runtime dim.
     std::vector<BenchmarkResult> results;
+    ARTEA_WITH_DIM(dispatcher, DistFunc, dist_func) {
+        // Create single-layer router
+        single_layer_router_t<DistFunc> router(
+            base_vecs,
+            dist_func,
+            topk,
+            candidate_queue_size
+        );
+        router.initialize();
 
-    for (uint32_t i = 0; i < total_iterations; ++i) {
-        auto result = run_benchmark(router, compact_refining_graph, query_vecs, groundtruth, base_vecs, dist_func, topk);
+        ARTEA_INFO(fmt::format("Router initialized: topk={}, candidate_queue_size={}",
+            topk, candidate_queue_size));
 
-        ARTEA_INFO(fmt::format("Iter {}: {:.2f} ms, {:.2f} QPS, Recall@{}={:.4f}",
-            i + 1, result.query_time_ms, result.throughput_qps, topk, result.recall));
+        for (uint32_t i = 0; i < total_iterations; ++i) {
+            auto result = run_benchmark(router, compact_refining_graph, query_vecs, groundtruth, base_vecs, dist_func, topk);
 
-        // Only collect statistics for last 100 iterations
-        if (i >= warmup_iterations) {
-            results.push_back(result);
+            ARTEA_INFO(fmt::format("Iter {}: {:.2f} ms, {:.2f} QPS, Recall@{}={:.4f}",
+                i + 1, result.query_time_ms, result.throughput_qps, topk, result.recall));
+
+            // Only collect statistics for last 100 iterations
+            if (i >= warmup_iterations) {
+                results.push_back(result);
+            }
         }
-    }
+    } ARTEA_END_DIM(dispatcher);
 
     // Compute averages from last 100 iterations
     double avg_query_time_ms = 0.0;

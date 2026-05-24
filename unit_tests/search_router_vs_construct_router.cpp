@@ -83,8 +83,8 @@ public:
         }
         ARTEA_INFO(fmt::format("Loading dataset '{}' from {}",
             g_config.dataset_name, g_config.config_path));
-        dataset_   = std::make_unique<vector_dataset_t>(g_config.config_path, g_config.dataset_name);
-        dist_func_ = std::make_unique<dist_func_t>(dataset_->get_base_vecs().get_vec_dim());
+        dataset_    = std::make_unique<vector_dataset_t>(g_config.config_path, g_config.dataset_name);
+        dispatcher_ = std::make_unique<simd_dispatcher_t>(dataset_->get_base_vecs().get_vec_dim());
 
         const auto& base_vecs = dataset_->get_base_vecs();
         g_results.dataset_name = g_config.dataset_name;
@@ -101,8 +101,14 @@ public:
 
         ARTEA_INFO("Building convergent graph...");
         auto t0 = std::chrono::high_resolution_clock::now();
-        graph_index_ = std::make_unique<conv_graph::index_t>(std::move(
-            conv_graph::factory_t::construct_graph(base_vecs, layer_cfg, pruning_cfg, propagate_cfg).graph
+        graph_index_ = std::make_unique<conv_graph::index_t>(dispatcher_->dispatch(
+            [&](const auto& dist_func) {
+                return std::move(
+                    conv_graph::factory_t::construct_graph(
+                        base_vecs, layer_cfg, pruning_cfg, propagate_cfg, dist_func
+                    ).graph
+                );
+            }
         ));
         auto t1 = std::chrono::high_resolution_clock::now();
         g_results.build_time_s =
@@ -125,7 +131,7 @@ public:
     }
 
     vector_dataset_t&    get_dataset()           { return *dataset_; }
-    dist_func_t&         get_dist_func()          { return *dist_func_; }
+    simd_dispatcher_t&   get_dispatcher()         { return *dispatcher_; }
     conv_graph::index_t&        get_graph_index()          { return *graph_index_; }
     compact::refining_graph_t& get_compact_refining_graph()  { return *compact_refining_graph_; }
     const idlist_array_t& get_gt()               { return dataset_->get_gt_vecs(); }
@@ -133,7 +139,7 @@ public:
 private:
     DataProvider() = default;
     std::unique_ptr<vector_dataset_t>    dataset_;
-    std::unique_ptr<dist_func_t>         dist_func_;
+    std::unique_ptr<simd_dispatcher_t>   dispatcher_;
     std::unique_ptr<conv_graph::index_t>        graph_index_;
     std::unique_ptr<compact::refining_graph_t> compact_refining_graph_;
 };
@@ -153,26 +159,28 @@ TEST_F(RouterComparisonTest, ConstructModeRouter) {
     const auto& base_vecs  = p.get_dataset().get_base_vecs();
     const auto& query_vecs = p.get_dataset().get_query_vecs();
 
-    single_layer_router_t router(
-        base_vecs, p.get_dist_func(),
-        g_config.topk, g_config.queue_size
-    );
-    router.initialize();
+    ARTEA_WITH_DIM(p.get_dispatcher(), DistFunc, dist_func) {
+        single_layer_router_t<DistFunc> router(
+            base_vecs, dist_func,
+            g_config.topk, g_config.queue_size
+        );
+        router.initialize();
 
-    auto t0 = std::chrono::high_resolution_clock::now();
-    knn_results_t results = router.batch_query(
-        query_vecs, p.get_graph_index().get_refining_graph());
-    auto t1 = std::chrono::high_resolution_clock::now();
-    double us = std::chrono::duration_cast<std::chrono::microseconds>(t1 - t0).count();
+        auto t0 = std::chrono::high_resolution_clock::now();
+        knn_results_t results = router.batch_query(
+            query_vecs, p.get_graph_index().get_refining_graph());
+        auto t1 = std::chrono::high_resolution_clock::now();
+        double us = std::chrono::duration_cast<std::chrono::microseconds>(t1 - t0).count();
 
-    ASSERT_EQ(results.size(), static_cast<size_t>(g_results.num_queries * g_config.topk));
+        ASSERT_EQ(results.size(), static_cast<size_t>(g_results.num_queries * g_config.topk));
 
-    recall_estimator_t re;
-    g_results.construct_recall = re.calculate_recall_at_k(
-        results, p.get_gt(), g_config.topk, g_results.num_queries);
-    g_results.construct_qps = g_results.num_queries * 1e6 / us;
+        recall_estimator_t re;
+        g_results.construct_recall = re.calculate_recall_at_k(
+            results, p.get_gt(), g_config.topk, g_results.num_queries);
+        g_results.construct_qps = g_results.num_queries * 1e6 / us;
 
-    EXPECT_GT(g_results.construct_recall, 0.0f);
+        EXPECT_GT(g_results.construct_recall, 0.0f);
+    } ARTEA_END_DIM(p.get_dispatcher());
 }
 
 // ============================================================
@@ -184,26 +192,28 @@ TEST_F(RouterComparisonTest, SearchModeRouter) {
     const auto& base_vecs  = p.get_dataset().get_base_vecs();
     const auto& query_vecs = p.get_dataset().get_query_vecs();
 
-    single_layer_router_t router(
-        base_vecs, p.get_dist_func(),
-        g_config.topk, g_config.queue_size
-    );
-    router.initialize();
+    ARTEA_WITH_DIM(p.get_dispatcher(), DistFunc, dist_func) {
+        single_layer_router_t<DistFunc> router(
+            base_vecs, dist_func,
+            g_config.topk, g_config.queue_size
+        );
+        router.initialize();
 
-    auto t0 = std::chrono::high_resolution_clock::now();
-    knn_results_t results = router.batch_query(
-        query_vecs, p.get_compact_refining_graph());
-    auto t1 = std::chrono::high_resolution_clock::now();
-    double us = std::chrono::duration_cast<std::chrono::microseconds>(t1 - t0).count();
+        auto t0 = std::chrono::high_resolution_clock::now();
+        knn_results_t results = router.batch_query(
+            query_vecs, p.get_compact_refining_graph());
+        auto t1 = std::chrono::high_resolution_clock::now();
+        double us = std::chrono::duration_cast<std::chrono::microseconds>(t1 - t0).count();
 
-    ASSERT_EQ(results.size(), static_cast<size_t>(g_results.num_queries * g_config.topk));
+        ASSERT_EQ(results.size(), static_cast<size_t>(g_results.num_queries * g_config.topk));
 
-    recall_estimator_t re;
-    g_results.search_recall = re.calculate_recall_at_k(
-        results, p.get_gt(), g_config.topk, g_results.num_queries);
-    g_results.search_qps = g_results.num_queries * 1e6 / us;
+        recall_estimator_t re;
+        g_results.search_recall = re.calculate_recall_at_k(
+            results, p.get_gt(), g_config.topk, g_results.num_queries);
+        g_results.search_qps = g_results.num_queries * 1e6 / us;
 
-    EXPECT_GT(g_results.search_recall, 0.0f);
+        EXPECT_GT(g_results.search_recall, 0.0f);
+    } ARTEA_END_DIM(p.get_dispatcher());
 }
 
 // ============================================================

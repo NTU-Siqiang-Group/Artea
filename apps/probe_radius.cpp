@@ -101,11 +101,13 @@ int main(int argc, char** argv) {
     ARTEA_INFO(fmt::format("  Dimension: {}", dim));
     ARTEA_INFO(fmt::format("  Base vectors: {}", num_base_vecs));
 
-    // Create distance function
-    dist_func_t dist_func(dim);
-
-    // Create radius prober
-    distance_prober_t prober(dist_func);
+    // Construct the runtime-dim dispatcher; visit once and use the
+    // concrete dist_func + matching prober inside the lambda. The lambda
+    // returns the process exit code so main() can forward it.
+    simd_dispatcher_t dispatcher(dim);
+    return dispatcher.dispatch([&](const auto& dist_func) -> int {
+    using DistFunc = std::decay_t<decltype(dist_func)>;
+    distance_prober_t<DistFunc> prober(dist_func);
 
     // Check if multi-quantile mode
     if (!has_quantile) {
@@ -169,7 +171,7 @@ int main(int argc, char** argv) {
         // Mode 2: Auto-compute from confidence and relative error
         confidence = program.get<float>("--confidence");
         relative_err = program.get<float>("--relative-err");
-        num_distances = distance_prober_t::compute_num_dists_sampled(quantile, confidence, relative_err);
+        num_distances = distance_prober_t<DistFunc>::compute_num_dists_sampled(quantile, confidence, relative_err);
 
         ARTEA_INFO(fmt::format("Radius Probing Configuration:"));
         ARTEA_INFO(fmt::format("  Dataset: {}", dataset_name));
@@ -182,7 +184,7 @@ int main(int argc, char** argv) {
         // Default mode: use default confidence and relative error
         confidence = program.get<float>("--confidence");
         relative_err = program.get<float>("--relative-err");
-        num_distances = distance_prober_t::compute_num_dists_sampled(quantile, confidence, relative_err);
+        num_distances = distance_prober_t<DistFunc>::compute_num_dists_sampled(quantile, confidence, relative_err);
 
         ARTEA_INFO(fmt::format("Radius Probing Configuration:"));
         ARTEA_INFO(fmt::format("  Dataset: {}", dataset_name));
@@ -210,4 +212,5 @@ int main(int argc, char** argv) {
     ARTEA_INFO(fmt::format("  Time elapsed: {:.3f} seconds", duration.count() / 1000.0));
 
     return 0;
+    });  // dispatcher.dispatch
 }

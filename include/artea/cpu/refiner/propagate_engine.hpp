@@ -52,7 +52,7 @@ class PropagateEngine {
     using refining_graph_t = typename RefinerTraitsT::dynamic::refining_graph_t;
 
     template <typename DerivedClassT>
-    using neighbor_updater_t = typename RefinerTraitsT::template neighbor_updater_t<DerivedClassT>;
+    using neighbor_updater_t = typename RefinerTraitsT::template neighbor_updater_t<DistFuncT, DerivedClassT>;
 
     static constexpr bool profiling_mode = RefinerTraitsT::profiling_mode;
 

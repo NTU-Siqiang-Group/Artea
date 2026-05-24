@@ -153,13 +153,19 @@ int main(int argc, char** argv) {
         params.num_routing_loops
     );
 
-    conv_graph::index_t graph_index = std::move(
-        conv_graph::factory_t::construct_graph(
-            dataset.get_base_vecs(),
-            layer_config,
-            pruning_config,
-            propagate_config
-        ).graph
+    simd_dispatcher_t dispatcher(dataset.get_base_vecs().get_vec_dim());
+    conv_graph::index_t graph_index = dispatcher.dispatch(
+        [&](const auto& dist_func) {
+            return std::move(
+                conv_graph::factory_t::construct_graph(
+                    dataset.get_base_vecs(),
+                    layer_config,
+                    pruning_config,
+                    propagate_config,
+                    dist_func
+                ).graph
+            );
+        }
     );
 
     auto end_time = std::chrono::high_resolution_clock::now();

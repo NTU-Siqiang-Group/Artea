@@ -75,12 +75,21 @@ public:
     /**
      * @brief The list of supported static-dim SIMDDistance alternatives.
      *        Single source of truth for the supported dim set.
+     *
+     *        Values are the *padded* vec_dim that VectorDataset reports
+     *        after _pad_to_simd_alignment rounds the original dim up to
+     *        the next multiple of 16. Logical → padded mapping:
+     *          - glove-100 (orig dim=100) → padded 112
+     *          - sift     (orig dim=128) → padded 128 (no change)
+     *          - crawl    (orig dim=300) → padded 304
+     *          - deep     (orig dim=96)  → padded 96  (no change)
+     *          - gist     (orig dim=960) → padded 960 (no change)
      */
     using simd_distance_variant_t = std::variant<
         simd_distance_t< 96>,
-        simd_distance_t<100>,
+        simd_distance_t<112>,
         simd_distance_t<128>,
-        simd_distance_t<300>,
+        simd_distance_t<304>,
         simd_distance_t<960>
     >;
 
@@ -123,16 +132,18 @@ public:
 
 private:
     static auto _make_variant(vec_dim_t vec_dim) -> simd_distance_variant_t {
+        // vec_dim here is the padded dim reported by VectorDataset after
+        // _pad_to_simd_alignment — always a multiple of 16.
         switch (vec_dim) {
             case  96: return simd_distance_t< 96>{};
-            case 100: return simd_distance_t<100>{};
+            case 112: return simd_distance_t<112>{};
             case 128: return simd_distance_t<128>{};
-            case 300: return simd_distance_t<300>{};
+            case 304: return simd_distance_t<304>{};
             case 960: return simd_distance_t<960>{};
             default:
                 ARTEA_ERROR(fmt::format(
-                    "SIMDDistanceDispatcher: unsupported vec_dim {}. "
-                    "Supported set: {{96, 100, 128, 300, 960}}. "
+                    "SIMDDistanceDispatcher: unsupported (padded) vec_dim {}. "
+                    "Supported padded set: {{96, 112, 128, 304, 960}}. "
                     "Extend simd_distance_variant_t and _make_variant in "
                     "simd_distance_dispatcher.hpp to support more dims.",
                     vec_dim));
