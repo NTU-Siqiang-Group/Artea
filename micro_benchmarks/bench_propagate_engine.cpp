@@ -57,7 +57,7 @@ public:
         base_vecs_ = std::move(dataset->get_base_vecs());
 
         // Initialize distance function
-        dist_func_ = std::make_unique<dist_func_t>(dim_);
+        dispatcher_ = std::make_unique<simd_dispatcher_t>(dim_);
 
         // Initialize flat graph with random edges
         ARTEA_INFO("Initializing descent graph with random edges...");
@@ -68,10 +68,13 @@ public:
             g_config.propagate_config
         );
 
-        random_eg_t random_eg(*dist_func_);
-        random_eg.generate(graph_index_->get_refining_graph(), static_cast<vec_num_t>(
-            g_config.layer_config.max_nbr_size() * g_config.propagate_config.prefill_ratio()
-        ));
+        dispatcher_->dispatch([&](const auto& dist_func) {
+            using DistFunc = std::decay_t<decltype(dist_func)>;
+            typename refiner_traits_t::template random_eg_t<DistFunc> random_eg(dist_func);
+            random_eg.generate(graph_index_->get_refining_graph(), static_cast<vec_num_t>(
+                g_config.layer_config.max_nbr_size() * g_config.propagate_config.prefill_ratio()
+            ));
+        });
         ARTEA_INFO("Descent graph initialization complete.");
 
         // Save initial graph state for benchmark reset
@@ -81,7 +84,7 @@ public:
     vec_dim_t get_dim() const { return dim_; }
     vec_num_t get_num_base_vecs() const { return num_base_vecs_; }
     const vector_array_t& get_base_vecs() const { return base_vecs_; }
-    const dist_func_t& get_dist_func() const { return *dist_func_; }
+    const simd_dispatcher_t& get_dispatcher() const { return *dispatcher_; }
     conv_graph::index_t& get_graph_index() const { return *graph_index_; }
 
     // Reset graph to initial state
@@ -104,7 +107,7 @@ private:
     vec_dim_t dim_;
     vec_num_t num_base_vecs_;
     vector_array_t base_vecs_;
-    std::unique_ptr<dist_func_t> dist_func_;
+    std::unique_ptr<simd_dispatcher_t> dispatcher_;
     std::unique_ptr<conv_graph::index_t> graph_index_;
     std::vector<nbr_arr_t> initial_nbrs_;
 };
@@ -112,34 +115,34 @@ private:
 // Benchmark for PropagateEngine with TriangleUpdater (with selective scheduling)
 static void BM_TriangleUpdater(benchmark::State& state) {
     auto& provider = DataProvider::instance();
-    const auto& dist_func = provider.get_dist_func();
+    const auto& dispatcher = provider.get_dispatcher();
     conv_graph::index_t& graph_index = provider.get_graph_index();
     const vec_num_t num_vertices = provider.get_num_base_vecs();
 
     // Set max_nbr_size on the flat graph
     graph_index.layer_config().max_nbr_size(g_config.layer_config.max_nbr_size());
 
-    // Create PropagateEngine instance
-    propagate_engine_t propagate_engine(dist_func);
-    propagate_engine.set_graph(graph_index.get_refining_graph());
+    dispatcher.dispatch([&](const auto& dist_func) {
+        using DistFunc = std::decay_t<decltype(dist_func)>;
+        typename refiner_traits_t::template propagate_engine_t<DistFunc>
+            propagate_engine(dist_func);
+        propagate_engine.set_graph(graph_index.get_refining_graph());
 
-    // Create TriangleUpdater using the factory method
-    auto triangle_updater = propagate_engine.make_updater<triangle_updater_t>(
-        g_config.scale_coeffs, g_config.shifted_coeffs);
+        auto triangle_updater = propagate_engine.template make_updater<
+            typename refiner_traits_t::template triangle_updater_t<DistFunc>>(
+            g_config.scale_coeffs, g_config.shifted_coeffs);
 
-    for (auto _ : state) {
-        // Reset graph to initial state before each benchmark iteration
-        state.PauseTiming();
-        provider.reset_graph();
-        state.ResumeTiming();
+        for (auto _ : state) {
+            state.PauseTiming();
+            provider.reset_graph();
+            state.ResumeTiming();
 
-        // Run the propagation for specified iterations
-        propagate_engine.run(g_config.num_iters, triangle_updater);
+            propagate_engine.run(g_config.num_iters, triangle_updater);
 
-        // Prevent optimization from removing the work
-        benchmark::DoNotOptimize(graph_index);
-        benchmark::ClobberMemory();
-    }
+            benchmark::DoNotOptimize(graph_index);
+            benchmark::ClobberMemory();
+        }
+    });
 
     state.SetItemsProcessed(state.iterations() * num_vertices * g_config.num_iters);
     state.SetLabel(fmt::format(
@@ -153,34 +156,33 @@ static void BM_TriangleUpdater(benchmark::State& state) {
 // Benchmark for PropagateEngine with TriangleUpdater (without selective scheduling)
 static void BM_TriangleUpdater_NoSS(benchmark::State& state) {
     auto& provider = DataProvider::instance();
-    const auto& dist_func = provider.get_dist_func();
+    const auto& dispatcher = provider.get_dispatcher();
     conv_graph::index_t& graph_index = provider.get_graph_index();
     const vec_num_t num_vertices = provider.get_num_base_vecs();
 
-    // Set max_nbr_size on the flat graph
     graph_index.layer_config().max_nbr_size(g_config.layer_config.max_nbr_size());
 
-    // Create PropagateEngine instance without selective scheduling
-    propagate_engine_t propagate_engine(dist_func);
-    propagate_engine.set_graph(graph_index.get_refining_graph());
+    dispatcher.dispatch([&](const auto& dist_func) {
+        using DistFunc = std::decay_t<decltype(dist_func)>;
+        typename refiner_traits_t::template propagate_engine_t<DistFunc>
+            propagate_engine(dist_func);
+        propagate_engine.set_graph(graph_index.get_refining_graph());
 
-    // Create TriangleUpdater using the factory method
-    auto triangle_updater = propagate_engine.make_updater<triangle_updater_t>(
-        g_config.scale_coeffs, g_config.shifted_coeffs);
+        auto triangle_updater = propagate_engine.template make_updater<
+            typename refiner_traits_t::template triangle_updater_t<DistFunc>>(
+            g_config.scale_coeffs, g_config.shifted_coeffs);
 
-    for (auto _ : state) {
-        // Reset graph to initial state before each benchmark iteration
-        state.PauseTiming();
-        provider.reset_graph();
-        state.ResumeTiming();
+        for (auto _ : state) {
+            state.PauseTiming();
+            provider.reset_graph();
+            state.ResumeTiming();
 
-        // Run the propagation for specified iterations
-        propagate_engine.run(g_config.num_iters, triangle_updater);
+            propagate_engine.run(g_config.num_iters, triangle_updater);
 
-        // Prevent optimization from removing the work
-        benchmark::DoNotOptimize(graph_index);
-        benchmark::ClobberMemory();
-    }
+            benchmark::DoNotOptimize(graph_index);
+            benchmark::ClobberMemory();
+        }
+    });
 
     state.SetItemsProcessed(state.iterations() * num_vertices * g_config.num_iters);
     state.SetLabel(fmt::format(
@@ -194,30 +196,30 @@ static void BM_TriangleUpdater_NoSS(benchmark::State& state) {
 // Benchmark for PropagateEngine with ReverseUpdater
 static void BM_ReverseUpdater(benchmark::State& state) {
     auto& provider = DataProvider::instance();
-    const auto& dist_func = provider.get_dist_func();
+    const auto& dispatcher = provider.get_dispatcher();
     conv_graph::index_t& graph_index = provider.get_graph_index();
     const vec_num_t num_vertices = provider.get_num_base_vecs();
 
-    // Create PropagateEngine instance
-    propagate_engine_t propagate_engine(dist_func);
-    propagate_engine.set_graph(graph_index.get_refining_graph());
+    dispatcher.dispatch([&](const auto& dist_func) {
+        using DistFunc = std::decay_t<decltype(dist_func)>;
+        typename refiner_traits_t::template propagate_engine_t<DistFunc>
+            propagate_engine(dist_func);
+        propagate_engine.set_graph(graph_index.get_refining_graph());
 
-    // Create ReverseUpdater using the factory method
-    auto reverse_updater = propagate_engine.make_updater<reverse_updater_t>();
+        auto reverse_updater = propagate_engine.template make_updater<
+            typename refiner_traits_t::template reverse_updater_t<DistFunc>>();
 
-    for (auto _ : state) {
-        // Reset graph to initial state before each benchmark iteration
-        state.PauseTiming();
-        provider.reset_graph();
-        state.ResumeTiming();
+        for (auto _ : state) {
+            state.PauseTiming();
+            provider.reset_graph();
+            state.ResumeTiming();
 
-        // Run the propagation for specified iterations
-        propagate_engine.run(g_config.num_iters, reverse_updater);
+            propagate_engine.run(g_config.num_iters, reverse_updater);
 
-        // Prevent optimization from removing the work
-        benchmark::DoNotOptimize(graph_index);
-        benchmark::ClobberMemory();
-    }
+            benchmark::DoNotOptimize(graph_index);
+            benchmark::ClobberMemory();
+        }
+    });
 
     state.SetItemsProcessed(state.iterations() * num_vertices * g_config.num_iters);
     state.SetLabel(fmt::format(
@@ -231,30 +233,30 @@ static void BM_ReverseUpdater(benchmark::State& state) {
 // Benchmark for PropagateEngine with ReverseUpdater (without selective scheduling)
 static void BM_ReverseUpdater_NoSS(benchmark::State& state) {
     auto& provider = DataProvider::instance();
-    const auto& dist_func = provider.get_dist_func();
+    const auto& dispatcher = provider.get_dispatcher();
     conv_graph::index_t& graph_index = provider.get_graph_index();
     const vec_num_t num_vertices = provider.get_num_base_vecs();
 
-    // Create PropagateEngine instance without selective scheduling
-    propagate_engine_t propagate_engine(dist_func);
-    propagate_engine.set_graph(graph_index.get_refining_graph());
+    dispatcher.dispatch([&](const auto& dist_func) {
+        using DistFunc = std::decay_t<decltype(dist_func)>;
+        typename refiner_traits_t::template propagate_engine_t<DistFunc>
+            propagate_engine(dist_func);
+        propagate_engine.set_graph(graph_index.get_refining_graph());
 
-    // Create ReverseUpdater using the factory method
-    auto reverse_updater = propagate_engine.make_updater<reverse_updater_t>();
+        auto reverse_updater = propagate_engine.template make_updater<
+            typename refiner_traits_t::template reverse_updater_t<DistFunc>>();
 
-    for (auto _ : state) {
-        // Reset graph to initial state before each benchmark iteration
-        state.PauseTiming();
-        provider.reset_graph();
-        state.ResumeTiming();
+        for (auto _ : state) {
+            state.PauseTiming();
+            provider.reset_graph();
+            state.ResumeTiming();
 
-        // Run the propagation for specified iterations
-        propagate_engine.run(g_config.num_iters, reverse_updater);
+            propagate_engine.run(g_config.num_iters, reverse_updater);
 
-        // Prevent optimization from removing the work
-        benchmark::DoNotOptimize(graph_index);
-        benchmark::ClobberMemory();
-    }
+            benchmark::DoNotOptimize(graph_index);
+            benchmark::ClobberMemory();
+        }
+    });
 
     state.SetItemsProcessed(state.iterations() * num_vertices * g_config.num_iters);
     state.SetLabel(fmt::format(
@@ -268,31 +270,31 @@ static void BM_ReverseUpdater_NoSS(benchmark::State& state) {
 // Benchmark for PropagateEngine with RandomUpdater
 static void BM_RandomUpdater(benchmark::State& state) {
     auto& provider = DataProvider::instance();
-    const auto& dist_func = provider.get_dist_func();
+    const auto& dispatcher = provider.get_dispatcher();
     conv_graph::index_t& graph_index = provider.get_graph_index();
     const vec_num_t num_vertices = provider.get_num_base_vecs();
 
-    // Create PropagateEngine instance
-    propagate_engine_t propagate_engine(dist_func);
-    propagate_engine.set_graph(graph_index.get_refining_graph());
+    dispatcher.dispatch([&](const auto& dist_func) {
+        using DistFunc = std::decay_t<decltype(dist_func)>;
+        typename refiner_traits_t::template propagate_engine_t<DistFunc>
+            propagate_engine(dist_func);
+        propagate_engine.set_graph(graph_index.get_refining_graph());
 
-    // Create RandomUpdater using the factory method
-    auto random_updater = propagate_engine.make_updater<random_updater_t>(
-        g_config.rand_gen_size, vertex_id_t{0}, num_vertices);
+        auto random_updater = propagate_engine.template make_updater<
+            typename refiner_traits_t::template random_updater_t<DistFunc>>(
+            g_config.rand_gen_size, vertex_id_t{0}, num_vertices);
 
-    for (auto _ : state) {
-        // Reset graph to initial state before each benchmark iteration
-        state.PauseTiming();
-        provider.reset_graph();
-        state.ResumeTiming();
+        for (auto _ : state) {
+            state.PauseTiming();
+            provider.reset_graph();
+            state.ResumeTiming();
 
-        // Run the propagation for specified iterations
-        propagate_engine.run(g_config.num_iters, random_updater);
+            propagate_engine.run(g_config.num_iters, random_updater);
 
-        // Prevent optimization from removing the work
-        benchmark::DoNotOptimize(graph_index);
-        benchmark::ClobberMemory();
-    }
+            benchmark::DoNotOptimize(graph_index);
+            benchmark::ClobberMemory();
+        }
+    });
 
     state.SetItemsProcessed(state.iterations() * num_vertices * g_config.num_iters);
     state.SetLabel(fmt::format(
@@ -306,31 +308,31 @@ static void BM_RandomUpdater(benchmark::State& state) {
 // Benchmark for PropagateEngine with RandomUpdater (without selective scheduling)
 static void BM_RandomUpdater_NoSS(benchmark::State& state) {
     auto& provider = DataProvider::instance();
-    const auto& dist_func = provider.get_dist_func();
+    const auto& dispatcher = provider.get_dispatcher();
     conv_graph::index_t& graph_index = provider.get_graph_index();
     const vec_num_t num_vertices = provider.get_num_base_vecs();
 
-    // Create PropagateEngine instance without selective scheduling
-    propagate_engine_t propagate_engine(dist_func);
-    propagate_engine.set_graph(graph_index.get_refining_graph());
+    dispatcher.dispatch([&](const auto& dist_func) {
+        using DistFunc = std::decay_t<decltype(dist_func)>;
+        typename refiner_traits_t::template propagate_engine_t<DistFunc>
+            propagate_engine(dist_func);
+        propagate_engine.set_graph(graph_index.get_refining_graph());
 
-    // Create RandomUpdater using the factory method
-    auto random_updater = propagate_engine.make_updater<random_updater_t>(
-        g_config.rand_gen_size, vertex_id_t{0}, num_vertices);
+        auto random_updater = propagate_engine.template make_updater<
+            typename refiner_traits_t::template random_updater_t<DistFunc>>(
+            g_config.rand_gen_size, vertex_id_t{0}, num_vertices);
 
-    for (auto _ : state) {
-        // Reset graph to initial state before each benchmark iteration
-        state.PauseTiming();
-        provider.reset_graph();
-        state.ResumeTiming();
+        for (auto _ : state) {
+            state.PauseTiming();
+            provider.reset_graph();
+            state.ResumeTiming();
 
-        // Run the propagation for specified iterations
-        propagate_engine.run(g_config.num_iters, random_updater);
+            propagate_engine.run(g_config.num_iters, random_updater);
 
-        // Prevent optimization from removing the work
-        benchmark::DoNotOptimize(graph_index);
-        benchmark::ClobberMemory();
-    }
+            benchmark::DoNotOptimize(graph_index);
+            benchmark::ClobberMemory();
+        }
+    });
 
     state.SetItemsProcessed(state.iterations() * num_vertices * g_config.num_iters);
     state.SetLabel(fmt::format(

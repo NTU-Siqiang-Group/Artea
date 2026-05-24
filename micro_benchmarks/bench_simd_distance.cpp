@@ -26,7 +26,10 @@
 using namespace artea;
 using namespace artea::cpu;
 
-template <std::size_t U> using artea_simd_dist_t = computer_traits_t::template simd_dist_t<U>;
+// Per-unroll runtime-dim adapter; visit inside each BM to get concrete
+// SIMDDistance<...,dim,U>.
+template <std::size_t U>
+using artea_simd_dispatcher_t = SIMDDistanceDispatcher<computer_traits_t, U>;
 
 static constexpr uint32_t NUM_PAIRS = 65536;
 
@@ -178,18 +181,20 @@ BENCHMARK_TEMPLATE(BM_StdSimdTail, 1)->Name("StdSimdTail_L2_U1");
 BENCHMARK_TEMPLATE(BM_StdSimdTail, 2)->Name("StdSimdTail_L2_U2");
 BENCHMARK_TEMPLATE(BM_StdSimdTail, 4)->Name("StdSimdTail_L2_U4");
 
-// 3. Artea SIMDDistance (class wrapper, runtime dim)
+// 3. Artea SIMDDistance (class wrapper, runtime dim via dispatcher)
 template <std::size_t U>
 static void BM_Artea(benchmark::State& state) {
     auto& p = DataProvider::instance();
-    artea_simd_dist_t<U> func(p.get_dim());
-    uint32_t idx = 0;
-    for (auto _ : state) {
-        const float* q = p.get_vec(p.get_id_a(idx));
-        const float* t = p.get_vec(p.get_id_b(idx));
-        benchmark::DoNotOptimize(func(q, t));
-        ++idx;
-    }
+    artea_simd_dispatcher_t<U> dispatcher(p.get_dim());
+    dispatcher.dispatch([&](const auto& func) {
+        uint32_t idx = 0;
+        for (auto _ : state) {
+            const float* q = p.get_vec(p.get_id_a(idx));
+            const float* t = p.get_vec(p.get_id_b(idx));
+            benchmark::DoNotOptimize(func(q, t));
+            ++idx;
+        }
+    });
     state.SetItemsProcessed(state.iterations());
 }
 BENCHMARK_TEMPLATE(BM_Artea, 1)->Name("Artea_L2_U1");
@@ -265,19 +270,21 @@ BENCHMARK_TEMPLATE(BM_StdSimdTail_Parallel, 4)->Name("Par_StdSimdTail_L2_U4")->U
 template <std::size_t U>
 static void BM_Artea_Parallel(benchmark::State& state) {
     auto& p = DataProvider::instance();
-    for (auto _ : state) {
-        tbb::parallel_for(
-            tbb::blocked_range<uint32_t>(0, PARALLEL_BATCH),
-            [&](const tbb::blocked_range<uint32_t>& r) {
-                artea_simd_dist_t<U> func(p.get_dim());
-                for (uint32_t i = r.begin(); i != r.end(); ++i) {
-                    const float* q = p.get_vec(p.get_id_a(i));
-                    const float* t = p.get_vec(p.get_id_b(i));
-                    benchmark::DoNotOptimize(func(q, t));
+    artea_simd_dispatcher_t<U> dispatcher(p.get_dim());
+    dispatcher.dispatch([&](const auto& func) {
+        for (auto _ : state) {
+            tbb::parallel_for(
+                tbb::blocked_range<uint32_t>(0, PARALLEL_BATCH),
+                [&](const tbb::blocked_range<uint32_t>& r) {
+                    for (uint32_t i = r.begin(); i != r.end(); ++i) {
+                        const float* q = p.get_vec(p.get_id_a(i));
+                        const float* t = p.get_vec(p.get_id_b(i));
+                        benchmark::DoNotOptimize(func(q, t));
+                    }
                 }
-            }
-        );
-    }
+            );
+        }
+    });
     state.SetItemsProcessed(state.iterations() * PARALLEL_BATCH);
 }
 BENCHMARK_TEMPLATE(BM_Artea_Parallel, 1)->Name("Par_Artea_L2_U1")->UseRealTime();

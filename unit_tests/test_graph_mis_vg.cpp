@@ -75,12 +75,15 @@ public:
         g_config.routing_topk, g_config.routing_queue_size);
 
         ARTEA_INFO("Building KNN graph...");
+        dispatcher_ = std::make_unique<simd_dispatcher_t>(base_vecs.get_vec_dim());
         auto t0 = std::chrono::high_resolution_clock::now();
-        knn_graph_ = std::make_unique<knn_graph::index_t>(std::move(
-            knn_graph::factory_t::construct_graph(
-                base_vecs, layer_config, propagate_config
-            ).graph
-        ));
+        knn_graph_ = std::make_unique<knn_graph::index_t>(
+            dispatcher_->dispatch([&](const auto& dist_func) {
+                return std::move(knn_graph::factory_t::construct_graph(
+                    base_vecs, layer_config, propagate_config, dist_func
+                ).graph);
+            })
+        );
         auto t1 = std::chrono::high_resolution_clock::now();
         g_results.knn_build_time_s = std::chrono::duration_cast<std::chrono::microseconds>(t1 - t0).count() / 1e6;
         g_results.num_vertices = knn_graph_->get_num_vertices();
@@ -172,6 +175,7 @@ private:
     }
 
     std::unique_ptr<vector_dataset_t> dataset_;
+    std::unique_ptr<simd_dispatcher_t> dispatcher_;
     std::unique_ptr<knn_graph::index_t> knn_graph_;
     std::unique_ptr<approx_rnet_t> rnet_;
 };

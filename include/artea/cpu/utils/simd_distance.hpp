@@ -23,10 +23,15 @@ namespace cpu {
 template <typename ComputerTraitsT, std::size_t VecDim, std::size_t UnrollSize = 1>
 class SIMDDistance {
 
-    using vec_ele_t = typename ComputerTraitsT::vec_ele_t;
-    using distance_t = typename ComputerTraitsT::distance_t;
+public:
+    // Public so callers (HG router compact-mode dispatch, compactor
+    // norm-cache gate) can `if constexpr` on the metric.
     using distance_metrics_t = typename ComputerTraitsT::distance_metrics_t;
     static constexpr distance_metrics_t distance_metrics = ComputerTraitsT::distance_metrics;
+
+private:
+    using vec_ele_t = typename ComputerTraitsT::vec_ele_t;
+    using distance_t = typename ComputerTraitsT::distance_t;
     static constexpr std::size_t unroll_size = UnrollSize;
 
     static constexpr std::size_t SIMD_REGISTER_BITS = 512;

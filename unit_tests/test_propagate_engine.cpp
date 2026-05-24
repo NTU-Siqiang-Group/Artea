@@ -43,25 +43,26 @@ protected:
         // This creates a more realistic test case with various distance relationships
 
         num_vertices_ = 12;
-        vec_dim_ = 2;
+        // Pad to a dispatcher-supported dim (96); zero-padded extra coords
+        // do not affect L2 distance, so the 2D grid geometry is preserved.
+        vec_dim_ = 96;
         layer_config_ = layer_config_t(8);
 
         // Create VectorArray and populate with vectors
         vecs_ = std::make_unique<vector_array_t>(vec_dim_);
         vecs_->reserve(num_vertices_);
 
-        // Add vertices in a 3x4 grid
+        // Add vertices in a 3x4 grid (first 2 dims encode col,row; rest zero)
         for (int row = 0; row < 3; ++row) {
             for (int col = 0; col < 4; ++col) {
-                std::vector<vec_ele_t> v = {
-                    static_cast<vec_ele_t>(col),
-                    static_cast<vec_ele_t>(row)
-                };
+                std::vector<vec_ele_t> v(vec_dim_, 0.0f);
+                v[0] = static_cast<vec_ele_t>(col);
+                v[1] = static_cast<vec_ele_t>(row);
                 vecs_->append_vec(v.data());
             }
         }
 
-        dist_func_ = std::make_unique<dist_func_t>(vec_dim_);
+        dispatcher_ = std::make_unique<simd_dispatcher_t>(vec_dim_);
 
         // Initialize descent graph
         graph_index_ = std::make_unique<conv_graph::index_t>(
@@ -76,7 +77,7 @@ protected:
     distance_t compute_distance(vertex_id_t v1, vertex_id_t v2) {
         const vec_ele_t* vec1 = vecs_->get(v1);
         const vec_ele_t* vec2 = vecs_->get(v2);
-        return (*dist_func_)(vec1, vec2);
+        return dispatcher_->dispatch([&](const auto& dist_func) { return dist_func(vec1, vec2); });
     }
 
     // Helper to check if edge (u, v) exists in neighbor array
@@ -131,7 +132,7 @@ protected:
     conv_graph::pruning_config_t pruning_config_{1.0, 0.0};
     conv_graph::propagate_config_t propagate_config_{4, 14, 0.6};
     std::unique_ptr<vector_array_t> vecs_;
-    std::unique_ptr<dist_func_t> dist_func_;
+    std::unique_ptr<simd_dispatcher_t> dispatcher_;
     std::unique_ptr<conv_graph::index_t> graph_index_;
 };
 
@@ -176,14 +177,19 @@ TEST_F(PropagateEngineCorrectnessTest, TrianglePruningWithPropagateEngine) {
 
     graph_index_->layer_config().max_nbr_size(max_nbr_size);
 
-    propagate_engine_t propagate_engine(*dist_func_);
-    propagate_engine.set_graph(graph_index_->get_refining_graph());
+    dispatcher_->dispatch([&](const auto& dist_func) {
+        using DistFunc = std::decay_t<decltype(dist_func)>;
+        typename refiner_traits_t::template propagate_engine_t<DistFunc>
+            propagate_engine(dist_func);
+        propagate_engine.set_graph(graph_index_->get_refining_graph());
 
-    auto triangle_updater = propagate_engine.make_updater<triangle_updater_t>(
-        pruning_config_.scale_coeffs(), pruning_config_.shifted_coeffs());
+        auto triangle_updater = propagate_engine.template make_updater<
+            typename refiner_traits_t::template triangle_updater_t<DistFunc>>(
+            pruning_config_.scale_coeffs(), pruning_config_.shifted_coeffs());
 
-    // Apply triangle pruning for 5 iterations
-    propagate_engine.run(5, triangle_updater);
+        // Apply triangle pruning for 5 iterations
+        propagate_engine.run(5, triangle_updater);
+    });
 
     ARTEA_INFO(fmt::format("After 5 iterations of triangle pruning:"));
     for (vertex_id_t u = 0; u < std::min(num_vertices_, static_cast<vec_num_t>(5)); ++u) {
@@ -240,52 +246,59 @@ TEST_F(PropagateEngineCorrectnessTest, IntegratedRandomAndReverseUpdater) {
 
     ARTEA_INFO("Step 1: Starting with empty graph");
 
-    propagate_engine_t propagate_engine(*dist_func_);
-    propagate_engine.set_graph(graph_index_->get_refining_graph());
-
-    // Step 2: Apply RandomUpdater to generate asymmetric edges
-    const vec_num_t rand_gen_size = 5;
-    auto random_updater = propagate_engine.make_updater<random_updater_t>(
-        rand_gen_size, vertex_id_t{0}, num_vertices_);
-
-    propagate_engine.run(1, random_updater);
-
     size_t edges_after_random = 0;
-    for (vertex_id_t u = 0; u < num_vertices_; ++u) {
-        edges_after_random += nbrs_arr[u].size();
-    }
-
-    ARTEA_INFO(fmt::format("Step 2: After RandomUpdater: {} edges generated", edges_after_random));
-
-    // Check how many edges are missing their reverse
+    size_t edges_after_reverse = 0;
     int missing_reverse_before = 0;
-    for (vertex_id_t u = 0; u < num_vertices_; ++u) {
-        for (const auto& nbr : nbrs_arr[u]) {
-            vertex_id_t v = nbr.get_vid();
-            if (!has_edge(nbrs_arr[v], u)) {
-                missing_reverse_before++;
+
+    dispatcher_->dispatch([&](const auto& dist_func) {
+        using DistFunc = std::decay_t<decltype(dist_func)>;
+        typename refiner_traits_t::template propagate_engine_t<DistFunc>
+            propagate_engine(dist_func);
+        propagate_engine.set_graph(graph_index_->get_refining_graph());
+
+        // Step 2: Apply RandomUpdater to generate asymmetric edges
+        const vec_num_t rand_gen_size = 5;
+        auto random_updater = propagate_engine.template make_updater<
+            typename refiner_traits_t::template random_updater_t<DistFunc>>(
+            rand_gen_size, vertex_id_t{0}, num_vertices_);
+
+        propagate_engine.run(1, random_updater);
+
+        for (vertex_id_t u = 0; u < num_vertices_; ++u) {
+            edges_after_random += nbrs_arr[u].size();
+        }
+
+        ARTEA_INFO(fmt::format("Step 2: After RandomUpdater: {} edges generated", edges_after_random));
+
+        // Check how many edges are missing their reverse
+        for (vertex_id_t u = 0; u < num_vertices_; ++u) {
+            for (const auto& nbr : nbrs_arr[u]) {
+                vertex_id_t v = nbr.get_vid();
+                if (!has_edge(nbrs_arr[v], u)) {
+                    missing_reverse_before++;
+                }
             }
         }
-    }
 
-    ARTEA_INFO(fmt::format("Before reverse updater: {} missing reverse edges", missing_reverse_before));
+        ARTEA_INFO(fmt::format("Before reverse updater: {} missing reverse edges", missing_reverse_before));
+
+        // Step 3: Apply reverse updater
+        auto reverse_updater = propagate_engine.template make_updater<
+            typename refiner_traits_t::template reverse_updater_t<DistFunc>>();
+        propagate_engine.run(1, reverse_updater);
+
+        for (vertex_id_t u = 0; u < num_vertices_; ++u) {
+            edges_after_reverse += nbrs_arr[u].size();
+        }
+
+        ARTEA_INFO(fmt::format("Step 3: After reverse updater: {} edges (increase: {})",
+                               edges_after_reverse,
+                               edges_after_reverse - edges_after_random));
+    });
 
     // RandomUpdater generates asymmetric edges, so there should be missing reverse edges
     EXPECT_GT(missing_reverse_before, 0)
         << "RandomUpdater should generate asymmetric edges (missing reverse edges)";
-
-    // Step 3: Apply reverse updater
-    auto reverse_updater = propagate_engine.make_updater<reverse_updater_t>();
-    propagate_engine.run(1, reverse_updater);
-
-    size_t edges_after_reverse = 0;
-    for (vertex_id_t u = 0; u < num_vertices_; ++u) {
-        edges_after_reverse += nbrs_arr[u].size();
-    }
-
-    ARTEA_INFO(fmt::format("Step 3: After reverse updater: {} edges (increase: {})",
-                           edges_after_reverse,
-                           edges_after_reverse - edges_after_random));
 
     // Verify that edges increased
     EXPECT_GT(edges_after_reverse, edges_after_random)
@@ -341,13 +354,18 @@ TEST_F(PropagateEngineCorrectnessTest, NeighborsSortedAfterPruning) {
     const vec_num_t max_nbr_size = 6;
     graph_index_->layer_config().max_nbr_size(max_nbr_size);
 
-    propagate_engine_t propagate_engine(*dist_func_);
-    propagate_engine.set_graph(graph_index_->get_refining_graph());
+    dispatcher_->dispatch([&](const auto& dist_func) {
+        using DistFunc = std::decay_t<decltype(dist_func)>;
+        typename refiner_traits_t::template propagate_engine_t<DistFunc>
+            propagate_engine(dist_func);
+        propagate_engine.set_graph(graph_index_->get_refining_graph());
 
-    auto triangle_updater = propagate_engine.make_updater<triangle_updater_t>(
-        pruning_config_.scale_coeffs(), pruning_config_.shifted_coeffs());
+        auto triangle_updater = propagate_engine.template make_updater<
+            typename refiner_traits_t::template triangle_updater_t<DistFunc>>(
+            pruning_config_.scale_coeffs(), pruning_config_.shifted_coeffs());
 
-    propagate_engine.run(5, triangle_updater);
+        propagate_engine.run(5, triangle_updater);
+    });
 
     // Check that all neighbor lists remain sorted
     for (vertex_id_t u = 0; u < num_vertices_; ++u) {
@@ -372,16 +390,21 @@ TEST_F(PropagateEngineCorrectnessTest, RandomUpdaterGeneratesEdges) {
 
     ARTEA_INFO("Testing RandomUpdater with empty initial graph:");
 
-    propagate_engine_t propagate_engine(*dist_func_);
-    propagate_engine.set_graph(graph_index_->get_refining_graph());
+    dispatcher_->dispatch([&](const auto& dist_func) {
+        using DistFunc = std::decay_t<decltype(dist_func)>;
+        typename refiner_traits_t::template propagate_engine_t<DistFunc>
+            propagate_engine(dist_func);
+        propagate_engine.set_graph(graph_index_->get_refining_graph());
 
-    const vec_num_t rand_gen_size = 5;  // Generate 5 random neighbors per vertex
+        const vec_num_t rand_gen_size = 5;  // Generate 5 random neighbors per vertex
 
-    auto random_updater = propagate_engine.make_updater<random_updater_t>(
-        rand_gen_size, vertex_id_t{0}, num_vertices_);
+        auto random_updater = propagate_engine.template make_updater<
+            typename refiner_traits_t::template random_updater_t<DistFunc>>(
+            rand_gen_size, vertex_id_t{0}, num_vertices_);
 
-    // Run one iteration of random edge generation
-    propagate_engine.run(1, random_updater);
+        // Run one iteration of random edge generation
+        propagate_engine.run(1, random_updater);
+    });
 
     // Count total edges after random generation
     size_t total_edges = 0;
@@ -433,16 +456,21 @@ TEST_F(PropagateEngineCorrectnessTest, RandomUpdaterThreadSafety) {
         nbrs_arr[u].clear();
     }
 
-    propagate_engine_t propagate_engine(*dist_func_);
-    propagate_engine.set_graph(graph_index_->get_refining_graph());
+    dispatcher_->dispatch([&](const auto& dist_func) {
+        using DistFunc = std::decay_t<decltype(dist_func)>;
+        typename refiner_traits_t::template propagate_engine_t<DistFunc>
+            propagate_engine(dist_func);
+        propagate_engine.set_graph(graph_index_->get_refining_graph());
 
-    const vec_num_t rand_gen_size = 10;
+        const vec_num_t rand_gen_size = 10;
 
-    auto random_updater = propagate_engine.make_updater<random_updater_t>(
-        rand_gen_size, vertex_id_t{0}, num_vertices_);
+        auto random_updater = propagate_engine.template make_updater<
+            typename refiner_traits_t::template random_updater_t<DistFunc>>(
+            rand_gen_size, vertex_id_t{0}, num_vertices_);
 
-    // Run multiple iterations to stress test thread safety
-    propagate_engine.run(3, random_updater);
+        // Run multiple iterations to stress test thread safety
+        propagate_engine.run(3, random_updater);
+    });
 
     // Verify no corruption occurred
     for (vertex_id_t u = 0; u < num_vertices_; ++u) {
@@ -485,13 +513,18 @@ TEST_F(PropagateEngineCorrectnessTest, TrianglePruningWithoutSelectiveScheduling
 
     graph_index_->layer_config().max_nbr_size(max_nbr_size);
 
-    propagate_engine_t propagate_engine(*dist_func_);
-    propagate_engine.set_graph(graph_index_->get_refining_graph());
+    dispatcher_->dispatch([&](const auto& dist_func) {
+        using DistFunc = std::decay_t<decltype(dist_func)>;
+        typename refiner_traits_t::template propagate_engine_t<DistFunc>
+            propagate_engine(dist_func);
+        propagate_engine.set_graph(graph_index_->get_refining_graph());
 
-    auto triangle_updater = propagate_engine.make_updater<triangle_updater_t>(
-        pruning_config_.scale_coeffs(), pruning_config_.shifted_coeffs());
+        auto triangle_updater = propagate_engine.template make_updater<
+            typename refiner_traits_t::template triangle_updater_t<DistFunc>>(
+            pruning_config_.scale_coeffs(), pruning_config_.shifted_coeffs());
 
-    propagate_engine.run(5, triangle_updater);
+        propagate_engine.run(5, triangle_updater);
+    });
 
     ARTEA_INFO("Testing without selective scheduling:");
     for (vertex_id_t u = 0; u < std::min(num_vertices_, static_cast<vec_num_t>(5)); ++u) {

@@ -50,7 +50,7 @@ public:
         }
         ARTEA_INFO(fmt::format("Loading Dataset: {} from {}", g_config.dataset_name, g_config.config_path));
         dataset_ = std::make_unique<vector_dataset_t>(g_config.config_path, g_config.dataset_name);
-        dist_func_ = std::make_unique<dist_func_t>(dataset_->get_base_vecs().get_vec_dim());
+        dispatcher_ = std::make_unique<simd_dispatcher_t>(dataset_->get_base_vecs().get_vec_dim());
 
         const auto& base_vecs = dataset_->get_base_vecs();
         if (g_config.verbose) {
@@ -69,12 +69,12 @@ public:
     }
 
     vector_dataset_t& get_dataset() { return *dataset_; }
-    dist_func_t& get_dist_func() { return *dist_func_; }
+    simd_dispatcher_t& get_dispatcher() { return *dispatcher_; }
 
 private:
     DataProvider() = default;
     std::unique_ptr<vector_dataset_t> dataset_;
-    std::unique_ptr<dist_func_t> dist_func_;
+    std::unique_ptr<simd_dispatcher_t> dispatcher_;
 };
 
 class FlatGraphPersistenceTest : public ::testing::Test {
@@ -82,11 +82,11 @@ protected:
     void SetUp() override {
         auto& provider = DataProvider::instance();
         dataset_ = &provider.get_dataset();
-        dist_func_ = &provider.get_dist_func();
+        dispatcher_ = &provider.get_dispatcher();
     }
 
     vector_dataset_t* dataset_;
-    dist_func_t* dist_func_;
+    simd_dispatcher_t* dispatcher_;
 };
 
 TEST_F(FlatGraphPersistenceTest, RefiningGraphSnapshotRestore) {
@@ -95,13 +95,18 @@ TEST_F(FlatGraphPersistenceTest, RefiningGraphSnapshotRestore) {
     ARTEA_INFO("Building descent graph for persistence test...");
 
     // Build original flat graph
-    conv_graph::index_t original_graph = std::move(
-        conv_graph::factory_t::construct_graph(
-            base_vecs,
-            g_config.layer_config,
-            g_config.pruning_config,
-            g_config.propagate_config
-        ).graph
+    conv_graph::index_t original_graph = dispatcher_->dispatch(
+        [&](const auto& dist_func) {
+            return std::move(
+                conv_graph::factory_t::construct_graph(
+                    base_vecs,
+                    g_config.layer_config,
+                    g_config.pruning_config,
+                    g_config.propagate_config,
+                    dist_func
+                ).graph
+            );
+        }
     );
 
     ARTEA_INFO(fmt::format("Original graph built with {} vertices", original_graph.get_num_vertices()));

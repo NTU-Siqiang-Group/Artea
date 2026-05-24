@@ -23,6 +23,7 @@
 
 #pragma once
 
+#include <cstddef>
 #include <utility>
 
 #include <artea/cpu/router/data_structures/candidate_queue_concept.hpp>
@@ -46,10 +47,12 @@ namespace detail {
  * and pushes them into the queue. Terminates when the queue's
  * @c should_terminate() trips or the unexplored heap drains.
  */
-template <typename RouterTraitsT,
+template <bool            EnableFastL2 = false,
+          typename        RouterTraitsT,
           NeighborRange   NeighborRangeT,
           CandidateQueue  CandidateQueueT,
-          typename        DistFuncT>
+          typename        DistFuncT,
+          typename        BaseNormsT = std::nullptr_t>
     requires VisitedTable<typename RouterTraitsT::visited_table_t>
 __attribute__((always_inline))
 inline auto beam_loop_body(
@@ -58,7 +61,8 @@ inline auto beam_loop_body(
     CandidateQueueT&                                   candidate_queue,
     typename RouterTraitsT::visited_table_t&           visited,
     const DistFuncT&                                   dist_func,
-    const typename RouterTraitsT::vector_array_t&      vecs_data
+    const typename RouterTraitsT::vector_array_t&      vecs_data,
+    const BaseNormsT&                                  base_norms = {}
 ) -> void {
     using vertex_id_t       = typename RouterTraitsT::vertex_id_t;
     using distance_t        = typename RouterTraitsT::distance_t;
@@ -72,7 +76,13 @@ inline auto beam_loop_body(
         const vertex_id_t cur_vid = current.get_vid();
         for (const vertex_id_t nbr_vid : nbrs_range.of(cur_vid)) {
             if (visited.test_and_set(nbr_vid)) continue;
-            const distance_t dist = dist_func(query_vec, vecs_data.get(nbr_vid));
+            distance_t dist;
+            if constexpr (EnableFastL2) {
+                dist = dist_func.fast_euclidean(
+                    vecs_data.get(nbr_vid), query_vec, base_norms[nbr_vid]);
+            } else {
+                dist = dist_func(query_vec, vecs_data.get(nbr_vid));
+            }
             candidate_queue.try_push(nbr_vid, dist);
         }
     }
@@ -86,7 +96,11 @@ inline auto beam_loop_body(
  * Single cursor; replaces best when a strictly closer neighbor appears.
  * Terminates at local optimum.
  */
-template <typename RouterTraitsT, NeighborRange NeighborRangeT, typename DistFuncT>
+template <bool          EnableFastL2 = false,
+          typename      RouterTraitsT,
+          NeighborRange NeighborRangeT,
+          typename      DistFuncT,
+          typename      BaseNormsT = std::nullptr_t>
     requires VisitedTable<typename RouterTraitsT::visited_table_t>
 __attribute__((always_inline))
 inline auto greedy_loop_body(
@@ -96,7 +110,8 @@ inline auto greedy_loop_body(
     typename RouterTraitsT::distance_t                 seed_dist,
     typename RouterTraitsT::visited_table_t&           visited,
     const DistFuncT&                                   dist_func,
-    const typename RouterTraitsT::vector_array_t&      vecs_data
+    const typename RouterTraitsT::vector_array_t&      vecs_data,
+    const BaseNormsT&                                  base_norms = {}
 ) -> std::pair<typename RouterTraitsT::vertex_id_t, typename RouterTraitsT::distance_t> {
     using vertex_id_t = typename RouterTraitsT::vertex_id_t;
     using distance_t  = typename RouterTraitsT::distance_t;
@@ -108,7 +123,13 @@ inline auto greedy_loop_body(
         distance_t  next_dist = best_dist;
         for (const vertex_id_t nbr_vid : nbrs_range.of(best_vid)) {
             if (visited.test_and_set(nbr_vid)) continue;
-            const distance_t nbr_dist = dist_func(query_vec, vecs_data.get(nbr_vid));
+            distance_t nbr_dist;
+            if constexpr (EnableFastL2) {
+                nbr_dist = dist_func.fast_euclidean(
+                    vecs_data.get(nbr_vid), query_vec, base_norms[nbr_vid]);
+            } else {
+                nbr_dist = dist_func(query_vec, vecs_data.get(nbr_vid));
+            }
             if (nbr_dist < next_dist) {
                 next_dist = nbr_dist;
                 next_vid  = nbr_vid;

@@ -90,7 +90,8 @@ private:
 // Benchmark for LBGreedyVG with auto-computed parameters
 static void BM_LBGreedyVG(benchmark::State& state) {
     auto& provider = DataProvider::instance();
-    ARTEA_WITH_DIM(provider.get_dispatcher(), DistFunc, dist_func) {
+    provider.get_dispatcher().dispatch([&](const auto& dist_func) {
+        using DistFunc = std::decay_t<decltype(dist_func)>;
         using lb_greedy_vg_t = typename vg_traits_t::template lb_greedy_vg_t<DistFunc>;
         lb_greedy_vg_t generator(dist_func);
 
@@ -122,7 +123,7 @@ static void BM_LBGreedyVG(benchmark::State& state) {
         state.counters["approx_rnet_ratio(%)"] = benchmark::Counter(
             100.0 * result.size() / provider.get_num_base_vecs()
         );
-    } ARTEA_END_DIM(provider.get_dispatcher());
+    });
 }
 BENCHMARK(BM_LBGreedyVG)
     ->Name("LBGreedyVG")

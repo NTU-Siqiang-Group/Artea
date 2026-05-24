@@ -73,15 +73,17 @@ public:
 
         // Part 1: Build KNN graph
         ARTEA_INFO("Part 1: Building KNN graph...");
+        dispatcher_ = std::make_unique<simd_dispatcher_t>(base_vecs.get_vec_dim());
         auto t0 = std::chrono::high_resolution_clock::now();
 
-        knn_graph::index_t knn_index = std::move(
-            knn_graph::factory_t::construct_graph(
+        knn_graph::index_t knn_index = dispatcher_->dispatch([&](const auto& dist_func) {
+            return std::move(knn_graph::factory_t::construct_graph(
                 base_vecs,
                 g_config.knn_layer_config,
-                g_config.knn_propagate_config
-            ).graph
-        );
+                g_config.knn_propagate_config,
+                dist_func
+            ).graph);
+        });
 
         auto t1 = std::chrono::high_resolution_clock::now();
         g_test_results.knn_build_time_s =
@@ -92,9 +94,13 @@ public:
         ARTEA_INFO("Part 2: Converting KNN graph to symmetric KNN graph (move + reverse)...");
         t0 = std::chrono::high_resolution_clock::now();
 
-        symknn_graph_ = std::make_unique<symmetric_knn_graph::index_t>(std::move(
-            symmetric_knn_graph::factory_t::construct_graph(std::move(knn_index)).graph
-        ));
+        symknn_graph_ = std::make_unique<symmetric_knn_graph::index_t>(
+            dispatcher_->dispatch([&](const auto& dist_func) {
+                return std::move(symmetric_knn_graph::factory_t::construct_graph(
+                    std::move(knn_index), dist_func
+                ).graph);
+            })
+        );
 
         t1 = std::chrono::high_resolution_clock::now();
         g_test_results.symknn_build_time_s =
@@ -109,6 +115,7 @@ public:
 private:
     DataProvider() = default;
     std::unique_ptr<vector_dataset_t> dataset_;
+    std::unique_ptr<simd_dispatcher_t> dispatcher_;
     std::unique_ptr<symmetric_knn_graph::index_t> symknn_graph_;
 };
 

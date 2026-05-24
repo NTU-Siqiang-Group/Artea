@@ -164,6 +164,15 @@ public:
             return knn_results_t{};
         }
 
+        // Compact-mode + EUCLIDEAN metric → switch every distance call on
+        // this query path to dist_func.fast_euclidean(base_p, query, p_norm).
+        // Ranking-equivalent to plain L2; distances themselves are proxy
+        // (-2<p,q>+||p||^2). Compile-time gated, zero runtime cost on the
+        // false branch.
+        constexpr bool EnableFastL2 =
+            HierarchicalGraphT::is_compacted &&
+            DistFuncT::distance_metrics == DistanceMetricsT::EUCLIDEAN;
+
         auto& visited = _visited_table_pool.acquire();
 
         // ---- Pick the entry point ----
@@ -171,10 +180,17 @@ public:
         distance_t  entry_dist;
         if constexpr (!RandomSeeding && HierarchicalGraphT::is_compacted) {
             entry_vid  = hier_graph.entry_point_vid();
-            entry_dist = this->_dist_func(query_vec, this->_vecs_data.get(entry_vid));
+            if constexpr (EnableFastL2) {
+                entry_dist = this->_dist_func.fast_euclidean(
+                    this->_vecs_data.get(entry_vid), query_vec,
+                    hier_graph.get_base_norms()[entry_vid]);
+            } else {
+                entry_dist = this->_dist_func(query_vec, this->_vecs_data.get(entry_vid));
+            }
         } else {
             // Either RandomSeeding=true, or the graph is dynamic (no
             // precomputed entry point) — sample one fresh from the apex.
+            // Dynamic path stays on plain L2.
             std::tie(entry_vid, entry_dist) = candidate_sample_utils_t::sample_single_entry(
                     this->_vecs_data, this->_dist_func, hier_graph, query_vec);
         }
@@ -185,10 +201,18 @@ public:
             candidate_queue.try_push(entry_vid, entry_dist);
 
             for (layer_id_t cur_level_id = top_level_id; ; --cur_level_id) {
-                _single_layer_router.beam_search(
-                    query_vec,
-                    detail::make_layer_range(hier_graph, cur_level_id),
-                    candidate_queue, visited);
+                if constexpr (EnableFastL2) {
+                    _single_layer_router.template beam_search<true>(
+                        query_vec,
+                        detail::make_layer_range(hier_graph, cur_level_id),
+                        candidate_queue, visited,
+                        hier_graph.get_base_norms());
+                } else {
+                    _single_layer_router.beam_search(
+                        query_vec,
+                        detail::make_layer_range(hier_graph, cur_level_id),
+                        candidate_queue, visited);
+                }
                 if (cur_level_id == 0) break;
                 // Reset visited between layers — each level walks a
                 // different neighborhood graph; cheap with VersionTagTable.
@@ -210,19 +234,35 @@ public:
             // legitimately enter L0 top-K. O(1) per clear with
             // VersionTagTable.
             for (layer_id_t cur_level_id = top_level_id; cur_level_id >= 1; --cur_level_id) {
-                std::tie(cursor_vid, cursor_dist) = _single_layer_router.greedy_search(
-                    query_vec,
-                    detail::make_layer_range(hier_graph, cur_level_id),
-                    cursor_vid, cursor_dist, visited);
+                if constexpr (EnableFastL2) {
+                    std::tie(cursor_vid, cursor_dist) = _single_layer_router.template greedy_search<true>(
+                        query_vec,
+                        detail::make_layer_range(hier_graph, cur_level_id),
+                        cursor_vid, cursor_dist, visited,
+                        hier_graph.get_base_norms());
+                } else {
+                    std::tie(cursor_vid, cursor_dist) = _single_layer_router.greedy_search(
+                        query_vec,
+                        detail::make_layer_range(hier_graph, cur_level_id),
+                        cursor_vid, cursor_dist, visited);
+                }
                 visited.clear();
             }
 
             std_candidate_queue_t candidate_queue(static_cast<std::size_t>(_candidate_queue_size));
             candidate_queue.try_push(cursor_vid, cursor_dist);
-            _single_layer_router.beam_search(
-                query_vec,
-                detail::make_layer_range(hier_graph, layer_id_t{0}),
-                candidate_queue, visited);
+            if constexpr (EnableFastL2) {
+                _single_layer_router.template beam_search<true>(
+                    query_vec,
+                    detail::make_layer_range(hier_graph, layer_id_t{0}),
+                    candidate_queue, visited,
+                    hier_graph.get_base_norms());
+            } else {
+                _single_layer_router.beam_search(
+                    query_vec,
+                    detail::make_layer_range(hier_graph, layer_id_t{0}),
+                    candidate_queue, visited);
+            }
 
             const std::size_t k = std::min<std::size_t>(static_cast<std::size_t>(this->_topk), candidate_queue.get_result_size());
             if (k == 0) return knn_results_t{};
@@ -244,6 +284,13 @@ public:
     ) const -> knn_results_t {
         static_assert(HierarchicalGraphT::is_compacted, "query_l0_only is only defined for compact graphs.");
 
+        // Compact-only path; for EUCLIDEAN we switch to fast_euclidean.
+        // RandomSeeding=true keeps plain L2 because candidate_queue
+        // .random_initialize does not yet have a fast variant.
+        constexpr bool EnableFastL2 =
+            !RandomSeeding &&
+            DistFuncT::distance_metrics == DistanceMetricsT::EUCLIDEAN;
+
         auto& visited = _visited_table_pool.acquire();
 
         std_candidate_queue_t candidate_queue(static_cast<std::size_t>(_candidate_queue_size));
@@ -253,14 +300,29 @@ public:
                 this->_vecs_data, visited);
         } else {
             const vertex_id_t entry_vid  = hier_graph.entry_point_vid();
-            const distance_t  entry_dist = this->_dist_func(query_vec, this->_vecs_data.get(entry_vid));
+            distance_t entry_dist;
+            if constexpr (EnableFastL2) {
+                entry_dist = this->_dist_func.fast_euclidean(
+                    this->_vecs_data.get(entry_vid), query_vec,
+                    hier_graph.get_base_norms()[entry_vid]);
+            } else {
+                entry_dist = this->_dist_func(query_vec, this->_vecs_data.get(entry_vid));
+            }
             candidate_queue.try_push(entry_vid, entry_dist);
         }
 
-        _single_layer_router.beam_search(
-            query_vec,
-            detail::make_layer_range(hier_graph, layer_id_t{0}),
-            candidate_queue, visited);
+        if constexpr (EnableFastL2) {
+            _single_layer_router.template beam_search<true>(
+                query_vec,
+                detail::make_layer_range(hier_graph, layer_id_t{0}),
+                candidate_queue, visited,
+                hier_graph.get_base_norms());
+        } else {
+            _single_layer_router.beam_search(
+                query_vec,
+                detail::make_layer_range(hier_graph, layer_id_t{0}),
+                candidate_queue, visited);
+        }
 
         const std::size_t k = std::min<std::size_t>(static_cast<std::size_t>(this->_topk), candidate_queue.get_result_size());
         if (k == 0) return knn_results_t{};

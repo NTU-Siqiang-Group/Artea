@@ -77,7 +77,8 @@ static void BM_BruteforceL2(benchmark::State& state) {
     const auto& query_vecs = p.dataset().get_query_vecs();
     const uint32_t num_queries = query_vecs.get_num_vecs();
 
-    ARTEA_WITH_DIM(p.dispatcher(), DistFunc, dist_func) {
+    p.dispatcher().dispatch([&](const auto& dist_func) {
+        using DistFunc = std::decay_t<decltype(dist_func)>;
         bruteforce_router_t<DistFunc> router(base_vecs, dist_func, TOPK);
         router.initialize();
 
@@ -89,7 +90,7 @@ static void BM_BruteforceL2(benchmark::State& state) {
             ++idx;
         }
         state.SetItemsProcessed(state.iterations());
-    } ARTEA_END_DIM(p.dispatcher());
+    });
 }
 BENCHMARK(BM_BruteforceL2)
     ->Name("Bruteforce_L2_top1")
@@ -107,7 +108,8 @@ static void BM_BruteforceFastL2(benchmark::State& state) {
     const auto& base_norms = p.dataset().get_base_norms();
     const uint32_t num_queries = query_vecs.get_num_vecs();
 
-    ARTEA_WITH_DIM(p.dispatcher(), DistFunc, dist_func) {
+    p.dispatcher().dispatch([&](const auto& dist_func) {
+        using DistFunc = std::decay_t<decltype(dist_func)>;
         bruteforce_router_t<DistFunc> router(base_vecs, dist_func, TOPK);
         router.initialize();
 
@@ -119,7 +121,7 @@ static void BM_BruteforceFastL2(benchmark::State& state) {
             ++idx;
         }
         state.SetItemsProcessed(state.iterations());
-    } ARTEA_END_DIM(p.dispatcher());
+    });
 }
 BENCHMARK(BM_BruteforceFastL2)
     ->Name("Bruteforce_FastL2_top1")
@@ -144,7 +146,8 @@ static void BM_BruteforceL2_SmallBase(benchmark::State& state) {
     const uint32_t num_queries = query_vecs.get_num_vecs();
 
     auto small_base = full_base.extract_subset(0, N);
-    ARTEA_WITH_DIM(p.dispatcher(), DistFunc, dist_func) {
+    p.dispatcher().dispatch([&](const auto& dist_func) {
+        using DistFunc = std::decay_t<decltype(dist_func)>;
         bruteforce_router_t<DistFunc> router(small_base, dist_func, TOPK);
         router.initialize();
 
@@ -159,7 +162,7 @@ static void BM_BruteforceL2_SmallBase(benchmark::State& state) {
         // Bytes-per-iteration: N base_vecs * dim * sizeof(float)
         state.SetBytesProcessed(
             int64_t(state.iterations()) * N * full_base.get_vec_dim() * sizeof(float));
-    } ARTEA_END_DIM(p.dispatcher());
+    });
 }
 BENCHMARK(BM_BruteforceL2_SmallBase)
     ->Name("Bruteforce_L2_top1_smallbase")
@@ -176,7 +179,8 @@ static void BM_BruteforceFastL2_SmallBase(benchmark::State& state) {
     const uint32_t num_queries = query_vecs.get_num_vecs();
 
     auto small_base = full_base.extract_subset(0, N);
-    ARTEA_WITH_DIM(p.dispatcher(), DistFunc, dist_func) {
+    p.dispatcher().dispatch([&](const auto& dist_func) {
+        using DistFunc = std::decay_t<decltype(dist_func)>;
         bruteforce_router_t<DistFunc> router(small_base, dist_func, TOPK);
         router.initialize();
 
@@ -192,7 +196,7 @@ static void BM_BruteforceFastL2_SmallBase(benchmark::State& state) {
         state.SetItemsProcessed(state.iterations());
         state.SetBytesProcessed(
             int64_t(state.iterations()) * N * full_base.get_vec_dim() * sizeof(float));
-    } ARTEA_END_DIM(p.dispatcher());
+    });
 }
 BENCHMARK(BM_BruteforceFastL2_SmallBase)
     ->Name("Bruteforce_FastL2_top1_smallbase")

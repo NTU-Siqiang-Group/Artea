@@ -81,7 +81,7 @@ public:
         }
         ARTEA_INFO(fmt::format("Loading dataset '{}' from {}", g_config.dataset_name, g_config.config_path));
         dataset_   = std::make_unique<vector_dataset_t>(g_config.config_path, g_config.dataset_name);
-        dist_func_ = std::make_unique<dist_func_t>(dataset_->get_base_vecs().get_vec_dim());
+        dispatcher_ = std::make_unique<simd_dispatcher_t>(dataset_->get_base_vecs().get_vec_dim());
 
         const auto& base_vecs = dataset_->get_base_vecs();
         g_results.dataset_name = g_config.dataset_name;
@@ -94,9 +94,15 @@ public:
         layer_config_t layer_cfg(16);
         conv_graph::pruning_config_t pruning_cfg(1.0f, 0.0f);
         conv_graph::propagate_config_t propagate_cfg(4, 14, 0.6f);
-        graph_index_ = std::make_unique<conv_graph::index_t>(std::move(
-            conv_graph::factory_t::construct_graph(base_vecs, layer_cfg, pruning_cfg, propagate_cfg).graph
-        ));
+        graph_index_ = std::make_unique<conv_graph::index_t>(
+            dispatcher_->dispatch([&](const auto& dist_func) {
+                return std::move(
+                    conv_graph::factory_t::construct_graph(
+                        base_vecs, layer_cfg, pruning_cfg, propagate_cfg, dist_func
+                    ).graph
+                );
+            })
+        );
 
         // Convert to search graph
         compact_refining_graph_ = std::make_unique<compact::refining_graph_t>(
@@ -107,7 +113,7 @@ public:
     }
 
     vector_dataset_t&    get_dataset()          { return *dataset_; }
-    dist_func_t&         get_dist_func()         { return *dist_func_; }
+    simd_dispatcher_t&   get_dispatcher()         { return *dispatcher_; }
     conv_graph::index_t&        get_graph_index()         { return *graph_index_; }
     compact::refining_graph_t& get_compact_refining_graph() { return *compact_refining_graph_; }
     const idlist_array_t& get_gt()              { return dataset_->get_gt_vecs(); }
@@ -115,7 +121,7 @@ public:
 private:
     DataProvider() = default;
     std::unique_ptr<vector_dataset_t>    dataset_;
-    std::unique_ptr<dist_func_t>         dist_func_;
+    std::unique_ptr<simd_dispatcher_t>         dispatcher_;
     std::unique_ptr<conv_graph::index_t>        graph_index_;
     std::unique_ptr<compact::refining_graph_t> compact_refining_graph_;
 };
@@ -135,37 +141,40 @@ TEST_F(ConvGraphSearchTest, SearchModeBatchQuery) {
     const auto& base_vecs  = p.get_dataset().get_base_vecs();
     const auto& query_vecs = p.get_dataset().get_query_vecs();
 
-    single_layer_router_t router(
-        base_vecs, p.get_dist_func(),
-        g_config.topk, g_config.queue_size
-    );
-    router.initialize();
+    p.get_dispatcher().dispatch([&](const auto& dist_func) {
+        using DistFunc = std::decay_t<decltype(dist_func)>;
+        single_layer_router_t<DistFunc> router(
+            base_vecs, dist_func,
+            g_config.topk, g_config.queue_size
+        );
+        router.initialize();
 
-    // Warmup runs
-    for (uint32_t w = 0; w < g_config.warmup_runs; ++w) {
-        [[maybe_unused]] auto _ = router.batch_query(query_vecs, p.get_compact_refining_graph());
-    }
+        // Warmup runs
+        for (uint32_t w = 0; w < g_config.warmup_runs; ++w) {
+            [[maybe_unused]] auto _ = router.batch_query(query_vecs, p.get_compact_refining_graph());
+        }
 
-    // Test runs
-    double total_us = 0.0;
-    float total_recall = 0.0f;
-    knn_results_t last_results;
-    recall_estimator_t re;
-    for (uint32_t r = 0; r < g_config.test_runs; ++r) {
-        auto t0 = std::chrono::high_resolution_clock::now();
-        last_results = router.batch_query(query_vecs, p.get_compact_refining_graph());
-        auto t1 = std::chrono::high_resolution_clock::now();
-        total_us += std::chrono::duration_cast<std::chrono::microseconds>(t1 - t0).count();
-        total_recall += re.calculate_recall_at_k(last_results, p.get_gt(), g_config.topk, g_results.num_queries);
-    }
-    double us = total_us / g_config.test_runs;
+        // Test runs
+        double total_us = 0.0;
+        float total_recall = 0.0f;
+        knn_results_t last_results;
+        recall_estimator_t re;
+        for (uint32_t r = 0; r < g_config.test_runs; ++r) {
+            auto t0 = std::chrono::high_resolution_clock::now();
+            last_results = router.batch_query(query_vecs, p.get_compact_refining_graph());
+            auto t1 = std::chrono::high_resolution_clock::now();
+            total_us += std::chrono::duration_cast<std::chrono::microseconds>(t1 - t0).count();
+            total_recall += re.calculate_recall_at_k(last_results, p.get_gt(), g_config.topk, g_results.num_queries);
+        }
+        double us = total_us / g_config.test_runs;
 
-    ASSERT_EQ(last_results.size(), static_cast<size_t>(g_results.num_queries * g_config.topk));
+        ASSERT_EQ(last_results.size(), static_cast<size_t>(g_results.num_queries * g_config.topk));
 
-    g_results.search_batch_recall = total_recall / g_config.test_runs;
-    g_results.search_batch_qps    = g_results.num_queries * 1e6 / us;
+        g_results.search_batch_recall = total_recall / g_config.test_runs;
+        g_results.search_batch_qps    = g_results.num_queries * 1e6 / us;
 
-    EXPECT_GT(g_results.search_batch_recall, 0.0f);
+        EXPECT_GT(g_results.search_batch_recall, 0.0f);
+    });
 }
 
 // ============================================================
@@ -177,62 +186,65 @@ TEST_F(ConvGraphSearchTest, SearchModeParallelSingleQuery) {
     const auto& base_vecs  = p.get_dataset().get_base_vecs();
     const auto& query_vecs = p.get_dataset().get_query_vecs();
 
-    single_layer_router_t router(
-        base_vecs, p.get_dist_func(),
-        g_config.topk, g_config.queue_size
-    );
-    router.initialize();
-
-    // Warmup runs
-    for (uint32_t w = 0; w < g_config.warmup_runs; ++w) {
-        knn_results_t warmup_results(g_results.num_queries * g_config.topk);
-        tbb::parallel_for(
-            tbb::blocked_range<uint32_t>(0, g_results.num_queries),
-            [&](const tbb::blocked_range<uint32_t>& r) {
-                for (uint32_t i = r.begin(); i != r.end(); ++i) {
-                    knn_results_t res = router.query(query_vecs.get(i), p.get_compact_refining_graph());
-                    std::copy(res.begin(), res.end(), warmup_results.begin() + i * g_config.topk);
-                }
-            }
+    p.get_dispatcher().dispatch([&](const auto& dist_func) {
+        using DistFunc = std::decay_t<decltype(dist_func)>;
+        single_layer_router_t<DistFunc> router(
+            base_vecs, dist_func,
+            g_config.topk, g_config.queue_size
         );
-    }
+        router.initialize();
 
-    // Test runs
-    double total_us = 0.0;
-    std::atomic<int> error_count{0};
-    knn_results_t all_results(g_results.num_queries * g_config.topk);
-
-    for (uint32_t run = 0; run < g_config.test_runs; ++run) {
-        error_count.store(0, std::memory_order_relaxed);
-
-        auto t0 = std::chrono::high_resolution_clock::now();
-        tbb::parallel_for(
-            tbb::blocked_range<uint32_t>(0, g_results.num_queries),
-            [&](const tbb::blocked_range<uint32_t>& r) {
-                for (uint32_t i = r.begin(); i != r.end(); ++i) {
-                    knn_results_t res = router.query(query_vecs.get(i), p.get_compact_refining_graph());
-                    if (res.size() != g_config.topk) {
-                        error_count.fetch_add(1, std::memory_order_relaxed);
-                        continue;
+        // Warmup runs
+        for (uint32_t w = 0; w < g_config.warmup_runs; ++w) {
+            knn_results_t warmup_results(g_results.num_queries * g_config.topk);
+            tbb::parallel_for(
+                tbb::blocked_range<uint32_t>(0, g_results.num_queries),
+                [&](const tbb::blocked_range<uint32_t>& r) {
+                    for (uint32_t i = r.begin(); i != r.end(); ++i) {
+                        knn_results_t res = router.query(query_vecs.get(i), p.get_compact_refining_graph());
+                        std::copy(res.begin(), res.end(), warmup_results.begin() + i * g_config.topk);
                     }
-                    for (const auto& e : res) {
-                        if (!e.is_invalid() && e.get_vid() >= g_results.num_base)
+                }
+            );
+        }
+
+        // Test runs
+        double total_us = 0.0;
+        std::atomic<int> error_count{0};
+        knn_results_t all_results(g_results.num_queries * g_config.topk);
+
+        for (uint32_t run = 0; run < g_config.test_runs; ++run) {
+            error_count.store(0, std::memory_order_relaxed);
+
+            auto t0 = std::chrono::high_resolution_clock::now();
+            tbb::parallel_for(
+                tbb::blocked_range<uint32_t>(0, g_results.num_queries),
+                [&](const tbb::blocked_range<uint32_t>& r) {
+                    for (uint32_t i = r.begin(); i != r.end(); ++i) {
+                        knn_results_t res = router.query(query_vecs.get(i), p.get_compact_refining_graph());
+                        if (res.size() != g_config.topk) {
                             error_count.fetch_add(1, std::memory_order_relaxed);
+                            continue;
+                        }
+                        for (const auto& e : res) {
+                            if (!e.is_invalid() && e.get_vid() >= g_results.num_base)
+                                error_count.fetch_add(1, std::memory_order_relaxed);
+                        }
+                        std::copy(res.begin(), res.end(), all_results.begin() + i * g_config.topk);
                     }
-                    std::copy(res.begin(), res.end(), all_results.begin() + i * g_config.topk);
                 }
-            }
-        );
-        auto t1 = std::chrono::high_resolution_clock::now();
-        total_us += std::chrono::duration_cast<std::chrono::microseconds>(t1 - t0).count();
-    }
-    double us = total_us / g_config.test_runs;
+            );
+            auto t1 = std::chrono::high_resolution_clock::now();
+            total_us += std::chrono::duration_cast<std::chrono::microseconds>(t1 - t0).count();
+        }
+        double us = total_us / g_config.test_runs;
 
-    EXPECT_EQ(error_count.load(), 0) << "Parallel single queries produced invalid results";
+        EXPECT_EQ(error_count.load(), 0) << "Parallel single queries produced invalid results";
 
-    recall_estimator_t re;
-    g_results.search_parallel_recall = re.calculate_recall_at_k(all_results, p.get_gt(), g_config.topk, g_results.num_queries);
-    g_results.search_parallel_qps    = g_results.num_queries * 1e6 / us;
+        recall_estimator_t re;
+        g_results.search_parallel_recall = re.calculate_recall_at_k(all_results, p.get_gt(), g_config.topk, g_results.num_queries);
+        g_results.search_parallel_qps    = g_results.num_queries * 1e6 / us;
+    });
 }
 
 // ============================================================
@@ -244,37 +256,40 @@ TEST_F(ConvGraphSearchTest, ConstructModeBatchQuery) {
     const auto& base_vecs  = p.get_dataset().get_base_vecs();
     const auto& query_vecs = p.get_dataset().get_query_vecs();
 
-    single_layer_router_t router(
-        base_vecs, p.get_dist_func(),
-        g_config.topk, g_config.queue_size
-    );
-    router.initialize();
+    p.get_dispatcher().dispatch([&](const auto& dist_func) {
+        using DistFunc = std::decay_t<decltype(dist_func)>;
+        single_layer_router_t<DistFunc> router(
+            base_vecs, dist_func,
+            g_config.topk, g_config.queue_size
+        );
+        router.initialize();
 
-    // Warmup runs
-    for (uint32_t w = 0; w < g_config.warmup_runs; ++w) {
-        [[maybe_unused]] auto _ = router.batch_query(query_vecs, p.get_graph_index().get_refining_graph());
-    }
+        // Warmup runs
+        for (uint32_t w = 0; w < g_config.warmup_runs; ++w) {
+            [[maybe_unused]] auto _ = router.batch_query(query_vecs, p.get_graph_index().get_refining_graph());
+        }
 
-    // Test runs
-    double total_us = 0.0;
-    float total_recall = 0.0f;
-    knn_results_t last_results;
-    recall_estimator_t re;
-    for (uint32_t r = 0; r < g_config.test_runs; ++r) {
-        auto t0 = std::chrono::high_resolution_clock::now();
-        last_results = router.batch_query(query_vecs, p.get_graph_index().get_refining_graph());
-        auto t1 = std::chrono::high_resolution_clock::now();
-        total_us += std::chrono::duration_cast<std::chrono::microseconds>(t1 - t0).count();
-        total_recall += re.calculate_recall_at_k(last_results, p.get_gt(), g_config.topk, g_results.num_queries);
-    }
-    double us = total_us / g_config.test_runs;
+        // Test runs
+        double total_us = 0.0;
+        float total_recall = 0.0f;
+        knn_results_t last_results;
+        recall_estimator_t re;
+        for (uint32_t r = 0; r < g_config.test_runs; ++r) {
+            auto t0 = std::chrono::high_resolution_clock::now();
+            last_results = router.batch_query(query_vecs, p.get_graph_index().get_refining_graph());
+            auto t1 = std::chrono::high_resolution_clock::now();
+            total_us += std::chrono::duration_cast<std::chrono::microseconds>(t1 - t0).count();
+            total_recall += re.calculate_recall_at_k(last_results, p.get_gt(), g_config.topk, g_results.num_queries);
+        }
+        double us = total_us / g_config.test_runs;
 
-    ASSERT_EQ(last_results.size(), static_cast<size_t>(g_results.num_queries * g_config.topk));
+        ASSERT_EQ(last_results.size(), static_cast<size_t>(g_results.num_queries * g_config.topk));
 
-    g_results.construct_batch_recall = total_recall / g_config.test_runs;
-    g_results.construct_batch_qps    = g_results.num_queries * 1e6 / us;
+        g_results.construct_batch_recall = total_recall / g_config.test_runs;
+        g_results.construct_batch_qps    = g_results.num_queries * 1e6 / us;
 
-    EXPECT_GT(g_results.construct_batch_recall, 0.0f);
+        EXPECT_GT(g_results.construct_batch_recall, 0.0f);
+    });
 }
 
 // ============================================================

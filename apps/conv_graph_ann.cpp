@@ -217,7 +217,8 @@ int main(int argc, char** argv) {
     // Visit once over the dispatcher; dist_func inside is the concrete
     // SIMDDistance<...,VecDim> picked by the runtime dim.
     std::vector<BenchmarkResult> results;
-    ARTEA_WITH_DIM(dispatcher, DistFunc, dist_func) {
+    dispatcher.dispatch([&](const auto& dist_func) {
+        using DistFunc = std::decay_t<decltype(dist_func)>;
         // Create single-layer router
         single_layer_router_t<DistFunc> router(
             base_vecs,
@@ -241,7 +242,7 @@ int main(int argc, char** argv) {
                 results.push_back(result);
             }
         }
-    } ARTEA_END_DIM(dispatcher);
+    });
 
     // Compute averages from last 100 iterations
     double avg_query_time_ms = 0.0;

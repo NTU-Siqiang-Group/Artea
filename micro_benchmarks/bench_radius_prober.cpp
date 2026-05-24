@@ -24,10 +24,11 @@ using namespace artea::cpu;
 using base_traits_t = BaseTraits<uint32_t, float>;
 using computer_traits_t = ComputerTraits<base_traits_t, DistanceMetricsT::EUCLIDEAN>;
 using vec_num_t = typename base_traits_t::vec_num_t;
-using dist_func_t = typename computer_traits_t::dist_func_t;
+using simd_dispatcher_t = SIMDDistanceDispatcher<computer_traits_t, 1>;
 using vector_array_t = typename computer_traits_t::vector_array_t;
 using vector_dataset_t = typename computer_traits_t::vector_dataset_t;
-using distance_prober_t = typename computer_traits_t::distance_prober_t;
+template <typename DistFuncT>
+using distance_prober_t = typename computer_traits_t::template distance_prober_t<DistFuncT>;
 
 struct BenchConfig {
     std::string config_path;
@@ -59,37 +60,38 @@ public:
         base_vecs_ = std::move(dataset->get_base_vecs());
 
         // Initialize distance function
-        dist_func_ = std::make_unique<dist_func_t>(dim_);
+        dispatcher_ = std::make_unique<simd_dispatcher_t>(dim_);
     }
 
     vec_num_t get_dim() const { return dim_; }
     vec_num_t get_num_base_vecs() const { return num_base_vecs_; }
     const vector_array_t& get_base_vecs() const { return base_vecs_; }
-    const dist_func_t& get_dist_func() const { return *dist_func_; }
+    const simd_dispatcher_t& get_dispatcher() const { return *dispatcher_; }
 
 private:
     vec_num_t dim_;
     vec_num_t num_base_vecs_;
     vector_array_t base_vecs_;
-    std::unique_ptr<dist_func_t> dist_func_;
+    std::unique_ptr<simd_dispatcher_t> dispatcher_;
 };
 
 // Benchmark for DistanceProber
 static void BM_DistanceProber(benchmark::State& state) {
     auto& provider = DataProvider::instance();
     const auto& base_vecs = provider.get_base_vecs();
-    const auto& dist_func = provider.get_dist_func();
+    auto& dispatcher      = provider.get_dispatcher();
 
     vec_num_t num_distances = g_config.num_dists_sampled;
 
-    distance_prober_t prober(dist_func);
-
-    for (auto _ : state) {
-        auto result = prober.probe(base_vecs, g_config.quantile, num_distances);
-        benchmark::DoNotOptimize(result);
-    }
-
-    state.SetItemsProcessed(state.iterations());
+    dispatcher.dispatch([&](const auto& dist_func) {
+        using DistFunc = std::decay_t<decltype(dist_func)>;
+        distance_prober_t<DistFunc> prober(dist_func);
+        for (auto _ : state) {
+            auto result = prober.probe(base_vecs, g_config.quantile, num_distances);
+            benchmark::DoNotOptimize(result);
+        }
+        state.SetItemsProcessed(state.iterations());
+    });
 }
 
 BENCHMARK(BM_DistanceProber)

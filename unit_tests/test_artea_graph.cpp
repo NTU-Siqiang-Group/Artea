@@ -195,36 +195,39 @@ public:
         ARTEA_INFO(fmt::format("Dataset loaded: {} vectors, {} dims",
             base_vecs.get_num_vecs(), base_vecs.get_vec_dim()));
 
-        _dist_func = std::make_unique<dist_func_t>(base_vecs.get_vec_dim());
+        _dispatcher = std::make_unique<simd_dispatcher_t>(base_vecs.get_vec_dim());
 
         if (g_config.l0_radius_provided) {
             _l0_radius = g_config.l0_rnet_radius;
             ARTEA_INFO(fmt::format(
                 "Using user-provided L0 rnet_radius = {:.6f}", _l0_radius));
         } else {
-            dataset_prober_t prober(base_vecs, *_dist_func);
             const std::vector<float> quantiles = { g_config.probe_quantile };
             ARTEA_INFO(fmt::format(
                 "Probing L0 rnet_radius ({}th pct, {} samples)...",
                 static_cast<int>(g_config.probe_quantile * 100.0f),
                 g_config.probe_num_samples));
-            auto result = prober.probe(quantiles, g_config.probe_num_samples);
-            _l0_radius = static_cast<float>(result.table[0][0]);
+            _l0_radius = _dispatcher->dispatch([&](const auto& dist_func) {
+                using DistFunc = std::decay_t<decltype(dist_func)>;
+                dataset_prober_t<DistFunc> prober(base_vecs, dist_func);
+                auto result = prober.probe(quantiles, g_config.probe_num_samples);
+                return static_cast<float>(result.table[0][0]);
+            });
             ARTEA_INFO(fmt::format(
                 "Auto-probed L0 rnet_radius = {:.6f}", _l0_radius));
         }
     }
 
-    auto get_dataset()   -> vector_dataset_t& { return *_dataset; }
-    auto get_dist_func() -> dist_func_t&      { return *_dist_func; }
-    auto get_l0_radius() const -> float       { return _l0_radius; }
+    auto get_dataset()    -> vector_dataset_t&  { return *_dataset; }
+    auto get_dispatcher() -> simd_dispatcher_t& { return *_dispatcher; }
+    auto get_l0_radius() const -> float         { return _l0_radius; }
 
 private:
     DataProvider() = default;
 
-    std::unique_ptr<vector_dataset_t> _dataset;
-    std::unique_ptr<dist_func_t>      _dist_func;
-    float                             _l0_radius = 0.0f;
+    std::unique_ptr<vector_dataset_t>  _dataset;
+    std::unique_ptr<simd_dispatcher_t> _dispatcher;
+    float                              _l0_radius = 0.0f;
 };
 
 // ============================================================
@@ -234,9 +237,9 @@ private:
 class ArteaGraphTest : public ::testing::Test {
 protected:
     static void SetUpTestSuite() {
-        auto& provider = DataProvider::instance();
+        auto& provider   = DataProvider::instance();
         const auto& base_vecs = provider.get_dataset().get_base_vecs();
-        auto& dist_func = provider.get_dist_func();
+        auto& dispatcher = provider.get_dispatcher();
 
         const vertex_num_t total_vertices =
             static_cast<vertex_num_t>(base_vecs.get_num_vecs());
@@ -282,10 +285,12 @@ protected:
 
         vector_array_t owned_batch =
             base_vecs.extract_subset(0, total_vertices);
-        artea_graph::factory_t::add_vertices(
-            *_graph, std::move(owned_batch), dist_func,
-            g_config.insert_on_L0,
-            g_config.shuffle_insertion_order);
+        dispatcher.dispatch([&](const auto& dist_func) {
+            artea_graph::factory_t::add_vertices(
+                *_graph, std::move(owned_batch), dist_func,
+                g_config.insert_on_L0,
+                g_config.shuffle_insertion_order);
+        });
 
         auto t1 = std::chrono::high_resolution_clock::now();
         _build_ms = std::chrono::duration_cast<std::chrono::milliseconds>(
@@ -356,18 +361,20 @@ TEST_F(ArteaGraphTest, BuildSanity) {
 }
 
 TEST_F(ArteaGraphTest, SearchRecallAndThroughput) {
-    auto& provider = DataProvider::instance();
-    const auto& dataset    = provider.get_dataset();
+    auto& provider   = DataProvider::instance();
+    auto&       dataset    = provider.get_dataset();
     const auto& base_vecs  = dataset.get_base_vecs();
     const auto& query_vecs = dataset.get_query_vecs();
     const auto& gt         = dataset.get_gt_vecs();
-    auto&       dist_func  = provider.get_dist_func();
+    auto&       dispatcher = provider.get_dispatcher();
 
     // ---- Compact the dynamic hierarchical graph ----
     const auto& dyn_hg = _graph->get_hierarchical_graph();
     auto tc0 = std::chrono::high_resolution_clock::now();
-    auto compact_hg = hierarchical_graph_compactor_t::compact_graph(
-        dyn_hg, base_vecs, dist_func);
+    auto compact_hg = dispatcher.dispatch([&](const auto& dist_func) {
+        return hierarchical_graph_compactor_t::compact_graph(
+            dyn_hg, dataset, dist_func);
+    });
     auto tc1 = std::chrono::high_resolution_clock::now();
     const int64_t compact_ms =
         std::chrono::duration_cast<std::chrono::milliseconds>(tc1 - tc0).count();
@@ -423,62 +430,65 @@ TEST_F(ArteaGraphTest, SearchRecallAndThroughput) {
         };
     };
 
-    for (uint32_t queue_size = g_config.queue_size_start;
-         queue_size <= g_config.queue_size_end;
-         queue_size += g_config.queue_size_step)
-    {
-        const uint32_t effective_queue_size =
-            std::max<uint32_t>(queue_size, topk);
+    dispatcher.dispatch([&](const auto& dist_func) {
+        using DistFunc = std::decay_t<decltype(dist_func)>;
+        for (uint32_t queue_size = g_config.queue_size_start;
+             queue_size <= g_config.queue_size_end;
+             queue_size += g_config.queue_size_step)
+        {
+            const uint32_t effective_queue_size =
+                std::max<uint32_t>(queue_size, topk);
 
-        hierarchical_graph_router_t s_router(
-            base_vecs, dist_func,
-            /*topk=*/topk,
-            /*candidate_queue_size=*/effective_queue_size);
-        s_router.initialize();
+            hierarchical_graph_router_t<DistFunc> s_router(
+                base_vecs, dist_func,
+                /*topk=*/topk,
+                /*candidate_queue_size=*/effective_queue_size);
+            s_router.initialize();
 
-        // --- Hierarchical router: compact hier_graph, greedy-upper + beam-L0
-        //     (RandomSeeding=false uses compact_hg.entry_point_vid()) ---
-        auto [s_avg_us, s_recall, s_last] = time_batch([&]() {
-            return s_router.template batch_query</*RandomSeeding=*/false, /*UpperLevelBeamSearch=*/false>(
-                query_vecs, compact_hg);
-        });
-        ASSERT_EQ(s_last.size(), static_cast<std::size_t>(num_queries) * topk);
+            // --- Hierarchical router: compact hier_graph, greedy-upper + beam-L0
+            //     (RandomSeeding=false uses compact_hg.entry_point_vid()) ---
+            auto [s_avg_us, s_recall, s_last] = time_batch([&]() {
+                return s_router.template batch_query</*RandomSeeding=*/false, /*UpperLevelBeamSearch=*/false>(
+                    query_vecs, compact_hg);
+            });
+            ASSERT_EQ(s_last.size(), static_cast<std::size_t>(num_queries) * topk);
 
-        Row row;
-        row.queue_size  = effective_queue_size;
-        row.s_batch_ms  = s_avg_us  / 1000.0;
-        row.s_qps       = num_queries * 1e6 / s_avg_us;
-        row.s_recall    = s_recall;
-        rows.push_back(row);
+            Row row;
+            row.queue_size  = effective_queue_size;
+            row.s_batch_ms  = s_avg_us  / 1000.0;
+            row.s_qps       = num_queries * 1e6 / s_avg_us;
+            row.s_recall    = s_recall;
+            rows.push_back(row);
 
+            ARTEA_INFO(fmt::format(
+                "CandidateQueue={:4}: "
+                "hierarchical [R@{}={:.4f}, QPS={:8.1f}, batch={:.2f} ms]",
+                effective_queue_size,
+                topk, row.s_recall,  row.s_qps,  row.s_batch_ms));
+        }
+
+        ARTEA_INFO("=== hierarchical router summary ===");
+        ARTEA_INFO(fmt::format("  build_time    : {} ms", _build_ms));
+        ARTEA_INFO(fmt::format("  compact_time  : {} ms", compact_ms));
+        ARTEA_INFO(fmt::format("  num_queries   : {}", num_queries));
+        ARTEA_INFO(fmt::format("  topk          : {}", topk));
         ARTEA_INFO(fmt::format(
-            "CandidateQueue={:4}: "
-            "hierarchical [R@{}={:.4f}, QPS={:8.1f}, batch={:.2f} ms]",
-            effective_queue_size,
-            topk, row.s_recall,  row.s_qps,  row.s_batch_ms));
-    }
+            "{:<8} | {:<10} {:<10} {:<10}",
+            "Queue", "H.Recall@k", "H.QPS", "H.batch(ms)"));
+        ARTEA_INFO(std::string(8 + 3 + 10 + 10 + 10, '-'));
+        for (const auto& row : rows) {
+            ARTEA_INFO(fmt::format(
+                "{:<8} | {:<10.4f} {:<10.1f} {:<10.2f}",
+                row.queue_size, row.s_recall, row.s_qps, row.s_batch_ms));
+        }
 
-    ARTEA_INFO("=== hierarchical router summary ===");
-    ARTEA_INFO(fmt::format("  build_time    : {} ms", _build_ms));
-    ARTEA_INFO(fmt::format("  compact_time  : {} ms", compact_ms));
-    ARTEA_INFO(fmt::format("  num_queries   : {}", num_queries));
-    ARTEA_INFO(fmt::format("  topk          : {}", topk));
-    ARTEA_INFO(fmt::format(
-        "{:<8} | {:<10} {:<10} {:<10}",
-        "Queue", "H.Recall@k", "H.QPS", "H.batch(ms)"));
-    ARTEA_INFO(std::string(8 + 3 + 10 + 10 + 10, '-'));
-    for (const auto& row : rows) {
-        ARTEA_INFO(fmt::format(
-            "{:<8} | {:<10.4f} {:<10.1f} {:<10.2f}",
-            row.queue_size, row.s_recall, row.s_qps, row.s_batch_ms));
-    }
-
-    bool has_any_hier = false;
-    for (const auto& row : rows) {
-        if (row.s_recall > 0.0f) has_any_hier = true;
-    }
-    EXPECT_TRUE(has_any_hier)
-        << "At least one queue-size should return hierarchical router results";
+        bool has_any_hier = false;
+        for (const auto& row : rows) {
+            if (row.s_recall > 0.0f) has_any_hier = true;
+        }
+        EXPECT_TRUE(has_any_hier)
+            << "At least one queue-size should return hierarchical router results";
+    });
 }
 
 // ============================================================

@@ -31,7 +31,10 @@
 using namespace artea;
 using namespace artea::cpu;
 
-template <std::size_t U> using artea_simd_dist_t = computer_traits_t::template simd_dist_t<U>;
+// SIMDDistance now requires VecDim as a template parameter; the per-unroll
+// dispatcher selects the right SIMDDistance<...,VecDim,U> at runtime.
+template <std::size_t U>
+using artea_simd_dispatcher_t = SIMDDistanceDispatcher<computer_traits_t, U>;
 
 struct TestConfig {
     std::string config_path, dataset_name;
@@ -77,18 +80,19 @@ TEST(DistanceCorrectness, VerifyMultiTargetAndEngines) {
     uint32_t dim = p.get_dim();
     float* q = p.get_query();
 
+    // Three dispatchers (one per unroll factor) constructed once; visit
+    // each to get the concrete SIMDDistance<...,dim,U> and run the check.
+    artea_simd_dispatcher_t<1> disp_u1(dim);
+    artea_simd_dispatcher_t<2> disp_u2(dim);
+    artea_simd_dispatcher_t<4> disp_u4(dim);
+
     for (int i = 0; i < g_config.num_samples; ++i) {
         float* t = p.get_target(i);
         float gt = simple_L2sqr(q, t, dim);
 
-        // 1. Artea SIMDDistance U1/U2/U4
-        artea_simd_dist_t<1> u1(dim);
-        artea_simd_dist_t<2> u2(dim);
-        artea_simd_dist_t<4> u4(dim);
-
-        EXPECT_NEAR(u1(q, t), gt, 1e-3) << "Artea U1 failed at target " << i;
-        EXPECT_NEAR(u2(q, t), gt, 1e-3) << "Artea U2 failed at target " << i;
-        EXPECT_NEAR(u4(q, t), gt, 1e-3) << "Artea U4 failed at target " << i;
+        disp_u1.dispatch([&](const auto& u1) { EXPECT_NEAR(u1(q, t), gt, 1e-3) << "Artea U1 failed at target " << i; });
+        disp_u2.dispatch([&](const auto& u2) { EXPECT_NEAR(u2(q, t), gt, 1e-3) << "Artea U2 failed at target " << i; });
+        disp_u4.dispatch([&](const auto& u4) { EXPECT_NEAR(u4(q, t), gt, 1e-3) << "Artea U4 failed at target " << i; });
     }
 }
 

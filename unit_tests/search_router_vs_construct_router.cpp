@@ -159,7 +159,8 @@ TEST_F(RouterComparisonTest, ConstructModeRouter) {
     const auto& base_vecs  = p.get_dataset().get_base_vecs();
     const auto& query_vecs = p.get_dataset().get_query_vecs();
 
-    ARTEA_WITH_DIM(p.get_dispatcher(), DistFunc, dist_func) {
+    p.get_dispatcher().dispatch([&](const auto& dist_func) {
+        using DistFunc = std::decay_t<decltype(dist_func)>;
         single_layer_router_t<DistFunc> router(
             base_vecs, dist_func,
             g_config.topk, g_config.queue_size
@@ -180,7 +181,7 @@ TEST_F(RouterComparisonTest, ConstructModeRouter) {
         g_results.construct_qps = g_results.num_queries * 1e6 / us;
 
         EXPECT_GT(g_results.construct_recall, 0.0f);
-    } ARTEA_END_DIM(p.get_dispatcher());
+    });
 }
 
 // ============================================================
@@ -192,7 +193,8 @@ TEST_F(RouterComparisonTest, SearchModeRouter) {
     const auto& base_vecs  = p.get_dataset().get_base_vecs();
     const auto& query_vecs = p.get_dataset().get_query_vecs();
 
-    ARTEA_WITH_DIM(p.get_dispatcher(), DistFunc, dist_func) {
+    p.get_dispatcher().dispatch([&](const auto& dist_func) {
+        using DistFunc = std::decay_t<decltype(dist_func)>;
         single_layer_router_t<DistFunc> router(
             base_vecs, dist_func,
             g_config.topk, g_config.queue_size
@@ -213,7 +215,7 @@ TEST_F(RouterComparisonTest, SearchModeRouter) {
         g_results.search_qps = g_results.num_queries * 1e6 / us;
 
         EXPECT_GT(g_results.search_recall, 0.0f);
-    } ARTEA_END_DIM(p.get_dispatcher());
+    });
 }
 
 // ============================================================

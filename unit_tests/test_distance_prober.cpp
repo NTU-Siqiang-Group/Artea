@@ -51,16 +51,16 @@ public:
         }
         ARTEA_INFO(fmt::format("Loading Dataset: {} from {}", g_config.dataset_name, g_config.config_path));
         dataset_ = std::make_unique<vector_dataset_t>(g_config.config_path, g_config.dataset_name);
-        dist_func_ = std::make_unique<dist_func_t>(dataset_->get_base_vecs().get_vec_dim());
+        dispatcher_ = std::make_unique<simd_dispatcher_t>(dataset_->get_base_vecs().get_vec_dim());
     }
 
-    vector_dataset_t& get_dataset() { return *dataset_; }
-    dist_func_t& get_dist_func() { return *dist_func_; }
+    vector_dataset_t&  get_dataset()    { return *dataset_; }
+    simd_dispatcher_t& get_dispatcher() { return *dispatcher_; }
 
 private:
     DataProvider() = default;
-    std::unique_ptr<vector_dataset_t> dataset_;
-    std::unique_ptr<dist_func_t> dist_func_;
+    std::unique_ptr<vector_dataset_t>  dataset_;
+    std::unique_ptr<simd_dispatcher_t> dispatcher_;
 };
 
 class DistanceProberTest : public ::testing::Test {};
@@ -73,9 +73,9 @@ class DistanceProberTest : public ::testing::Test {};
  * (0.0001%, 0.001%, ...) and the absolute minimum.
  */
 TEST_F(DistanceProberTest, ProbeMultiQuantiles) {
-    auto& provider = DataProvider::instance();
-    auto& dataset = provider.get_dataset();
-    auto& dist_func = provider.get_dist_func();
+    auto& provider   = DataProvider::instance();
+    auto& dataset    = provider.get_dataset();
+    auto& dispatcher = provider.get_dispatcher();
 
     const auto& base_vecs = dataset.get_base_vecs();
     const vec_num_t total_vecs = base_vecs.get_num_vecs();
@@ -104,14 +104,16 @@ TEST_F(DistanceProberTest, ProbeMultiQuantiles) {
     std::vector<distance_t> distances(num_pairs);
     auto t0 = std::chrono::high_resolution_clock::now();
 
-    tbb::parallel_for(
-        tbb::blocked_range<vec_num_t>(0, num_pairs),
-        [&](const tbb::blocked_range<vec_num_t>& r) {
-            for (vec_num_t i = r.begin(); i != r.end(); ++i) {
-                distances[i] = dist_func(base_vecs.get(ids_1[i]), base_vecs.get(ids_2[i]));
+    dispatcher.dispatch([&](const auto& dist_func) {
+        tbb::parallel_for(
+            tbb::blocked_range<vec_num_t>(0, num_pairs),
+            [&](const tbb::blocked_range<vec_num_t>& r) {
+                for (vec_num_t i = r.begin(); i != r.end(); ++i) {
+                    distances[i] = dist_func(base_vecs.get(ids_1[i]), base_vecs.get(ids_2[i]));
+                }
             }
-        }
-    );
+        );
+    });
 
     // Sort distances
     std::sort(distances.begin(), distances.end());
@@ -164,40 +166,47 @@ TEST_F(DistanceProberTest, ProbeMultiQuantiles) {
  * Uses the user-specified num_samples to probe the median (0.5 quantile).
  */
 TEST_F(DistanceProberTest, ProbeSingleQuantile) {
-    auto& provider = DataProvider::instance();
-    auto& dataset = provider.get_dataset();
-    auto& dist_func = provider.get_dist_func();
+    auto& provider   = DataProvider::instance();
+    auto& dataset    = provider.get_dataset();
+    auto& dispatcher = provider.get_dispatcher();
 
     const auto& base_vecs = dataset.get_base_vecs();
-
-    distance_prober_t prober(dist_func);
 
     float quantile = 0.5f;
     vec_num_t num_distances = g_config.num_samples;
 
     ARTEA_INFO(fmt::format("Probing single quantile {:.2f} with {} distance samples...", quantile, num_distances));
 
-    auto t0 = std::chrono::high_resolution_clock::now();
-    auto result = prober.probe(base_vecs, quantile, num_distances);
-    auto t1 = std::chrono::high_resolution_clock::now();
-    double elapsed_ms = std::chrono::duration_cast<std::chrono::microseconds>(t1 - t0).count() / 1000.0;
+    dispatcher.dispatch([&](const auto& dist_func) {
+        using DistFunc = std::decay_t<decltype(dist_func)>;
+        distance_prober_t<DistFunc> prober(dist_func);
 
-    ARTEA_INFO(fmt::format("Median distance: {:.6f} (sampled {} distances in {:.2f} ms)",
-        result.radius, result.num_dists_sampled, elapsed_ms));
+        auto t0 = std::chrono::high_resolution_clock::now();
+        auto result = prober.probe(base_vecs, quantile, num_distances);
+        auto t1 = std::chrono::high_resolution_clock::now();
+        double elapsed_ms = std::chrono::duration_cast<std::chrono::microseconds>(t1 - t0).count() / 1000.0;
 
-    EXPECT_GT(result.radius, 0.0f) << "Median distance should be positive";
-    EXPECT_EQ(result.num_dists_sampled, num_distances);
-    EXPECT_FLOAT_EQ(result.quantile, quantile);
+        ARTEA_INFO(fmt::format("Median distance: {:.6f} (sampled {} distances in {:.2f} ms)",
+            result.radius, result.num_dists_sampled, elapsed_ms));
+
+        EXPECT_GT(result.radius, 0.0f) << "Median distance should be positive";
+        EXPECT_EQ(result.num_dists_sampled, num_distances);
+        EXPECT_FLOAT_EQ(result.quantile, quantile);
+    });
 }
 
 /**
  * @brief Verify compute_num_dists_sampled returns reasonable sample sizes.
  */
 TEST_F(DistanceProberTest, ComputeNumDistsSampled) {
+    // compute_num_dists_sampled is a static method that doesn't touch
+    // dist_func; instantiate distance_prober_t with any supported dim.
+    using any_dist_func_t = SIMDDistance<computer_traits_t, 128, 1>;
+    using any_prober_t    = distance_prober_t<any_dist_func_t>;
     // Smaller quantile or higher confidence should require more samples
-    vec_num_t n1 = distance_prober_t::compute_num_dists_sampled(0.01f, 0.95f, 0.1f);
-    vec_num_t n2 = distance_prober_t::compute_num_dists_sampled(0.001f, 0.95f, 0.1f);
-    vec_num_t n3 = distance_prober_t::compute_num_dists_sampled(0.001f, 0.99f, 0.1f);
+    vec_num_t n1 = any_prober_t::compute_num_dists_sampled(0.01f, 0.95f, 0.1f);
+    vec_num_t n2 = any_prober_t::compute_num_dists_sampled(0.001f, 0.95f, 0.1f);
+    vec_num_t n3 = any_prober_t::compute_num_dists_sampled(0.001f, 0.99f, 0.1f);
 
     ARTEA_INFO(fmt::format("Sample sizes: q=0.01/c=0.95/e=0.1 -> {}", n1));
     ARTEA_INFO(fmt::format("Sample sizes: q=0.001/c=0.95/e=0.1 -> {}", n2));

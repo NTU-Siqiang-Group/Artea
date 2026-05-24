@@ -76,7 +76,7 @@ public:
         }
         ARTEA_INFO(fmt::format("Loading Dataset: {} from {}", g_config.dataset_name, g_config.config_path));
         dataset_ = std::make_unique<vector_dataset_t>(g_config.config_path, g_config.dataset_name);
-        dist_func_ = std::make_unique<dist_func_t>(dataset_->get_base_vecs().get_vec_dim());
+        dispatcher_ = std::make_unique<simd_dispatcher_t>(dataset_->get_base_vecs().get_vec_dim());
 
         const auto& base_vecs = dataset_->get_base_vecs();
         g_test_results.num_vertices = static_cast<uint32_t>(base_vecs.get_num_vecs());
@@ -86,13 +86,16 @@ public:
         ARTEA_INFO("Part 1: Building KNN graph...");
         auto t0 = std::chrono::high_resolution_clock::now();
 
-        knn_graph::index_t knn_index = std::move(
-            knn_graph::factory_t::construct_graph(
-                base_vecs,
-                g_config.knn_layer_config,
-                g_config.knn_propagate_config
-            ).graph
-        );
+        knn_graph::index_t knn_index = dispatcher_->dispatch([&](const auto& dist_func) {
+            return std::move(
+                knn_graph::factory_t::construct_graph(
+                    base_vecs,
+                    g_config.knn_layer_config,
+                    g_config.knn_propagate_config,
+                    dist_func
+                ).graph
+            );
+        });
 
         auto t1 = std::chrono::high_resolution_clock::now();
         g_test_results.knn_build_time_s =
@@ -103,12 +106,17 @@ public:
         ARTEA_INFO("Part 2: Converting KNN graph to conv_graph (move + triangle/reverse pruning)...");
         t0 = std::chrono::high_resolution_clock::now();
 
-        conv_graph_ = std::make_unique<conv_graph::index_t>(std::move(
-            conv_graph::factory_t::construct_graph(
-                std::move(knn_index.get_refining_graph()),
-                g_config.conv_pruning_config
-            ).graph
-        ));
+        conv_graph_ = std::make_unique<conv_graph::index_t>(
+            dispatcher_->dispatch([&](const auto& dist_func) {
+                return std::move(
+                    conv_graph::factory_t::construct_graph(
+                        std::move(knn_index.get_refining_graph()),
+                        g_config.conv_pruning_config,
+                        dist_func
+                    ).graph
+                );
+            })
+        );
 
         t1 = std::chrono::high_resolution_clock::now();
         g_test_results.conv_build_time_s =
@@ -128,14 +136,14 @@ public:
     }
 
     vector_dataset_t& get_dataset() { return *dataset_; }
-    dist_func_t& get_dist_func() { return *dist_func_; }
+    simd_dispatcher_t& get_dispatcher() { return *dispatcher_; }
     compact::refining_graph_t& get_compact_refining_graph() { return *compact_refining_graph_; }
     const idlist_array_t& get_groundtruth() { return dataset_->get_gt_vecs(); }
 
 private:
     DataProvider() = default;
     std::unique_ptr<vector_dataset_t> dataset_;
-    std::unique_ptr<dist_func_t> dist_func_;
+    std::unique_ptr<simd_dispatcher_t> dispatcher_;
     std::unique_ptr<conv_graph::index_t> conv_graph_;
     std::unique_ptr<compact::refining_graph_t> compact_refining_graph_;
 };
@@ -143,9 +151,9 @@ private:
 class Knn2ConvTest : public ::testing::Test {};
 
 TEST_F(Knn2ConvTest, QueryRecall) {
-    auto& provider = DataProvider::instance();
-    auto& dataset = provider.get_dataset();
-    auto& dist_func = provider.get_dist_func();
+    auto& provider   = DataProvider::instance();
+    auto& dataset    = provider.get_dataset();
+    auto& dispatcher = provider.get_dispatcher();
     auto& compact_refining_graph = provider.get_compact_refining_graph();
     const auto& groundtruth = provider.get_groundtruth();
 
@@ -157,25 +165,28 @@ TEST_F(Knn2ConvTest, QueryRecall) {
     ARTEA_INFO(fmt::format("\nRunning Grid Search: candidate queue size {} to {}, step {}",
         g_config.queue_start, g_config.queue_end, g_config.queue_step));
 
-    for (uint32_t queue_size = g_config.queue_start; queue_size <= g_config.queue_end; queue_size += g_config.queue_step) {
-        single_layer_router_t router(base_vecs, dist_func, g_config.topk, queue_size);
-        router.initialize();
+    dispatcher.dispatch([&](const auto& dist_func) {
+        using DistFunc = std::decay_t<decltype(dist_func)>;
+        for (uint32_t queue_size = g_config.queue_start; queue_size <= g_config.queue_end; queue_size += g_config.queue_step) {
+            single_layer_router_t<DistFunc> router(base_vecs, dist_func, g_config.topk, queue_size);
+            router.initialize();
 
-        auto t0 = std::chrono::high_resolution_clock::now();
-        knn_results_t results = router.batch_query(query_vecs, compact_refining_graph);
-        auto t1 = std::chrono::high_resolution_clock::now();
-        auto us = std::chrono::duration_cast<std::chrono::microseconds>(t1 - t0).count();
+            auto t0 = std::chrono::high_resolution_clock::now();
+            knn_results_t results = router.batch_query(query_vecs, compact_refining_graph);
+            auto t1 = std::chrono::high_resolution_clock::now();
+            auto us = std::chrono::duration_cast<std::chrono::microseconds>(t1 - t0).count();
 
-        QueryResult result;
-        result.candidate_queue_size = queue_size;
-        result.avg_query_time_us = static_cast<double>(us) / query_vecs.get_num_vecs();
-        result.throughput_qps = query_vecs.get_num_vecs() * 1e6 / us;
-        result.recall = recall_estimator.calculate_recall_at_k(results, groundtruth, g_config.topk, query_vecs.get_num_vecs());
-        g_test_results.query_results.push_back(result);
+            QueryResult result;
+            result.candidate_queue_size = queue_size;
+            result.avg_query_time_us = static_cast<double>(us) / query_vecs.get_num_vecs();
+            result.throughput_qps = query_vecs.get_num_vecs() * 1e6 / us;
+            result.recall = recall_estimator.calculate_recall_at_k(results, groundtruth, g_config.topk, query_vecs.get_num_vecs());
+            g_test_results.query_results.push_back(result);
 
-        ARTEA_INFO(fmt::format("CandidateQueue={:3}: Recall@{}={:.4f}, QPS={:8.2f}, AvgTime={:.2f}us",
-            queue_size, g_config.topk, result.recall, result.throughput_qps, result.avg_query_time_us));
-    }
+            ARTEA_INFO(fmt::format("CandidateQueue={:3}: Recall@{}={:.4f}, QPS={:8.2f}, AvgTime={:.2f}us",
+                queue_size, g_config.topk, result.recall, result.throughput_qps, result.avg_query_time_us));
+        }
+    });
 
     bool has_good_recall = false;
     for (const auto& r : g_test_results.query_results) {

@@ -101,6 +101,10 @@ public:
         return _dataset->get_base_vecs();
     }
 
+    auto dataset() -> vector_dataset_t& {
+        return *_dataset;
+    }
+
 private:
     DataProvider() = default;
     std::unique_ptr<vector_dataset_t> _dataset;
@@ -550,10 +554,12 @@ TEST_F(HierarchicalGraphTest, IndexFactoryLikeWorkload) {
 TEST_F(HierarchicalGraphTest, CompactorPreservesTopology) {
     // Compactor now requires vecs_data + dist_func to compute the
     // top-bucket centroid and entry point.
-    const auto&       base_vecs = DataProvider::instance().vectors();
-    const dist_func_t dist_func(base_vecs.get_vec_dim());
-    auto compact_graph = compactor_t::compact_graph(
-        *_graph, base_vecs, dist_func);
+    auto&        dataset   = DataProvider::instance().dataset();
+    const auto&  base_vecs = dataset.get_base_vecs();
+    simd_dispatcher_t dispatcher(base_vecs.get_vec_dim());
+    auto compact_graph = dispatcher.dispatch([&](const auto& dist_func) {
+        return compactor_t::compact_graph(*_graph, dataset, dist_func);
+    });
 
     // The compactor also trims top buckets whose apex population is
     // below its @c min_layer_cap threshold: every such vid is demoted
@@ -730,14 +736,17 @@ TEST_F(HierarchicalGraphTest, LayerRefiningGraphRoundTrip) {
         // For freshly-built indexes the slot is all-invalid (no edges
         // written by the fixture), so num_valid_nbrs == 0 and refining_graph
         // rows are empty. Just sanity-check counts and identity round-trip.
-        propagate_engine_t::parallel_for_each_vertex(
-            *refining_graph,
-            [&](const vertex_id_t /*layer_vid*/, const vertex_id_t storage_vid) {
-                if (!_graph->is_vertex_assigned(storage_vid)) return;
-                const vertex_num_t hg_cnt = _graph->num_valid_nbrs(storage_vid, h);
-                const auto& refining_nbrs = refining_graph->fetch_nbrs(storage_vid);
-                EXPECT_EQ(refining_nbrs.size(), hg_cnt)
-                    << "vid=" << storage_vid << " h=" << h;
+        tbb::parallel_for(
+            tbb::blocked_range<vertex_num_t>(0, refining_graph->get_num_vertices()),
+            [&](const tbb::blocked_range<vertex_num_t>& range) {
+                for (vertex_num_t i = range.begin(); i != range.end(); ++i) {
+                    const vertex_id_t storage_vid = refining_graph->get_storage_vid(i);
+                    if (!_graph->is_vertex_assigned(storage_vid)) continue;
+                    const vertex_num_t hg_cnt = _graph->num_valid_nbrs(storage_vid, h);
+                    const auto& refining_nbrs = refining_graph->fetch_nbrs(storage_vid);
+                    EXPECT_EQ(refining_nbrs.size(), hg_cnt)
+                        << "vid=" << storage_vid << " h=" << h;
+                }
             });
 
         // ---- Mutate one row: pick the first local row, push a fake

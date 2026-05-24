@@ -95,36 +95,39 @@ public:
         ARTEA_INFO(fmt::format("Dataset loaded: {} vectors, {} dims",
             base_vecs.get_num_vecs(), base_vecs.get_vec_dim()));
 
-        _dist_func = std::make_unique<dist_func_t>(base_vecs.get_vec_dim());
+        _dispatcher = std::make_unique<simd_dispatcher_t>(base_vecs.get_vec_dim());
 
         if (g_config.l0_radius_provided) {
             _l0_radius = g_config.l0_rnet_radius;
             ARTEA_INFO(fmt::format(
                 "Using user-provided L0 rnet_radius = {:.6f}", _l0_radius));
         } else {
-            dataset_prober_t prober(base_vecs, *_dist_func);
             const std::vector<float> quantiles = { g_config.probe_quantile };
             ARTEA_INFO(fmt::format(
                 "Probing L0 rnet_radius ({}th pct, {} samples)...",
                 static_cast<int>(g_config.probe_quantile * 100.0f),
                 g_config.probe_num_samples));
-            auto result = prober.probe(quantiles, g_config.probe_num_samples);
-            _l0_radius = static_cast<float>(result.table[0][0]);
+            _l0_radius = _dispatcher->dispatch([&](const auto& dist_func) {
+                using DistFunc = std::decay_t<decltype(dist_func)>;
+                dataset_prober_t<DistFunc> prober(base_vecs, dist_func);
+                auto result = prober.probe(quantiles, g_config.probe_num_samples);
+                return static_cast<float>(result.table[0][0]);
+            });
             ARTEA_INFO(fmt::format(
                 "Auto-probed L0 rnet_radius = {:.6f}", _l0_radius));
         }
     }
 
-    auto get_dataset()   -> vector_dataset_t& { return *_dataset; }
-    auto get_dist_func() -> dist_func_t&      { return *_dist_func; }
-    auto get_l0_radius() const -> float       { return _l0_radius; }
+    auto get_dataset()    -> vector_dataset_t&  { return *_dataset; }
+    auto get_dispatcher() -> simd_dispatcher_t& { return *_dispatcher; }
+    auto get_l0_radius() const -> float         { return _l0_radius; }
 
 private:
     DataProvider() = default;
 
-    std::unique_ptr<vector_dataset_t> _dataset;
-    std::unique_ptr<dist_func_t>      _dist_func;
-    float                             _l0_radius = 0.0f;
+    std::unique_ptr<vector_dataset_t>  _dataset;
+    std::unique_ptr<simd_dispatcher_t> _dispatcher;
+    float                              _l0_radius = 0.0f;
 };
 
 // ============================================================
@@ -136,9 +139,9 @@ protected:
     static auto build_graph(bool insert_on_L0)
         -> std::pair<std::unique_ptr<stacked_rgraph::index_t>, int64_t>
     {
-        auto& provider = DataProvider::instance();
+        auto& provider   = DataProvider::instance();
         const auto& base_vecs = provider.get_dataset().get_base_vecs();
-        auto& dist_func = provider.get_dist_func();
+        auto& dispatcher = provider.get_dispatcher();
 
         const vertex_num_t total_vertices =
             static_cast<vertex_num_t>(base_vecs.get_num_vecs());
@@ -162,8 +165,10 @@ protected:
             base_vecs.extract_subset(0, total_vertices);
 
         auto t0 = std::chrono::high_resolution_clock::now();
-        stacked_rgraph::factory_t::add_vertices(
-            *graph, std::move(owned_batch), dist_func, insert_on_L0);
+        dispatcher.dispatch([&](const auto& dist_func) {
+            stacked_rgraph::factory_t::add_vertices(
+                *graph, std::move(owned_batch), dist_func, insert_on_L0);
+        });
         auto t1 = std::chrono::high_resolution_clock::now();
         const int64_t ms =
             std::chrono::duration_cast<std::chrono::milliseconds>(t1 - t0).count();

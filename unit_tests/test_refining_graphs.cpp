@@ -55,7 +55,7 @@ protected:
             vecs_->append_vec(v.data());
         }
 
-        dist_func_ = std::make_unique<dist_func_t>(vec_dim);
+        dist_func_ = std::make_unique<simd_dispatcher_t>(vec_dim);
 
         layer_config_ = layer_config_t(64);
         graph_index_ = std::make_unique<conv_graph::index_t>(
@@ -76,7 +76,7 @@ protected:
             for (vertex_num_t i = 0; i < count; ++i) {
                 vertex_id_t v = id_dist(rng);
                 if (v == u) v = (v + 1) % num_vertices;
-                const distance_t d = (*dist_func_)(vecs_->get(u), vecs_->get(v));
+                const distance_t d = dist_func_->dispatch([&](const auto& df) { return df(vecs_->get(u), vecs_->get(v)); });
                 nbrs.push_back(nbr_t(v, d, true));
             }
             std::sort(nbrs.begin(), nbrs.end(),
@@ -88,7 +88,7 @@ protected:
 
     layer_config_t layer_config_{64};
     std::unique_ptr<vector_array_t> vecs_;
-    std::unique_ptr<dist_func_t>    dist_func_;
+    std::unique_ptr<simd_dispatcher_t>    dist_func_;
     std::unique_ptr<conv_graph::index_t> graph_index_;
 };
 
@@ -219,7 +219,7 @@ TEST_F(RefiningGraphTest, CompactorNeighborOrderPreserved) {
         distance_t prev_dist = 0.0f;
         for (vertex_num_t i = 0; i < extracted; ++i) {
             if (nbrs[i] == base_traits_t::invalid_vertex_id) break;
-            const distance_t d = (*dist_func_)(vecs_->get(v), vecs_->get(nbrs[i]));
+            const distance_t d = dist_func_->dispatch([&](const auto& df) { return df(vecs_->get(v), vecs_->get(nbrs[i])); });
             EXPECT_GE(d, prev_dist);
             prev_dist = d;
         }

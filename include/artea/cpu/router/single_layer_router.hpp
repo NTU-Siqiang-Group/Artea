@@ -114,20 +114,27 @@ public:
     // ================================================================
 
     /** @brief Greedy walk over @p nbrs_range starting from @p seed_vid;
-     *         marks the seed in @p visited and returns the local optimum. */
-    template <NeighborRange NeighborRangeT>
+     *         marks the seed in @p visited and returns the local optimum.
+     *
+     * `EnableFastL2 == true` switches the distance call to
+     * @c dist_func.fast_euclidean(base_p, query, p_norm) and requires
+     * @p base_norms to be the per-base ||p||^2 cache (typically from
+     * the compact graph's @c get_base_norms()). EUCLIDEAN-only. */
+    template <bool EnableFastL2 = false, NeighborRange NeighborRangeT,
+              typename BaseNormsT = std::nullptr_t>
     __attribute__((always_inline))
     auto greedy_search(
         const vec_ele_t*       query_vec,
         const NeighborRangeT&  nbrs_range,
         vertex_id_t            seed_vid,
         distance_t             seed_dist,
-        visited_table_t&       visited
+        visited_table_t&       visited,
+        const BaseNormsT&      base_norms = {}
     ) const -> std::pair<vertex_id_t, distance_t> {
         visited.set(seed_vid);
-        return detail::greedy_loop_body<RouterTraitsT>(
+        return detail::greedy_loop_body<EnableFastL2, RouterTraitsT>(
             query_vec, nbrs_range, seed_vid, seed_dist,
-            visited, this->_dist_func, this->_vecs_data);
+            visited, this->_dist_func, this->_vecs_data, base_norms);
     }
 
     /**
@@ -139,14 +146,20 @@ public:
      * the unexplored heap drains across each call, so checking
      * @c empty() first would skip the level under shared-queue
      * hierarchical descent.
+     *
+     * `EnableFastL2 == true` switches the distance call to
+     * @c dist_func.fast_euclidean(base_p, query, p_norm); see
+     * @c greedy_search for the same opt-in.
      */
-    template <NeighborRange NeighborRangeT>
+    template <bool EnableFastL2 = false, NeighborRange NeighborRangeT,
+              typename BaseNormsT = std::nullptr_t>
     __attribute__((always_inline))
     auto beam_search(
         const vec_ele_t*       query_vec,
         const NeighborRangeT&  nbrs_range,
         std_candidate_queue_t& candidate_queue,
-        visited_table_t&       visited
+        visited_table_t&       visited,
+        const BaseNormsT&      base_norms = {}
     ) const -> void {
         candidate_queue.reset_exploration();
         if (candidate_queue.empty()) return;
@@ -155,9 +168,9 @@ public:
             visited.set(seed.get_vid());
         }
 
-        detail::beam_loop_body<RouterTraitsT>(
+        detail::beam_loop_body<EnableFastL2, RouterTraitsT>(
             query_vec, nbrs_range, candidate_queue,
-            visited, this->_dist_func, this->_vecs_data);
+            visited, this->_dist_func, this->_vecs_data, base_norms);
     }
 
     // ================================================================
@@ -281,7 +294,7 @@ private:
         candidate_queue.try_push(entry_point, entry_dist);
         visited.set(entry_point);
 
-        detail::beam_loop_body<RouterTraitsT>(
+        detail::beam_loop_body<false, RouterTraitsT>(
             query_vec,
             detail::make_flat_range(single_layer_graph),
             candidate_queue, visited, this->_dist_func, this->_vecs_data);
@@ -313,7 +326,7 @@ private:
             candidate_queue.try_push(seed_vid, seed_nbrs[i].get_distance());
         }
 
-        detail::beam_loop_body<RouterTraitsT>(
+        detail::beam_loop_body<false, RouterTraitsT>(
             query_vec,
             detail::make_flat_range(single_layer_graph),
             candidate_queue, visited, this->_dist_func, this->_vecs_data);

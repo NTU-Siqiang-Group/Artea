@@ -32,6 +32,7 @@
 #include <cstddef>
 #include <limits>
 #include <span>
+#include <utility>
 #include <vector>
 
 #include <artea/cpu/containers/allocator.hpp>
@@ -67,6 +68,7 @@ public:
     using vertex_id_t  = typename IndexTraitsT::vertex_id_t;
     using layer_num_t  = typename IndexTraitsT::layer_num_t;
     using layer_id_t   = typename IndexTraitsT::layer_id_t;
+    using base_norms_t = typename IndexTraitsT::base_norms_t;
 
 private:
     using vid_arena_container_t = cache_aligned_container_t<vertex_id_t>;
@@ -304,6 +306,27 @@ public:
         return _arenas[h].data();
     }
 
+    // =================================================================
+    //   FastL2 norms (||p||^2 per base vector)
+    // =================================================================
+
+    /** @brief Per-base ||p||^2 cache for FastL2 search. Empty unless
+     *         the compactor populated it (EUCLIDEAN metric only).
+     *         Router compact-mode query paths read this to feed
+     *         @c SIMDDistance::fast_euclidean. */
+    __attribute__((always_inline))
+    auto get_base_norms() const -> const base_norms_t& {
+        return _base_norms;
+    }
+
+    /** @brief Move-in the precomputed norm cache. Called by the
+     *         compactor after it has retrieved norms from the
+     *         source vector_dataset via @c enable_fast_L2. */
+    __attribute__((always_inline))
+    auto set_base_norms(base_norms_t norms) -> void {
+        _base_norms = std::move(norms);
+    }
+
 private:
     layer_num_t  _max_restrict_level;
     vertex_num_t _ul_max_nbr_size;
@@ -323,6 +346,10 @@ private:
      *         highest_level_id == h. Copied from the source at compact
      *         time; not mutated thereafter. */
     std::vector<std::vector<vertex_id_t>> _vids_by_highest_level;
+
+    /** @brief Per-base ||p||^2 cache for FastL2 router queries. Empty
+     *         unless the compactor populated it (EUCLIDEAN-only). */
+    base_norms_t _base_norms;
 
     /** @brief Per-vertex row, indexed by vid. */
     std::vector<VertexInfo>               _vertex_info_table;

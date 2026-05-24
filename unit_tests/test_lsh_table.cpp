@@ -49,7 +49,7 @@ using pstable_lsh_generator_t = typename vertex_generator_traits_t::pstable_lsh_
 using hash_num_t = typename vertex_generator_traits_t::hash_num_t;
 using vector_array_t = typename vertex_generator_traits_t::vector_array_t;
 using vector_dataset_t = typename vertex_generator_traits_t::vector_dataset_t;
-using dist_func_t = typename vertex_generator_traits_t::dist_func_t;
+using simd_dispatcher_t = SIMDDistanceDispatcher<computer_traits_t, 1>;
 using fma_func_t = typename vertex_generator_traits_t::fma_func_t;
 
 static constexpr hash_num_t num_hashes = 8;
@@ -74,18 +74,18 @@ public:
         }
         ARTEA_INFO(fmt::format("Loading Dataset: {} from {}", g_config.dataset_name, g_config.config_path));
         dataset_ = std::make_unique<vector_dataset_t>(g_config.config_path, g_config.dataset_name);
-        dist_func_ = std::make_unique<dist_func_t>(dataset_->get_base_vecs().get_vec_dim());
+        dispatcher_ = std::make_unique<simd_dispatcher_t>(dataset_->get_base_vecs().get_vec_dim());
         fma_func_ = std::make_unique<fma_func_t>(dataset_->get_base_vecs().get_vec_dim());
     }
 
     vector_dataset_t& get_dataset() { return *dataset_; }
-    dist_func_t& get_dist_func() { return *dist_func_; }
+    simd_dispatcher_t& get_dispatcher() { return *dispatcher_; }
     fma_func_t& get_fma_func() { return *fma_func_; }
 
 private:
     DataProvider() = default;
     std::unique_ptr<vector_dataset_t> dataset_;
-    std::unique_ptr<dist_func_t> dist_func_;
+    std::unique_ptr<simd_dispatcher_t> dispatcher_;
     std::unique_ptr<fma_func_t> fma_func_;
 };
 
@@ -94,7 +94,6 @@ class LSHTableCorrectnessTest : public ::testing::Test {};
 TEST_F(LSHTableCorrectnessTest, VerifyRecallAccuracy) {
     auto& provider = DataProvider::instance();
     auto& dataset = provider.get_dataset();
-    auto& dist_func = provider.get_dist_func();
     auto& fma_func = provider.get_fma_func();
 
     const auto& base_vecs = dataset.get_base_vecs();

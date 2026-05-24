@@ -77,13 +77,14 @@ namespace cpu {
 template <typename IndexTraitsT>
 class HierarchicalGraphCompactor {
 
-    using vertex_num_t   = typename IndexTraitsT::vertex_num_t;
-    using vertex_id_t    = typename IndexTraitsT::vertex_id_t;
-    using layer_num_t    = typename IndexTraitsT::layer_num_t;
-    using layer_id_t     = typename IndexTraitsT::layer_id_t;
-    using vec_ele_t      = typename IndexTraitsT::vec_ele_t;
-    using distance_t     = typename IndexTraitsT::distance_t;
-    using vector_array_t = typename IndexTraitsT::vector_array_t;
+    using vertex_num_t     = typename IndexTraitsT::vertex_num_t;
+    using vertex_id_t      = typename IndexTraitsT::vertex_id_t;
+    using layer_num_t      = typename IndexTraitsT::layer_num_t;
+    using layer_id_t       = typename IndexTraitsT::layer_id_t;
+    using vec_ele_t        = typename IndexTraitsT::vec_ele_t;
+    using distance_t       = typename IndexTraitsT::distance_t;
+    using vector_array_t   = typename IndexTraitsT::vector_array_t;
+    using vector_dataset_t = typename IndexTraitsT::vector_dataset_t;
 
     using dynamic        = typename IndexTraitsT::dynamic;
     using compact        = typename IndexTraitsT::compact;
@@ -105,8 +106,12 @@ public:
      * @param src        Dynamic source graph. Must have
      *                   @c assign_layer completed for every vid in
      *                   @c [0, src.get_num_vertices()).
-     * @param vecs_data  Base-vector storage, used to compute the
-     *                   top-bucket centroid + entry point.
+     * @param dataset    Source vector dataset. Provides base storage
+     *                   (used to compute the top-bucket centroid +
+     *                   entry point) and, for EUCLIDEAN metric, gets
+     *                   @c enable_fast_L2 called so we can copy its
+     *                   precomputed @c ||p||^2 cache into the compact
+     *                   graph for FastL2 search.
      * @param dist_func  Distance functor used to pick the top-bucket
      *                   vid closest to the centroid.
      * @return A new compact::HierarchicalGraph with a trimmed
@@ -115,11 +120,13 @@ public:
     template <typename DistFuncT>
     static auto compact_graph(
         const typename dynamic::hierarchical_graph_t& src,
-        const vector_array_t&                         vecs_data,
+        vector_dataset_t&                             dataset,
         const DistFuncT&                              dist_func
     ) -> typename compact::hierarchical_graph_t {
         using src_graph_t     = typename dynamic::hierarchical_graph_t;
         using compact_graph_t = typename compact::hierarchical_graph_t;
+
+        const vector_array_t& vecs_data = dataset.get_base_vecs();
 
         const vertex_num_t num_vertices    = src.get_num_vertices();
         const vertex_num_t ul_max_nbr_size = src.ul_max_nbr_size();
@@ -338,6 +345,22 @@ public:
         const vertex_id_t entry_vid = _compute_entry_point_vid(
             compact_buckets[new_top], vecs_data, dist_func);
         result.set_entry_point_vid(entry_vid);
+
+        // =============================================================
+        //   Step 8: FastL2 norm cache (EUCLIDEAN only).
+        // =============================================================
+        //
+        // For Euclidean search the compact-mode router uses
+        // SIMDDistance::fast_euclidean, which needs per-base ||p||^2.
+        // Trigger the dataset's parallel norm computation and copy the
+        // result into the compact graph so it's lifetime-independent of
+        // the source dataset.
+        if constexpr (DistFuncT::distance_metrics ==
+                      DistanceMetricsT::EUCLIDEAN)
+        {
+            dataset.enable_fast_L2();
+            result.set_base_norms(dataset.get_base_norms());
+        }
 
         return result;
     }

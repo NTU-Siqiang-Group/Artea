@@ -50,7 +50,7 @@ public:
         }
         ARTEA_INFO(fmt::format("Loading Dataset: {} from {}", g_config.dataset_name, g_config.config_path));
         dataset_ = std::make_unique<vector_dataset_t>(g_config.config_path, g_config.dataset_name);
-        dist_func_ = std::make_unique<dist_func_t>(dataset_->get_base_vecs().get_vec_dim());
+        dispatcher_ = std::make_unique<simd_dispatcher_t>(dataset_->get_base_vecs().get_vec_dim());
 
         // Build KNN graph
         const auto& base_vecs = dataset_->get_base_vecs();
@@ -59,24 +59,28 @@ public:
 
         ARTEA_INFO("Building KNN graph...");
         auto t0 = std::chrono::high_resolution_clock::now();
-        knn_graph_ = std::make_unique<knn_graph::index_t>(std::move(
-            knn_graph::factory_t::construct_graph(
-                base_vecs, layer_config, propagate_config
-            ).graph
-        ));
+        knn_graph_ = std::make_unique<knn_graph::index_t>(
+            dispatcher_->dispatch([&](const auto& dist_func) {
+                return std::move(
+                    knn_graph::factory_t::construct_graph(
+                        base_vecs, layer_config, propagate_config, dist_func
+                    ).graph
+                );
+            })
+        );
         auto t1 = std::chrono::high_resolution_clock::now();
         double build_time_s = std::chrono::duration_cast<std::chrono::microseconds>(t1 - t0).count() / 1e6;
         ARTEA_INFO(fmt::format("KNN graph built with {} vertices in {:.2f} s", knn_graph_->get_num_vertices(), build_time_s));
     }
 
     vector_dataset_t& get_dataset() { return *dataset_; }
-    dist_func_t& get_dist_func() { return *dist_func_; }
+    simd_dispatcher_t& get_dispatcher() { return *dispatcher_; }
     knn_graph::index_t& get_knn_graph() { return *knn_graph_; }
 
 private:
     DataProvider() = default;
     std::unique_ptr<vector_dataset_t> dataset_;
-    std::unique_ptr<dist_func_t> dist_func_;
+    std::unique_ptr<simd_dispatcher_t> dispatcher_;
     std::unique_ptr<knn_graph::index_t> knn_graph_;
 };
 
@@ -95,10 +99,10 @@ class RadiusProberTest : public ::testing::Test {};
  *      so error depends on dataset dimensionality and build parameters.
  */
 TEST_F(RadiusProberTest, CompareWithBruteforce) {
-    auto& provider = DataProvider::instance();
-    auto& dataset = provider.get_dataset();
-    auto& dist_func = provider.get_dist_func();
-    auto& knn_graph = provider.get_knn_graph();
+    auto& provider   = DataProvider::instance();
+    auto& dataset    = provider.get_dataset();
+    auto& dispatcher = provider.get_dispatcher();
+    auto& knn_graph  = provider.get_knn_graph();
 
     const auto& base_vecs = dataset.get_base_vecs();
     const vertex_num_t num_vertices = base_vecs.get_num_vecs();
@@ -116,75 +120,79 @@ TEST_F(RadiusProberTest, CompareWithBruteforce) {
     // topk=3: need extra slots because bruteforce includes self (distance=0),
     // and there may also be a duplicate vector (distance=0) occupying another slot.
     const uint32_t num_samples = std::min(g_config.num_samples, static_cast<uint32_t>(num_vertices));
-    bruteforce_router_t bf_router(base_vecs, dist_func, 3);
-    bf_router.initialize();
 
-    // Uniformly sample vertices with stride = num_vertices / num_samples.
-    std::vector<distance_t> bf_nn_distances(num_samples);
-    std::vector<vertex_id_t> results_cache(num_samples);
-    uint32_t stride = num_vertices / num_samples;
-    for (uint32_t i = 0; i < num_samples; ++i) {
-        vertex_id_t vid = i * stride;
-        const auto* query_vec = base_vecs.get(vid);
-        auto results = bf_router.query(query_vec);
-        // Skip self (bruteforce returns the query vertex itself with distance=0).
-        for (const auto& entry : results) {
-            if (entry.get_vid() != vid) {
-                bf_nn_distances[i] = entry.get_distance();
-                results_cache[i] = entry.get_vid();
-                break;
+    dispatcher.dispatch([&](const auto& dist_func) {
+        using DistFunc = std::decay_t<decltype(dist_func)>;
+        bruteforce_router_t<DistFunc> bf_router(base_vecs, dist_func, 3);
+        bf_router.initialize();
+
+        // Uniformly sample vertices with stride = num_vertices / num_samples.
+        std::vector<distance_t> bf_nn_distances(num_samples);
+        std::vector<vertex_id_t> results_cache(num_samples);
+        uint32_t stride = num_vertices / num_samples;
+        for (uint32_t i = 0; i < num_samples; ++i) {
+            vertex_id_t vid = i * stride;
+            const auto* query_vec = base_vecs.get(vid);
+            auto results = bf_router.query(query_vec);
+            // Skip self (bruteforce returns the query vertex itself with distance=0).
+            for (const auto& entry : results) {
+                if (entry.get_vid() != vid) {
+                    bf_nn_distances[i] = entry.get_distance();
+                    results_cache[i] = entry.get_vid();
+                    break;
+                }
             }
         }
-    }
 
-    // --- Step 3: Per-sample comparison ---
-    double total_relative_error = 0.0;
-    uint32_t valid_count = 0;
-    uint32_t exact_match_count = 0;
-    uint32_t duplicate_vec_count = 0;
-    for (uint32_t i = 0; i < num_samples; ++i) {
-        vertex_id_t vid = i * stride;
-        // Graph NN: the closest neighbor found by the approximate KNN graph.
-        distance_t graph_nn_dist = knn_graph.fetch_nbrs(vid)[0].get_distance();
-        // Bruteforce NN: the exact closest non-self neighbor.
-        distance_t bf_nn_dist = bf_nn_distances[i];
+        // --- Step 3: Per-sample comparison ---
+        double total_relative_error = 0.0;
+        uint32_t valid_count = 0;
+        uint32_t exact_match_count = 0;
+        uint32_t duplicate_vec_count = 0;
+        for (uint32_t i = 0; i < num_samples; ++i) {
+            vertex_id_t vid = i * stride;
+            // Graph NN: the closest neighbor found by the approximate KNN graph.
+            distance_t graph_nn_dist = knn_graph.fetch_nbrs(vid)[0].get_distance();
+            // Bruteforce NN: the exact closest non-self neighbor.
+            distance_t bf_nn_dist = bf_nn_distances[i];
 
-        // Detect duplicate vectors in the dataset (exact NN distance is 0).
-        // Verify by recomputing distance between the two different vertex IDs.
-        if (bf_nn_dist == 0.0f) {
-            vertex_id_t bf_nn_id = results_cache[i];
-            distance_t recomputed = dist_func(base_vecs.get(vid), base_vecs.get(bf_nn_id));
-            ARTEA_INFO(fmt::format("  [duplicate] vertex {}: bf_nn_id={}, recomputed_dist={:.6f}",
-                vid, bf_nn_id, recomputed));
-            duplicate_vec_count++;
-            continue;
+            // Detect duplicate vectors in the dataset (exact NN distance is 0).
+            // Verify by recomputing distance between the two different vertex IDs.
+            if (bf_nn_dist == 0.0f) {
+                vertex_id_t bf_nn_id = results_cache[i];
+                distance_t recomputed = dist_func(base_vecs.get(vid), base_vecs.get(bf_nn_id));
+                ARTEA_INFO(fmt::format("  [duplicate] vertex {}: bf_nn_id={}, recomputed_dist={:.6f}",
+                    vid, bf_nn_id, recomputed));
+                duplicate_vec_count++;
+                continue;
+            }
+
+            // Relative error: how far the approximate graph NN is from the exact NN.
+            // Always >= 0 since graph_nn_dist >= bf_nn_dist (approximate can't beat exact).
+            double rel_err = std::abs(static_cast<double>(graph_nn_dist) - static_cast<double>(bf_nn_dist))
+                           / static_cast<double>(bf_nn_dist);
+            total_relative_error += rel_err;
+            valid_count++;
+
+            if (rel_err == 0.0) { exact_match_count++; }
+
+            if (g_config.verbose && i < 10) {
+                ARTEA_INFO(fmt::format("  vertex {}: graph_nn={:.6f}, bf_nn={:.6f}, rel_err={:.4f}%",
+                    vid, graph_nn_dist, bf_nn_dist, rel_err * 100.0));
+            }
         }
 
-        // Relative error: how far the approximate graph NN is from the exact NN.
-        // Always >= 0 since graph_nn_dist >= bf_nn_dist (approximate can't beat exact).
-        double rel_err = std::abs(static_cast<double>(graph_nn_dist) - static_cast<double>(bf_nn_dist))
-                       / static_cast<double>(bf_nn_dist);
-        total_relative_error += rel_err;
-        valid_count++;
+        // --- Step 4: Summary statistics ---
+        double avg_relative_error = (valid_count > 0) ? total_relative_error / valid_count : 0.0;
+        double match_ratio = (valid_count > 0) ? static_cast<double>(exact_match_count) / valid_count : 0.0;
 
-        if (rel_err == 0.0) { exact_match_count++; }
+        ARTEA_INFO(fmt::format("Samples: {}, non-duplicate: {}, exact_match: {}, duplicate_vecs: {}",
+            num_samples, valid_count, exact_match_count, duplicate_vec_count));
+        ARTEA_INFO(fmt::format("Match ratio: {:.2f}% ({}/{})", match_ratio * 100.0, exact_match_count, valid_count));
+        ARTEA_INFO(fmt::format("Average relative error over {} samples: {:.4f}%", valid_count, avg_relative_error * 100.0));
 
-        if (g_config.verbose && i < 10) {
-            ARTEA_INFO(fmt::format("  vertex {}: graph_nn={:.6f}, bf_nn={:.6f}, rel_err={:.4f}%",
-                vid, graph_nn_dist, bf_nn_dist, rel_err * 100.0));
-        }
-    }
-
-    // --- Step 4: Summary statistics ---
-    double avg_relative_error = (valid_count > 0) ? total_relative_error / valid_count : 0.0;
-    double match_ratio = (valid_count > 0) ? static_cast<double>(exact_match_count) / valid_count : 0.0;
-
-    ARTEA_INFO(fmt::format("Samples: {}, non-duplicate: {}, exact_match: {}, duplicate_vecs: {}",
-        num_samples, valid_count, exact_match_count, duplicate_vec_count));
-    ARTEA_INFO(fmt::format("Match ratio: {:.2f}% ({}/{})", match_ratio * 100.0, exact_match_count, valid_count));
-    ARTEA_INFO(fmt::format("Average relative error over {} samples: {:.4f}%", valid_count, avg_relative_error * 100.0));
-
-    EXPECT_GT(valid_count, 0u) << "Should have at least some valid (non-duplicate) samples";
+        EXPECT_GT(valid_count, 0u) << "Should have at least some valid (non-duplicate) samples";
+    });
 }
 
 TEST_F(RadiusProberTest, QuantileOrdering) {

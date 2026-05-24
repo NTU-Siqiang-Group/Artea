@@ -95,7 +95,8 @@ TEST_F(BruteforceCorrectnessTest, VerifyRecallAccuracy) {
         g_config.dataset_name, base_vecs.get_num_vecs(),
         num_queries, query_vecs.get_num_vecs()));
 
-    ARTEA_WITH_DIM(dispatcher, DistFunc, dist_func) {
+    dispatcher.dispatch([&](const auto& dist_func) {
+        using DistFunc = std::decay_t<decltype(dist_func)>;
         // 1. Initialize Artea Bruteforce Router with topk=1
         const uint32_t topk = 1;
         bruteforce_router_t<DistFunc> router(base_vecs, dist_func, topk);
@@ -112,7 +113,7 @@ TEST_F(BruteforceCorrectnessTest, VerifyRecallAccuracy) {
 
         // Bruteforce should theoretically be 100% (or extremely close due to float precision)
         EXPECT_GE(recall, 0.99f) << "Bruteforce router recall is lower than 0.99!";
-    } ARTEA_END_DIM(dispatcher);
+    });
 }
 
 TEST(BruteforceRouterTest, BatchTopKQuery) {
@@ -127,7 +128,8 @@ TEST(BruteforceRouterTest, BatchTopKQuery) {
     // Test with different k values
     std::vector<uint32_t> k_values = {1, 5, 10, 20};
 
-    ARTEA_WITH_DIM(dispatcher, DistFunc, dist_func) {
+    dispatcher.dispatch([&](const auto& dist_func) {
+        using DistFunc = std::decay_t<decltype(dist_func)>;
         for (uint32_t k : k_values) {
             ARTEA_INFO(fmt::format("Testing batch top-{} query", k));
 
@@ -163,7 +165,7 @@ TEST(BruteforceRouterTest, BatchTopKQuery) {
             ARTEA_INFO(fmt::format("Batch top-{} query test passed:", k));
             ARTEA_INFO(fmt::format("   -> Recall@{}: {:.2f}%", k, recall * 100.0));
         }
-    } ARTEA_END_DIM(dispatcher);
+    });
 
     ARTEA_INFO("Batch top-k query test passed");
 }
@@ -195,53 +197,54 @@ TEST(BruteforceFastL2EquivalenceTest, TopKMatchesL2) {
     auto query_subset = query_vecs.extract_subset(0, num_queries);
     auto gt_subset    = gt_vecs.extract_subset(0, num_queries);
 
-    ARTEA_WITH_DIM(dispatcher, DistFunc, dist_func) {
-    for (uint32_t k : {1u, 10u, 100u}) {
-        if (k > base_vecs.get_num_vecs()) continue;
-        ARTEA_INFO(fmt::format("FastL2 equivalence: k={}, num_queries={}", k, num_queries));
+    dispatcher.dispatch([&](const auto& dist_func) {
+        using DistFunc = std::decay_t<decltype(dist_func)>;
+        for (uint32_t k : {1u, 10u, 100u}) {
+            if (k > base_vecs.get_num_vecs()) continue;
+            ARTEA_INFO(fmt::format("FastL2 equivalence: k={}, num_queries={}", k, num_queries));
 
-        bruteforce_router_t<DistFunc> router(base_vecs, dist_func, k);
-        router.initialize();
+            bruteforce_router_t<DistFunc> router(base_vecs, dist_func, k);
+            router.initialize();
 
-        auto preds_l2   = router.batch_query(query_subset);
-        auto preds_fast = router.batch_query_fast(query_subset, base_norms);
+            auto preds_l2   = router.batch_query(query_subset);
+            auto preds_fast = router.batch_query_fast(query_subset, base_norms);
 
-        ASSERT_EQ(preds_l2.size(),   num_queries * k);
-        ASSERT_EQ(preds_fast.size(), num_queries * k);
+            ASSERT_EQ(preds_l2.size(),   num_queries * k);
+            ASSERT_EQ(preds_fast.size(), num_queries * k);
 
-        uint32_t mismatches = 0;
-        for (uint32_t q = 0; q < num_queries; ++q) {
-            std::set<vec_id_t> set_l2, set_fast;
-            for (uint32_t r = 0; r < k; ++r) {
-                set_l2.insert(preds_l2[q * k + r].get_vid());
-                set_fast.insert(preds_fast[q * k + r].get_vid());
-            }
-            if (set_l2 != set_fast) {
-                ++mismatches;
-                if (mismatches <= 3) {  // Bound the dump.
-                    ARTEA_WARN(fmt::format(
-                        "k={} query={}: L2 set != FastL2 set", k, q));
+            uint32_t mismatches = 0;
+            for (uint32_t q = 0; q < num_queries; ++q) {
+                std::set<vec_id_t> set_l2, set_fast;
+                for (uint32_t r = 0; r < k; ++r) {
+                    set_l2.insert(preds_l2[q * k + r].get_vid());
+                    set_fast.insert(preds_fast[q * k + r].get_vid());
+                }
+                if (set_l2 != set_fast) {
+                    ++mismatches;
+                    if (mismatches <= 3) {  // Bound the dump.
+                        ARTEA_WARN(fmt::format(
+                            "k={} query={}: L2 set != FastL2 set", k, q));
+                    }
                 }
             }
+
+            EXPECT_EQ(mismatches, 0u)
+                << fmt::format(
+                    "FastL2 disagrees with L2 on {} / {} queries at k={}. "
+                    "Check fast_euclidean math or VectorDataset::_compute_base_norms.",
+                    mismatches, num_queries, k);
+
+            // Backstop: recall must not regress.
+            recall_estimator_t est;
+            auto r_l2   = est.calculate_recall_at_k(preds_l2,   gt_subset, k, num_queries);
+            auto r_fast = est.calculate_recall_at_k(preds_fast, gt_subset, k, num_queries);
+            EXPECT_GE(r_fast, r_l2 - 1e-6f)
+                << fmt::format("Recall@{} regressed: L2={:.6f} fast={:.6f}", k, r_l2, r_fast);
+
+            ARTEA_INFO(fmt::format(
+                "  k={:>3}  recall L2={:.4f} fast={:.4f}", k, r_l2, r_fast));
         }
-
-        EXPECT_EQ(mismatches, 0u)
-            << fmt::format(
-                "FastL2 disagrees with L2 on {} / {} queries at k={}. "
-                "Check fast_euclidean math or VectorDataset::_compute_base_norms.",
-                mismatches, num_queries, k);
-
-        // Backstop: recall must not regress.
-        recall_estimator_t est;
-        auto r_l2   = est.calculate_recall_at_k(preds_l2,   gt_subset, k, num_queries);
-        auto r_fast = est.calculate_recall_at_k(preds_fast, gt_subset, k, num_queries);
-        EXPECT_GE(r_fast, r_l2 - 1e-6f)
-            << fmt::format("Recall@{} regressed: L2={:.6f} fast={:.6f}", k, r_l2, r_fast);
-
-        ARTEA_INFO(fmt::format(
-            "  k={:>3}  recall L2={:.4f} fast={:.4f}", k, r_l2, r_fast));
-    }
-    } ARTEA_END_DIM(dispatcher);
+    });
 }
 
 int main(int argc, char** argv) {

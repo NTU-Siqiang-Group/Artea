@@ -52,47 +52,49 @@ public:
         base_vecs_ = std::move(dataset->get_base_vecs());
 
         // Initialize distance function
-        dist_func_ = std::make_unique<dist_func_t>(dim_);
+        dispatcher_ = std::make_unique<simd_dispatcher_t>(dim_);
     }
 
     vec_dim_t get_dim() const { return dim_; }
     vec_num_t get_num_base_vecs() const { return num_base_vecs_; }
     const vector_array_t& get_base_vecs() const { return base_vecs_; }
-    const dist_func_t& get_dist_func() const { return *dist_func_; }
+    const simd_dispatcher_t& get_dispatcher() const { return *dispatcher_; }
 
 private:
     vec_dim_t dim_;
     vec_num_t num_base_vecs_;
     vector_array_t base_vecs_;
-    std::unique_ptr<dist_func_t> dist_func_;
+    std::unique_ptr<simd_dispatcher_t> dispatcher_;
 };
 
 // Benchmark for RandomEG
 static void BM_RandomEG(benchmark::State& state) {
     auto& provider = DataProvider::instance();
     const auto& base_vecs = provider.get_base_vecs();
-    const auto& dist_func = provider.get_dist_func();
+    auto& dispatcher      = provider.get_dispatcher();
     const vec_num_t num_vertices = provider.get_num_base_vecs();
 
-    // Create RandomEG instance
-    random_eg_t random_eg(dist_func);
+    dispatcher.dispatch([&](const auto& dist_func) {
+        using DistFunc = std::decay_t<decltype(dist_func)>;
+        random_eg_t<DistFunc> random_eg(dist_func);
 
-    for (auto _ : state) {
-        // Create a new graph_index (included in timing)
-        conv_graph::index_t graph_index(
-            base_vecs,
-            g_config.layer_config,
-            g_config.pruning_config,
-            g_config.propagate_config
-        );
+        for (auto _ : state) {
+            // Create a new graph_index (included in timing)
+            conv_graph::index_t graph_index(
+                base_vecs,
+                g_config.layer_config,
+                g_config.pruning_config,
+                g_config.propagate_config
+            );
 
-        // Perform the random edge generation
-        random_eg.generate(graph_index.get_refining_graph(), g_config.layer_config.max_nbr_size());
+            // Perform the random edge generation
+            random_eg.generate(graph_index.get_refining_graph(), g_config.layer_config.max_nbr_size());
 
-        // Prevent optimization from removing the work
-        benchmark::DoNotOptimize(graph_index);
-        benchmark::ClobberMemory();
-    }
+            // Prevent optimization from removing the work
+            benchmark::DoNotOptimize(graph_index);
+            benchmark::ClobberMemory();
+        }
+    });
 
     state.SetItemsProcessed(state.iterations() * num_vertices);
     state.SetLabel(fmt::format("vertices={}, max_nbrs={}", num_vertices, g_config.layer_config.max_nbr_size()));
