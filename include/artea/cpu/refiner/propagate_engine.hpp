@@ -279,13 +279,16 @@ public:
       */
     template <typename UpdaterT, typename... Args>
     auto make_updater(Args&&... args) -> UpdaterT {
-        using triangle_updater_t = typename RefinerTraitsT::triangle_updater_t;
-        using pruning_updater_t  = typename RefinerTraitsT::pruning_updater_t;
-        using reverse_updater_t  = typename RefinerTraitsT::reverse_updater_t;
-        using random_updater_t   = typename RefinerTraitsT::random_updater_t;
-        using routing_updater_t  = typename RefinerTraitsT::routing_updater_t;
-        using truncate_updater_t = typename RefinerTraitsT::truncate_updater_t;
-        using arc_updater_t      = typename RefinerTraitsT::arc_updater_t;
+        // Updater aliases in RefinerTraits are template aliases on DistFuncT;
+        // bind them with PropagateEngine's own DistFuncT here so the
+        // is_same_v dispatch below works on concrete updater types.
+        using triangle_updater_t = typename RefinerTraitsT::template triangle_updater_t<DistFuncT>;
+        using pruning_updater_t  = typename RefinerTraitsT::template pruning_updater_t<DistFuncT>;
+        using reverse_updater_t  = typename RefinerTraitsT::template reverse_updater_t<DistFuncT>;
+        using random_updater_t   = typename RefinerTraitsT::template random_updater_t<DistFuncT>;
+        using routing_updater_t  = typename RefinerTraitsT::template routing_updater_t<DistFuncT>;
+        using truncate_updater_t = typename RefinerTraitsT::template truncate_updater_t<DistFuncT>;
+        using arc_updater_t      = typename RefinerTraitsT::template arc_updater_t<DistFuncT>;
 
         const auto& vecs_arr = _refining_graph->get_vecs_data();
         auto& log_table = _log_table;

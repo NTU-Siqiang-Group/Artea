@@ -81,13 +81,13 @@ std::constructible_from<CandidateQueueImpl, std::size_t> && requires(
     const CandidateQueueImpl const_queue
 ) {
 
-    // Type aliases
+    // Type aliases. dist_func_t is per-method template arg now (DistFuncT),
+    // not a queue-class member alias — removed from the concept too.
     typename CandidateQueueImpl::vertex_id_t;
     typename CandidateQueueImpl::distance_t;
     typename CandidateQueueImpl::candidate_entry_t;
     typename CandidateQueueImpl::knn_results_t;
     typename CandidateQueueImpl::random_seq_t;
-    typename CandidateQueueImpl::dist_func_t;
     typename CandidateQueueImpl::vec_ele_t;
     typename CandidateQueueImpl::vector_array_t;
     typename CandidateQueueImpl::visited_table_t;

@@ -256,7 +256,7 @@ TEST_F(CandidateQueueTest, RandomInitialize_StdQueue) {
 
     // Create test data
     using vector_array_t = typename router_traits_t::vector_array_t;
-    using dist_func_t = typename router_traits_t::dist_func_t;
+    using dist_func_t = SIMDDistance<computer_traits_t, 128, 1>;  // test fixed at dim=128
     using random_seq_t = typename router_traits_t::random_seq_t;
 
     vector_array_t base_vecs(num_vecs, dim);
@@ -278,7 +278,7 @@ TEST_F(CandidateQueueTest, RandomInitialize_StdQueue) {
     }
 
     // Create distance function and random sequence
-    dist_func_t dist_func(dim);
+    dist_func_t dist_func{};
     random_seq_t random_seq;
 
     // Create visited table
@@ -312,7 +312,7 @@ TEST_F(CandidateQueueTest, RandomInitialize_LinearQueue) {
 
     // Create test data
     using vector_array_t = typename router_traits_t::vector_array_t;
-    using dist_func_t = typename router_traits_t::dist_func_t;
+    using dist_func_t = SIMDDistance<computer_traits_t, 128, 1>;  // test fixed at dim=128
     using random_seq_t = typename router_traits_t::random_seq_t;
 
     vector_array_t base_vecs(num_vecs, dim);
@@ -331,7 +331,7 @@ TEST_F(CandidateQueueTest, RandomInitialize_LinearQueue) {
         query_vec[j] = dist(rng);
     }
 
-    dist_func_t dist_func(dim);
+    dist_func_t dist_func{};
     random_seq_t random_seq;
 
     // Create visited table
@@ -362,7 +362,7 @@ TEST_F(CandidateQueueTest, RandomInitialize_FHQueue) {
 
     // Create test data
     using vector_array_t = typename router_traits_t::vector_array_t;
-    using dist_func_t = typename router_traits_t::dist_func_t;
+    using dist_func_t = SIMDDistance<computer_traits_t, 128, 1>;  // test fixed at dim=128
     using random_seq_t = typename router_traits_t::random_seq_t;
 
     vector_array_t base_vecs(num_vecs, dim);
@@ -381,7 +381,7 @@ TEST_F(CandidateQueueTest, RandomInitialize_FHQueue) {
         query_vec[j] = dist(rng);
     }
 
-    dist_func_t dist_func(dim);
+    dist_func_t dist_func{};
     random_seq_t random_seq;
 
     // Create visited table
@@ -411,7 +411,7 @@ TEST_F(CandidateQueueTest, RandomInitialize_BoostQueue) {
     const std::size_t dim = 128;
 
     using vector_array_t = typename router_traits_t::vector_array_t;
-    using dist_func_t = typename router_traits_t::dist_func_t;
+    using dist_func_t = SIMDDistance<computer_traits_t, 128, 1>;  // test fixed at dim=128
     using random_seq_t = typename router_traits_t::random_seq_t;
 
     vector_array_t base_vecs(num_vecs, dim);
@@ -430,7 +430,7 @@ TEST_F(CandidateQueueTest, RandomInitialize_BoostQueue) {
         query_vec[j] = dist(rng);
     }
 
-    dist_func_t dist_func(dim);
+    dist_func_t dist_func{};
     random_seq_t random_seq;
     visited_table_t visited_table(num_vecs);
 
@@ -1285,7 +1285,7 @@ TEST_F(CandidateQueueTest, SeededInitialize_StdQueue) {
 
     // Create test data
     using vector_array_t = typename router_traits_t::vector_array_t;
-    using dist_func_t = typename router_traits_t::dist_func_t;
+    using dist_func_t = SIMDDistance<computer_traits_t, 128, 1>;  // test fixed at dim=128
 
     vector_array_t base_vecs(num_vecs, dim);
     std::mt19937 rng(g_config.seed);
@@ -1310,7 +1310,7 @@ TEST_F(CandidateQueueTest, SeededInitialize_StdQueue) {
         init_vids.push_back(static_cast<vertex_id_t>(i));
     }
 
-    dist_func_t dist_func(dim);
+    dist_func_t dist_func{};
 
     // Create visited table
     visited_table_t visited_table(num_vecs);
@@ -1341,7 +1341,7 @@ TEST_F(CandidateQueueTest, SeededInitialize_LinearQueue) {
     const std::size_t dim = 128;
 
     using vector_array_t = typename router_traits_t::vector_array_t;
-    using dist_func_t = typename router_traits_t::dist_func_t;
+    using dist_func_t = SIMDDistance<computer_traits_t, 128, 1>;  // test fixed at dim=128
 
     vector_array_t base_vecs(num_vecs, dim);
     std::mt19937 rng(g_config.seed);
@@ -1365,7 +1365,7 @@ TEST_F(CandidateQueueTest, SeededInitialize_LinearQueue) {
         init_vids.push_back(static_cast<vertex_id_t>(i));
     }
 
-    dist_func_t dist_func(dim);
+    dist_func_t dist_func{};
 
     // Create visited table
     visited_table_t visited_table(num_vecs);
@@ -1394,7 +1394,7 @@ TEST_F(CandidateQueueTest, SeededInitialize_FHQueue) {
     const std::size_t dim = 128;
 
     using vector_array_t = typename router_traits_t::vector_array_t;
-    using dist_func_t = typename router_traits_t::dist_func_t;
+    using dist_func_t = SIMDDistance<computer_traits_t, 128, 1>;  // test fixed at dim=128
 
     vector_array_t base_vecs(num_vecs, dim);
     std::mt19937 rng(g_config.seed);
@@ -1418,7 +1418,7 @@ TEST_F(CandidateQueueTest, SeededInitialize_FHQueue) {
         init_vids.push_back(static_cast<vertex_id_t>(i));
     }
 
-    dist_func_t dist_func(dim);
+    dist_func_t dist_func{};
 
     // Create visited table
     visited_table_t visited_table(num_vecs);
@@ -1447,7 +1447,7 @@ TEST_F(CandidateQueueTest, SeededInitialize_BoostQueue) {
     const std::size_t dim = 128;
 
     using vector_array_t = typename router_traits_t::vector_array_t;
-    using dist_func_t = typename router_traits_t::dist_func_t;
+    using dist_func_t = SIMDDistance<computer_traits_t, 128, 1>;  // test fixed at dim=128
 
     vector_array_t base_vecs(num_vecs, dim);
     std::mt19937 rng(g_config.seed);
@@ -1471,7 +1471,7 @@ TEST_F(CandidateQueueTest, SeededInitialize_BoostQueue) {
         init_vids.push_back(static_cast<vertex_id_t>(i));
     }
 
-    dist_func_t dist_func(dim);
+    dist_func_t dist_func{};
     visited_table_t visited_table(num_vecs);
 
     boost_queue_t q(K);
@@ -1503,7 +1503,7 @@ TEST_F(CandidateQueueTest, SeededInitialize_ExceedsCapacity_StdQueue) {
     const std::size_t dim = 128;
 
     using vector_array_t = typename router_traits_t::vector_array_t;
-    using dist_func_t = typename router_traits_t::dist_func_t;
+    using dist_func_t = SIMDDistance<computer_traits_t, 128, 1>;  // test fixed at dim=128
 
     vector_array_t base_vecs(num_vecs, dim);
     std::mt19937 rng(g_config.seed);
@@ -1527,7 +1527,7 @@ TEST_F(CandidateQueueTest, SeededInitialize_ExceedsCapacity_StdQueue) {
         init_vids.push_back(static_cast<vertex_id_t>(i));
     }
 
-    dist_func_t dist_func(dim);
+    dist_func_t dist_func{};
 
     // Create visited table
     visited_table_t visited_table(num_vecs);
@@ -1560,7 +1560,7 @@ TEST_F(CandidateQueueTest, SeededInitialize_ExceedsCapacity_LinearQueue) {
     const std::size_t dim = 128;
 
     using vector_array_t = typename router_traits_t::vector_array_t;
-    using dist_func_t = typename router_traits_t::dist_func_t;
+    using dist_func_t = SIMDDistance<computer_traits_t, 128, 1>;  // test fixed at dim=128
 
     vector_array_t base_vecs(num_vecs, dim);
     std::mt19937 rng(g_config.seed + 1);
@@ -1583,7 +1583,7 @@ TEST_F(CandidateQueueTest, SeededInitialize_ExceedsCapacity_LinearQueue) {
         init_vids.push_back(static_cast<vertex_id_t>(i));
     }
 
-    dist_func_t dist_func(dim);
+    dist_func_t dist_func{};
 
     // Create visited table
     visited_table_t visited_table(num_vecs);
@@ -1614,7 +1614,7 @@ TEST_F(CandidateQueueTest, SeededInitialize_ExceedsCapacity_FHQueue) {
     const std::size_t dim = 128;
 
     using vector_array_t = typename router_traits_t::vector_array_t;
-    using dist_func_t = typename router_traits_t::dist_func_t;
+    using dist_func_t = SIMDDistance<computer_traits_t, 128, 1>;  // test fixed at dim=128
 
     vector_array_t base_vecs(num_vecs, dim);
     std::mt19937 rng(g_config.seed + 2);
@@ -1637,7 +1637,7 @@ TEST_F(CandidateQueueTest, SeededInitialize_ExceedsCapacity_FHQueue) {
         init_vids.push_back(static_cast<vertex_id_t>(i));
     }
 
-    dist_func_t dist_func(dim);
+    dist_func_t dist_func{};
 
     // Create visited table
     visited_table_t visited_table(num_vecs);
@@ -1668,7 +1668,7 @@ TEST_F(CandidateQueueTest, SeededInitialize_ExceedsCapacity_BoostQueue) {
     const std::size_t dim = 128;
 
     using vector_array_t = typename router_traits_t::vector_array_t;
-    using dist_func_t = typename router_traits_t::dist_func_t;
+    using dist_func_t = SIMDDistance<computer_traits_t, 128, 1>;  // test fixed at dim=128
 
     vector_array_t base_vecs(num_vecs, dim);
     std::mt19937 rng(g_config.seed + 3);
@@ -1691,7 +1691,7 @@ TEST_F(CandidateQueueTest, SeededInitialize_ExceedsCapacity_BoostQueue) {
         init_vids.push_back(static_cast<vertex_id_t>(i));
     }
 
-    dist_func_t dist_func(dim);
+    dist_func_t dist_func{};
     visited_table_t visited_table(num_vecs);
 
     boost_queue_t q(K);
