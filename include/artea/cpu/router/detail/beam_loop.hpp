@@ -48,7 +48,8 @@ namespace detail {
  */
 template <typename RouterTraitsT,
           NeighborRange   NeighborRangeT,
-          CandidateQueue  CandidateQueueT>
+          CandidateQueue  CandidateQueueT,
+          typename        DistFuncT>
     requires VisitedTable<typename RouterTraitsT::visited_table_t>
 __attribute__((always_inline))
 inline auto beam_loop_body(
@@ -56,7 +57,7 @@ inline auto beam_loop_body(
     const NeighborRangeT&                              nbrs_range,
     CandidateQueueT&                                   candidate_queue,
     typename RouterTraitsT::visited_table_t&           visited,
-    const typename RouterTraitsT::dist_func_t&         dist_func,
+    const DistFuncT&                                   dist_func,
     const typename RouterTraitsT::vector_array_t&      vecs_data
 ) -> void {
     using vertex_id_t       = typename RouterTraitsT::vertex_id_t;
@@ -85,7 +86,7 @@ inline auto beam_loop_body(
  * Single cursor; replaces best when a strictly closer neighbor appears.
  * Terminates at local optimum.
  */
-template <typename RouterTraitsT, NeighborRange NeighborRangeT>
+template <typename RouterTraitsT, NeighborRange NeighborRangeT, typename DistFuncT>
     requires VisitedTable<typename RouterTraitsT::visited_table_t>
 __attribute__((always_inline))
 inline auto greedy_loop_body(
@@ -94,7 +95,7 @@ inline auto greedy_loop_body(
     typename RouterTraitsT::vertex_id_t                seed_vid,
     typename RouterTraitsT::distance_t                 seed_dist,
     typename RouterTraitsT::visited_table_t&           visited,
-    const typename RouterTraitsT::dist_func_t&         dist_func,
+    const DistFuncT&                                   dist_func,
     const typename RouterTraitsT::vector_array_t&      vecs_data
 ) -> std::pair<typename RouterTraitsT::vertex_id_t, typename RouterTraitsT::distance_t> {
     using vertex_id_t = typename RouterTraitsT::vertex_id_t;

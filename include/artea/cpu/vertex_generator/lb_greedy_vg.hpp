@@ -27,8 +27,8 @@
 namespace artea {
 namespace cpu {
 
-template <typename VertexGeneratorTraitsT>
-class LBGreedyVG : public VertexGeneratorTraitsT::template vertex_generator_t<LBGreedyVG<VertexGeneratorTraitsT>> {
+template <typename VertexGeneratorTraitsT, typename DistFuncT>
+class LBGreedyVG : public VertexGeneratorTraitsT::template vertex_generator_t<LBGreedyVG<VertexGeneratorTraitsT, DistFuncT>> {
 
     using vec_num_t = typename VertexGeneratorTraitsT::vec_num_t;
     using vec_id_t = typename VertexGeneratorTraitsT::vec_id_t;
@@ -38,7 +38,7 @@ class LBGreedyVG : public VertexGeneratorTraitsT::template vertex_generator_t<LB
     using ratio_t = typename VertexGeneratorTraitsT::ratio_t;
     using vec_dim_t = typename VertexGeneratorTraitsT::vec_dim_t;
     using vector_array_t = typename VertexGeneratorTraitsT::vector_array_t;
-    using dist_func_t = typename VertexGeneratorTraitsT::dist_func_t;
+    using dist_func_t = DistFuncT;
     using approx_rnet_t = typename VertexGeneratorTraitsT::approx_rnet_t;
 
 public:

@@ -77,7 +77,7 @@ public:
     /** @brief knn_results_t is now a queue-local type that tracks @c EntryT. */
     using knn_results_t = std::vector<candidate_entry_t>;
     using random_seq_t = typename RouterTraitsT::random_seq_t;
-    using dist_func_t = typename RouterTraitsT::dist_func_t;
+    // dist_func type is per-method template arg (DistFuncT); deduced from caller.
     using vec_ele_t = typename RouterTraitsT::vec_ele_t;
     using vector_array_t = typename RouterTraitsT::vector_array_t;
     using visited_table_t = typename RouterTraitsT::visited_table_t;
@@ -174,9 +174,10 @@ public:
      * @note Generates random IDs, computes distances using dist_func, and calls seeded_initialize.
      * @complexity O(N) for generation + O(N log N) for heap operations.
      */
+    template <typename DistFuncT>
     void random_initialize(
         random_seq_t& random_seq,
-        const dist_func_t& dist_func,
+        const DistFuncT& dist_func,
         const vec_ele_t* query_vec,
         const vector_array_t& base_vecs,
         visited_table_t& visited_table
@@ -199,9 +200,10 @@ public:
      * @note If init_vids.size() > capacity, only the best capacity candidates are kept.
      * @complexity O(N) for distance computation + O(N log N) for sorting + O(L log L) for heap operations.
      */
+    template <typename DistFuncT>
     void seeded_initialize(
         const std::vector<vertex_id_t>& init_vids,
-        const dist_func_t& dist_func,
+        const DistFuncT& dist_func,
         const vec_ele_t* query_vec,
         const vector_array_t& base_vecs,
         visited_table_t& visited_table

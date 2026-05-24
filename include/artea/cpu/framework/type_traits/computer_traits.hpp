@@ -34,8 +34,8 @@ template <typename ComputerTraitsT, std::size_t UnrollSize> class SIMDFMA;
 template <typename ComputerTraitsT, std::size_t UnrollSize> class SIMDLinear;
 template <typename ComputerTraitsT> class RecallEstimator;
 template <typename ComputerTraitsT> class ADREstimator;
-template <typename ComputerTraitsT> class DistanceProber;
-template <typename ComputerTraitsT> class DatasetProber;
+template <typename ComputerTraitsT, typename DistFuncT> class DistanceProber;
+template <typename ComputerTraitsT, typename DistFuncT> class DatasetProber;
 
 /** @brief Distance metrics used for computing distances between vectors */
 enum class DistanceMetricsT : uint8_t {
@@ -99,8 +99,11 @@ public:
     using recall_estimator_t = RecallEstimator<computer_traits_t>;
     using adr_estimator_t = ADREstimator<computer_traits_t>;
 
-    using distance_prober_t = DistanceProber<computer_traits_t>;
-    using dataset_prober_t = DatasetProber<computer_traits_t>;
+    // Probers hold a dist_func by member — template aliases on DistFuncT.
+    template <typename DistFuncT>
+    using distance_prober_t = DistanceProber<computer_traits_t, DistFuncT>;
+    template <typename DistFuncT>
+    using dataset_prober_t = DatasetProber<computer_traits_t, DistFuncT>;
 
     static constexpr distance_metrics_t distance_metrics = DistanceMetrics;
 

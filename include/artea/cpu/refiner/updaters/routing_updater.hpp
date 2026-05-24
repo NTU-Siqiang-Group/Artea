@@ -33,9 +33,9 @@ namespace cpu {
  *
  * @tparam RefinerTraitsT The refiner traits type.
  */
-template <typename RefinerTraitsT>
+template <typename RefinerTraitsT, typename DistFuncT>
 class RoutingUpdater :
-    public RefinerTraitsT::template neighbor_updater_t<RoutingUpdater<RefinerTraitsT>>
+    public RefinerTraitsT::template neighbor_updater_t<DistFuncT, RoutingUpdater<RefinerTraitsT, DistFuncT>>
 {
     using vertex_id_t = typename RefinerTraitsT::vertex_id_t;
     using vertex_num_t = typename RefinerTraitsT::vertex_num_t;
@@ -45,10 +45,10 @@ class RoutingUpdater :
     using nbr_t = typename RefinerTraitsT::nbr_t;
     using nbr_arr_t = typename RefinerTraitsT::nbr_arr_t;
     using log_table_t = typename RefinerTraitsT::log_table_t;
-    using dist_func_t = typename RefinerTraitsT::dist_func_t;
-    using router_t = typename RefinerTraitsT::single_layer_router_t;
+    using dist_func_t = DistFuncT;
+    using router_t = typename RefinerTraitsT::template single_layer_router_t<DistFuncT>;
     using refining_graph_t = typename RefinerTraitsT::dynamic::refining_graph_t;
-    using base_class_t = typename RefinerTraitsT::template neighbor_updater_t<RoutingUpdater<RefinerTraitsT>>;
+    using base_class_t = typename RefinerTraitsT::template neighbor_updater_t<DistFuncT, RoutingUpdater<RefinerTraitsT, DistFuncT>>;
 
 public:
     static constexpr const char* updater_name = "routing_updater";

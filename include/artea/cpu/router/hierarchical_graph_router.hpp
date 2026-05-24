@@ -59,16 +59,16 @@ namespace cpu {
  *
  * @tparam RouterTraitsT The router traits type.
  */
-template <typename RouterTraitsT>
+template <typename RouterTraitsT, typename DistFuncT>
 class HierarchicalGraphRouter :
-    public RouterTraitsT::template vector_router_t<HierarchicalGraphRouter<RouterTraitsT>>
+    public RouterTraitsT::template vector_router_t<DistFuncT, HierarchicalGraphRouter<RouterTraitsT, DistFuncT>>
 {
     using vertex_num_t             = typename RouterTraitsT::vertex_num_t;
     using vertex_id_t              = typename RouterTraitsT::vertex_id_t;
     using layer_id_t               = typename RouterTraitsT::layer_id_t;
     using vec_ele_t                = typename RouterTraitsT::vec_ele_t;
     using distance_t               = typename RouterTraitsT::distance_t;
-    using dist_func_t              = typename RouterTraitsT::dist_func_t;
+    using dist_func_t              = DistFuncT;
     using vector_array_t           = typename RouterTraitsT::vector_array_t;
     using query_vecs_t             = typename RouterTraitsT::query_vecs_t;
     using candidate_entry_t        = typename RouterTraitsT::candidate_entry_t;
@@ -79,9 +79,9 @@ class HierarchicalGraphRouter :
     using random_seq_t             = typename RouterTraitsT::random_seq_t;
     using candidate_sample_utils_t = typename RouterTraitsT::candidate_sample_utils_t;
     using base_class_t             =
-        typename RouterTraitsT::template vector_router_t<HierarchicalGraphRouter<RouterTraitsT>>;
+        typename RouterTraitsT::template vector_router_t<DistFuncT, HierarchicalGraphRouter<RouterTraitsT, DistFuncT>>;
 
-    using single_layer_router_t    = SingleLayerRouter<RouterTraitsT>;
+    using single_layer_router_t    = SingleLayerRouter<RouterTraitsT, DistFuncT>;
 
     static constexpr vertex_id_t invalid_vertex_id = RouterTraitsT::invalid_vertex_id;
 

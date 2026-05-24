@@ -34,7 +34,7 @@ namespace cpu {
  * @brief Random edge generator for initializing graph with random neighbors.
  * @tparam RefinerTraitsT The refiner traits type.
  */
-template <typename RefinerTraitsT>
+template <typename RefinerTraitsT, typename DistFuncT>
 class RandomEG {
 
     using vertex_num_t = typename RefinerTraitsT::vertex_num_t;
@@ -46,7 +46,7 @@ class RandomEG {
     using nbr_t = typename RefinerTraitsT::nbr_t;
     using nbr_arr_t = typename RefinerTraitsT::nbr_arr_t;
     using nbr_comp_t = typename RefinerTraitsT::nbr_comp_t;
-    using dist_func_t = typename RefinerTraitsT::dist_func_t;
+    using dist_func_t = DistFuncT;
     using random_seq_t = typename RefinerTraitsT::random_seq_t;
     using refining_graph_t = typename RefinerTraitsT::dynamic::refining_graph_t;
 

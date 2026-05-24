@@ -64,23 +64,23 @@ namespace cpu {
  *
  * @tparam RouterTraitsT The router traits type.
  */
-template <typename RouterTraitsT>
+template <typename RouterTraitsT, typename DistFuncT>
 class SLRouterProfiler :
-    public RouterTraitsT::template vector_router_t<SLRouterProfiler<RouterTraitsT>>
+    public RouterTraitsT::template vector_router_t<DistFuncT, SLRouterProfiler<RouterTraitsT, DistFuncT>>
 {
     using vertex_num_t         = typename RouterTraitsT::vertex_num_t;
     using vertex_id_t          = typename RouterTraitsT::vertex_id_t;
     using layer_id_t           = typename RouterTraitsT::layer_id_t;
     using vec_ele_t            = typename RouterTraitsT::vec_ele_t;
     using distance_t           = typename RouterTraitsT::distance_t;
-    using dist_func_t          = typename RouterTraitsT::dist_func_t;
+    using dist_func_t          = DistFuncT;
     using vector_array_t       = typename RouterTraitsT::vector_array_t;
     using query_vecs_t         = typename RouterTraitsT::query_vecs_t;
     using visited_table_pool_t = typename RouterTraitsT::visited_table_pool_t;
     using ground_truth_t       = typename RouterTraitsT::ground_truth_t;
     using candidate_queue_t    = typename RouterTraitsT::candidate_queue_t;
     using base_class_t         =
-        typename RouterTraitsT::template vector_router_t<SLRouterProfiler<RouterTraitsT>>;
+        typename RouterTraitsT::template vector_router_t<DistFuncT, SLRouterProfiler<RouterTraitsT, DistFuncT>>;
 
 public:
     SLRouterProfiler(

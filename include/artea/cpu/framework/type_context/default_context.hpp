@@ -94,8 +94,8 @@ using simdu2_linear_t = typename computer_traits_t::simdu2_linear_t;
 using simdu4_linear_t = typename computer_traits_t::simdu4_linear_t;
 using recall_estimator_t = typename computer_traits_t::recall_estimator_t;
 using adr_estimator_t = typename computer_traits_t::adr_estimator_t;
-using distance_prober_t = typename computer_traits_t::distance_prober_t;
-using dataset_prober_t = typename computer_traits_t::dataset_prober_t;
+template <typename DistFuncT> using distance_prober_t = typename computer_traits_t::template distance_prober_t<DistFuncT>;
+template <typename DistFuncT> using dataset_prober_t  = typename computer_traits_t::template dataset_prober_t<DistFuncT>;
 
 // Buffer types from BufferTraits
 using buffer_policy_t = typename buffer_traits_t::buffer_policy_t;
@@ -149,8 +149,8 @@ using approx_rnet_t = typename vertex_generator_traits_t::approx_rnet_t;
 using ortho_lsh_generator_t = typename vertex_generator_traits_t::ortho_lsh_generator_t;
 using pstable_lsh_generator_t = typename vertex_generator_traits_t::pstable_lsh_generator_t;
 using lsh_table_t = typename vertex_generator_traits_t::lsh_table_t;
-using lb_greedy_vg_t = typename vertex_generator_traits_t::lb_greedy_vg_t;
-using mb_greedy_vg_t = typename vertex_generator_traits_t::mb_greedy_vg_t;
+template <typename DistFuncT> using lb_greedy_vg_t = typename vertex_generator_traits_t::template lb_greedy_vg_t<DistFuncT>;
+template <typename DistFuncT> using mb_greedy_vg_t = typename vertex_generator_traits_t::template mb_greedy_vg_t<DistFuncT>;
 using random_vg_t = typename vertex_generator_traits_t::random_vg_t;
 using graph_mis_vg_t = typename vertex_generator_traits_t::graph_mis_vg_t;
 

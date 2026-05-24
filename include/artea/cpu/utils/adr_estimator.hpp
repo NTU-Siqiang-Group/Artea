@@ -55,7 +55,7 @@ class ADREstimator final {
     using distance_t     = typename ComputerTraitsT::distance_t;
     using idlist_array_t = typename ComputerTraitsT::idlist_array_t;
     using vector_array_t = typename ComputerTraitsT::vector_array_t;
-    using dist_func_t    = typename ComputerTraitsT::dist_func_t;
+    // dist_func type is per-method template arg (DistFuncT); deduced from caller.
 
 public:
 
@@ -85,14 +85,14 @@ public:
      *                       squared-L2.
      * @return Averaged ratio >= 1 (0.0 when every query was skipped).
      */
-    template <ResultEntry ResultEntryT>
+    template <ResultEntry ResultEntryT, typename DistFuncT>
     auto calculate_adr_at_1(
         const std::vector<ResultEntryT>& predictions,
         std::size_t                      topk,
         const idlist_array_t&            gt_vecs,
         const vector_array_t&            query_vecs,
         const vector_array_t&            base_vecs,
-        const dist_func_t&               dist_func,
+        const DistFuncT&                 dist_func,
         std::size_t                      num_queries
     ) const -> double {
         if (num_queries == 0 || topk == 0) return 0.0;
@@ -151,12 +151,13 @@ public:
      *        query, @c get_vec_dim() == topk). Convenience overload for
      *        call sites that hold vid lists directly.
      */
+    template <typename DistFuncT>
     auto calculate_adr_at_1(
         const idlist_array_t& predictions,
         const idlist_array_t& gt_vecs,
         const vector_array_t& query_vecs,
         const vector_array_t& base_vecs,
-        const dist_func_t&    dist_func
+        const DistFuncT&      dist_func
     ) const -> double {
         const std::size_t num_queries = gt_vecs.get_num_vecs();
         if (num_queries == 0) return 0.0;

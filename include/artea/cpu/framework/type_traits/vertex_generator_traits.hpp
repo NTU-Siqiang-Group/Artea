@@ -28,8 +28,8 @@ template <typename VertexGeneratorTraitsT, typename DerivedClassT> class VertexG
 template <typename VertexGeneratorTraitsT> class OrthoLSHGenerator;
 template <typename VertexGeneratorTraitsT> class PStableLSHGenerator;
 template <typename VertexGeneratorTraitsT> class LSHTable;
-template <typename VertexGeneratorTraitsT> class LBGreedyVG;
-template <typename VertexGeneratorTraitsT> class MBGreedyVG;
+template <typename VertexGeneratorTraitsT, typename DistFuncT> class LBGreedyVG;
+template <typename VertexGeneratorTraitsT, typename DistFuncT> class MBGreedyVG;
 template <typename VertexGeneratorTraitsT> class RandomVG;
 template <typename VertexGeneratorTraitsT> class GraphMISVG;
 
@@ -58,10 +58,12 @@ struct VertexGeneratorTraits :
     using lsh_table_t = LSHTable<vertex_generator_traits_t>;
 
     /** @brief Large batch greedy vertex generator. */
-    using lb_greedy_vg_t = LBGreedyVG<vertex_generator_traits_t>;
+    template <typename DistFuncT>
+    using lb_greedy_vg_t = LBGreedyVG<vertex_generator_traits_t, DistFuncT>;
 
     /** @brief Mini batch greedy vertex generator. */
-    using mb_greedy_vg_t = MBGreedyVG<vertex_generator_traits_t>;
+    template <typename DistFuncT>
+    using mb_greedy_vg_t = MBGreedyVG<vertex_generator_traits_t, DistFuncT>;
 
     /** @brief Random vertex generator. */
     using random_vg_t = RandomVG<vertex_generator_traits_t>;

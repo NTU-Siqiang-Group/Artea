@@ -88,11 +88,12 @@ class IndexFactory {
     using vec_ele_t        = typename GraphFactoryTraitsT::vec_ele_t;
     using nbr_t            = typename GraphFactoryTraitsT::nbr_t;
     using vector_array_t   = typename GraphFactoryTraitsT::vector_array_t;
-    using dist_func_t      = typename GraphFactoryTraitsT::dist_func_t;
+    // dist_func type is per-method template arg (DistFuncT); deduced from caller.
     using ratio_t          = typename GraphFactoryTraitsT::ratio_t;
 
+    template <typename DistFuncT>
     using hierarchical_pruning_updater_t =
-        typename GraphFactoryTraitsT::hierarchical_pruning_updater_t;
+        typename GraphFactoryTraitsT::template hierarchical_pruning_updater_t<DistFuncT>;
 
     using hierarchical_graph_t =
         typename GraphFactoryTraitsT::dynamic::hierarchical_graph_t;
@@ -105,7 +106,8 @@ class IndexFactory {
     // Insertion only needs the atom-level beam_search, so we bind the
     // graph-agnostic single-layer router directly and skip the
     // hierarchical wrapper.
-    using single_layer_router_t    = typename GraphFactoryTraitsT::single_layer_router_t;
+    template <typename DistFuncT>
+    using single_layer_router_t    = typename GraphFactoryTraitsT::template single_layer_router_t<DistFuncT>;
     using candidate_sample_utils_t = typename GraphFactoryTraitsT::candidate_sample_utils_t;
 
     static constexpr vertex_id_t invalid_vertex_id = GraphFactoryTraitsT::invalid_vertex_id;
@@ -157,10 +159,11 @@ public:
      *                      cluster-sorted datasets. Default false
      *                      preserves the legacy dataset-order build.
      */
+    template <typename DistFuncT>
     static auto add_vertices(
         this_index_t&      index,
         vector_array_t&&   batch_vecs,
-        const dist_func_t& dist_func,
+        const DistFuncT&   dist_func,
         const bool         insert_on_L0 = true,
         const bool         shuffle_insertion_order = false
     ) -> BuildTime {
@@ -203,7 +206,7 @@ public:
         // and-suspenders; vecs_storage_t is stable either way). The
         // scaled RNG rule with scale_coeffs from index.pruning_config()
         // is applied uniformly at every level (L0 included).
-        hierarchical_pruning_updater_t pruning_updater(
+        hierarchical_pruning_updater_t<DistFuncT> pruning_updater(
             dist_func,
             index.get_vecs_storage());
 
@@ -214,7 +217,7 @@ public:
         // stack, so the router itself doesn't need topk /
         // candidate_queue_size (those only drive the convenience query
         // layer, which insertion never touches).
-        single_layer_router_t router(vecs_storage, dist_func);
+        single_layer_router_t<DistFuncT> router(vecs_storage, dist_func);
 
         visited_table_pool_t visited_pool(total_vecs);
 
@@ -253,12 +256,12 @@ private:
     //   Per-vertex insertion
     // -----------------------------------------------------------------
 
-    template <typename PruningUpdaterT>
+    template <typename DistFuncT, typename PruningUpdaterT>
     static auto _insert_one(
-        this_index_t&              index,
-        const single_layer_router_t& router,
+        this_index_t&                          index,
+        const single_layer_router_t<DistFuncT>& router,
         const vertex_id_t   new_vid,
-        const dist_func_t&  dist_func,
+        const DistFuncT&    dist_func,
         PruningUpdaterT&    pruning_updater,
         visited_table_t&    visited,
         const bool          insert_on_L0

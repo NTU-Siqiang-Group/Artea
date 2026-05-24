@@ -52,9 +52,9 @@ namespace cpu {
  *
  * @tparam RouterTraitsT The router traits type.
  */
-template <typename RouterTraitsT>
+template <typename RouterTraitsT, typename DistFuncT>
 class SingleLayerRouter :
-    public RouterTraitsT::template vector_router_t<SingleLayerRouter<RouterTraitsT>>
+    public RouterTraitsT::template vector_router_t<DistFuncT, SingleLayerRouter<RouterTraitsT, DistFuncT>>
 {
 
     using vertex_num_t          = typename RouterTraitsT::vertex_num_t;
@@ -62,7 +62,7 @@ class SingleLayerRouter :
     using vec_id_t              = typename RouterTraitsT::vec_id_t;
     using vec_ele_t             = typename RouterTraitsT::vec_ele_t;
     using distance_t            = typename RouterTraitsT::distance_t;
-    using dist_func_t           = typename RouterTraitsT::dist_func_t;
+    using dist_func_t           = DistFuncT;
     using vector_array_t        = typename RouterTraitsT::vector_array_t;
     using query_vecs_t          = typename RouterTraitsT::query_vecs_t;
     using nbr_arr_t             = typename RouterTraitsT::nbr_arr_t;
@@ -73,7 +73,7 @@ class SingleLayerRouter :
     using random_seq_t          = typename RouterTraitsT::random_seq_t;
     using knn_results_t         = typename RouterTraitsT::knn_results_t;
     using base_class_t          =
-        typename RouterTraitsT::template vector_router_t<SingleLayerRouter<RouterTraitsT>>;
+        typename RouterTraitsT::template vector_router_t<DistFuncT, SingleLayerRouter<RouterTraitsT, DistFuncT>>;
 
 public:
     /**

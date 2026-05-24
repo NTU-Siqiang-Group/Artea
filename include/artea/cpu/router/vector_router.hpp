@@ -29,14 +29,14 @@
 namespace artea {
 namespace cpu {
 
-template <typename RouterTraitsT, typename DerivedClassT>
+template <typename RouterTraitsT, typename DistFuncT, typename DerivedClassT>
 class VectorRouter {
 
     using vec_id_t = typename RouterTraitsT::vec_id_t;
     using vec_num_t = typename RouterTraitsT::vec_num_t;
     using vec_ele_t = typename RouterTraitsT::vec_ele_t;
     using distance_t = typename RouterTraitsT::distance_t;
-    using dist_func_t = typename RouterTraitsT::dist_func_t;
+    using dist_func_t = DistFuncT;
     using vector_array_t = typename RouterTraitsT::vector_array_t;
     using query_vecs_t = typename RouterTraitsT::query_vecs_t;
     using knn_results_t = typename RouterTraitsT::knn_results_t;

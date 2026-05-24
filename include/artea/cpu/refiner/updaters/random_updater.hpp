@@ -29,9 +29,9 @@
 namespace artea {
 namespace cpu {
 
-template <typename RefinerTraitsT>
+template <typename RefinerTraitsT, typename DistFuncT>
 class RandomUpdater :
-    public RefinerTraitsT::template neighbor_updater_t<RandomUpdater<RefinerTraitsT>>
+    public RefinerTraitsT::template neighbor_updater_t<DistFuncT, RandomUpdater<RefinerTraitsT, DistFuncT>>
 {
 
     using vertex_id_t = typename RefinerTraitsT::vertex_id_t;
@@ -43,9 +43,9 @@ class RandomUpdater :
     using nbr_t = typename RefinerTraitsT::nbr_t;
     using nbr_arr_t = typename RefinerTraitsT::nbr_arr_t;
     using log_table_t = typename RefinerTraitsT::log_table_t;
-    using dist_func_t = typename RefinerTraitsT::dist_func_t;
+    using dist_func_t = DistFuncT;
     using refining_graph_t = typename RefinerTraitsT::dynamic::refining_graph_t;
-    using base_class_t = typename RefinerTraitsT::template neighbor_updater_t<RandomUpdater<RefinerTraitsT>>;
+    using base_class_t = typename RefinerTraitsT::template neighbor_updater_t<DistFuncT, RandomUpdater<RefinerTraitsT, DistFuncT>>;
     using random_seq_t = typename RefinerTraitsT::random_seq_t;
 
 public:

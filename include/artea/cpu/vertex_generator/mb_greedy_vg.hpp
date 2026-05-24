@@ -40,9 +40,9 @@ namespace cpu {
  * The parameter k is computed based on coverage_ratio and confidence to ensure
  * high-precision sampling with statistical guarantees.
  */
-template <typename VertexGeneratorTraitsT>
+template <typename VertexGeneratorTraitsT, typename DistFuncT>
 class MBGreedyVG :
-    public VertexGeneratorTraitsT::template vertex_generator_t<MBGreedyVG<VertexGeneratorTraitsT>> {
+    public VertexGeneratorTraitsT::template vertex_generator_t<MBGreedyVG<VertexGeneratorTraitsT, DistFuncT>> {
 
     using vec_num_t = typename VertexGeneratorTraitsT::vec_num_t;
     using vec_id_t = typename VertexGeneratorTraitsT::vec_id_t;
@@ -52,7 +52,7 @@ class MBGreedyVG :
     using ratio_t = typename VertexGeneratorTraitsT::ratio_t;
     using vec_dim_t = typename VertexGeneratorTraitsT::vec_dim_t;
     using vector_array_t = typename VertexGeneratorTraitsT::vector_array_t;
-    using dist_func_t = typename VertexGeneratorTraitsT::dist_func_t;
+    using dist_func_t = DistFuncT;
     using approx_rnet_t = typename VertexGeneratorTraitsT::approx_rnet_t;
 
 public:

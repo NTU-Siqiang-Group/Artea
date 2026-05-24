@@ -33,21 +33,21 @@ class IndexFactory {
     using iter_t = typename GraphFactoryTraitsT::iter_t;
     using ratio_t = typename GraphFactoryTraitsT::ratio_t;
     using vector_dataset_t = typename GraphFactoryTraitsT::vector_dataset_t;
-    using dist_func_t = typename GraphFactoryTraitsT::dist_func_t;
+    // dist_func type is per-method template arg (DistFuncT); deduced from caller.
     using layer_config_t = typename GraphFactoryTraitsT::layer_config_t;
     using this_index_t = typename GraphFactoryTraitsT::symmetric_knn_graph::index_t;
     using propagate_config_t = typename GraphFactoryTraitsT::symmetric_knn_graph::propagate_config_t;
-    using random_eg_t = typename GraphFactoryTraitsT::random_eg_t;
-    using propagate_engine_t = typename GraphFactoryTraitsT::propagate_engine_t;
-    using triangle_updater_t = typename GraphFactoryTraitsT::triangle_updater_t;
-    using reverse_updater_t  = typename GraphFactoryTraitsT::reverse_updater_t;
-    using routing_updater_t  = typename GraphFactoryTraitsT::routing_updater_t;
-    using truncate_updater_t = typename GraphFactoryTraitsT::truncate_updater_t;
+    template <typename DistFuncT> using random_eg_t        = typename GraphFactoryTraitsT::template random_eg_t<DistFuncT>;
+    template <typename DistFuncT> using propagate_engine_t = typename GraphFactoryTraitsT::template propagate_engine_t<DistFuncT>;
+    template <typename DistFuncT> using triangle_updater_t = typename GraphFactoryTraitsT::template triangle_updater_t<DistFuncT>;
+    template <typename DistFuncT> using reverse_updater_t  = typename GraphFactoryTraitsT::template reverse_updater_t<DistFuncT>;
+    template <typename DistFuncT> using routing_updater_t  = typename GraphFactoryTraitsT::template routing_updater_t<DistFuncT>;
+    template <typename DistFuncT> using truncate_updater_t = typename GraphFactoryTraitsT::template truncate_updater_t<DistFuncT>;
     using vector_array_t = typename GraphFactoryTraitsT::vector_array_t;
     using query_vecs_t = typename GraphFactoryTraitsT::query_vecs_t;
     using ground_truth_t = typename GraphFactoryTraitsT::ground_truth_t;
     using recall_estimator_t = typename GraphFactoryTraitsT::recall_estimator_t;
-    using single_layer_router_t = typename GraphFactoryTraitsT::single_layer_router_t;
+    template <typename DistFuncT> using single_layer_router_t = typename GraphFactoryTraitsT::template single_layer_router_t<DistFuncT>;
     using knn_graph = typename GraphFactoryTraitsT::knn_graph;
 
 public:
@@ -62,14 +62,15 @@ public:
     };
 
     /** @brief Construct a symmetric KNN graph from vector array. */
+    template <typename DistFuncT>
     static auto construct_graph(
-        const vector_array_t& base_vecs,
-        const layer_config_t layer_config,
-        const propagate_config_t propagate_config
+        const vector_array_t&    base_vecs,
+        const layer_config_t     layer_config,
+        const propagate_config_t propagate_config,
+        const DistFuncT&         dist_func
     ) -> ConstructResult {
         const auto t_start = std::chrono::high_resolution_clock::now();
         this_index_t graph_index(base_vecs, layer_config, propagate_config);
-        dist_func_t dist_func(base_vecs.get_vec_dim());
         _build_loop(graph_index, dist_func, propagate_config);
         const auto t_end = std::chrono::high_resolution_clock::now();
         return ConstructResult{
@@ -88,19 +89,20 @@ public:
      * @param knn_graph_index  The knn_graph whose edges will be consumed (moved).
      * @return A symmetric KNN graph with reverse edges added.
      */
+    template <typename DistFuncT>
     static auto construct_graph(
-        typename knn_graph::index_t&& knn_graph_index
+        typename knn_graph::index_t&& knn_graph_index,
+        const DistFuncT&              dist_func
     ) -> ConstructResult {
         const auto t_start = std::chrono::high_resolution_clock::now();
         this_index_t graph_index(std::move(knn_graph_index));
 
         const vertex_num_t num_vertices = graph_index.get_num_vertices();
-        dist_func_t dist_func(graph_index.get_vecs_data().get_vec_dim());
 
-        propagate_engine_t propagate_engine(dist_func);
+        propagate_engine_t<DistFuncT> propagate_engine(dist_func);
         propagate_engine.set_graph(graph_index.get_refining_graph());
 
-        auto reverse_updater = propagate_engine.template make_updater<reverse_updater_t>();
+        auto reverse_updater = propagate_engine.template make_updater<reverse_updater_t<DistFuncT>>();
 
         propagate_engine.next(reverse_updater);
 
@@ -112,22 +114,23 @@ public:
     }
 
     /** @brief Construct with per-build-loop recall/throughput profiling. */
+    template <typename DistFuncT>
     static auto profile_graph_quality(
-        const vector_dataset_t& dataset,
-        const layer_config_t layer_config,
-        const propagate_config_t propagate_config
+        const vector_dataset_t&  dataset,
+        const layer_config_t     layer_config,
+        const propagate_config_t propagate_config,
+        const DistFuncT&         dist_func
     ) -> void {
         const vector_array_t& base_vecs = dataset.get_base_vecs();
         const query_vecs_t& query_vecs = dataset.get_query_vecs();
         const ground_truth_t& groundtruth = dataset.get_gt_vecs();
 
         this_index_t graph_index(base_vecs, layer_config, propagate_config);
-        dist_func_t dist_func(base_vecs.get_vec_dim());
 
         recall_estimator_t recall_estimator;
         const vertex_num_t topk = 20;
         const vertex_num_t candidate_queue_size = 40;
-        single_layer_router_t router(
+        single_layer_router_t<DistFuncT> router(
             base_vecs, dist_func, topk, candidate_queue_size);
         router.initialize();
 
@@ -154,9 +157,10 @@ private:
      * @brief Core build loop: runs the KNN graph build schedule, then adds
      *        reverse edges without truncation to make it symmetric.
      */
+    template <typename DistFuncT>
     static auto _build_loop(
         this_index_t& graph_index,
-        const dist_func_t& dist_func,
+        const DistFuncT& dist_func,
         const propagate_config_t& propagate_config,
         std::function<void(iter_t)> on_iter_end = nullptr
     ) -> void {
@@ -169,22 +173,22 @@ private:
         graph_index.layer_config().max_nbr_size(max_nbr_size / 2);
         /** ----------------------------------------------------------------------- ***/
 
-        random_eg_t random_eg(dist_func);
+        random_eg_t<DistFuncT> random_eg(dist_func);
         random_eg.generate(graph_index.get_refining_graph(), init_nbr_size);
 
-        propagate_engine_t propagate_engine(dist_func);
+        propagate_engine_t<DistFuncT> propagate_engine(dist_func);
         propagate_engine.set_graph(graph_index.get_refining_graph());
 
         // symmetric_knn_graph dropped PruningConfig in a prior commit;
         // pass plain RNG coefficients (scale=1, shift=0) to preserve the
         // ori_dist threshold TriangleUpdater used before gaining params.
-        auto triangle_updater  = propagate_engine.template make_updater<triangle_updater_t>(
+        auto triangle_updater  = propagate_engine.template make_updater<triangle_updater_t<DistFuncT>>(
             ratio_t{1}, ratio_t{0});
-        auto reverse_updater   = propagate_engine.template make_updater<reverse_updater_t>();
+        auto reverse_updater   = propagate_engine.template make_updater<reverse_updater_t<DistFuncT>>();
         const vertex_num_t routing_topk = propagate_config.resolve_routing_topk(max_nbr_size);
         const vertex_num_t routing_queue_size = propagate_config.resolve_routing_queue_size(max_nbr_size);
-        auto routing_updater   = propagate_engine.template make_updater<routing_updater_t>(routing_topk, routing_queue_size);
-        auto truncate_updater  = propagate_engine.template make_updater<truncate_updater_t>();
+        auto routing_updater   = propagate_engine.template make_updater<routing_updater_t<DistFuncT>>(routing_topk, routing_queue_size);
+        auto truncate_updater  = propagate_engine.template make_updater<truncate_updater_t<DistFuncT>>();
 
         for (iter_t build_loop = 0; build_loop < propagate_config.num_build_loops(); ++build_loop) {
             propagate_engine.run(propagate_config.num_triu_iters(), triangle_updater)

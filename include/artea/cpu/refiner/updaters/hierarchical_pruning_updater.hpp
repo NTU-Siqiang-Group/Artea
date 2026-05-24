@@ -50,7 +50,7 @@ namespace cpu {
  *
  * @tparam RefinerTraitsT The refiner traits type.
  */
-template <typename RefinerTraitsT>
+template <typename RefinerTraitsT, typename DistFuncT>
 class HierarchicalPruningUpdater {
 
     using vertex_num_t    = typename RefinerTraitsT::vertex_num_t;
@@ -58,7 +58,7 @@ class HierarchicalPruningUpdater {
     using distance_t      = typename RefinerTraitsT::distance_t;
     using ratio_t         = typename RefinerTraitsT::ratio_t;
     using vector_array_t  = typename RefinerTraitsT::vector_array_t;
-    using dist_func_t     = typename RefinerTraitsT::dist_func_t;
+    using dist_func_t     = DistFuncT;
     using nbr_t           = typename RefinerTraitsT::nbr_t;
 
 public:

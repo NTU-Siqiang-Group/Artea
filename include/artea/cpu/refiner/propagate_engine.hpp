@@ -35,7 +35,7 @@
 namespace artea {
 namespace cpu {
 
-template <typename RefinerTraitsT>
+template <typename RefinerTraitsT, typename DistFuncT>
 class PropagateEngine {
 
     using vertex_num_t = typename RefinerTraitsT::vertex_num_t;
@@ -48,7 +48,7 @@ class PropagateEngine {
     using log_buffer_t = typename RefinerTraitsT::log_buffer_t;
     using log_container_t = typename RefinerTraitsT::log_container_t;
     using log_table_t = typename RefinerTraitsT::log_table_t;
-    using dist_func_t = typename RefinerTraitsT::dist_func_t;
+    using dist_func_t = DistFuncT;
     using refining_graph_t = typename RefinerTraitsT::dynamic::refining_graph_t;
 
     template <typename DerivedClassT>

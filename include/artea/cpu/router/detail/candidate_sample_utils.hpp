@@ -42,16 +42,16 @@ class CandidateSampleUtils {
     using layer_id_t            = typename RouterTraitsT::layer_id_t;
     using vec_ele_t             = typename RouterTraitsT::vec_ele_t;
     using distance_t            = typename RouterTraitsT::distance_t;
-    using dist_func_t           = typename RouterTraitsT::dist_func_t;
+    // dist_func type is per-method template arg (DistFuncT); deduced from caller.
     using vector_array_t        = typename RouterTraitsT::vector_array_t;
     using std_candidate_queue_t = typename RouterTraitsT::std_candidate_queue_t;
 
 public:
     /** @brief Multi-seed apex sampling into a caller-owned queue. */
-    template <typename HierarchicalGraphT>
+    template <typename HierarchicalGraphT, typename DistFuncT>
     static auto sample_entries(
         const vector_array_t&     vecs_data,
-        const dist_func_t&        dist_func,
+        const DistFuncT&          dist_func,
         const HierarchicalGraphT& hier_graph,
         const vec_ele_t*          query_vec,
         std_candidate_queue_t&    candidate_queue
@@ -81,10 +81,10 @@ public:
     }
 
     /** @brief Multi-seed apex sampling returned directly as a vector. */
-    template <typename HierarchicalGraphT>
+    template <typename HierarchicalGraphT, typename DistFuncT>
     static auto sample_entries(
         const vector_array_t&     vecs_data,
-        const dist_func_t&        dist_func,
+        const DistFuncT&          dist_func,
         const HierarchicalGraphT& hier_graph,
         const vec_ele_t*          query_vec,
         const std::size_t         num_entries
@@ -116,10 +116,10 @@ public:
     }
 
     /** @brief One-seed apex sampling pushed into a caller-owned queue. */
-    template <typename HierarchicalGraphT>
+    template <typename HierarchicalGraphT, typename DistFuncT>
     static auto sample_single_entry(
         const vector_array_t&     vecs_data,
-        const dist_func_t&        dist_func,
+        const DistFuncT&          dist_func,
         const HierarchicalGraphT& hier_graph,
         const vec_ele_t*          query_vec,
         std_candidate_queue_t&    candidate_queue
@@ -140,10 +140,10 @@ public:
     }
 
     /** @brief One-seed apex sampling returned as a (vid, dist) pair. */
-    template <typename HierarchicalGraphT>
+    template <typename HierarchicalGraphT, typename DistFuncT>
     static auto sample_single_entry(
         const vector_array_t&     vecs_data,
-        const dist_func_t&        dist_func,
+        const DistFuncT&          dist_func,
         const HierarchicalGraphT& hier_graph,
         const vec_ele_t*          query_vec
     ) -> std::pair<vertex_id_t, distance_t> {

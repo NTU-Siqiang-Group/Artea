@@ -45,9 +45,9 @@ enum class PruningConditionT {
     origin_rng_ineq
 };
 
-template <typename RefinerTraitsT>
+template <typename RefinerTraitsT, typename DistFuncT>
 class PruningUpdater :
-    public RefinerTraitsT::template neighbor_updater_t<PruningUpdater<RefinerTraitsT>> {
+    public RefinerTraitsT::template neighbor_updater_t<DistFuncT, PruningUpdater<RefinerTraitsT, DistFuncT>> {
 
     using vertex_id_t = typename RefinerTraitsT::vertex_id_t;
     using vertex_num_t = typename RefinerTraitsT::vertex_num_t;
@@ -58,10 +58,10 @@ class PruningUpdater :
     using nbr_t = typename RefinerTraitsT::nbr_t;
     using nbr_arr_t = typename RefinerTraitsT::nbr_arr_t;
     using log_table_t = typename RefinerTraitsT::log_table_t;
-    using dist_func_t = typename RefinerTraitsT::dist_func_t;
+    using dist_func_t = DistFuncT;
     using pruning_condition_t = typename RefinerTraitsT::pruning_condition_t;
     using refining_graph_t = typename RefinerTraitsT::dynamic::refining_graph_t;
-    using base_class_t = typename RefinerTraitsT::template neighbor_updater_t<PruningUpdater<RefinerTraitsT>>;
+    using base_class_t = typename RefinerTraitsT::template neighbor_updater_t<DistFuncT, PruningUpdater<RefinerTraitsT, DistFuncT>>;
     static constexpr vertex_id_t invalid_vertex_id = RefinerTraitsT::invalid_vertex_id;
     static constexpr distance_t nan_distance = RefinerTraitsT::nan_distance;
     static constexpr distance_t max_distance = RefinerTraitsT::max_distance;

@@ -35,7 +35,7 @@
 namespace artea {
 namespace cpu {
 
-template <typename ComputerTraitsT>
+template <typename ComputerTraitsT, typename DistFuncT>
 class DistanceProber {
 
     using vec_num_t = typename ComputerTraitsT::vec_num_t;
@@ -44,7 +44,7 @@ class DistanceProber {
     using distance_t = typename ComputerTraitsT::distance_t;
     using vector_array_t = typename ComputerTraitsT::vector_array_t;
     using random_seq_t = typename ComputerTraitsT::random_seq_t;
-    using dist_func_t = typename ComputerTraitsT::dist_func_t;
+    using dist_func_t = DistFuncT;
 
     // Batch size for sampling to reduce memory usage
     static constexpr vec_num_t SAMPLING_BATCH_SIZE = 100000;

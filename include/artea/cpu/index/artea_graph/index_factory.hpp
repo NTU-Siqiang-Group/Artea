@@ -62,7 +62,7 @@ class IndexFactory : public stacked_rgraph::IndexFactory<GraphFactoryTraitsT> {
     using ratio_t         = typename GraphFactoryTraitsT::ratio_t;
     using distance_t      = typename GraphFactoryTraitsT::distance_t;
     using vector_array_t  = typename GraphFactoryTraitsT::vector_array_t;
-    using dist_func_t     = typename GraphFactoryTraitsT::dist_func_t;
+    // dist_func type is per-method template arg (DistFuncT); deduced from caller.
 
     using refining_graph_t   = typename GraphFactoryTraitsT::dynamic::refining_graph_t;
     using layer_config_t     = typename GraphFactoryTraitsT::layer_config_t;
@@ -72,18 +72,16 @@ class IndexFactory : public stacked_rgraph::IndexFactory<GraphFactoryTraitsT> {
     using pruning_config_t   = typename GraphFactoryTraitsT::artea_graph::pruning_config_t;
     using propagate_config_t = typename GraphFactoryTraitsT::artea_graph::propagate_config_t;
 
-    // Refiner primitives driven directly (conv_graph::construct_graph
-    // assumes a dense RefiningGraph, which would break the L1+ sparse
-    // case — so we inline the prune + reverse + truncate pipeline here
-    // using the same refiner building blocks).
-    using propagate_engine_t = typename GraphFactoryTraitsT::propagate_engine_t;
-    using triangle_updater_t = typename GraphFactoryTraitsT::triangle_updater_t;
-    using pruning_updater_t  = typename GraphFactoryTraitsT::pruning_updater_t;
-    using reverse_updater_t  = typename GraphFactoryTraitsT::reverse_updater_t;
-    using routing_updater_t  = typename GraphFactoryTraitsT::routing_updater_t;
-    using random_updater_t   = typename GraphFactoryTraitsT::random_updater_t;
-    using truncate_updater_t = typename GraphFactoryTraitsT::truncate_updater_t;
-    using arc_updater_t      = typename GraphFactoryTraitsT::arc_updater_t;
+    // Refiner primitives driven directly. Each carries a DistFuncT
+    // template param, so the trait aliases are also templates here.
+    template <typename DistFuncT> using propagate_engine_t = typename GraphFactoryTraitsT::template propagate_engine_t<DistFuncT>;
+    template <typename DistFuncT> using triangle_updater_t = typename GraphFactoryTraitsT::template triangle_updater_t<DistFuncT>;
+    template <typename DistFuncT> using pruning_updater_t  = typename GraphFactoryTraitsT::template pruning_updater_t<DistFuncT>;
+    template <typename DistFuncT> using reverse_updater_t  = typename GraphFactoryTraitsT::template reverse_updater_t<DistFuncT>;
+    template <typename DistFuncT> using routing_updater_t  = typename GraphFactoryTraitsT::template routing_updater_t<DistFuncT>;
+    template <typename DistFuncT> using random_updater_t   = typename GraphFactoryTraitsT::template random_updater_t<DistFuncT>;
+    template <typename DistFuncT> using truncate_updater_t = typename GraphFactoryTraitsT::template truncate_updater_t<DistFuncT>;
+    template <typename DistFuncT> using arc_updater_t      = typename GraphFactoryTraitsT::template arc_updater_t<DistFuncT>;
     using refiner_utils_t    = typename GraphFactoryTraitsT::refiner_utils_t;
 
 public:
@@ -139,10 +137,11 @@ public:
      *                                 @c stacked_rgraph::IndexFactory::add_vertices;
      *                                 see that overload for semantics.
      */
+    template <typename DistFuncT>
     static auto add_vertices(
         this_index_t&      index,
         vector_array_t&&   batch_vecs,
-        const dist_func_t& dist_func,
+        const DistFuncT&   dist_func,
         const bool         insert_on_L0 = true,
         const bool         shuffle_insertion_order = false
     ) -> BuildTime {
@@ -260,10 +259,11 @@ public:
      * @param new_vid_end         Exclusive upper bound of the newly
      *                            inserted vid window.
      */
+    template <typename DistFuncT>
     static auto refine_layer(
         this_index_t&      index,
         const layer_id_t   level_id,
-        const dist_func_t& dist_func,
+        const DistFuncT&   dist_func,
         const vertex_id_t  new_vid_start,
         const vertex_id_t  new_vid_end
     ) -> void {
@@ -334,7 +334,7 @@ public:
         // The log_table inside propagate_engine is indexed by local_vid
         // (N_local for sparse upper layers, N_global in identity mode);
         // set_graph sizes it from the bound RG.
-        propagate_engine_t propagate_engine(dist_func);
+        propagate_engine_t<DistFuncT> propagate_engine(dist_func);
         propagate_engine.set_graph(*refining_graph);
 
         // ---- Step 2.5: L0 random top-up. Fires regardless of how the
@@ -348,7 +348,7 @@ public:
                 static_cast<ratio_t>(max_nbr_size) * propagate_config.prefill_ratio());
             if (prefill_threshold > 0) {
                 const vertex_num_t l0_num_vertices = refining_graph->get_num_vertices();
-                auto random_updater = propagate_engine.template make_updater<random_updater_t>(
+                auto random_updater = propagate_engine.template make_updater<random_updater_t<DistFuncT>>(
                         /*rand_gen_size=*/prefill_threshold,
                         /*start_vid=*/vertex_id_t{0},
                         /*end_vid=*/l0_num_vertices);
@@ -381,14 +381,14 @@ public:
             ? pruning_config.shifted_coeffs() * pruning_config.l0_min_distance()
             : ratio_t(0);
 
-        auto triangle_updater = propagate_engine.template make_updater<triangle_updater_t>(
+        auto triangle_updater = propagate_engine.template make_updater<triangle_updater_t<DistFuncT>>(
             pruning_config.scale_coeffs(), effective_shift);
-        auto reverse_updater  = propagate_engine.template make_updater<reverse_updater_t>();
+        auto reverse_updater  = propagate_engine.template make_updater<reverse_updater_t<DistFuncT>>();
         const vertex_num_t routing_topk = propagate_config.resolve_routing_topk(max_nbr_size);
         const vertex_num_t routing_queue_size = propagate_config.resolve_routing_queue_size(max_nbr_size);
-        auto routing_updater  = propagate_engine.template make_updater<routing_updater_t>(routing_topk, routing_queue_size);
-        auto truncate_updater = propagate_engine.template make_updater<truncate_updater_t>();
-        auto pruning_updater = propagate_engine.template make_updater<pruning_updater_t>(
+        auto routing_updater  = propagate_engine.template make_updater<routing_updater_t<DistFuncT>>(routing_topk, routing_queue_size);
+        auto truncate_updater = propagate_engine.template make_updater<truncate_updater_t<DistFuncT>>();
+        auto pruning_updater = propagate_engine.template make_updater<pruning_updater_t<DistFuncT>>(
             pruning_config.scale_coeffs(), effective_shift);
 
         // propagate_engine.next(reverse_updater).next(truncate_updater);
@@ -426,7 +426,7 @@ public:
                 "radius={:.6f}, aspect_ratio_constraint={}, arc_threshold={:.6f}",
                 level_id, layer_radius,
                 pruning_config.aspect_ratio_constraint(), arc_threshold));
-            auto arc_updater = propagate_engine.template make_updater<arc_updater_t>(arc_threshold);
+            auto arc_updater = propagate_engine.template make_updater<arc_updater_t<DistFuncT>>(arc_threshold);
             propagate_engine.next(arc_updater);
         }
 

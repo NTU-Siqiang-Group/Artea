@@ -80,7 +80,7 @@ namespace cpu {
  *
  * @tparam ComputerTraitsT The computer traits type providing distance computation types.
  */
-template <typename ComputerTraitsT>
+template <typename ComputerTraitsT, typename DistFuncT>
 class DatasetProber {
 
     using vec_num_t = typename ComputerTraitsT::vec_num_t;
@@ -91,7 +91,7 @@ class DatasetProber {
     using query_vecs_t = typename ComputerTraitsT::query_vecs_t;
     using ground_truth_t = typename ComputerTraitsT::ground_truth_t;
     using random_seq_t = typename ComputerTraitsT::random_seq_t;
-    using dist_func_t = typename ComputerTraitsT::dist_func_t;
+    using dist_func_t = DistFuncT;
 
     static constexpr uint32_t MAX_K = 128;
     static constexpr float EPSILON = 1e-6f;
