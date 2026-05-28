@@ -273,6 +273,24 @@ public:
         _vecs_storage.append_batch(std::move(batch_vecs));
     }
 
+    /**
+     * @brief Free the composed @c dynamic::HierarchicalGraph. After this
+     *        call the index has surrendered the per-vertex neighbor
+     *        arrays that dominate its resident set (≈ 12 GB on a 10M ×
+     *        bl_max=96 build); subsequent @c get_hierarchical_graph /
+     *        @c fetch_layer_nbrs / @c add_vertices calls dereference a
+     *        null pointer and are undefined — release() is meant to be
+     *        called only after the dynamic graph has been compacted to
+     *        @c compact::hierarchical_graph_t (the form search reads
+     *        from) and no further dynamic-side queries are needed.
+     *        Configs and @c _vecs_storage are deliberately retained so
+     *        outstanding references stay valid.
+     */
+    __attribute__((always_inline))
+    auto release() -> void {
+        _hierarchical_graph.reset();
+    }
+
 private:
     /// @brief Hard cap on the number of upper layers (paper 1-indexed).
     ///        Stored as a field because we need it before the

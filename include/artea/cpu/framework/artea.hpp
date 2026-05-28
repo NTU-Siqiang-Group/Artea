@@ -71,6 +71,9 @@
 #include <artea/cpu/index/stacked_rgraph/configs.hpp>
 #include <artea/cpu/index/stacked_rgraph/index_structure.hpp>
 #include <artea/cpu/index/stacked_rgraph/index_factory.hpp>
+#include <artea/cpu/index/hier_conv_graph/configs.hpp>
+#include <artea/cpu/index/hier_conv_graph/index_structure.hpp>
+#include <artea/cpu/index/hier_conv_graph/index_factory.hpp>
 
 #include <artea/cpu/router/vector_router.hpp>
 #include <artea/cpu/router/bruteforce_router.hpp>

@@ -202,5 +202,13 @@ namespace artea_graph {
     using factory_t          = typename graph_factory_traits_t::artea_graph::factory_t;
 }
 
+namespace hier_conv_graph {
+    using hierarchy_config_t = typename graph_factory_traits_t::hier_conv_graph::hierarchy_config_t;
+    using propagate_config_t = typename graph_factory_traits_t::hier_conv_graph::propagate_config_t;
+    using pruning_config_t   = typename graph_factory_traits_t::hier_conv_graph::pruning_config_t;
+    using index_t            = typename graph_factory_traits_t::hier_conv_graph::index_t;
+    using factory_t          = typename graph_factory_traits_t::hier_conv_graph::factory_t;
+}
+
 }   // namespace cpu
 }   // namespace artea

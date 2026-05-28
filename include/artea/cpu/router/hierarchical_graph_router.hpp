@@ -281,7 +281,12 @@ public:
         const vertex_num_t num_queries = query_vecs.get_num_vecs();
         const uint32_t     k           = this->_topk;
 
-        knn_results_t results(num_queries * k);
+        // Pre-fill with the invalid sentinel so any per-query call returning
+        // fewer than k results leaves the unused tail at INVALID instead of
+        // the type's default-constructed value (which would surface to the
+        // recall / ADR estimator as `vid = 0` and trigger the vertical-line
+        // collapse seen by compare_hier_vs_L0 on SIFT-1M at small queues).
+        knn_results_t results(num_queries * k, candidate_entry_t::make_invalid_entry());
 
         tbb::parallel_for(
             tbb::blocked_range<vertex_num_t>(0, num_queries),
@@ -289,11 +294,8 @@ public:
                 for (vertex_num_t i = r.begin(); i != r.end(); ++i) {
                     const vec_ele_t* q_vec = query_vecs.get(i);
                     auto topk_results = this->template query<RandomSeeding, UpperLevelBeamSearch>(q_vec, hier_graph);
-                    const std::size_t n = topk_results.size();
                     std::copy(topk_results.begin(), topk_results.end(), results.begin() + i * k);
-                    // for (std::size_t j = n; j < k; ++j) {
-                    //     results[i * k + j] = candidate_entry_t::make_invalid_entry();
-                    // }
+                    // Slots [n, k) keep the invalid sentinel from allocation.
                 }
             }
         );

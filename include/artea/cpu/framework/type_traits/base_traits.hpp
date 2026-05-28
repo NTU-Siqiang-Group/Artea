@@ -81,6 +81,15 @@ namespace artea_graph {
     template <typename IndexTraitsT> using RGraphConfig = stacked_rgraph::RGraphConfig<IndexTraitsT>;
 }
 
+namespace hier_conv_graph {
+    // Layer membership is set by random pull-out (factory-side), not
+    // r-net geometry — so only a slim hierarchy-shape config plus the
+    // conv_graph propagate / pruning aliases. No RGraphConfig.
+    template <typename IndexTraitsT> struct HierarchyConfig;
+    template <typename IndexTraitsT> using PropagateConfig = conv_graph::PropagateConfig<IndexTraitsT>;
+    template <typename IndexTraitsT> using PruningConfig   = conv_graph::PruningConfig<IndexTraitsT>;
+}
+
 /* ------ Enumerations ------ */
 enum class PruningConditionT;
 

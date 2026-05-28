@@ -54,6 +54,9 @@ namespace stacked_rgraph {
 namespace artea_graph {
     template <typename IndexTraitsT> class IndexStructure;
 }
+namespace hier_conv_graph {
+    template <typename IndexTraitsT> class IndexStructure;
+}
 
 template <typename BaseTraitsT>
 struct IndexTraits : virtual public BaseTraitsT {
@@ -142,6 +145,16 @@ struct IndexTraits : virtual public BaseTraitsT {
         using rgraph_config_t    = cpu::artea_graph::RGraphConfig<index_traits_t>;
         using propagate_config_t = cpu::artea_graph::PropagateConfig<index_traits_t>;
         using pruning_config_t   = cpu::artea_graph::PruningConfig<index_traits_t>;
+    };
+
+    /** @brief Namespace-scoped types for hier_conv_graph
+     *  (random-pull-out hierarchy with per-layer conv_graph refinement). */
+    struct hier_conv_graph {
+        hier_conv_graph() = delete;
+        using index_t            = cpu::hier_conv_graph::IndexStructure<index_traits_t>;
+        using hierarchy_config_t = cpu::hier_conv_graph::HierarchyConfig<index_traits_t>;
+        using propagate_config_t = cpu::hier_conv_graph::PropagateConfig<index_traits_t>;
+        using pruning_config_t   = cpu::hier_conv_graph::PruningConfig<index_traits_t>;
     };
 
 };  // struct IndexTraits

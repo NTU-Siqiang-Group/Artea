@@ -39,6 +39,9 @@ namespace stacked_rgraph {
 namespace artea_graph {
     template <typename GraphFactoryTraitsT> class IndexFactory;
 }
+namespace hier_conv_graph {
+    template <typename GraphFactoryTraitsT> class IndexFactory;
+}
 
 template <
     typename VertexGeneratorTraitsT,
@@ -79,6 +82,12 @@ struct GraphFactoryTraits :
     struct artea_graph : RefinerTraitsT::artea_graph {
         artea_graph() = delete;
         using factory_t = cpu::artea_graph::IndexFactory<graph_factory_traits_t>;
+    };
+
+    /** @brief Namespace-scoped factory types for hier_conv_graph, extending IndexTraits::hier_conv_graph. */
+    struct hier_conv_graph : RefinerTraitsT::hier_conv_graph {
+        hier_conv_graph() = delete;
+        using factory_t = cpu::hier_conv_graph::IndexFactory<graph_factory_traits_t>;
     };
 
 };  // struct GraphFactoryTraits
