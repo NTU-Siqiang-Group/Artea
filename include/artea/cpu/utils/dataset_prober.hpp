@@ -46,6 +46,12 @@ namespace cpu {
  * via brute-force scan, then for each nn_rank (1..128) extracts the requested quantiles.
  * The result is a 128 x Q table where Q is the number of quantiles.
  *
+ * ## Farthest-Distance Probe
+ *
+ * The outer-scale counterpart (@c probe_farthest): samples M vertices and records, for each,
+ * the single farthest distance to any other vertex (the per-sample "radius"), then reports the
+ * quantiles of those maxima plus the global min/max. Characterises the dataset diameter.
+ *
  * ## Local Intrinsic Dimensionality (LID) Estimation
  *
  * LID measures the effective number of dimensions the data locally occupies. It captures
@@ -124,6 +130,23 @@ public:
         std::vector<float> quantiles;                           // quantile values
         std::vector<std::vector<distance_t>> table;             // table[rank_idx][quantile_idx]
         vec_num_t num_queries;                                  // number of queries processed
+    };
+
+    /**
+     * @brief Probe result for the farthest-distance variant.
+     *
+     * For each sampled vertex, the single farthest distance to any other base
+     * vertex (the per-sample dataset "radius") is recorded via a full scan;
+     * the quantiles are then taken across the sampled vertices. Characterises
+     * the outer distance scale / diameter, complementing the near-NN table
+     * from @c probe(). No LID is reported (it is a near-neighbour quantity).
+     */
+    struct FarthestProbeResult {
+        std::vector<float> quantiles;                           // quantile values
+        std::vector<distance_t> farthest;                       // farthest[quantile_idx]: quantile of per-sample max distance
+        distance_t min_farthest;                                // smallest per-sample farthest distance
+        distance_t max_farthest;                                // largest per-sample farthest distance
+        vec_num_t num_samples;                                  // number of sampled vertices
     };
 
     DatasetProber(const vector_array_t& base_vecs, const dist_func_t& dist_func)
@@ -305,6 +328,43 @@ public:
         return result;
     }
 
+    /**
+     * @brief Probe the farthest-distance distribution of the dataset.
+     *
+     * Samples @p num_samples vertices; for each, brute-force scans the full
+     * base set and records the single farthest distance (the per-sample
+     * "radius"). The per-sample maxima are then sorted and the requested
+     * quantiles extracted, alongside the global min/max. This is the outer-
+     * scale counterpart to @c probe()'s near-NN table.
+     *
+     * @param quantiles   Vector of target quantiles, each in (0, 1).
+     * @param num_samples Number of vertices to sample.
+     * @return FarthestProbeResult holding the per-sample farthest quantiles.
+     */
+    auto probe_farthest(
+        const std::vector<float>& quantiles,
+        vec_num_t num_samples
+    ) -> FarthestProbeResult {
+
+        std::vector<distance_t> max_dists = _compute_farthest(num_samples);
+        std::sort(std::execution::par, max_dists.begin(), max_dists.end());
+
+        FarthestProbeResult result;
+        result.quantiles = quantiles;
+        result.farthest.reserve(quantiles.size());
+        for (float q : quantiles) {
+            vec_num_t idx = static_cast<vec_num_t>(q * max_dists.size());
+            if (idx >= max_dists.size()) {
+                idx = max_dists.size() - 1;
+            }
+            result.farthest.push_back(max_dists[idx]);
+        }
+        result.min_farthest = max_dists.front();
+        result.max_farthest = max_dists.back();
+        result.num_samples = num_samples;
+        return result;
+    }
+
 private:
     const vector_array_t& _base_vecs;
     const dist_func_t& _dist_func;
@@ -435,6 +495,59 @@ private:
         );
 
         return knn_table;
+    }
+
+    /**
+     * @brief Sample vertices and compute, for each, the farthest distance to
+     *        any other base vertex via a full brute-force scan.
+     *
+     * Mirrors @c _compute_knn_table's sampling but tracks only the running
+     * maximum per sample (no heap needed), so it is O(num_samples * N).
+     *
+     * @param num_samples Number of vertices to sample
+     * @return Flat vector of size num_samples; entry s is the farthest
+     *         distance from sample s to any other base vertex.
+     */
+    auto _compute_farthest(vec_num_t num_samples) -> std::vector<distance_t> {
+        const vec_num_t total_vecs = _base_vecs.get_num_vecs();
+        if (total_vecs < 2) {
+            ARTEA_ERROR(fmt::format("Dataset must contain at least 2 vectors, got {}",
+                total_vecs));
+        }
+        if (num_samples < 1) {
+            ARTEA_ERROR("num_samples must be at least 1");
+        }
+
+        // Sample vertex IDs (per-call upper bound supplied below)
+        random_seq_t rand_gen;
+        std::vector<vec_id_t> sample_ids(num_samples);
+        tbb::parallel_for(
+            tbb::blocked_range<vec_num_t>(0, num_samples),
+            [&](const tbb::blocked_range<vec_num_t>& r) {
+                rand_gen.generate(sample_ids.data() + r.begin(), total_vecs, r.size());
+            }
+        );
+
+        std::vector<distance_t> max_dists(num_samples);
+        tbb::parallel_for(
+            tbb::blocked_range<vec_num_t>(0, num_samples),
+            [&](const tbb::blocked_range<vec_num_t>& r) {
+                for (vec_num_t s = r.begin(); s != r.end(); ++s) {
+                    const vec_id_t vid = sample_ids[s];
+                    const vec_ele_t* query = _base_vecs.get(vid);
+
+                    distance_t max_d = std::numeric_limits<distance_t>::lowest();
+                    for (vec_num_t j = 0; j < total_vecs; ++j) {
+                        if (j == vid) continue;
+                        distance_t d = _dist_func(query, _base_vecs.get(j));
+                        if (d > max_d) max_d = d;
+                    }
+                    max_dists[s] = max_d;
+                }
+            }
+        );
+
+        return max_dists;
     }
 
 };  // class DatasetProber

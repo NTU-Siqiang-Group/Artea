@@ -17,6 +17,8 @@
 #include <memory>
 #include <filesystem>
 #include <chrono>
+#include <cmath>
+#include <limits>
 #include <fmt/format.h>
 #include <argparse/argparse.hpp>
 #include <gtest/gtest.h>
@@ -75,7 +77,7 @@ TEST_F(DatasetProberTest, Probe) {
     const vec_num_t num_samples = g_config.num_samples;
 
     std::vector<float> quantiles = {
-        0.001f, 0.01f, 0.05f, 0.1f, 0.25f, 0.5f, 0.75f, 0.9f, 0.95f, 0.99f
+        0.0001f, 0.001f, 0.01f, 0.05f, 0.1f, 0.25f, 0.5f, 0.75f, 0.9f, 0.95f, 0.99f, 0.999f, 0.9999f
     };
 
     ARTEA_INFO(fmt::format("Probing dataset with {} samples...", num_samples));
@@ -147,7 +149,7 @@ TEST_F(DatasetProberTest, ProbeQuery) {
     dataset_prober_t prober(base_vecs, dist_func);
 
     std::vector<float> quantiles = {
-        0.001f, 0.01f, 0.05f, 0.1f, 0.25f, 0.5f, 0.75f, 0.9f, 0.95f, 0.99f
+        0.0001f, 0.001f, 0.01f, 0.05f, 0.1f, 0.25f, 0.5f, 0.75f, 0.9f, 0.95f, 0.99f, 0.999f, 0.9999f
     };
 
     ARTEA_INFO(fmt::format(
@@ -205,6 +207,137 @@ TEST_F(DatasetProberTest, ProbeQuery) {
                     result.quantiles[qi], result.table[r][qi]);
         }
     }
+}
+
+/**
+ * @brief Probe the per-sample farthest distance distribution.
+ *        For each sampled vertex, scan the full base set and record the single
+ *        farthest distance; then report quantiles across samples plus the
+ *        global min/max. Characterises the dataset's outer scale (diameter),
+ *        complementing the near-NN table from the Probe test.
+ */
+TEST_F(DatasetProberTest, ProbeFarthest) {
+    auto& provider = DataProvider::instance();
+    auto& dataset = provider.get_dataset();
+    auto& dist_func = provider.get_dist_func();
+
+    const auto& base_vecs = dataset.get_base_vecs();
+    dataset_prober_t prober(base_vecs, dist_func);
+
+    const vec_num_t num_samples = g_config.num_samples;
+
+    std::vector<float> quantiles = {
+        0.0001f, 0.001f, 0.01f, 0.05f, 0.1f, 0.25f, 0.5f, 0.75f, 0.9f, 0.95f, 0.99f, 0.999f, 0.9999f
+    };
+
+    ARTEA_INFO(fmt::format("Probing farthest distance with {} samples...", num_samples));
+
+    auto t0 = std::chrono::high_resolution_clock::now();
+    auto result = prober.probe_farthest(quantiles, num_samples);
+    auto t1 = std::chrono::high_resolution_clock::now();
+    double elapsed_s = std::chrono::duration_cast<std::chrono::microseconds>(t1 - t0).count() / 1e6;
+
+    ARTEA_INFO(fmt::format("Farthest probe completed in {:.2f} s ({} samples x full scan)",
+        elapsed_s, num_samples));
+    ARTEA_INFO(fmt::format("Per-sample farthest distance: min={:.2f}  max={:.2f}",
+        result.min_farthest, result.max_farthest));
+
+    // Print a one-row quantile table for the per-sample farthest distance.
+    std::string header = fmt::format("  {:>10s}", "stat");
+    for (size_t qi = 0; qi < result.quantiles.size(); ++qi) {
+        header += fmt::format(" {:>9.3f}%", result.quantiles[qi] * 100.0f);
+    }
+    ARTEA_INFO(header);
+
+    std::string row = fmt::format("  {:>10s}", "farthest");
+    for (size_t qi = 0; qi < result.farthest.size(); ++qi) {
+        row += fmt::format(" {:>10.2f}", result.farthest[qi]);
+    }
+    ARTEA_INFO(row);
+
+    // Verify: farthest distances are positive and min <= max.
+    EXPECT_GT(result.max_farthest, 0.0f) << "Farthest distance should be positive";
+    EXPECT_LE(result.min_farthest, result.max_farthest);
+
+    // Verify: quantiles are non-decreasing across the sorted per-sample maxima.
+    for (size_t qi = 1; qi < result.farthest.size(); ++qi) {
+        EXPECT_LE(result.farthest[qi - 1], result.farthest[qi])
+            << fmt::format("farthest quantile ordering violated: q={:.3f} ({:.6f}) > q={:.3f} ({:.6f})",
+                result.quantiles[qi - 1], result.farthest[qi - 1],
+                result.quantiles[qi], result.farthest[qi]);
+    }
+}
+
+/**
+ * @brief Report the dataset's approximate aspect ratio = farthest / nearest.
+ *        "Nearest" is the 1-NN (nn_rank=1) distance probed over @c num_samples
+ *        sampled vertices; "farthest" is the per-sample farthest distance from
+ *        a full scan (probe_farthest). Two ratios are reported:
+ *          - extreme: max farthest / min nearest  (≈ diameter / closest-pair,
+ *            the classic aspect ratio),
+ *          - median : median farthest / median nearest  (robust to outliers /
+ *            duplicate points whose 1-NN distance is 0).
+ *        Distances are in the prober's own metric (e.g. squared L2); the ratio
+ *        is reported in those same units.
+ */
+TEST_F(DatasetProberTest, AspectRatio) {
+    auto& provider = DataProvider::instance();
+    auto& dataset = provider.get_dataset();
+    auto& dist_func = provider.get_dist_func();
+
+    const auto& base_vecs = dataset.get_base_vecs();
+    dataset_prober_t prober(base_vecs, dist_func);
+
+    const vec_num_t num_samples = g_config.num_samples;
+
+    // Extremes (for diameter / closest-pair) plus the median (robust ratio).
+    std::vector<float> quantiles = {0.0001f, 0.5f, 0.9999f};
+
+    ARTEA_INFO(fmt::format("Probing approximate aspect ratio with {} samples...", num_samples));
+
+    auto t0 = std::chrono::high_resolution_clock::now();
+    auto near_res = prober.probe(quantiles, num_samples);            // nn_rank=1 → nearest
+    auto far_res  = prober.probe_farthest(quantiles, num_samples);   // per-sample farthest
+    auto t1 = std::chrono::high_resolution_clock::now();
+    double elapsed_s = std::chrono::duration_cast<std::chrono::microseconds>(t1 - t0).count() / 1e6;
+    ARTEA_INFO(fmt::format("Aspect-ratio probe completed in {:.2f} s", elapsed_s));
+
+    // Index of a given quantile in a result's echoed quantile list.
+    auto qidx = [](const std::vector<float>& qs, float target) -> size_t {
+        for (size_t i = 0; i < qs.size(); ++i) {
+            if (std::abs(qs[i] - target) < 1e-9f) return i;
+        }
+        return 0;
+    };
+
+    ASSERT_FALSE(near_res.nn_ranks.empty()) << "probe returned no nn_ranks";
+    const size_t near_lo  = qidx(near_res.quantiles, 0.0001f);  // ≈ min 1-NN (closest pair)
+    const size_t near_med = qidx(near_res.quantiles, 0.5f);
+    const float near_min = near_res.table[0][near_lo];          // table[0] is nn_rank=1
+    const float near_p50 = near_res.table[0][near_med];
+
+    const size_t far_med = qidx(far_res.quantiles, 0.5f);
+    const float far_p50  = far_res.farthest[far_med];
+    const float far_max  = far_res.max_farthest;
+
+    auto safe_ratio = [](float f, float n) -> float {
+        return n > 0.0f ? f / n : std::numeric_limits<float>::infinity();
+    };
+    const float ar_extreme = safe_ratio(far_max, near_min);
+    const float ar_median  = safe_ratio(far_p50, near_p50);
+
+    ARTEA_INFO(fmt::format("Nearest (nn=1):  min={:.2f}  median={:.2f}", near_min, near_p50));
+    ARTEA_INFO(fmt::format("Farthest:        median={:.2f}  max={:.2f}", far_p50, far_max));
+    ARTEA_INFO(fmt::format(
+        "Approximate aspect ratio (extreme = max_farthest / min_nearest): {:.2f}", ar_extreme));
+    ARTEA_INFO(fmt::format(
+        "Approximate aspect ratio (median  = med_farthest / med_nearest): {:.2f}", ar_median));
+
+    // Sanity: farthest must dominate nearest, and the median ratio is finite.
+    EXPECT_GT(far_max, 0.0f) << "Farthest distance should be positive";
+    EXPECT_GE(far_max, near_min) << "max farthest must be >= min nearest";
+    EXPECT_GT(near_p50, 0.0f) << "median 1-NN distance should be positive";
+    EXPECT_GE(ar_median, 1.0f) << "aspect ratio should be >= 1";
 }
 
 int main(int argc, char** argv) {

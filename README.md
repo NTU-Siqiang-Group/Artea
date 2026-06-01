@@ -32,62 +32,36 @@ cmake --build build -j64
 ./build/unit_tests/test_simd_distance -c datasets.json -d sift-1m    # e.g. test the SIMD distance implementation
 ```
 
-> [!NOTE]
->
-> To get the total lines of code in the include directory, you can run the following command:
->
-> ```shell
-> find ./include -type f \( -name "*.hpp" -o -name "*.cpp" \) | xargs wc -l
-> ```
+---
 
-## Designations
+## Benchmarking tip: NUMA page-cache saturation can silently slow runs
 
-### Summarization Module: <u>B</u>alanced and <u>I</u>ncremental Clustering using <u>N</u>avigable <u>G</u>raph (BING)
+On a multi-socket (NUMA) machine the benchmark runs under `numactl --interleave=all`,
+which assumes every node has balanced **free** memory. Reading the large dataset files
+fills the OS page cache; if one NUMA node's free memory drops to near zero (almost all
+of it reclaimable `FilePages`), interleaved allocations destined for that node force
+synchronous page reclaim. This uniformly slows **both** index build (allocation-heavy —
+observed +40%) and search throughput (memory-latency-bound — ~15% lower) while producing
+**byte-identical** results (same recall, same index size) — so it looks like a
+performance regression but isn't.
 
-#### Objective Function
+**Symptom:** the current run is uniformly slower than a stored/legacy baseline at every
+operating point *and* the build is slower too, yet recall and index size are unchanged.
 
-This module aims to maximize the following objective function:
+**Check** per-node free memory (look for a node with very little free):
 
-$$
-\mathbb{C} = \left\{ C_1, C_2, \cdots, C_k \right\}\\
-O_{Partition} = A\cdot\sum_{C_i \in \mathbb{C}} \sum_{u\in C_i}\sum_{v\in C_i/\{u\}} \mathbb{I}\left\{v\in \mathbb{N}_r(u)\right\} - B\cdot \sum_{C_i \in \mathbb{C}} \left| |C_i| - \frac{n}{k} \right|
-$$
+```bash
+numactl --hardware
+grep -E 'MemFree|FilePages' /sys/devices/system/node/node*/meminfo
+```
 
-By maximizing the first term, we hope that data points within the same cluster are closely connected in the r-NN graph, promoting intra-cluster similarity. The second term penalizes deviations from the ideal cluster size of n/k, thereby encouraging balanced cluster sizes across the dataset. The constants A and B are used to weight the importance of these two objectives.
+**Fix** — drop the page cache so every node regains real free memory, then re-run:
 
-We hierarchically sample the data points to create a multi-level representation of the dataset. At each level, we perform clustering using the r-NN graph constructed from the sampled points. This hierarchical structure will be served as A BETTER CHOICE of HNSW-like routing layers.
+```bash
+sync; echo 3 | sudo tee /proc/sys/vm/drop_caches
+```
 
-![image-20251212125456916](./README.assets/image-20251212125456916.png)
-
-#### Baseline: Hierarchical Sampled Kmeans|| Clustering
-
-####Clustering Feature
-
-
-
-### Propagation Module: Bidirectional RNG Propagation
-
-![image-20251212131127682](./README.assets/image-20251212131127682.png)
-
-Following experiment data was generated with current library implementation: Kmeans|| Graph Summarization + Bidirectional RNG Propagation.
-
-We fine-tuned the parameters for all methods to ensure 99% recall@10 on the SIFT1M dataset.
-
-| Dataset/Setting/Result       | Baseline (RNN-Descent)  | BRNG (Artea)                         | GS+BRNG (Artea)                      |
-| ---------------------------- | ----------------------- | ---------------------------- | ---------------------------- |
-| Parameter Setting            | S=20, R=96, T1=4, T2=15 | S=16, R=$\infty$, T=30, K=64 | S=16, R=$\infty$, T=30, K=64 |
-| Construction Performance (s) | 36.296                  | 30.131                       | 16.382                       |
-| Search Performance (QPS)     | 21273.91                | 30847.16                     | 47382.83                     |
-
-We fine-tuned the parameters for all methods to ensure 99% recall@10 on the GIST1M dataset.
-
-| Dataset/Setting/Result       | Baseline (RNN-Descent)        | BRNG                         | GS+BRNG                      |
-| ---------------------------- | ----------------------------- | ---------------------------- | ---------------------------- |
-| Parameter Setting            | S=20, R=96, T1=4, T2=15, K=64 | S=16, R=$\infty$, T=30, K=64 | S=16, R=$\infty$, T=30, K=64 |
-| Construction Performance (s) | 159.95                        | 126.10                       | 68.39                        |
-| Search Performance (QPS)     | 2799.11                       | 4812.40                      | 6119.35                      |
-
-### Maintenance Module: Batched RNG Descent
+The cache refills harmlessly as the datasets are re-read.
 
 
 

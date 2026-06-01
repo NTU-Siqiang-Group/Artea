@@ -340,7 +340,12 @@ private:
             current_layer_pool[i] = i;
         }
 
-        random_seq_nr_t random_sampler;
+        // Fixed seed: the layer-membership decision is the dominant
+        // source of run-to-run noise in this index, so we pin it. Every
+        // other RNG path (refinement init edges, search-time random
+        // seeding) still uses random_device — see compare_hier_vs_L0
+        // notes for the trade-off.
+        random_seq_nr_t random_sampler(/*seed=*/20260529);
         for (layer_id_t target_layer = layer_id_t{1}; target_layer <= max_restrict_level; ++target_layer) {
             const vertex_num_t current_pool_size = static_cast<vertex_num_t>(current_layer_pool.size());
             const vertex_num_t next_layer_size   = static_cast<vertex_num_t>(
