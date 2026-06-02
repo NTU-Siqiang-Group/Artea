@@ -1,8 +1,6 @@
 <div align="center">
 
-<img src="README.assets/ARTEA-logo.png" alt="ARTEA logo" width="360"/>
-
-# ARTEA
+<img src="README.assets/ARTEA-logo.png" alt="ARTEA logo" width="100%"/>
 
 **Theory-Guided Hierarchical Graph Index for High-Performance ANN Search**
 
