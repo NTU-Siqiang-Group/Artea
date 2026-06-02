@@ -2,7 +2,7 @@
 
 <img src="README.assets/ARTEA-logo.png" alt="ARTEA logo" width="60%"/>
 
-**Theory-Guided Hierarchical Graph Index for High-Performance ANN Search**
+### Theory-Guided Hierarchical Graph Index for High-Performance ANN Search
 
 [![C++23](https://img.shields.io/badge/C%2B%2B-23-00599C?logo=cplusplus&logoColor=white)](https://isocpp.org/)
 [![Build](https://img.shields.io/badge/build-CMake-064F8C?logo=cmake&logoColor=white)](https://cmake.org/)
