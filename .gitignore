@@ -1,6 +1,8 @@
 /build/
+/backup/
 /.vscode
 /.claude
+/.codex
 CLAUDE.md
 graph_index_repo/**/*.index
 graph_index_repo/**/
@@ -21,5 +23,3 @@ temp/
 backup_prefill/
 build-tsan/
 test_artea_graph.output
-.codex
-vldb27-exp/results/

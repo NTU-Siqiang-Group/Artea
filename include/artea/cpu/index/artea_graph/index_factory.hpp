@@ -82,7 +82,6 @@ class IndexFactory : public stacked_rgraph::IndexFactory<GraphFactoryTraitsT> {
     using reverse_updater_t  = typename GraphFactoryTraitsT::reverse_updater_t;
     using routing_updater_t  = typename GraphFactoryTraitsT::routing_updater_t;
     using random_updater_t   = typename GraphFactoryTraitsT::random_updater_t;
-    using truncate_updater_t = typename GraphFactoryTraitsT::truncate_updater_t;
     using arc_updater_t      = typename GraphFactoryTraitsT::arc_updater_t;
     using refiner_utils_t    = typename GraphFactoryTraitsT::refiner_utils_t;
 
@@ -237,7 +236,7 @@ public:
      *        the pass is a cheap no-op for rows that already have
      *        enough edges, and it still rescues any sparse rows.
      *   3. Drive @c propagate_engine with @c triangle_updater +
-     *      @c reverse_updater + @c truncate_updater (+ optional routing
+     *      @c reverse_updater + @c arc_updater (+ optional routing
      *      loops) directly on the RefiningGraph. We cannot call
      *      @c conv_factory_t::construct_graph here because its
      *      @c refining_graph_t&& overload dense-constructs its own inner
@@ -356,13 +355,6 @@ public:
             }
         }
 
-        // R-net covering radius at this layer. Used only by the ARC
-        // sweep below to scale its per-layer edge-length cutoff; the
-        // shift term consumed by the triangle / pruning updaters is
-        // scaled by @c pruning_config.l0_min_distance() instead — see
-        // @c effective_shift below.
-        const distance_t layer_radius = index.radius_at(level_id);
-
         // L0-only shift policy: apply @c pruning_config.shifted_coeffs()
         // on the bottom layer only; force shift to 0 at every upper
         // layer. Upper layers' inter-vertex distances are already spread
@@ -387,18 +379,18 @@ public:
         const vertex_num_t routing_topk = propagate_config.resolve_routing_topk(max_nbr_size);
         const vertex_num_t routing_queue_size = propagate_config.resolve_routing_queue_size(max_nbr_size);
         auto routing_updater  = propagate_engine.template make_updater<routing_updater_t>(routing_topk, routing_queue_size);
-        auto truncate_updater = propagate_engine.template make_updater<truncate_updater_t>();
+        auto arc_updater = propagate_engine.template make_updater<arc_updater_t>();
         auto pruning_updater = propagate_engine.template make_updater<pruning_updater_t>(
             pruning_config.scale_coeffs(), effective_shift);
 
-        // propagate_engine.next(reverse_updater).next(truncate_updater);
+        // propagate_engine.next(reverse_updater).next(arc_updater);
         for (iter_t build_loop = 0; build_loop < propagate_config.num_build_loops(); ++build_loop) {
-            // propagate_engine.run(propagate_config.num_triu_iters(), triangle_updater).next(truncate_updater)
-            //                 .next(reverse_updater).next(truncate_updater);
+            // propagate_engine.run(propagate_config.num_triu_iters(), triangle_updater).next(arc_updater)
+            //                 .next(reverse_updater).next(arc_updater);
             for (iter_t triu_iter = 0; triu_iter < propagate_config.num_triu_iters(); ++triu_iter) {
-                propagate_engine.next(triangle_updater).next(truncate_updater);
+                propagate_engine.next(triangle_updater).next(arc_updater);
             }
-            propagate_engine.next(reverse_updater).next(truncate_updater);
+            propagate_engine.next(reverse_updater).next(arc_updater);
         }
 
         // /** -------------------- Optimization --------------------------------------- ***/
@@ -408,26 +400,7 @@ public:
 
         for (iter_t routing_loop = 0; routing_loop < propagate_config.num_routing_loops(); ++routing_loop) {
             propagate_engine.next(routing_updater).next(pruning_updater)
-                            .next(reverse_updater).next(truncate_updater);
-        }
-
-        // ---- Step 3.5: optional aspect-ratio-constrained (ARC) sweep.
-        //      Drops every edge longer than
-        //      @c aspect_ratio_constraint * @c radius_at(level_id) at
-        //      this layer. Applied uniformly across every refined level,
-        //      with the threshold scaled per-layer by the r-net covering
-        //      radius. Skipped entirely when
-        //      @c pruning_config.perform_arc() is false.
-        if (pruning_config.perform_arc()) {
-            const distance_t arc_threshold = static_cast<distance_t>(
-                layer_radius * pruning_config.aspect_ratio_constraint());
-            ARTEA_INFO(fmt::format(
-                "[artea_graph] refine_layer ARC sweep: level_id={}, "
-                "radius={:.6f}, aspect_ratio_constraint={}, arc_threshold={:.6f}",
-                level_id, layer_radius,
-                pruning_config.aspect_ratio_constraint(), arc_threshold));
-            auto arc_updater = propagate_engine.template make_updater<arc_updater_t>(arc_threshold);
-            propagate_engine.next(arc_updater);
+                            .next(reverse_updater).next(arc_updater);
         }
 
         // ---- Step 4: write refined edges back ----

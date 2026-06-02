@@ -72,9 +72,7 @@ public:
      * @param pruning_config    artea_graph PruningConfig. Carries RNG
      *                          scale/shift (both consumed by per-layer
      *                          refinement; insertion reads scale_coeffs
-     *                          only) plus ARC policy (@c perform_arc /
-     *                          @c aspect_ratio_constraint) consumed by
-     *                          the final refine_layer sweep.
+     *                          only).
      */
     IndexStructure(
         const vertex_num_t        total_vertices,

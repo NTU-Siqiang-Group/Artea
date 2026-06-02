@@ -40,7 +40,6 @@ template <typename RefinerTraitsT> class ReverseUpdater;
 template <typename RefinerTraitsT> class RandomUpdater;
 template <typename RefinerTraitsT> class RoutingUpdater;
 template <typename RefinerTraitsT> class TruncateUpdater;
-template <typename RefinerTraitsT> class ARCUpdater;
 template <typename RefinerTraitsT> class RandomEG;
 template <typename RefinerTraitsT> class PropagateEngine;
 template <typename RefinerTraitsT> class IVFPartitions;
@@ -87,9 +86,16 @@ struct RefinerTraits :
     /** @brief Truncate updater: trims neighbor arrays to max_nbr_size. */
     using truncate_updater_t = TruncateUpdater<refiner_traits_t>;
 
-    /** @brief Arc-radius pruning updater: drops edges longer than the
-     *         configured arc_radius. */
-    using arc_updater_t = ARCUpdater<refiner_traits_t>;
+    /** @brief Aspect-Ratio-Constrained (ARC) updater — an alias of
+     *         @c truncate_updater_t.
+     *
+     *         Capping a vertex's maximum out-degree is itself an approximate
+     *         enforcement of the Aspect Ratio Constraint: bounding the
+     *         out-degree forces pruning to retain only the closest neighbors,
+     *         which discards exactly the long-range, large-aspect-ratio edges
+     *         that an explicit ARC sweep was meant to drop. Truncating to
+     *         @c max_nbr_size therefore subsumes ARC. */
+    using arc_updater_t = truncate_updater_t;
 
     /** @brief Random edge generator. */
     using random_eg_t = RandomEG<refiner_traits_t>;

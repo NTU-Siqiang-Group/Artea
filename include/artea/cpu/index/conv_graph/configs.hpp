@@ -34,7 +34,7 @@ struct PropagateConfig {
         iter_t num_build_loops,
         iter_t num_triu_iters,
         ratio_t prefill_ratio = ratio_t(1),
-        iter_t num_routing_loops = iter_t(1),
+        iter_t num_routing_loops = iter_t(0),
         vertex_num_t routing_topk = vertex_num_t(64),
         vertex_num_t routing_queue_size = vertex_num_t(96)
     ) :

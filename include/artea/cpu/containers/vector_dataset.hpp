@@ -114,13 +114,6 @@ public:
      *        Updates base vectors and ground truth IDs accordingly.
      * @param seed Random seed for reproducibility (default: random_device).
      *
-     * TODO: Optimize memory usage by implementing true in-place shuffle.
-     *       Current implementation uses extract_subset which creates a full copy,
-     *       resulting in 2x peak memory usage. A better approach would be:
-     *       1. Use Fisher-Yates shuffle with direct vector swapping via get()
-     *       2. Parallelize vector element swaps with TBB for large dimensions
-     *       3. Parallelize ground truth updates with TBB
-     *       This would reduce peak memory from 2N to N bytes.
      */
     auto shuffle_in_place(uint32_t seed = std::random_device{}()) -> uint32_t {
         const vec_num_t num_base_vecs = _base_vecs.get_num_vecs();

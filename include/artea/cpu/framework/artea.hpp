@@ -121,7 +121,6 @@
 #include <artea/cpu/refiner/ivf_partitions.hpp>
 #include <artea/cpu/refiner/updaters/routing_updater.hpp>
 #include <artea/cpu/refiner/updaters/truncate_updater.hpp>
-#include <artea/cpu/refiner/updaters/arc_updater.hpp>
 #include <artea/cpu/refiner/refiner_utils.hpp>
 
 #include <artea/cpu/utils/bit_ops.hpp>

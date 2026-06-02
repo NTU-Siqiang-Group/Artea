@@ -67,8 +67,6 @@ struct TestConfig {
     float    scale_coeffs;
     float    shifted_coeffs;
     float    l0_min_distance;
-    bool     perform_arc;
-    float    aspect_ratio_constraint;
 
     // L0-radius auto-probe
     uint32_t probe_num_samples;
@@ -129,11 +127,6 @@ auto dump_config(const char* banner) -> void {
        << "scale_coeffs only and ignores shift)\n"
        << "l0_min_distance:            " << g_config.l0_min_distance
        << " (per-vertex L0 minimum-distance gate; consumed by refinement pruning)\n"
-       << "perform_arc:                "
-       << (g_config.perform_arc ? "true" : "false") << "\n"
-       << "aspect_ratio_constraint:    " << g_config.aspect_ratio_constraint
-       << " (final refine_layer sweep drops edges > arc * radius_at(h); "
-       << "skipped when perform_arc=false)\n"
        << "--- Per-layer refinement ---\n"
        << "ul_refining_max_nbr_size:   "
        << static_cast<uint32_t>(g_config.ul_max_nbr_size * 1.5f)
@@ -268,9 +261,7 @@ protected:
         artea_graph::pruning_config_t pruning_config(
             static_cast<ratio_t>(g_config.scale_coeffs),
             static_cast<ratio_t>(g_config.shifted_coeffs),
-            static_cast<ratio_t>(g_config.l0_min_distance),
-            g_config.perform_arc,
-            static_cast<ratio_t>(g_config.aspect_ratio_constraint));
+            static_cast<ratio_t>(g_config.l0_min_distance));
 
         _graph = std::make_unique<artea_graph::index_t>(
             total_vertices, rgraph_config,
@@ -527,16 +518,6 @@ int main(int argc, char** argv) {
         .default_value(1.0f).scan<'g', float>()
         .help("Per-vertex L0 minimum-distance gate consumed by refinement "
               "pruning. Default 1.0.");
-    program.add_argument("--perform-arc")
-        .default_value(false).implicit_value(true)
-        .help("If present, refine_layer runs a final aspect-ratio-constrained "
-              "pruning sweep that drops edges longer than "
-              "aspect_ratio_constraint * radius_at(level_id).");
-    program.add_argument("--aspect-ratio-constraint")
-        .default_value(1.0f).scan<'g', float>()
-        .help("Multiplier on the per-layer r-net radius for the ARC sweep "
-              "(only consumed when --perform-arc is set). Default 1.0.");
-
     program.add_argument("--probe-num-samples")
         .default_value(500u).scan<'u', uint32_t>();
     program.add_argument("--probe-quantile")
@@ -602,8 +583,6 @@ int main(int argc, char** argv) {
     g_config.scale_coeffs              = program.get<float>("--scale-coeffs");
     g_config.shifted_coeffs            = program.get<float>("--shifted-coeffs");
     g_config.l0_min_distance           = program.get<float>("--l0-min-distance");
-    g_config.perform_arc               = program.get<bool>("--perform-arc");
-    g_config.aspect_ratio_constraint   = program.get<float>("--aspect-ratio-constraint");
     g_config.probe_num_samples         = program.get<uint32_t>("--probe-num-samples");
     g_config.probe_quantile            = program.get<float>("--probe-quantile");
     g_config.num_build_loops           = program.get<uint32_t>("--num-build-loops");

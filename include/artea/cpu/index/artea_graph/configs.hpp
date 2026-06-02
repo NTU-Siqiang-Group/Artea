@@ -58,13 +58,6 @@ using RGraphConfig = stacked_rgraph::RGraphConfig<IndexTraitsT>;
  *     Distinct from @c rgraph_config.l0_rnet_radius, which sets the L0
  *     covering radius for r-net construction.
  *
- * Also carries an aspect-ratio-constrained (ARC) pruning toggle applied
- * as a final sweep at the end of @c refine_layer:
- *   - When @c perform_arc is true, every edge longer than
- *     @c aspect_ratio_constraint * @c radius_at(level_id) is dropped
- *     at layer @p level_id.
- *   - When @c perform_arc is false, the ARC sweep is skipped entirely.
- *
  * @tparam IndexTraitsT The index traits type.
  */
 template <typename IndexTraitsT>
@@ -85,42 +78,26 @@ struct PruningConfig {
      *                                (NOT @c l0_rnet_radius — that is
      *                                geometrically the covering radius and
      *                                serves a different purpose).
-     * @param perform_arc             Whether refine_layer runs the final
-     *                                ARC sweep. Default false.
-     * @param aspect_ratio_constraint Multiplier applied to the per-layer
-     *                                r-net radius to obtain the ARC
-     *                                threshold. Only consumed when
-     *                                @p perform_arc is true. Default 1.0
-     *                                (drop edges longer than the layer's
-     *                                covering radius).
      */
     PruningConfig(
         ratio_t scale_coeffs,
         ratio_t shifted_coeffs,
-        ratio_t l0_min_distance         = ratio_t(1),
-        bool    perform_arc             = false,
-        ratio_t aspect_ratio_constraint = ratio_t(1)
+        ratio_t l0_min_distance         = ratio_t(1)
     ) :
         _scale_coeffs(scale_coeffs),
         _shifted_coeffs(shifted_coeffs),
-        _l0_min_distance(l0_min_distance),
-        _perform_arc(perform_arc),
-        _aspect_ratio_constraint(aspect_ratio_constraint)
+        _l0_min_distance(l0_min_distance)
     {}
 
     // Builder-style setters (chainable)
     auto scale_coeffs(ratio_t v)            -> PruningConfig& { _scale_coeffs = v;            return *this; }
     auto shifted_coeffs(ratio_t v)          -> PruningConfig& { _shifted_coeffs = v;          return *this; }
     auto l0_min_distance(ratio_t v)         -> PruningConfig& { _l0_min_distance = v;         return *this; }
-    auto perform_arc(bool v)                -> PruningConfig& { _perform_arc = v;             return *this; }
-    auto aspect_ratio_constraint(ratio_t v) -> PruningConfig& { _aspect_ratio_constraint = v; return *this; }
 
     // Const getters
     auto scale_coeffs()            const -> ratio_t { return _scale_coeffs; }
     auto shifted_coeffs()          const -> ratio_t { return _shifted_coeffs; }
     auto l0_min_distance()         const -> ratio_t { return _l0_min_distance; }
-    auto perform_arc()             const -> bool    { return _perform_arc; }
-    auto aspect_ratio_constraint() const -> ratio_t { return _aspect_ratio_constraint; }
 
     /**
      * @brief Project down to a conv_graph::PruningConfig (scale + shift
@@ -140,8 +117,6 @@ private:
     ratio_t _scale_coeffs;
     ratio_t _shifted_coeffs;
     ratio_t _l0_min_distance;
-    bool    _perform_arc;
-    ratio_t _aspect_ratio_constraint;
 };
 
 }   // namespace artea_graph
