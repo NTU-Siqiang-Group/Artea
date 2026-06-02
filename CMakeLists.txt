@@ -152,7 +152,6 @@ if (NOT ARTEA_SKIP_SUBDIRS)
 
     # --- 5. Include subdirectories ---
     add_subdirectory(unit_tests)
-    add_subdirectory(benchmarks)
     add_subdirectory(micro_benchmarks)
     add_subdirectory(apps)
 endif()
