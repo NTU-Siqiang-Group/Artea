@@ -18,7 +18,7 @@
 
 📄 &nbsp; $\color{red}{\Large \textsf{Full technical report with complete proofs and derivations:}}$
 
-### ➡️ [`third-party/artea/artea-technical-report.pdf`](artea-technical-report.pdf)
+### ➡️ [Click this link: `artea/artea-technical-report.pdf`](artea-technical-report.pdf)
 
 </div>
 
@@ -101,4 +101,20 @@ against both flat and hierarchical baselines.
 <div align="center">
 <img src="README.assets/build_time_all.png" alt="Build time across all datasets" width="760"/>
 </div>
+
+## Citation
+
+If you use ARTEA, please cite the repository (a [`CITATION.cff`](CITATION.cff) is
+included, so GitHub's **"Cite this repository"** button works out of the box) and
+the accompanying paper:
+
+```bibtex
+@software{artea_repo,
+  title     = {{ARTEA}: Theory-Guided Hierarchical Graph Index for High-Performance ANN Search},
+  author    = {Ye, Weitang and Mo, Dingheng and Luo, Siqiang},
+  year      = {2026},
+  publisher = {GitHub},
+  url       = {https://github.com/NTU-Siqiang-Group/Artea}
+}
+```
 
