@@ -104,9 +104,7 @@ against both flat and hierarchical baselines.
 
 ## Citation
 
-If you use ARTEA, please cite the repository (a [`CITATION.cff`](CITATION.cff) is
-included, so GitHub's **"Cite this repository"** button works out of the box) and
-the accompanying paper:
+If you use ARTEA, please cite the repository:
 
 ```bibtex
 @software{artea_repo,
