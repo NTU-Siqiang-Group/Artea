@@ -21,7 +21,7 @@
 </div>
 
 ARTEA is a hierarchical proximity-graph index for approximate nearest neighbor
-(ANN) search. It pairs a deterministic bottom-up *r*-net hierarchy with
+(ANN) search. It pairs a **deterministic bottom-up *r*-net hierarchy** with
 **Aspect-Ratio-Constrained Pruning (ARC-Pruning)**, bounding the worst-case
 search complexity to <code>O((α·τ)<sup>λ</sup> + α<sup>λ</sup> log Δ)</code> — the
 first proximity graph with a *strictly logarithmic* dependence on the dataset
