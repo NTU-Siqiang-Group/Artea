@@ -19,6 +19,7 @@
 #include <artea/cpu/vertex_generator/random_vg.hpp>
 #include <artea/cpu/framework/artea.hpp>
 #include <artea/cpu/framework/type_context/default_context.hpp>
+#include <artea/cpu/framework/type_context/infra_dispatcher.hpp>
 #include <filesystem>
 #include <memory>
 
@@ -29,23 +30,31 @@ using namespace artea::cpu;
 struct BenchConfig {
     std::string config_path;
     std::string dataset_name;
+    std::string metric;
 } g_config;
 
-// Global dataset
+// Global dataset (metric/dim-independent). The random_vg_t is metric-dependent
+// now, so its (metric, padded-dim) pair is resolved from the --metric input
+// and the loaded dataset, and the generator is rebuilt inside each dispatched
+// <Metric, Dim> body.
 std::unique_ptr<vector_dataset_t> g_dataset = nullptr;
 const vector_array_t* g_vecs_data = nullptr;
+DatasetInfra g_dataset_info{};
 uint32_t g_num_vecs = 0;
 uint32_t g_vec_dim = 0;
 
 // Benchmark: Small sample size (1% of dataset)
 static void BM_RandomVG_SmallSample(benchmark::State& state) {
-    random_vg_t random_vg;
     uint32_t result_size = std::max(100u, g_num_vecs / 100);
 
-    for (auto _ : state) {
-        auto result = random_vg.generate(*g_vecs_data, result_size);
-        benchmark::DoNotOptimize(result);
-    }
+    infra_dispatch(g_dataset_info, ARTEA_METRIC_LAMBDA(void) {
+        // Stateless generator: the dimension is a compile-time trait now.
+        random_vg_t<Metric, Dim> random_vg;
+        for (auto _ : state) {
+            auto result = random_vg.generate(*g_vecs_data, result_size);
+            benchmark::DoNotOptimize(result);
+        }
+    });
 
     state.SetItemsProcessed(state.iterations() * result_size);
     state.counters["result_size"] = result_size;
@@ -56,13 +65,15 @@ BENCHMARK(BM_RandomVG_SmallSample)->Unit(benchmark::kMillisecond);
 
 // Benchmark: Medium sample size (10% of dataset)
 static void BM_RandomVG_MediumSample(benchmark::State& state) {
-    random_vg_t random_vg;
     uint32_t result_size = g_num_vecs / 10;
 
-    for (auto _ : state) {
-        auto result = random_vg.generate(*g_vecs_data, result_size);
-        benchmark::DoNotOptimize(result);
-    }
+    infra_dispatch(g_dataset_info, ARTEA_METRIC_LAMBDA(void) {
+        random_vg_t<Metric, Dim> random_vg;
+        for (auto _ : state) {
+            auto result = random_vg.generate(*g_vecs_data, result_size);
+            benchmark::DoNotOptimize(result);
+        }
+    });
 
     state.SetItemsProcessed(state.iterations() * result_size);
     state.counters["result_size"] = result_size;
@@ -73,13 +84,15 @@ BENCHMARK(BM_RandomVG_MediumSample)->Unit(benchmark::kMillisecond);
 
 // Benchmark: Large sample size (50% of dataset)
 static void BM_RandomVG_LargeSample(benchmark::State& state) {
-    random_vg_t random_vg;
     uint32_t result_size = g_num_vecs / 2;
 
-    for (auto _ : state) {
-        auto result = random_vg.generate(*g_vecs_data, result_size);
-        benchmark::DoNotOptimize(result);
-    }
+    infra_dispatch(g_dataset_info, ARTEA_METRIC_LAMBDA(void) {
+        random_vg_t<Metric, Dim> random_vg;
+        for (auto _ : state) {
+            auto result = random_vg.generate(*g_vecs_data, result_size);
+            benchmark::DoNotOptimize(result);
+        }
+    });
 
     state.SetItemsProcessed(state.iterations() * result_size);
     state.counters["result_size"] = result_size;
@@ -90,13 +103,15 @@ BENCHMARK(BM_RandomVG_LargeSample)->Unit(benchmark::kMillisecond);
 
 // Benchmark: Very large sample size (90% of dataset)
 static void BM_RandomVG_VeryLargeSample(benchmark::State& state) {
-    random_vg_t random_vg;
     uint32_t result_size = static_cast<uint32_t>(g_num_vecs * 0.9);
 
-    for (auto _ : state) {
-        auto result = random_vg.generate(*g_vecs_data, result_size);
-        benchmark::DoNotOptimize(result);
-    }
+    infra_dispatch(g_dataset_info, ARTEA_METRIC_LAMBDA(void) {
+        random_vg_t<Metric, Dim> random_vg;
+        for (auto _ : state) {
+            auto result = random_vg.generate(*g_vecs_data, result_size);
+            benchmark::DoNotOptimize(result);
+        }
+    });
 
     state.SetItemsProcessed(state.iterations() * result_size);
     state.counters["result_size"] = result_size;
@@ -107,13 +122,15 @@ BENCHMARK(BM_RandomVG_VeryLargeSample)->Unit(benchmark::kMillisecond);
 
 // Benchmark: Varying sample sizes
 static void BM_RandomVG_VaryingSizes(benchmark::State& state) {
-    random_vg_t random_vg;
     uint32_t result_size = state.range(0);
 
-    for (auto _ : state) {
-        auto result = random_vg.generate(*g_vecs_data, result_size);
-        benchmark::DoNotOptimize(result);
-    }
+    infra_dispatch(g_dataset_info, ARTEA_METRIC_LAMBDA(void) {
+        random_vg_t<Metric, Dim> random_vg;
+        for (auto _ : state) {
+            auto result = random_vg.generate(*g_vecs_data, result_size);
+            benchmark::DoNotOptimize(result);
+        }
+    });
 
     state.SetItemsProcessed(state.iterations() * result_size);
     state.counters["result_size"] = result_size;
@@ -188,6 +205,9 @@ int main(int argc, char** argv) {
     program.add_argument("-d", "--dataset")
         .help("Name of the dataset to use")
         .default_value(std::string("sift-1m"));
+    program.add_argument("--metric")
+        .help("Distance metric: 'euclidean', 'inner_product', or 'cosine'")
+        .default_value(std::string("euclidean"));
 
     try {
         program.parse_args(argc, argv);
@@ -199,6 +219,7 @@ int main(int argc, char** argv) {
 
     g_config.config_path = program.get<std::string>("--config");
     g_config.dataset_name = program.get<std::string>("--dataset");
+    g_config.metric = program.get<std::string>("--metric");
 
     // Load dataset
     if (!std::filesystem::exists(g_config.config_path)) {
@@ -212,6 +233,9 @@ int main(int argc, char** argv) {
     g_vecs_data = &g_dataset->get_base_vecs();
     g_num_vecs = g_vecs_data->get_num_vecs();
     g_vec_dim = g_vecs_data->get_vec_dim();
+
+    // Resolve BOTH compile-time axes: metric from --metric, padded dim from the loaded dataset.
+    g_dataset_info = DatasetInfra{parse_metric(g_config.metric), g_vec_dim};
 
     ARTEA_INFO(fmt::format("Dataset loaded: {} vectors, {} dimensions", g_num_vecs, g_vec_dim));
 

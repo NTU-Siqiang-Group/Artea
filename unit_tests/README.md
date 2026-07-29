@@ -21,10 +21,3 @@ cd Artea
 cd Artea
 ./build/tests/test_simd_distance -c ./configs/datasets.json -d sift-1m
 ```
-
-- To test `SIMD FMA Functions`, run:
-
-```bash
-cd Artea
-./build/tests/test_simd_fma -c ./configs/datasets.json -d sift-1m
-```

@@ -12,34 +12,52 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+/*
+ * @FilePath: /Artea/include/artea/cpu/framework/type_context/default_context.hpp
+ * @Author: Chandler (Weitang Ye) <weitang.ye@ntu.edu.sg>
+ * @Description: Public artea type aliases.
+ *
+ *   Two compile-time axes are explicit at every use site:
+ *     - Metric  : the distance metric (DistanceMetricsT)
+ *     - Dim : the SIMD-padded vector dimension
+ *   ONLY the types that depend on ComputerTraits are parameterized by <Metric, Dim>;
+ *   everything that derives purely from BaseTraits / BufferTraits / IndexTraits
+ *   is a plain, metric- and dimension-independent alias.
+ *
+ *   The <Metric, Dim> aliases have NO defaults: downstream code MUST state both,
+ *   e.g.
+ *       dist_func_t<DistanceMetricsT::EUCLIDEAN, 128> dist;     // no ctor arg
+ *       artea_graph::index_t<DistanceMetricsT::COSINE, 112> idx(...);
+ *   Metric-independent aliases (vector_dataset_t, distance_t, the compactor, the
+ *   compact graph, base scalars, ...) are used without angle brackets as before.
+ */
+
 #pragma once
+
+#include <artea/cpu/framework/artea.hpp>
 
 namespace artea {
 namespace cpu {
 
-// Type definitions using EUCLIDEAN, LOCKED_BUFFER_WITH_MUTEX
+/** ===================================================================== **/
+/**  Metric/dim-INDEPENDENT trait chain (BaseTraits / BufferTraits / IndexTraits) **/
+/** ===================================================================== **/
 using vec_num_t = uint32_t;
 using vec_ele_t = float;
 
-using base_traits_t = BaseTraits<vec_num_t, vec_ele_t>;
-using computer_traits_t = ComputerTraits<base_traits_t, DistanceMetricsT::EUCLIDEAN>;
+using base_traits_t   = BaseTraits<vec_num_t, vec_ele_t>;
 using buffer_traits_t = BufferTraits<base_traits_t, BufferPolicyT::LOCKED_BUFFER_WITH_MUTEX, 32>;
-using index_traits_t = IndexTraits<base_traits_t>;
-using vertex_generator_traits_t = VertexGeneratorTraits<computer_traits_t, index_traits_t>;
-using router_traits_t = RouterTraits<computer_traits_t, index_traits_t, false>;
-using refiner_traits_t = RefinerTraits<computer_traits_t, buffer_traits_t, index_traits_t, router_traits_t>;
-using graph_factory_traits_t = GraphFactoryTraits<
-    vertex_generator_traits_t,
-    refiner_traits_t,
-    router_traits_t
->;
+using index_traits_t  = IndexTraits<base_traits_t>;
+
+/** ===================================================================== **/
+/**  Metric/dim-INDEPENDENT member aliases (no <Metric, Dim>)                  **/
+/** ===================================================================== **/
 
 // Base types from BaseTraits
 using vec_dim_t = typename base_traits_t::vec_dim_t;
 using vertex_num_t = typename base_traits_t::vertex_num_t;
 using vertex_id_t = typename base_traits_t::vertex_id_t;
 using vec_id_t = typename base_traits_t::vec_id_t;
-using vec_ele_t = typename base_traits_t::vec_ele_t;
 using distance_t = typename base_traits_t::distance_t;
 using ratio_t = typename base_traits_t::ratio_t;
 using cluster_num_t = typename base_traits_t::cluster_num_t;
@@ -76,35 +94,14 @@ using vertex_subset_t = typename base_traits_t::vertex_subset_t;
 using pruning_condition_t = typename base_traits_t::pruning_condition_t;
 using centroid_computer_t = typename base_traits_t::centroid_computer_t;
 
-// Computer types from ComputerTraits
-using distance_metrics_t = typename computer_traits_t::distance_metrics_t;
-using dist_func_t = typename computer_traits_t::dist_func_t;
-using simdu1_dist_t = typename computer_traits_t::simdu1_dist_t;
-using simdu2_dist_t = typename computer_traits_t::simdu2_dist_t;
-using simdu4_dist_t = typename computer_traits_t::simdu4_dist_t;
-using fma_func_t = typename computer_traits_t::fma_func_t;
-using simdu1_fma_t = typename computer_traits_t::simdu1_fma_t;
-using simdu2_fma_t = typename computer_traits_t::simdu2_fma_t;
-using simdu4_fma_t = typename computer_traits_t::simdu4_fma_t;
-using linear_func_t = typename computer_traits_t::linear_func_t;
-using simdu1_linear_t = typename computer_traits_t::simdu1_linear_t;
-using simdu2_linear_t = typename computer_traits_t::simdu2_linear_t;
-using simdu4_linear_t = typename computer_traits_t::simdu4_linear_t;
-using recall_estimator_t = typename computer_traits_t::recall_estimator_t;
-using adr_estimator_t = typename computer_traits_t::adr_estimator_t;
-using distance_prober_t = typename computer_traits_t::distance_prober_t;
-using dataset_prober_t = typename computer_traits_t::dataset_prober_t;
-
 // Buffer types from BufferTraits
 using buffer_policy_t = typename buffer_traits_t::buffer_policy_t;
 using log_buffer_t = typename buffer_traits_t::log_buffer_t;
 using log_container_t = typename buffer_traits_t::log_container_t;
 using log_table_t = typename buffer_traits_t::log_table_t;
 
-// Config types from IndexTraits
+// Config / index types from IndexTraits
 using layer_config_t = typename index_traits_t::layer_config_t;
-
-// Index types from IndexTraits
 using refining_graph_compactor_t = typename index_traits_t::refining_graph_compactor_t;
 using flat_graph_file_manager_t = typename index_traits_t::flat_graph_file_manager_t;
 using hierarchical_graph_file_manager_t = typename index_traits_t::hierarchical_graph_file_manager_t;
@@ -112,103 +109,143 @@ using index_size_calculator_t = typename index_traits_t::index_size_calculator_t
 using radius_prober_t = typename index_traits_t::radius_prober_t;
 using hierarchical_graph_compactor_t = typename index_traits_t::hierarchical_graph_compactor_t;
 
-// Unified routers — graph-storage-agnostic at the class level.
-using single_layer_router_t       = router_traits_t::single_layer_router_t;
-using hierarchical_graph_router_t = router_traits_t::hierarchical_graph_router_t;
-
+// Graph-storage types from IndexTraits (metric/dim-independent)
 namespace compact {
-    using refining_graph_t            = index_traits_t::compact::refining_graph_t;
-    using hierarchical_graph_t        = index_traits_t::compact::hierarchical_graph_t;
+    using refining_graph_t     = typename index_traits_t::compact::refining_graph_t;
+    using hierarchical_graph_t = typename index_traits_t::compact::hierarchical_graph_t;
 }   // namespace compact
 namespace dynamic {
-    using hierarchical_graph_t        = index_traits_t::dynamic::hierarchical_graph_t;
+    using hierarchical_graph_t = typename index_traits_t::dynamic::hierarchical_graph_t;
 }   // namespace dynamic
-
-// Refiner types from RefinerTraits
-using triangle_updater_t = typename refiner_traits_t::triangle_updater_t;
-using hierarchical_pruning_updater_t = typename refiner_traits_t::hierarchical_pruning_updater_t;
-using reverse_updater_t  = typename refiner_traits_t::reverse_updater_t;
-using random_updater_t   = typename refiner_traits_t::random_updater_t;
-using routing_updater_t  = typename refiner_traits_t::routing_updater_t;
-using truncate_updater_t = typename refiner_traits_t::truncate_updater_t;
-using random_eg_t = typename refiner_traits_t::random_eg_t;
-using ivf_partitions_t = typename refiner_traits_t::ivf_partitions_t;
-using ivf_construct_policy_t = typename refiner_traits_t::ivf_construct_policy_t;
-using refiner_utils_t = typename refiner_traits_t::refiner_utils_t;
-
-// Vertex generator types from VertexGeneratorTraits
-using approx_rnet_t = typename vertex_generator_traits_t::approx_rnet_t;
-using ortho_lsh_generator_t = typename vertex_generator_traits_t::ortho_lsh_generator_t;
-using pstable_lsh_generator_t = typename vertex_generator_traits_t::pstable_lsh_generator_t;
-using lsh_table_t = typename vertex_generator_traits_t::lsh_table_t;
-using lb_greedy_vg_t = typename vertex_generator_traits_t::lb_greedy_vg_t;
-using mb_greedy_vg_t = typename vertex_generator_traits_t::mb_greedy_vg_t;
-using random_vg_t = typename vertex_generator_traits_t::random_vg_t;
-using graph_mis_vg_t = typename vertex_generator_traits_t::graph_mis_vg_t;
-
-// Router types from RouterTraits
-using candidate_entry_t = typename router_traits_t::candidate_entry_t;
-using result_entry_t = typename router_traits_t::result_entry_t;
-using knn_results_t = typename router_traits_t::knn_results_t;
-using std_candidate_queue_t = typename router_traits_t::std_candidate_queue_t;
-using linear_candidate_queue_t = typename router_traits_t::linear_candidate_queue_t;
-using fh_candidate_queue_t = typename router_traits_t::fh_candidate_queue_t;
-using boost_candidate_queue_t = typename router_traits_t::boost_candidate_queue_t;
-using candidate_queue_t = typename router_traits_t::candidate_queue_t;
-using visited_table_pool_t = typename router_traits_t::visited_table_pool_t;
-using candidate_sample_utils_t = typename router_traits_t::candidate_sample_utils_t;
-using bruteforce_router_t = typename router_traits_t::bruteforce_router_t;
-using sl_router_profiler_t = typename router_traits_t::sl_router_profiler_t;
-using hg_router_profiler_t = typename router_traits_t::hg_router_profiler_t;
 
 // Utility types
 using index_register_util_t = IndexRegisterUtil;
 
-// Propagate engine from RefinerTraits
-using propagate_engine_t = typename refiner_traits_t::propagate_engine_t;
+/** ===================================================================== **/
+/**  Metric/dim-DEPENDENT trait chain (everything below flows from <Metric, Dim>) **/
+/** ===================================================================== **/
+template <DistanceMetricsT Metric, vec_dim_t Dim>
+using computer_traits_t = ComputerTraits<base_traits_t, Metric, Dim>;
 
-// Namespace-scoped types from GraphFactoryTraits (index_t, factory_t, config types)
+template <DistanceMetricsT Metric, vec_dim_t Dim>
+using vertex_generator_traits_t = VertexGeneratorTraits<computer_traits_t<Metric, Dim>, index_traits_t>;
+
+template <DistanceMetricsT Metric, vec_dim_t Dim>
+using router_traits_t = RouterTraits<computer_traits_t<Metric, Dim>, index_traits_t, false>;
+
+template <DistanceMetricsT Metric, vec_dim_t Dim>
+using refiner_traits_t = RefinerTraits<computer_traits_t<Metric, Dim>, buffer_traits_t, index_traits_t, router_traits_t<Metric, Dim>>;
+
+template <DistanceMetricsT Metric, vec_dim_t Dim>
+using graph_factory_traits_t = GraphFactoryTraits<
+    vertex_generator_traits_t<Metric, Dim>,
+    refiner_traits_t<Metric, Dim>,
+    router_traits_t<Metric, Dim>
+>;
+
+/** ===================================================================== **/
+/**  Metric/dim-DEPENDENT member aliases (parameterized by <Metric, Dim>)      **/
+/** ===================================================================== **/
+
+// Computer types from ComputerTraits
+template <DistanceMetricsT Metric, vec_dim_t Dim> using distance_metrics_t = typename computer_traits_t<Metric, Dim>::distance_metrics_t;
+template <DistanceMetricsT Metric, vec_dim_t Dim> using dist_func_t = typename computer_traits_t<Metric, Dim>::dist_func_t;
+template <DistanceMetricsT Metric, vec_dim_t Dim> using simdu1_dist_t = typename computer_traits_t<Metric, Dim>::simdu1_dist_t;
+template <DistanceMetricsT Metric, vec_dim_t Dim> using simdu2_dist_t = typename computer_traits_t<Metric, Dim>::simdu2_dist_t;
+template <DistanceMetricsT Metric, vec_dim_t Dim> using simdu4_dist_t = typename computer_traits_t<Metric, Dim>::simdu4_dist_t;
+template <DistanceMetricsT Metric, vec_dim_t Dim> using linear_func_t = typename computer_traits_t<Metric, Dim>::linear_func_t;
+template <DistanceMetricsT Metric, vec_dim_t Dim> using simdu1_linear_t = typename computer_traits_t<Metric, Dim>::simdu1_linear_t;
+template <DistanceMetricsT Metric, vec_dim_t Dim> using simdu2_linear_t = typename computer_traits_t<Metric, Dim>::simdu2_linear_t;
+template <DistanceMetricsT Metric, vec_dim_t Dim> using simdu4_linear_t = typename computer_traits_t<Metric, Dim>::simdu4_linear_t;
+template <DistanceMetricsT Metric, vec_dim_t Dim> using recall_estimator_t = typename computer_traits_t<Metric, Dim>::recall_estimator_t;
+template <DistanceMetricsT Metric, vec_dim_t Dim> using adr_estimator_t = typename computer_traits_t<Metric, Dim>::adr_estimator_t;
+template <DistanceMetricsT Metric, vec_dim_t Dim> using distance_prober_t = typename computer_traits_t<Metric, Dim>::distance_prober_t;
+template <DistanceMetricsT Metric, vec_dim_t Dim> using dataset_prober_t = typename computer_traits_t<Metric, Dim>::dataset_prober_t;
+
+// Unified routers from RouterTraits
+template <DistanceMetricsT Metric, vec_dim_t Dim> using single_layer_router_t = typename router_traits_t<Metric, Dim>::single_layer_router_t;
+template <DistanceMetricsT Metric, vec_dim_t Dim> using hierarchical_graph_router_t = typename router_traits_t<Metric, Dim>::hierarchical_graph_router_t;
+
+// Router data structures / helpers from RouterTraits
+template <DistanceMetricsT Metric, vec_dim_t Dim> using candidate_entry_t = typename router_traits_t<Metric, Dim>::candidate_entry_t;
+template <DistanceMetricsT Metric, vec_dim_t Dim> using result_entry_t = typename router_traits_t<Metric, Dim>::result_entry_t;
+template <DistanceMetricsT Metric, vec_dim_t Dim> using knn_results_t = typename router_traits_t<Metric, Dim>::knn_results_t;
+template <DistanceMetricsT Metric, vec_dim_t Dim> using std_candidate_queue_t = typename router_traits_t<Metric, Dim>::std_candidate_queue_t;
+template <DistanceMetricsT Metric, vec_dim_t Dim> using linear_candidate_queue_t = typename router_traits_t<Metric, Dim>::linear_candidate_queue_t;
+template <DistanceMetricsT Metric, vec_dim_t Dim> using fh_candidate_queue_t = typename router_traits_t<Metric, Dim>::fh_candidate_queue_t;
+template <DistanceMetricsT Metric, vec_dim_t Dim> using boost_candidate_queue_t = typename router_traits_t<Metric, Dim>::boost_candidate_queue_t;
+template <DistanceMetricsT Metric, vec_dim_t Dim> using candidate_queue_t = typename router_traits_t<Metric, Dim>::candidate_queue_t;
+template <DistanceMetricsT Metric, vec_dim_t Dim> using visited_table_pool_t = typename router_traits_t<Metric, Dim>::visited_table_pool_t;
+template <DistanceMetricsT Metric, vec_dim_t Dim> using candidate_sample_utils_t = typename router_traits_t<Metric, Dim>::candidate_sample_utils_t;
+template <DistanceMetricsT Metric, vec_dim_t Dim> using bruteforce_router_t = typename router_traits_t<Metric, Dim>::bruteforce_router_t;
+template <DistanceMetricsT Metric, vec_dim_t Dim> using sl_router_profiler_t = typename router_traits_t<Metric, Dim>::sl_router_profiler_t;
+template <DistanceMetricsT Metric, vec_dim_t Dim> using hg_router_profiler_t = typename router_traits_t<Metric, Dim>::hg_router_profiler_t;
+
+// Refiner types from RefinerTraits
+template <DistanceMetricsT Metric, vec_dim_t Dim> using triangle_updater_t = typename refiner_traits_t<Metric, Dim>::triangle_updater_t;
+template <DistanceMetricsT Metric, vec_dim_t Dim> using hierarchical_pruning_updater_t = typename refiner_traits_t<Metric, Dim>::hierarchical_pruning_updater_t;
+template <DistanceMetricsT Metric, vec_dim_t Dim> using reverse_updater_t = typename refiner_traits_t<Metric, Dim>::reverse_updater_t;
+template <DistanceMetricsT Metric, vec_dim_t Dim> using random_updater_t = typename refiner_traits_t<Metric, Dim>::random_updater_t;
+template <DistanceMetricsT Metric, vec_dim_t Dim> using routing_updater_t = typename refiner_traits_t<Metric, Dim>::routing_updater_t;
+template <DistanceMetricsT Metric, vec_dim_t Dim> using truncate_updater_t = typename refiner_traits_t<Metric, Dim>::truncate_updater_t;
+template <DistanceMetricsT Metric, vec_dim_t Dim> using random_eg_t = typename refiner_traits_t<Metric, Dim>::random_eg_t;
+template <DistanceMetricsT Metric, vec_dim_t Dim> using ivf_partitions_t = typename refiner_traits_t<Metric, Dim>::ivf_partitions_t;
+template <DistanceMetricsT Metric, vec_dim_t Dim> using ivf_construct_policy_t = typename refiner_traits_t<Metric, Dim>::ivf_construct_policy_t;
+template <DistanceMetricsT Metric, vec_dim_t Dim> using refiner_utils_t = typename refiner_traits_t<Metric, Dim>::refiner_utils_t;
+template <DistanceMetricsT Metric, vec_dim_t Dim> using propagate_engine_t = typename refiner_traits_t<Metric, Dim>::propagate_engine_t;
+
+// Vertex generator types from VertexGeneratorTraits
+template <DistanceMetricsT Metric, vec_dim_t Dim> using approx_rnet_t = typename vertex_generator_traits_t<Metric, Dim>::approx_rnet_t;
+template <DistanceMetricsT Metric, vec_dim_t Dim> using ortho_lsh_generator_t = typename vertex_generator_traits_t<Metric, Dim>::ortho_lsh_generator_t;
+template <DistanceMetricsT Metric, vec_dim_t Dim> using pstable_lsh_generator_t = typename vertex_generator_traits_t<Metric, Dim>::pstable_lsh_generator_t;
+template <DistanceMetricsT Metric, vec_dim_t Dim> using lsh_table_t = typename vertex_generator_traits_t<Metric, Dim>::lsh_table_t;
+template <DistanceMetricsT Metric, vec_dim_t Dim> using lb_greedy_vg_t = typename vertex_generator_traits_t<Metric, Dim>::lb_greedy_vg_t;
+template <DistanceMetricsT Metric, vec_dim_t Dim> using mb_greedy_vg_t = typename vertex_generator_traits_t<Metric, Dim>::mb_greedy_vg_t;
+template <DistanceMetricsT Metric, vec_dim_t Dim> using random_vg_t = typename vertex_generator_traits_t<Metric, Dim>::random_vg_t;
+template <DistanceMetricsT Metric, vec_dim_t Dim> using graph_mis_vg_t = typename vertex_generator_traits_t<Metric, Dim>::graph_mis_vg_t;
+
+// Namespace-scoped graph factories / indexes / configs from GraphFactoryTraits
 namespace conv_graph {
-    using index_t = typename graph_factory_traits_t::conv_graph::index_t;
-    using factory_t = typename graph_factory_traits_t::conv_graph::factory_t;
-    using propagate_config_t = typename graph_factory_traits_t::conv_graph::propagate_config_t;
-    using pruning_config_t = typename graph_factory_traits_t::conv_graph::pruning_config_t;
-}
+    template <DistanceMetricsT Metric, vec_dim_t Dim> using index_t = typename graph_factory_traits_t<Metric, Dim>::conv_graph::index_t;
+    template <DistanceMetricsT Metric, vec_dim_t Dim> using factory_t = typename graph_factory_traits_t<Metric, Dim>::conv_graph::factory_t;
+    template <DistanceMetricsT Metric, vec_dim_t Dim> using propagate_config_t = typename graph_factory_traits_t<Metric, Dim>::conv_graph::propagate_config_t;
+    template <DistanceMetricsT Metric, vec_dim_t Dim> using pruning_config_t = typename graph_factory_traits_t<Metric, Dim>::conv_graph::pruning_config_t;
+}   // namespace conv_graph
 
 namespace knn_graph {
-    using index_t = typename graph_factory_traits_t::knn_graph::index_t;
-    using factory_t = typename graph_factory_traits_t::knn_graph::factory_t;
-    using propagate_config_t = typename graph_factory_traits_t::knn_graph::propagate_config_t;
-}
+    template <DistanceMetricsT Metric, vec_dim_t Dim> using index_t = typename graph_factory_traits_t<Metric, Dim>::knn_graph::index_t;
+    template <DistanceMetricsT Metric, vec_dim_t Dim> using factory_t = typename graph_factory_traits_t<Metric, Dim>::knn_graph::factory_t;
+    template <DistanceMetricsT Metric, vec_dim_t Dim> using propagate_config_t = typename graph_factory_traits_t<Metric, Dim>::knn_graph::propagate_config_t;
+}   // namespace knn_graph
 
 namespace symmetric_knn_graph {
-    using index_t = typename graph_factory_traits_t::symmetric_knn_graph::index_t;
-    using factory_t = typename graph_factory_traits_t::symmetric_knn_graph::factory_t;
-    using propagate_config_t = typename graph_factory_traits_t::symmetric_knn_graph::propagate_config_t;
-}
+    template <DistanceMetricsT Metric, vec_dim_t Dim> using index_t = typename graph_factory_traits_t<Metric, Dim>::symmetric_knn_graph::index_t;
+    template <DistanceMetricsT Metric, vec_dim_t Dim> using factory_t = typename graph_factory_traits_t<Metric, Dim>::symmetric_knn_graph::factory_t;
+    template <DistanceMetricsT Metric, vec_dim_t Dim> using propagate_config_t = typename graph_factory_traits_t<Metric, Dim>::symmetric_knn_graph::propagate_config_t;
+}   // namespace symmetric_knn_graph
 
 namespace stacked_rgraph {
-    using rgraph_config_t  = typename graph_factory_traits_t::stacked_rgraph::rgraph_config_t;
-    using pruning_config_t = typename graph_factory_traits_t::stacked_rgraph::pruning_config_t;
-    using index_t          = typename graph_factory_traits_t::stacked_rgraph::index_t;
-    using factory_t        = typename graph_factory_traits_t::stacked_rgraph::factory_t;
-}
+    template <DistanceMetricsT Metric, vec_dim_t Dim> using rgraph_config_t = typename graph_factory_traits_t<Metric, Dim>::stacked_rgraph::rgraph_config_t;
+    template <DistanceMetricsT Metric, vec_dim_t Dim> using pruning_config_t = typename graph_factory_traits_t<Metric, Dim>::stacked_rgraph::pruning_config_t;
+    template <DistanceMetricsT Metric, vec_dim_t Dim> using index_t = typename graph_factory_traits_t<Metric, Dim>::stacked_rgraph::index_t;
+    template <DistanceMetricsT Metric, vec_dim_t Dim> using factory_t = typename graph_factory_traits_t<Metric, Dim>::stacked_rgraph::factory_t;
+}   // namespace stacked_rgraph
 
 namespace artea_graph {
-    using rgraph_config_t    = typename graph_factory_traits_t::artea_graph::rgraph_config_t;
-    using propagate_config_t = typename graph_factory_traits_t::artea_graph::propagate_config_t;
-    using pruning_config_t   = typename graph_factory_traits_t::artea_graph::pruning_config_t;
-    using index_t            = typename graph_factory_traits_t::artea_graph::index_t;
-    using factory_t          = typename graph_factory_traits_t::artea_graph::factory_t;
-}
+    template <DistanceMetricsT Metric, vec_dim_t Dim> using rgraph_config_t = typename graph_factory_traits_t<Metric, Dim>::artea_graph::rgraph_config_t;
+    template <DistanceMetricsT Metric, vec_dim_t Dim> using propagate_config_t = typename graph_factory_traits_t<Metric, Dim>::artea_graph::propagate_config_t;
+    template <DistanceMetricsT Metric, vec_dim_t Dim> using pruning_config_t = typename graph_factory_traits_t<Metric, Dim>::artea_graph::pruning_config_t;
+    template <DistanceMetricsT Metric, vec_dim_t Dim> using index_t = typename graph_factory_traits_t<Metric, Dim>::artea_graph::index_t;
+    template <DistanceMetricsT Metric, vec_dim_t Dim> using factory_t = typename graph_factory_traits_t<Metric, Dim>::artea_graph::factory_t;
+}   // namespace artea_graph
 
 namespace hier_conv_graph {
-    using hierarchy_config_t = typename graph_factory_traits_t::hier_conv_graph::hierarchy_config_t;
-    using propagate_config_t = typename graph_factory_traits_t::hier_conv_graph::propagate_config_t;
-    using pruning_config_t   = typename graph_factory_traits_t::hier_conv_graph::pruning_config_t;
-    using index_t            = typename graph_factory_traits_t::hier_conv_graph::index_t;
-    using factory_t          = typename graph_factory_traits_t::hier_conv_graph::factory_t;
-}
+    template <DistanceMetricsT Metric, vec_dim_t Dim> using hierarchy_config_t = typename graph_factory_traits_t<Metric, Dim>::hier_conv_graph::hierarchy_config_t;
+    template <DistanceMetricsT Metric, vec_dim_t Dim> using propagate_config_t = typename graph_factory_traits_t<Metric, Dim>::hier_conv_graph::propagate_config_t;
+    template <DistanceMetricsT Metric, vec_dim_t Dim> using pruning_config_t = typename graph_factory_traits_t<Metric, Dim>::hier_conv_graph::pruning_config_t;
+    template <DistanceMetricsT Metric, vec_dim_t Dim> using index_t = typename graph_factory_traits_t<Metric, Dim>::hier_conv_graph::index_t;
+    template <DistanceMetricsT Metric, vec_dim_t Dim> using factory_t = typename graph_factory_traits_t<Metric, Dim>::hier_conv_graph::factory_t;
+}   // namespace hier_conv_graph
 
 }   // namespace cpu
 }   // namespace artea

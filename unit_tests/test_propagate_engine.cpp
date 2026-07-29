@@ -31,6 +31,13 @@
 using namespace artea;
 using namespace artea::cpu;
 
+// Purely synthetic test (no dataset): pin the compile-time metric/dim axes.
+// TEST_DIM is the SIMD-padded dimension (multiple of 16); the grid uses only
+// the first 2 coordinates and zero-pads the rest, so all pairwise Euclidean
+// distances are identical to the original 2D grid.
+constexpr DistanceMetricsT TEST_METRIC = DistanceMetricsT::EUCLIDEAN;
+constexpr vec_dim_t TEST_DIM = 16;
+
 class PropagateEngineCorrectnessTest : public ::testing::Test {
 protected:
     void SetUp() override {
@@ -43,28 +50,29 @@ protected:
         // This creates a more realistic test case with various distance relationships
 
         num_vertices_ = 12;
-        vec_dim_ = 2;
+        vec_dim_ = TEST_DIM;
         layer_config_ = layer_config_t(8);
 
-        // Create VectorArray and populate with vectors
+        // Create VectorArray and populate with vectors. Storage stride is the
+        // SIMD-padded TEST_DIM; only the first 2 coords carry the grid position
+        // and the rest are zero-padded so distances match the original 2D grid.
         vecs_ = std::make_unique<vector_array_t>(vec_dim_);
         vecs_->reserve(num_vertices_);
 
         // Add vertices in a 3x4 grid
         for (int row = 0; row < 3; ++row) {
             for (int col = 0; col < 4; ++col) {
-                std::vector<vec_ele_t> v = {
-                    static_cast<vec_ele_t>(col),
-                    static_cast<vec_ele_t>(row)
-                };
+                std::vector<vec_ele_t> v(TEST_DIM, 0.0f);
+                v[0] = static_cast<vec_ele_t>(col);
+                v[1] = static_cast<vec_ele_t>(row);
                 vecs_->append_vec(v.data());
             }
         }
 
-        dist_func_ = std::make_unique<dist_func_t>(vec_dim_);
+        dist_func_ = std::make_unique<dist_func_t<TEST_METRIC, TEST_DIM>>();
 
         // Initialize descent graph
-        graph_index_ = std::make_unique<conv_graph::index_t>(
+        graph_index_ = std::make_unique<conv_graph::index_t<TEST_METRIC, TEST_DIM>>(
             *vecs_,
             layer_config_,
             pruning_config_,
@@ -128,11 +136,11 @@ protected:
     vec_num_t num_vertices_;
     vec_num_t vec_dim_;
     layer_config_t layer_config_{8};
-    conv_graph::pruning_config_t pruning_config_{1.0, 0.0};
-    conv_graph::propagate_config_t propagate_config_{4, 14, 0.6};
+    conv_graph::pruning_config_t<TEST_METRIC, TEST_DIM> pruning_config_{1.0, 0.0};
+    conv_graph::propagate_config_t<TEST_METRIC, TEST_DIM> propagate_config_{4, 14, 0.6};
     std::unique_ptr<vector_array_t> vecs_;
-    std::unique_ptr<dist_func_t> dist_func_;
-    std::unique_ptr<conv_graph::index_t> graph_index_;
+    std::unique_ptr<dist_func_t<TEST_METRIC, TEST_DIM>> dist_func_;
+    std::unique_ptr<conv_graph::index_t<TEST_METRIC, TEST_DIM>> graph_index_;
 };
 
 TEST_F(PropagateEngineCorrectnessTest, TrianglePruningWithPropagateEngine) {
@@ -176,10 +184,10 @@ TEST_F(PropagateEngineCorrectnessTest, TrianglePruningWithPropagateEngine) {
 
     graph_index_->layer_config().max_nbr_size(max_nbr_size);
 
-    propagate_engine_t propagate_engine(*dist_func_);
+    propagate_engine_t<TEST_METRIC, TEST_DIM> propagate_engine(*dist_func_);
     propagate_engine.set_graph(graph_index_->get_refining_graph());
 
-    auto triangle_updater = propagate_engine.make_updater<triangle_updater_t>(
+    auto triangle_updater = propagate_engine.make_updater<triangle_updater_t<TEST_METRIC, TEST_DIM>>(
         pruning_config_.scale_coeffs(), pruning_config_.shifted_coeffs());
 
     // Apply triangle pruning for 5 iterations
@@ -240,12 +248,12 @@ TEST_F(PropagateEngineCorrectnessTest, IntegratedRandomAndReverseUpdater) {
 
     ARTEA_INFO("Step 1: Starting with empty graph");
 
-    propagate_engine_t propagate_engine(*dist_func_);
+    propagate_engine_t<TEST_METRIC, TEST_DIM> propagate_engine(*dist_func_);
     propagate_engine.set_graph(graph_index_->get_refining_graph());
 
     // Step 2: Apply RandomUpdater to generate asymmetric edges
     const vec_num_t rand_gen_size = 5;
-    auto random_updater = propagate_engine.make_updater<random_updater_t>(
+    auto random_updater = propagate_engine.make_updater<random_updater_t<TEST_METRIC, TEST_DIM>>(
         rand_gen_size, vertex_id_t{0}, num_vertices_);
 
     propagate_engine.run(1, random_updater);
@@ -275,7 +283,7 @@ TEST_F(PropagateEngineCorrectnessTest, IntegratedRandomAndReverseUpdater) {
         << "RandomUpdater should generate asymmetric edges (missing reverse edges)";
 
     // Step 3: Apply reverse updater
-    auto reverse_updater = propagate_engine.make_updater<reverse_updater_t>();
+    auto reverse_updater = propagate_engine.make_updater<reverse_updater_t<TEST_METRIC, TEST_DIM>>();
     propagate_engine.run(1, reverse_updater);
 
     size_t edges_after_reverse = 0;
@@ -341,10 +349,10 @@ TEST_F(PropagateEngineCorrectnessTest, NeighborsSortedAfterPruning) {
     const vec_num_t max_nbr_size = 6;
     graph_index_->layer_config().max_nbr_size(max_nbr_size);
 
-    propagate_engine_t propagate_engine(*dist_func_);
+    propagate_engine_t<TEST_METRIC, TEST_DIM> propagate_engine(*dist_func_);
     propagate_engine.set_graph(graph_index_->get_refining_graph());
 
-    auto triangle_updater = propagate_engine.make_updater<triangle_updater_t>(
+    auto triangle_updater = propagate_engine.make_updater<triangle_updater_t<TEST_METRIC, TEST_DIM>>(
         pruning_config_.scale_coeffs(), pruning_config_.shifted_coeffs());
 
     propagate_engine.run(5, triangle_updater);
@@ -372,12 +380,12 @@ TEST_F(PropagateEngineCorrectnessTest, RandomUpdaterGeneratesEdges) {
 
     ARTEA_INFO("Testing RandomUpdater with empty initial graph:");
 
-    propagate_engine_t propagate_engine(*dist_func_);
+    propagate_engine_t<TEST_METRIC, TEST_DIM> propagate_engine(*dist_func_);
     propagate_engine.set_graph(graph_index_->get_refining_graph());
 
     const vec_num_t rand_gen_size = 5;  // Generate 5 random neighbors per vertex
 
-    auto random_updater = propagate_engine.make_updater<random_updater_t>(
+    auto random_updater = propagate_engine.make_updater<random_updater_t<TEST_METRIC, TEST_DIM>>(
         rand_gen_size, vertex_id_t{0}, num_vertices_);
 
     // Run one iteration of random edge generation
@@ -433,12 +441,12 @@ TEST_F(PropagateEngineCorrectnessTest, RandomUpdaterThreadSafety) {
         nbrs_arr[u].clear();
     }
 
-    propagate_engine_t propagate_engine(*dist_func_);
+    propagate_engine_t<TEST_METRIC, TEST_DIM> propagate_engine(*dist_func_);
     propagate_engine.set_graph(graph_index_->get_refining_graph());
 
     const vec_num_t rand_gen_size = 10;
 
-    auto random_updater = propagate_engine.make_updater<random_updater_t>(
+    auto random_updater = propagate_engine.make_updater<random_updater_t<TEST_METRIC, TEST_DIM>>(
         rand_gen_size, vertex_id_t{0}, num_vertices_);
 
     // Run multiple iterations to stress test thread safety
@@ -485,10 +493,10 @@ TEST_F(PropagateEngineCorrectnessTest, TrianglePruningWithoutSelectiveScheduling
 
     graph_index_->layer_config().max_nbr_size(max_nbr_size);
 
-    propagate_engine_t propagate_engine(*dist_func_);
+    propagate_engine_t<TEST_METRIC, TEST_DIM> propagate_engine(*dist_func_);
     propagate_engine.set_graph(graph_index_->get_refining_graph());
 
-    auto triangle_updater = propagate_engine.make_updater<triangle_updater_t>(
+    auto triangle_updater = propagate_engine.make_updater<triangle_updater_t<TEST_METRIC, TEST_DIM>>(
         pruning_config_.scale_coeffs(), pruning_config_.shifted_coeffs());
 
     propagate_engine.run(5, triangle_updater);

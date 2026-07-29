@@ -29,7 +29,6 @@ namespace cpu {
 
 /** ------ Forward Declaration  ------ **/
 template <typename ComputerTraitsT, std::size_t UnrollSize> class SIMDDistance;
-template <typename ComputerTraitsT, std::size_t UnrollSize> class SIMDFMA;
 template <typename ComputerTraitsT, std::size_t UnrollSize> class SIMDLinear;
 template <typename ComputerTraitsT> class RecallEstimator;
 template <typename ComputerTraitsT> class ADREstimator;
@@ -43,14 +42,19 @@ enum class DistanceMetricsT : uint8_t {
     COSINE
 };  // enum class DistanceMetricsT
 
-/** @brief Traits for computing distances between vectors */
-template <typename BaseTraitsT, DistanceMetricsT DistanceMetrics>
+/** @brief Traits for computing distances between vectors.
+ *
+ *  The vector dimension @p VecDim is a compile-time template parameter so the
+ *  SIMD distance/linear kernels know their chunk count statically and no
+ *  longer take a runtime dimension via their constructor. @p VecDim must be the
+ *  SIMD-padded dimension (a multiple of the SIMD chunk size). */
+template <typename BaseTraitsT, DistanceMetricsT DistanceMetrics, typename BaseTraitsT::vec_dim_t VecDim>
 struct ComputerTraits : virtual public BaseTraitsT {
 
 private:
 
     /** ------ Self Traits ------ **/
-    using computer_traits_t = ComputerTraits<BaseTraitsT, DistanceMetrics>;
+    using computer_traits_t = ComputerTraits<BaseTraitsT, DistanceMetrics, VecDim>;
 
 public:
 
@@ -58,6 +62,10 @@ public:
     using base_traits_t = BaseTraitsT;
 
     using distance_metrics_t = DistanceMetricsT;
+
+    /** @brief Compile-time SIMD-padded vector dimension. */
+    using vec_dim_t = typename BaseTraitsT::vec_dim_t;
+    static constexpr vec_dim_t vec_dim = VecDim;
 
     // Distance function type selection
     template <std::size_t UnrollSize = 1>
@@ -69,21 +77,11 @@ public:
     using dist_func_t = SIMDDistance<computer_traits_t, 1>;
 
     template <std::size_t UnrollSize = 1>
-    using simd_fma_t = SIMDFMA<computer_traits_t, UnrollSize>;
-    using simdu1_fma_t = SIMDFMA<computer_traits_t, 1>;
-    using simdu2_fma_t = SIMDFMA<computer_traits_t, 2>;
-    using simdu4_fma_t = SIMDFMA<computer_traits_t, 4>;
-    using fma_func_t = SIMDFMA<computer_traits_t, 1>;
-
-    template <std::size_t UnrollSize = 1>
     using simd_linear_t = SIMDLinear<computer_traits_t, UnrollSize>;
     using simdu1_linear_t = SIMDLinear<computer_traits_t, 1>;
     using simdu2_linear_t = SIMDLinear<computer_traits_t, 2>;
     using simdu4_linear_t = SIMDLinear<computer_traits_t, 4>;
     using linear_func_t = SIMDLinear<computer_traits_t, 1>;
-
-    template <std::size_t UnrollSize = 1>
-    using fma_t = SIMDFMA<computer_traits_t, UnrollSize>;
 
     using recall_estimator_t = RecallEstimator<computer_traits_t>;
     using adr_estimator_t = ADREstimator<computer_traits_t>;

@@ -35,9 +35,13 @@
 
 #include <artea/cpu/framework/artea.hpp>
 #include <artea/cpu/framework/type_context/default_context.hpp>
+#include <artea/cpu/framework/type_context/infra_dispatcher.hpp>
 
 using namespace artea;
 using namespace artea::cpu;
+
+using dynamic_refining_graph_t = typename index_traits_t::dynamic::refining_graph_t;
+using conv_index_t = typename index_traits_t::conv_graph::index_t;
 
 // ============================================================
 // Config & results
@@ -46,6 +50,7 @@ using namespace artea::cpu;
 struct TestConfig {
     std::string config_path;
     std::string dataset_name;
+    std::string metric;
     uint32_t topk               = 20;
     uint32_t queue_size         = 80;
     uint32_t extracted_nbr_size = 16;
@@ -81,7 +86,6 @@ public:
         }
         ARTEA_INFO(fmt::format("Loading dataset '{}' from {}", g_config.dataset_name, g_config.config_path));
         dataset_   = std::make_unique<vector_dataset_t>(g_config.config_path, g_config.dataset_name);
-        dist_func_ = std::make_unique<dist_func_t>(dataset_->get_base_vecs().get_vec_dim());
 
         const auto& base_vecs = dataset_->get_base_vecs();
         g_results.dataset_name = g_config.dataset_name;
@@ -89,35 +93,44 @@ public:
         g_results.num_queries  = dataset_->get_query_vecs().get_num_vecs();
         g_results.vec_dim      = base_vecs.get_vec_dim();
 
-        // Build convergent graph
-        ARTEA_INFO("Building convergent graph...");
-        layer_config_t layer_cfg(16);
-        conv_graph::pruning_config_t pruning_cfg(1.0f, 0.0f);
-        conv_graph::propagate_config_t propagate_cfg(4, 14, 0.6f);
-        graph_index_ = std::make_unique<conv_graph::index_t>(std::move(
-            conv_graph::factory_t::construct_graph(base_vecs, layer_cfg, pruning_cfg, propagate_cfg).graph
-        ));
+        // Metric from the --metric input, padded dim from the loaded dataset;
+        // the dataset and the compact::refining_graph_t are metric/dim-
+        // independent, so only the build runs behind <Metric, Dim>.
+        dataset_info_ = DatasetInfra{parse_metric(g_config.metric), base_vecs.get_vec_dim()};
 
-        // Convert to search graph
-        compact_refining_graph_ = std::make_unique<compact::refining_graph_t>(
-            refining_graph_compactor_t::compact_graph(*graph_index_, g_config.extracted_nbr_size)
-        );
+        infra_dispatch(dataset_info_, ARTEA_METRIC_LAMBDA(void) {
+            // Build convergent graph
+            ARTEA_INFO("Building convergent graph...");
+            layer_config_t layer_cfg(16);
+            conv_graph::pruning_config_t<Metric, Dim> pruning_cfg(1.0f, 0.0f);
+            conv_graph::propagate_config_t<Metric, Dim> propagate_cfg(4, 14, 0.6f);
+            conv_index_t graph_index = std::move(
+                conv_graph::factory_t<Metric, Dim>::construct_graph(base_vecs, layer_cfg, pruning_cfg, propagate_cfg).graph
+            );
+
+            // Convert to search graph (metric/dim-independent result)
+            compact_refining_graph_ = std::make_unique<compact::refining_graph_t>(
+                refining_graph_compactor_t::compact_graph(graph_index, g_config.extracted_nbr_size)
+            );
+
+            graph_index_ = std::make_unique<conv_index_t>(std::move(graph_index));
+        });
 
         ARTEA_INFO("DataProvider ready.");
     }
 
     vector_dataset_t&    get_dataset()          { return *dataset_; }
-    dist_func_t&         get_dist_func()         { return *dist_func_; }
-    conv_graph::index_t&        get_graph_index()         { return *graph_index_; }
+    DatasetInfra         get_dataset_info() const { return dataset_info_; }
+    dynamic_refining_graph_t& get_dynamic_refining_graph() { return graph_index_->get_refining_graph(); }
     compact::refining_graph_t& get_compact_refining_graph() { return *compact_refining_graph_; }
     const idlist_array_t& get_gt()              { return dataset_->get_gt_vecs(); }
 
 private:
     DataProvider() = default;
     std::unique_ptr<vector_dataset_t>    dataset_;
-    std::unique_ptr<dist_func_t>         dist_func_;
-    std::unique_ptr<conv_graph::index_t>        graph_index_;
+    std::unique_ptr<conv_index_t>        graph_index_;
     std::unique_ptr<compact::refining_graph_t> compact_refining_graph_;
+    DatasetInfra dataset_info_{};
 };
 
 // ============================================================
@@ -135,37 +148,42 @@ TEST_F(ConvGraphSearchTest, SearchModeBatchQuery) {
     const auto& base_vecs  = p.get_dataset().get_base_vecs();
     const auto& query_vecs = p.get_dataset().get_query_vecs();
 
-    single_layer_router_t router(
-        base_vecs, p.get_dist_func(),
-        g_config.topk, g_config.queue_size
-    );
-    router.initialize();
+    infra_dispatch(p.get_dataset_info(), ARTEA_METRIC_LAMBDA(void) {
+        // Stateless functor: the dimension is a compile-time trait now.
+        dist_func_t<Metric, Dim> dist_func;
 
-    // Warmup runs
-    for (uint32_t w = 0; w < g_config.warmup_runs; ++w) {
-        [[maybe_unused]] auto _ = router.batch_query(query_vecs, p.get_compact_refining_graph());
-    }
+        single_layer_router_t<Metric, Dim> router(
+            base_vecs, dist_func,
+            g_config.topk, g_config.queue_size
+        );
+        router.initialize();
 
-    // Test runs
-    double total_us = 0.0;
-    float total_recall = 0.0f;
-    knn_results_t last_results;
-    recall_estimator_t re;
-    for (uint32_t r = 0; r < g_config.test_runs; ++r) {
-        auto t0 = std::chrono::high_resolution_clock::now();
-        last_results = router.batch_query(query_vecs, p.get_compact_refining_graph());
-        auto t1 = std::chrono::high_resolution_clock::now();
-        total_us += std::chrono::duration_cast<std::chrono::microseconds>(t1 - t0).count();
-        total_recall += re.calculate_recall_at_k(last_results, p.get_gt(), g_config.topk, g_results.num_queries);
-    }
-    double us = total_us / g_config.test_runs;
+        // Warmup runs
+        for (uint32_t w = 0; w < g_config.warmup_runs; ++w) {
+            [[maybe_unused]] auto _ = router.batch_query(query_vecs, p.get_compact_refining_graph());
+        }
 
-    ASSERT_EQ(last_results.size(), static_cast<size_t>(g_results.num_queries * g_config.topk));
+        // Test runs
+        double total_us = 0.0;
+        float total_recall = 0.0f;
+        knn_results_t<Metric, Dim> last_results;
+        recall_estimator_t<Metric, Dim> re;
+        for (uint32_t r = 0; r < g_config.test_runs; ++r) {
+            auto t0 = std::chrono::high_resolution_clock::now();
+            last_results = router.batch_query(query_vecs, p.get_compact_refining_graph());
+            auto t1 = std::chrono::high_resolution_clock::now();
+            total_us += std::chrono::duration_cast<std::chrono::microseconds>(t1 - t0).count();
+            total_recall += re.calculate_recall_at_k(last_results, p.get_gt(), g_config.topk, g_results.num_queries);
+        }
+        double us = total_us / g_config.test_runs;
 
-    g_results.search_batch_recall = total_recall / g_config.test_runs;
-    g_results.search_batch_qps    = g_results.num_queries * 1e6 / us;
+        ASSERT_EQ(last_results.size(), static_cast<size_t>(g_results.num_queries * g_config.topk));
 
-    EXPECT_GT(g_results.search_batch_recall, 0.0f);
+        g_results.search_batch_recall = total_recall / g_config.test_runs;
+        g_results.search_batch_qps    = g_results.num_queries * 1e6 / us;
+
+        EXPECT_GT(g_results.search_batch_recall, 0.0f);
+    });
 }
 
 // ============================================================
@@ -177,62 +195,67 @@ TEST_F(ConvGraphSearchTest, SearchModeParallelSingleQuery) {
     const auto& base_vecs  = p.get_dataset().get_base_vecs();
     const auto& query_vecs = p.get_dataset().get_query_vecs();
 
-    single_layer_router_t router(
-        base_vecs, p.get_dist_func(),
-        g_config.topk, g_config.queue_size
-    );
-    router.initialize();
+    infra_dispatch(p.get_dataset_info(), ARTEA_METRIC_LAMBDA(void) {
+        // Stateless functor: the dimension is a compile-time trait now.
+        dist_func_t<Metric, Dim> dist_func;
 
-    // Warmup runs
-    for (uint32_t w = 0; w < g_config.warmup_runs; ++w) {
-        knn_results_t warmup_results(g_results.num_queries * g_config.topk);
-        tbb::parallel_for(
-            tbb::blocked_range<uint32_t>(0, g_results.num_queries),
-            [&](const tbb::blocked_range<uint32_t>& r) {
-                for (uint32_t i = r.begin(); i != r.end(); ++i) {
-                    knn_results_t res = router.query(query_vecs.get(i), p.get_compact_refining_graph());
-                    std::copy(res.begin(), res.end(), warmup_results.begin() + i * g_config.topk);
-                }
-            }
+        single_layer_router_t<Metric, Dim> router(
+            base_vecs, dist_func,
+            g_config.topk, g_config.queue_size
         );
-    }
+        router.initialize();
 
-    // Test runs
-    double total_us = 0.0;
-    std::atomic<int> error_count{0};
-    knn_results_t all_results(g_results.num_queries * g_config.topk);
-
-    for (uint32_t run = 0; run < g_config.test_runs; ++run) {
-        error_count.store(0, std::memory_order_relaxed);
-
-        auto t0 = std::chrono::high_resolution_clock::now();
-        tbb::parallel_for(
-            tbb::blocked_range<uint32_t>(0, g_results.num_queries),
-            [&](const tbb::blocked_range<uint32_t>& r) {
-                for (uint32_t i = r.begin(); i != r.end(); ++i) {
-                    knn_results_t res = router.query(query_vecs.get(i), p.get_compact_refining_graph());
-                    if (res.size() != g_config.topk) {
-                        error_count.fetch_add(1, std::memory_order_relaxed);
-                        continue;
+        // Warmup runs
+        for (uint32_t w = 0; w < g_config.warmup_runs; ++w) {
+            knn_results_t<Metric, Dim> warmup_results(g_results.num_queries * g_config.topk);
+            tbb::parallel_for(
+                tbb::blocked_range<uint32_t>(0, g_results.num_queries),
+                [&](const tbb::blocked_range<uint32_t>& r) {
+                    for (uint32_t i = r.begin(); i != r.end(); ++i) {
+                        knn_results_t<Metric, Dim> res = router.query(query_vecs.get(i), p.get_compact_refining_graph());
+                        std::copy(res.begin(), res.end(), warmup_results.begin() + i * g_config.topk);
                     }
-                    for (const auto& e : res) {
-                        if (!e.is_invalid() && e.get_vid() >= g_results.num_base)
+                }
+            );
+        }
+
+        // Test runs
+        double total_us = 0.0;
+        std::atomic<int> error_count{0};
+        knn_results_t<Metric, Dim> all_results(g_results.num_queries * g_config.topk);
+
+        for (uint32_t run = 0; run < g_config.test_runs; ++run) {
+            error_count.store(0, std::memory_order_relaxed);
+
+            auto t0 = std::chrono::high_resolution_clock::now();
+            tbb::parallel_for(
+                tbb::blocked_range<uint32_t>(0, g_results.num_queries),
+                [&](const tbb::blocked_range<uint32_t>& r) {
+                    for (uint32_t i = r.begin(); i != r.end(); ++i) {
+                        knn_results_t<Metric, Dim> res = router.query(query_vecs.get(i), p.get_compact_refining_graph());
+                        if (res.size() != g_config.topk) {
                             error_count.fetch_add(1, std::memory_order_relaxed);
+                            continue;
+                        }
+                        for (const auto& e : res) {
+                            if (!e.is_invalid() && e.get_vid() >= g_results.num_base)
+                                error_count.fetch_add(1, std::memory_order_relaxed);
+                        }
+                        std::copy(res.begin(), res.end(), all_results.begin() + i * g_config.topk);
                     }
-                    std::copy(res.begin(), res.end(), all_results.begin() + i * g_config.topk);
                 }
-            }
-        );
-        auto t1 = std::chrono::high_resolution_clock::now();
-        total_us += std::chrono::duration_cast<std::chrono::microseconds>(t1 - t0).count();
-    }
-    double us = total_us / g_config.test_runs;
+            );
+            auto t1 = std::chrono::high_resolution_clock::now();
+            total_us += std::chrono::duration_cast<std::chrono::microseconds>(t1 - t0).count();
+        }
+        double us = total_us / g_config.test_runs;
 
-    EXPECT_EQ(error_count.load(), 0) << "Parallel single queries produced invalid results";
+        EXPECT_EQ(error_count.load(), 0) << "Parallel single queries produced invalid results";
 
-    recall_estimator_t re;
-    g_results.search_parallel_recall = re.calculate_recall_at_k(all_results, p.get_gt(), g_config.topk, g_results.num_queries);
-    g_results.search_parallel_qps    = g_results.num_queries * 1e6 / us;
+        recall_estimator_t<Metric, Dim> re;
+        g_results.search_parallel_recall = re.calculate_recall_at_k(all_results, p.get_gt(), g_config.topk, g_results.num_queries);
+        g_results.search_parallel_qps    = g_results.num_queries * 1e6 / us;
+    });
 }
 
 // ============================================================
@@ -244,37 +267,42 @@ TEST_F(ConvGraphSearchTest, ConstructModeBatchQuery) {
     const auto& base_vecs  = p.get_dataset().get_base_vecs();
     const auto& query_vecs = p.get_dataset().get_query_vecs();
 
-    single_layer_router_t router(
-        base_vecs, p.get_dist_func(),
-        g_config.topk, g_config.queue_size
-    );
-    router.initialize();
+    infra_dispatch(p.get_dataset_info(), ARTEA_METRIC_LAMBDA(void) {
+        // Stateless functor: the dimension is a compile-time trait now.
+        dist_func_t<Metric, Dim> dist_func;
 
-    // Warmup runs
-    for (uint32_t w = 0; w < g_config.warmup_runs; ++w) {
-        [[maybe_unused]] auto _ = router.batch_query(query_vecs, p.get_graph_index().get_refining_graph());
-    }
+        single_layer_router_t<Metric, Dim> router(
+            base_vecs, dist_func,
+            g_config.topk, g_config.queue_size
+        );
+        router.initialize();
 
-    // Test runs
-    double total_us = 0.0;
-    float total_recall = 0.0f;
-    knn_results_t last_results;
-    recall_estimator_t re;
-    for (uint32_t r = 0; r < g_config.test_runs; ++r) {
-        auto t0 = std::chrono::high_resolution_clock::now();
-        last_results = router.batch_query(query_vecs, p.get_graph_index().get_refining_graph());
-        auto t1 = std::chrono::high_resolution_clock::now();
-        total_us += std::chrono::duration_cast<std::chrono::microseconds>(t1 - t0).count();
-        total_recall += re.calculate_recall_at_k(last_results, p.get_gt(), g_config.topk, g_results.num_queries);
-    }
-    double us = total_us / g_config.test_runs;
+        // Warmup runs
+        for (uint32_t w = 0; w < g_config.warmup_runs; ++w) {
+            [[maybe_unused]] auto _ = router.batch_query(query_vecs, p.get_dynamic_refining_graph());
+        }
 
-    ASSERT_EQ(last_results.size(), static_cast<size_t>(g_results.num_queries * g_config.topk));
+        // Test runs
+        double total_us = 0.0;
+        float total_recall = 0.0f;
+        knn_results_t<Metric, Dim> last_results;
+        recall_estimator_t<Metric, Dim> re;
+        for (uint32_t r = 0; r < g_config.test_runs; ++r) {
+            auto t0 = std::chrono::high_resolution_clock::now();
+            last_results = router.batch_query(query_vecs, p.get_dynamic_refining_graph());
+            auto t1 = std::chrono::high_resolution_clock::now();
+            total_us += std::chrono::duration_cast<std::chrono::microseconds>(t1 - t0).count();
+            total_recall += re.calculate_recall_at_k(last_results, p.get_gt(), g_config.topk, g_results.num_queries);
+        }
+        double us = total_us / g_config.test_runs;
 
-    g_results.construct_batch_recall = total_recall / g_config.test_runs;
-    g_results.construct_batch_qps    = g_results.num_queries * 1e6 / us;
+        ASSERT_EQ(last_results.size(), static_cast<size_t>(g_results.num_queries * g_config.topk));
 
-    EXPECT_GT(g_results.construct_batch_recall, 0.0f);
+        g_results.construct_batch_recall = total_recall / g_config.test_runs;
+        g_results.construct_batch_qps    = g_results.num_queries * 1e6 / us;
+
+        EXPECT_GT(g_results.construct_batch_recall, 0.0f);
+    });
 }
 
 // ============================================================
@@ -287,6 +315,7 @@ int main(int argc, char** argv) {
     argparse::ArgumentParser program("test_conv_graph_search");
     program.add_argument("-c", "--config").default_value(artea::default_dataset_config_path());
     program.add_argument("-d", "--dataset").default_value(std::string("sift-1m"));
+    program.add_argument("--metric").default_value(std::string("euclidean")).help("Distance metric: 'euclidean', 'inner_product', or 'cosine'");
     program.add_argument("-k", "--topk").default_value(20u).scan<'u', uint32_t>();
     program.add_argument("--candidate-queue-size").default_value(80u).scan<'u', uint32_t>();
     program.add_argument("--extracted-nbr-size").default_value(16u).scan<'u', uint32_t>();
@@ -299,6 +328,7 @@ int main(int argc, char** argv) {
 
     g_config.config_path        = program.get<std::string>("--config");
     g_config.dataset_name       = program.get<std::string>("--dataset");
+    g_config.metric             = program.get<std::string>("--metric");
     g_config.topk               = program.get<uint32_t>("--topk");
     g_config.queue_size         = program.get<uint32_t>("--candidate-queue-size");
     g_config.extracted_nbr_size = program.get<uint32_t>("--extracted-nbr-size");

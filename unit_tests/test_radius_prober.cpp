@@ -24,13 +24,17 @@
 
 #include <artea/cpu/framework/artea.hpp>
 #include <artea/cpu/framework/type_context/default_context.hpp>
+#include <artea/cpu/framework/type_context/infra_dispatcher.hpp>
 
 using namespace artea;
 using namespace artea::cpu;
 
+using knn_index_t = typename index_traits_t::knn_graph::index_t;
+
 struct TestConfig {
     std::string config_path;
     std::string dataset_name;
+    std::string metric;
     uint32_t max_nbr_size;
     float prefill_ratio;
     uint32_t num_samples;
@@ -50,34 +54,39 @@ public:
         }
         ARTEA_INFO(fmt::format("Loading Dataset: {} from {}", g_config.dataset_name, g_config.config_path));
         dataset_ = std::make_unique<vector_dataset_t>(g_config.config_path, g_config.dataset_name);
-        dist_func_ = std::make_unique<dist_func_t>(dataset_->get_base_vecs().get_vec_dim());
+
+        const auto& base_vecs = dataset_->get_base_vecs();
+
+        // Resolve compile-time axes for the metric-dependent graph factory.
+        dataset_info_ = DatasetInfra{parse_metric(g_config.metric), base_vecs.get_vec_dim()};
 
         // Build KNN graph
-        const auto& base_vecs = dataset_->get_base_vecs();
         layer_config_t layer_config(g_config.max_nbr_size);
-        knn_graph::propagate_config_t propagate_config(5, 12, g_config.prefill_ratio, 1);
 
         ARTEA_INFO("Building KNN graph...");
         auto t0 = std::chrono::high_resolution_clock::now();
-        knn_graph_ = std::make_unique<knn_graph::index_t>(std::move(
-            knn_graph::factory_t::construct_graph(
-                base_vecs, layer_config, propagate_config
-            ).graph
-        ));
+        infra_dispatch(dataset_info_, ARTEA_METRIC_LAMBDA(void) {
+            knn_graph::propagate_config_t<Metric, Dim> propagate_config(5, 12, g_config.prefill_ratio, 1);
+            knn_graph_ = std::make_unique<knn_index_t>(std::move(
+                knn_graph::factory_t<Metric, Dim>::construct_graph(
+                    base_vecs, layer_config, propagate_config
+                ).graph
+            ));
+        });
         auto t1 = std::chrono::high_resolution_clock::now();
         double build_time_s = std::chrono::duration_cast<std::chrono::microseconds>(t1 - t0).count() / 1e6;
         ARTEA_INFO(fmt::format("KNN graph built with {} vertices in {:.2f} s", knn_graph_->get_num_vertices(), build_time_s));
     }
 
     vector_dataset_t& get_dataset() { return *dataset_; }
-    dist_func_t& get_dist_func() { return *dist_func_; }
-    knn_graph::index_t& get_knn_graph() { return *knn_graph_; }
+    DatasetInfra get_dataset_info() const { return dataset_info_; }
+    knn_index_t& get_knn_graph() { return *knn_graph_; }
 
 private:
     DataProvider() = default;
     std::unique_ptr<vector_dataset_t> dataset_;
-    std::unique_ptr<dist_func_t> dist_func_;
-    std::unique_ptr<knn_graph::index_t> knn_graph_;
+    std::unique_ptr<knn_index_t> knn_graph_;
+    DatasetInfra dataset_info_{};
 };
 
 class RadiusProberTest : public ::testing::Test {};
@@ -97,7 +106,6 @@ class RadiusProberTest : public ::testing::Test {};
 TEST_F(RadiusProberTest, CompareWithBruteforce) {
     auto& provider = DataProvider::instance();
     auto& dataset = provider.get_dataset();
-    auto& dist_func = provider.get_dist_func();
     auto& knn_graph = provider.get_knn_graph();
 
     const auto& base_vecs = dataset.get_base_vecs();
@@ -112,68 +120,75 @@ TEST_F(RadiusProberTest, CompareWithBruteforce) {
     double probe_time_ms = std::chrono::duration_cast<std::chrono::microseconds>(t1 - t0).count() / 1000.0;
     ARTEA_INFO(fmt::format("RadiusProber min NN distance: {:.6f} (probe time: {:.2f} ms)", probe_result.radius, probe_time_ms));
 
-    // --- Step 2: Compute exact NN distances via BruteforceRouter ---
-    // topk=3: need extra slots because bruteforce includes self (distance=0),
-    // and there may also be a duplicate vector (distance=0) occupying another slot.
+    // --- Steps 2 & 3: BruteforceRouter (metric-dependent) + the per-sample
+    // comparison both need the stateless dist_func, so run them behind dispatch.
     const uint32_t num_samples = std::min(g_config.num_samples, static_cast<uint32_t>(num_vertices));
-    bruteforce_router_t bf_router(base_vecs, dist_func, 3);
-    bf_router.initialize();
-
-    // Uniformly sample vertices with stride = num_vertices / num_samples.
-    std::vector<distance_t> bf_nn_distances(num_samples);
-    std::vector<vertex_id_t> results_cache(num_samples);
-    uint32_t stride = num_vertices / num_samples;
-    for (uint32_t i = 0; i < num_samples; ++i) {
-        vertex_id_t vid = i * stride;
-        const auto* query_vec = base_vecs.get(vid);
-        auto results = bf_router.query(query_vec);
-        // Skip self (bruteforce returns the query vertex itself with distance=0).
-        for (const auto& entry : results) {
-            if (entry.get_vid() != vid) {
-                bf_nn_distances[i] = entry.get_distance();
-                results_cache[i] = entry.get_vid();
-                break;
-            }
-        }
-    }
-
-    // --- Step 3: Per-sample comparison ---
     double total_relative_error = 0.0;
     uint32_t valid_count = 0;
     uint32_t exact_match_count = 0;
     uint32_t duplicate_vec_count = 0;
-    for (uint32_t i = 0; i < num_samples; ++i) {
-        vertex_id_t vid = i * stride;
-        // Graph NN: the closest neighbor found by the approximate KNN graph.
-        distance_t graph_nn_dist = knn_graph.fetch_nbrs(vid)[0].get_distance();
-        // Bruteforce NN: the exact closest non-self neighbor.
-        distance_t bf_nn_dist = bf_nn_distances[i];
+    infra_dispatch(provider.get_dataset_info(), ARTEA_METRIC_LAMBDA(void) {
+        // Stateless functor: the dimension is a compile-time trait now.
+        dist_func_t<Metric, Dim> dist_func;
 
-        // Detect duplicate vectors in the dataset (exact NN distance is 0).
-        // Verify by recomputing distance between the two different vertex IDs.
-        if (bf_nn_dist == 0.0f) {
-            vertex_id_t bf_nn_id = results_cache[i];
-            distance_t recomputed = dist_func(base_vecs.get(vid), base_vecs.get(bf_nn_id));
-            ARTEA_INFO(fmt::format("  [duplicate] vertex {}: bf_nn_id={}, recomputed_dist={:.6f}",
-                vid, bf_nn_id, recomputed));
-            duplicate_vec_count++;
-            continue;
+        // --- Step 2: Compute exact NN distances via BruteforceRouter ---
+        // topk=3: need extra slots because bruteforce includes self (distance=0),
+        // and there may also be a duplicate vector (distance=0) occupying another slot.
+        bruteforce_router_t<Metric, Dim> bf_router(base_vecs, dist_func, 3);
+        bf_router.initialize();
+
+        // Uniformly sample vertices with stride = num_vertices / num_samples.
+        std::vector<distance_t> bf_nn_distances(num_samples);
+        std::vector<vertex_id_t> results_cache(num_samples);
+        uint32_t stride = num_vertices / num_samples;
+        for (uint32_t i = 0; i < num_samples; ++i) {
+            vertex_id_t vid = i * stride;
+            const auto* query_vec = base_vecs.get(vid);
+            auto results = bf_router.query(query_vec);
+            // Skip self (bruteforce returns the query vertex itself with distance=0).
+            for (const auto& entry : results) {
+                if (entry.get_vid() != vid) {
+                    bf_nn_distances[i] = entry.get_distance();
+                    results_cache[i] = entry.get_vid();
+                    break;
+                }
+            }
         }
 
-        // Relative error: how far the approximate graph NN is from the exact NN.
-        // Always >= 0 since graph_nn_dist >= bf_nn_dist (approximate can't beat exact).
-        double rel_err = std::abs(static_cast<double>(graph_nn_dist) - static_cast<double>(bf_nn_dist))
-                       / static_cast<double>(bf_nn_dist);
-        total_relative_error += rel_err;
-        valid_count++;
+        // --- Step 3: Per-sample comparison ---
+        for (uint32_t i = 0; i < num_samples; ++i) {
+            vertex_id_t vid = i * stride;
+            // Graph NN: the closest neighbor found by the approximate KNN graph.
+            distance_t graph_nn_dist = knn_graph.fetch_nbrs(vid)[0].get_distance();
+            // Bruteforce NN: the exact closest non-self neighbor.
+            distance_t bf_nn_dist = bf_nn_distances[i];
 
-        if (rel_err == 0.0) { exact_match_count++; }
+            // Detect duplicate vectors in the dataset (exact NN distance is 0).
+            // Verify by recomputing distance between the two different vertex IDs.
+            if (bf_nn_dist == 0.0f) {
+                vertex_id_t bf_nn_id = results_cache[i];
+                distance_t recomputed = dist_func(base_vecs.get(vid), base_vecs.get(bf_nn_id));
+                ARTEA_INFO(fmt::format("  [duplicate] vertex {}: bf_nn_id={}, recomputed_dist={:.6f}",
+                    vid, bf_nn_id, recomputed));
+                duplicate_vec_count++;
+                continue;
+            }
 
-        if (g_config.verbose && i < 10) {
-            ARTEA_INFO(fmt::format("  vertex {}: graph_nn={:.6f}, bf_nn={:.6f}, rel_err={:.4f}%",
-                vid, graph_nn_dist, bf_nn_dist, rel_err * 100.0));
+            // Relative error: how far the approximate graph NN is from the exact NN.
+            // Always >= 0 since graph_nn_dist >= bf_nn_dist (approximate can't beat exact).
+            double rel_err = std::abs(static_cast<double>(graph_nn_dist) - static_cast<double>(bf_nn_dist))
+                           / static_cast<double>(bf_nn_dist);
+            total_relative_error += rel_err;
+            valid_count++;
+
+            if (rel_err == 0.0) { exact_match_count++; }
+
+            if (g_config.verbose && i < 10) {
+                ARTEA_INFO(fmt::format("  vertex {}: graph_nn={:.6f}, bf_nn={:.6f}, rel_err={:.4f}%",
+                    vid, graph_nn_dist, bf_nn_dist, rel_err * 100.0));
+            }
         }
-    }
+    });
 
     // --- Step 4: Summary statistics ---
     double avg_relative_error = (valid_count > 0) ? total_relative_error / valid_count : 0.0;
@@ -242,6 +257,8 @@ int main(int argc, char** argv) {
     argparse::ArgumentParser program("test_radius_prober");
     program.add_argument("-c", "--config").default_value(artea::default_dataset_config_path());
     program.add_argument("-d", "--dataset").default_value(std::string("sift-1m"));
+    program.add_argument("--metric").default_value(std::string("euclidean"))
+        .help("Distance metric: 'euclidean', 'inner_product', or 'cosine'");
     program.add_argument("--max-nbr-size").default_value(96u).scan<'u', uint32_t>();
     program.add_argument("--prefill-ratio").default_value(0.34f).scan<'g', float>();
     program.add_argument("--num-samples").default_value(100u).scan<'u', uint32_t>();
@@ -257,6 +274,7 @@ int main(int argc, char** argv) {
 
     g_config.config_path = program.get<std::string>("--config");
     g_config.dataset_name = program.get<std::string>("--dataset");
+    g_config.metric = program.get<std::string>("--metric");
     g_config.max_nbr_size = program.get<uint32_t>("--max-nbr-size");
     g_config.prefill_ratio = program.get<float>("--prefill-ratio");
     g_config.num_samples = program.get<uint32_t>("--num-samples");

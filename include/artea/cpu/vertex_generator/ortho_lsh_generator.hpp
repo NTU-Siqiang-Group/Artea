@@ -40,7 +40,6 @@ class OrthoLSHGenerator {
     using vector_t = typename VertexGeneratorTraitsT::vector_t;
     using vector_array_t = typename VertexGeneratorTraitsT::vector_array_t;
     using lsh_table_t = typename VertexGeneratorTraitsT::lsh_table_t;
-    using fma_func_t = typename VertexGeneratorTraitsT::fma_func_t;
     using distance_metrics_t = typename VertexGeneratorTraitsT::distance_metrics_t;
     static constexpr distance_metrics_t distance_metrics = VertexGeneratorTraitsT::distance_metrics;
 
@@ -50,7 +49,7 @@ class OrthoLSHGenerator {
     );
 
 public:
-    OrthoLSHGenerator(const fma_func_t& fma_func) : _fma_func(fma_func) {}
+    OrthoLSHGenerator() = default;
 
     /**
      * @brief Generate orthogonal LSH projection vectors.
@@ -101,8 +100,7 @@ public:
             num_hashes,
             bucket_scale,
             std::move(projection_vecs),
-            std::move(offset_vec),
-            _fma_func
+            std::move(offset_vec)
         );
     }
 
@@ -134,9 +132,6 @@ public:
         // Update the table with new parameters
         lsh_table.update_parameters(new_bucket_scale, std::move(new_offset_vec));
     }
-
-private:
-    const fma_func_t& _fma_func;
 
 };  // class OrthoLSHGenerator
 

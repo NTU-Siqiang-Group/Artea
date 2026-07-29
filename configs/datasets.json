@@ -54,6 +54,51 @@
       "base_path": "spacev10m_base.fvecs",
       "query_path": "spacev10m_query.fvecs",
       "gt_path": "spacev10m_groundtruth.ivecs"
+    },
+    "crawl": {
+      "dataset_dir": "crawl",
+      "base_path": "crawl_base.fvecs",
+      "query_path": "crawl_query.fvecs",
+      "gt_path": "crawl_groundtruth.ivecs"
+    },
+    "glove-100d": {
+      "dataset_dir": "glove-100d",
+      "base_path": "glove100d_base.fvecs",
+      "query_path": "glove100d_query.fvecs",
+      "gt_path": "glove100d_groundtruth.ivecs"
+    },
+    "yahoomusic": {
+      "dataset_dir": "yahoomusic",
+      "base_path": "yahoomusic_base.fvecs",
+      "query_path": "yahoomusic_query.fvecs",
+      "gt_path": "yahoomusic_groundtruth.ivecs"
+    },
+    "tiny5m": {
+      "dataset_dir": "tiny5m",
+      "base_path": "tiny5m_base.fvecs",
+      "query_path": "tiny5m_query.fvecs",
+      "gt_path": "tiny5m_groundtruth.ivecs"
+    },
+    "bigann-10m": {
+      "dataset_dir": "bigann-10m",
+      "train_path": "sift10m_learn.fvecs",
+      "base_path": "sift10m_base.fvecs",
+      "query_path": "sift10m_query.fvecs",
+      "gt_path": "sift10m_groundtruth.ivecs"
+    },
+    "deep-10m": {
+      "dataset_dir": "deep-10m",
+      "train_path": "deep10m_learn.fvecs",
+      "base_path": "deep10m_base.fvecs",
+      "query_path": "deep10m_query.fvecs",
+      "gt_path": "deep10m_groundtruth.ivecs"
+    },
+    "deep-100m": {
+      "dataset_dir": "deep-100m",
+      "train_path": "deep100m_learn.fvecs",
+      "base_path": "deep100m_base.fvecs",
+      "query_path": "deep100m_query.fvecs",
+      "gt_path": "deep100m_groundtruth.ivecs"
     }
   }
 }

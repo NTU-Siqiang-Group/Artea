@@ -15,23 +15,18 @@
 #include <benchmark/benchmark.h>
 #include <argparse/argparse.hpp>
 #include <artea/cpu/framework/artea.hpp>
+#include <artea/cpu/framework/type_context/default_context.hpp>
+#include <artea/cpu/framework/type_context/infra_dispatcher.hpp>
 #include <memory>
 #include <cstring>
 
 using namespace artea;
 using namespace artea::cpu;
 
-using base_traits_t = BaseTraits<uint32_t, float>;
-using computer_traits_t = ComputerTraits<base_traits_t, DistanceMetricsT::EUCLIDEAN>;
-using vec_num_t = typename base_traits_t::vec_num_t;
-using dist_func_t = typename computer_traits_t::dist_func_t;
-using vector_array_t = typename computer_traits_t::vector_array_t;
-using vector_dataset_t = typename computer_traits_t::vector_dataset_t;
-using distance_prober_t = typename computer_traits_t::distance_prober_t;
-
 struct BenchConfig {
     std::string config_path;
     std::string dataset_name;
+    std::string metric;
     int num_dists_sampled;
     float quantile;
     int64_t iterations;
@@ -58,36 +53,42 @@ public:
         // Use all base vectors from dataset
         base_vecs_ = std::move(dataset->get_base_vecs());
 
-        // Initialize distance function
-        dist_func_ = std::make_unique<dist_func_t>(dim_);
+        // Resolve compile-time axes: metric from the --metric input, padded dim
+        // from the loaded dataset. The base vectors stay metric/dim-independent.
+        // The (stateless) distance function + DistanceProber are built behind
+        // <Metric, Dim> inside the BM body.
+        dataset_info_ = DatasetInfra{parse_metric(g_config.metric), dim_};
     }
 
     vec_num_t get_dim() const { return dim_; }
     vec_num_t get_num_base_vecs() const { return num_base_vecs_; }
     const vector_array_t& get_base_vecs() const { return base_vecs_; }
-    const dist_func_t& get_dist_func() const { return *dist_func_; }
+    DatasetInfra get_dataset_info() const { return dataset_info_; }
 
 private:
     vec_num_t dim_;
     vec_num_t num_base_vecs_;
     vector_array_t base_vecs_;
-    std::unique_ptr<dist_func_t> dist_func_;
+    DatasetInfra dataset_info_{};
 };
 
 // Benchmark for DistanceProber
 static void BM_DistanceProber(benchmark::State& state) {
     auto& provider = DataProvider::instance();
     const auto& base_vecs = provider.get_base_vecs();
-    const auto& dist_func = provider.get_dist_func();
 
     vec_num_t num_distances = g_config.num_dists_sampled;
 
-    distance_prober_t prober(dist_func);
+    infra_dispatch(provider.get_dataset_info(), ARTEA_METRIC_LAMBDA(void) {
+        // Stateless functor: the dimension is a compile-time trait now.
+        dist_func_t<Metric, Dim> dist_func;
+        distance_prober_t<Metric, Dim> prober(dist_func);
 
-    for (auto _ : state) {
-        auto result = prober.probe(base_vecs, g_config.quantile, num_distances);
-        benchmark::DoNotOptimize(result);
-    }
+        for (auto _ : state) {
+            auto result = prober.probe(base_vecs, g_config.quantile, num_distances);
+            benchmark::DoNotOptimize(result);
+        }
+    });
 
     state.SetItemsProcessed(state.iterations());
 }
@@ -108,6 +109,10 @@ int main(int argc, char** argv) {
     program.add_argument("-d", "--dataset")
         .default_value(std::string("sift-1m"))
         .help("Dataset name");
+
+    program.add_argument("--metric")
+        .default_value(std::string("euclidean"))
+        .help("Distance metric: 'euclidean', 'inner_product', or 'cosine'");
 
     // Algorithm parameters
     program.add_argument("-m", "--num-dists")
@@ -146,6 +151,7 @@ int main(int argc, char** argv) {
 
     g_config.config_path = program.get<std::string>("--config");
     g_config.dataset_name = program.get<std::string>("--dataset");
+    g_config.metric = program.get<std::string>("--metric");
     g_config.num_dists_sampled = program.get<int>("--num-dists");
     g_config.quantile = program.get<float>("--quantile");
     g_config.iterations = program.get<int64_t>("--iterations");

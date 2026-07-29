@@ -25,29 +25,19 @@
 
 // Artea Headers
 #include <artea/cpu/framework/artea.hpp>
+#include <artea/cpu/framework/type_context/default_context.hpp>
+#include <artea/cpu/framework/type_context/infra_dispatcher.hpp>
 
 using namespace artea;
 using namespace artea::cpu;
 
-// Typename Definitions
-using vec_num_t = uint32_t;
-using vec_id_t = uint32_t;
-using vec_ele_t = float;
-using distance_t = float;
-using base_traits_t = BaseTraits<vec_num_t, vec_ele_t>;
-using computer_traits_t = ComputerTraits<base_traits_t, DistanceMetricsT::EUCLIDEAN>;
-using index_traits_t = IndexTraits<base_traits_t>;
-using vg_traits_t = VertexGeneratorTraits<computer_traits_t, index_traits_t>;
-using vector_array_t = typename vg_traits_t::vector_array_t;
-using vector_dataset_t = typename vg_traits_t::vector_dataset_t;
-using dist_func_t = typename vg_traits_t::dist_func_t;
-using lb_greedy_vg_t = typename vg_traits_t::lb_greedy_vg_t;
-using approx_rnet_t = typename vg_traits_t::approx_rnet_t;
-using distance_prober_t = typename vg_traits_t::distance_prober_t;
+// The approximate r-net resolves to the PLAIN vertex_subset_t — store it as such
+// (lb_greedy_vg_t<Metric, Dim>::generate() returns this metric/dim-independent type).
 
 struct TestConfig {
     std::string config_path;
     std::string dataset_name;
+    std::string metric;
     float beta;
     uint32_t max_result_size;
     float coverage_ratio;
@@ -91,55 +81,66 @@ public:
         ARTEA_INFO("Shuffling dataset...");
         dataset_->shuffle_in_place();
 
-        dist_func_ = std::make_unique<dist_func_t>(dataset_->get_base_vecs().get_vec_dim());
+        // Resolve compile-time axes: metric from the --metric input, padded dim
+        // from the loaded dataset. The dataset/r-net stay metric/dim-independent;
+        // the probe + generation (stateless functors, dimension is a compile-time
+        // trait) run behind <Metric, Dim> via dispatch.
+        const auto& base_vecs = dataset_->get_base_vecs();
+        dataset_info_ = DatasetInfra{parse_metric(g_config.metric), base_vecs.get_vec_dim()};
 
         // Probe min_radius using radius prober
-        const auto& base_vecs = dataset_->get_base_vecs();
         ARTEA_INFO("Probing min_radius from dataset...");
 
         constexpr float QUANTILE = 0.001f;
         constexpr float CONFIDENCE = 0.99f;
         constexpr float RELATIVE_ERR = 0.05f;
 
-        distance_prober_t prober(*dist_func_);
-        auto probe_start = std::chrono::high_resolution_clock::now();
-        auto probe_result = prober.probe(base_vecs, QUANTILE, CONFIDENCE, RELATIVE_ERR);
-        auto probe_end = std::chrono::high_resolution_clock::now();
-        auto probe_duration = std::chrono::duration_cast<std::chrono::microseconds>(probe_end - probe_start);
+        approx_rnet_ = std::make_unique<vertex_subset_t>(
+            infra_dispatch(dataset_info_, ARTEA_METRIC_LAMBDA(vertex_subset_t) {
+                dist_func_t<Metric, Dim> dist_func;
 
-        g_test_results.probe_time_ms = probe_duration.count() / 1000.0;
-        g_test_results.min_radius = probe_result.radius;
-        g_test_results.rnet_radius = probe_result.radius * g_config.beta;
+                distance_prober_t<Metric, Dim> prober(dist_func);
+                auto probe_start = std::chrono::high_resolution_clock::now();
+                auto probe_result = prober.probe(base_vecs, QUANTILE, CONFIDENCE, RELATIVE_ERR);
+                auto probe_end = std::chrono::high_resolution_clock::now();
+                auto probe_duration = std::chrono::duration_cast<std::chrono::microseconds>(probe_end - probe_start);
 
-        ARTEA_INFO(fmt::format("Probed min radius: {:.6f} (quantile: {:.4f}, samples: {}, time: {:.2f}ms)",
-            probe_result.radius, probe_result.quantile, probe_result.num_dists_sampled, g_test_results.probe_time_ms));
-        ARTEA_INFO(fmt::format("R-net radius (beta={:.2f}): {:.6f}", g_config.beta, g_test_results.rnet_radius));
+                g_test_results.probe_time_ms = probe_duration.count() / 1000.0;
+                g_test_results.min_radius = probe_result.radius;
+                g_test_results.rnet_radius = probe_result.radius * g_config.beta;
 
-        // Generate r-net once for all tests
-        if (g_config.verbose) {
-            ARTEA_INFO(fmt::format("Base vectors size: {}", base_vecs.get_num_vecs()));
-            ARTEA_INFO(fmt::format("R-net radius: {}", g_test_results.rnet_radius));
-            ARTEA_INFO(fmt::format("Coverage ratio: {}", g_config.coverage_ratio));
-            ARTEA_INFO(fmt::format("Confidence: {}", g_config.confidence));
-            ARTEA_INFO(fmt::format("Batch size: {}", g_config.batch_size));
-        }
+                ARTEA_INFO(fmt::format("Probed min radius: {:.6f} (quantile: {:.4f}, samples: {}, time: {:.2f}ms)",
+                    probe_result.radius, probe_result.quantile, probe_result.num_dists_sampled, g_test_results.probe_time_ms));
+                ARTEA_INFO(fmt::format("R-net radius (beta={:.2f}): {:.6f}", g_config.beta, g_test_results.rnet_radius));
 
-        // Time the generation
-        auto start_time = std::chrono::high_resolution_clock::now();
+                // Generate r-net once for all tests
+                if (g_config.verbose) {
+                    ARTEA_INFO(fmt::format("Base vectors size: {}", base_vecs.get_num_vecs()));
+                    ARTEA_INFO(fmt::format("R-net radius: {}", g_test_results.rnet_radius));
+                    ARTEA_INFO(fmt::format("Coverage ratio: {}", g_config.coverage_ratio));
+                    ARTEA_INFO(fmt::format("Confidence: {}", g_config.confidence));
+                    ARTEA_INFO(fmt::format("Batch size: {}", g_config.batch_size));
+                }
 
-        lb_greedy_vg_t generator(*dist_func_);
-        approx_rnet_ = std::make_unique<approx_rnet_t>(generator.generate(
-            base_vecs,
-            g_test_results.rnet_radius,
-            g_config.max_result_size,
-            g_config.coverage_ratio,
-            g_config.confidence,
-            g_config.batch_size
-        ));
+                // Time the generation
+                auto start_time = std::chrono::high_resolution_clock::now();
 
-        auto end_time = std::chrono::high_resolution_clock::now();
-        auto duration = std::chrono::duration_cast<std::chrono::microseconds>(end_time - start_time);
-        g_test_results.generation_time_ms = duration.count() / 1000.0;
+                lb_greedy_vg_t<Metric, Dim> generator(dist_func);
+                auto rnet = generator.generate(
+                    base_vecs,
+                    g_test_results.rnet_radius,
+                    g_config.max_result_size,
+                    g_config.coverage_ratio,
+                    g_config.confidence,
+                    g_config.batch_size
+                );
+
+                auto end_time = std::chrono::high_resolution_clock::now();
+                auto duration = std::chrono::duration_cast<std::chrono::microseconds>(end_time - start_time);
+                g_test_results.generation_time_ms = duration.count() / 1000.0;
+
+                return rnet;
+            }));
 
         g_test_results.num_vertices = approx_rnet_->get_num_vecs();
         g_test_results.total_base_vecs = base_vecs.get_num_vecs();
@@ -151,14 +152,14 @@ public:
     }
 
     vector_dataset_t& get_dataset() { return *dataset_; }
-    dist_func_t& get_dist_func() { return *dist_func_; }
-    approx_rnet_t& get_approx_rnet() { return *approx_rnet_; }
+    DatasetInfra get_dataset_info() const { return dataset_info_; }
+    vertex_subset_t& get_approx_rnet() { return *approx_rnet_; }
 
 private:
     DataProvider() = default;
     std::unique_ptr<vector_dataset_t> dataset_;
-    std::unique_ptr<dist_func_t> dist_func_;
-    std::unique_ptr<approx_rnet_t> approx_rnet_;
+    std::unique_ptr<vertex_subset_t> approx_rnet_;
+    DatasetInfra dataset_info_{};
 };
 
 class LBGreedyVGTest : public ::testing::Test {};
@@ -225,7 +226,6 @@ TEST_F(LBGreedyVGTest, VerifyRNetUniqueness) {
 
 TEST_F(LBGreedyVGTest, VerifyRNetSeparation) {
     auto& provider = DataProvider::instance();
-    auto& dist_func = provider.get_dist_func();
     auto& approx_rnet = provider.get_approx_rnet();
 
     // Test: Verify separation property by sampling points
@@ -243,26 +243,31 @@ TEST_F(LBGreedyVGTest, VerifyRNetSeparation) {
     distance_t min_pairwise_dist = std::numeric_limits<distance_t>::max();
     uint32_t total_pairs_checked = 0;
 
-    // Sample points and check their distances to all other r-net points
-    for (uint32_t sample_idx = 0; sample_idx < actual_samples; ++sample_idx) {
-        uint32_t i = dist_sampler(gen);
+    infra_dispatch(provider.get_dataset_info(), ARTEA_METRIC_LAMBDA(void) {
+        // Stateless functor: the dimension is a compile-time trait now.
+        dist_func_t<Metric, Dim> dist_func;
 
-        for (uint32_t j = 0; j < num_rnet_vecs; ++j) {
-            if (i == j) continue;
+        // Sample points and check their distances to all other r-net points
+        for (uint32_t sample_idx = 0; sample_idx < actual_samples; ++sample_idx) {
+            uint32_t i = dist_sampler(gen);
 
-            distance_t dist = dist_func(approx_rnet.vecs_data.get(i), approx_rnet.vecs_data.get(j));
-            min_pairwise_dist = std::min(min_pairwise_dist, dist);
-            total_pairs_checked++;
+            for (uint32_t j = 0; j < num_rnet_vecs; ++j) {
+                if (i == j) continue;
 
-            if (dist < g_test_results.rnet_radius) {
-                violation_count++;
-                if (g_config.verbose && violation_count <= 10) {
-                    ARTEA_WARN(fmt::format("Separation violation: rnet[{}] and rnet[{}] have distance {:.4f} < {:.4f}",
-                        i, j, dist, g_test_results.rnet_radius));
+                distance_t dist = dist_func(approx_rnet.vecs_data.get(i), approx_rnet.vecs_data.get(j));
+                min_pairwise_dist = std::min(min_pairwise_dist, dist);
+                total_pairs_checked++;
+
+                if (dist < g_test_results.rnet_radius) {
+                    violation_count++;
+                    if (g_config.verbose && violation_count <= 10) {
+                        ARTEA_WARN(fmt::format("Separation violation: rnet[{}] and rnet[{}] have distance {:.4f} < {:.4f}",
+                            i, j, dist, g_test_results.rnet_radius));
+                    }
                 }
             }
         }
-    }
+    });
 
     ARTEA_INFO(fmt::format("Separation test: {} violations out of {} pairs checked",
         violation_count, total_pairs_checked));
@@ -278,7 +283,6 @@ TEST_F(LBGreedyVGTest, VerifyRNetSeparation) {
 TEST_F(LBGreedyVGTest, VerifyRNetCoverage) {
     auto& provider = DataProvider::instance();
     auto& dataset = provider.get_dataset();
-    auto& dist_func = provider.get_dist_func();
     auto& approx_rnet = provider.get_approx_rnet();
 
     const auto& base_vecs = dataset.get_base_vecs();
@@ -298,25 +302,30 @@ TEST_F(LBGreedyVGTest, VerifyRNetCoverage) {
         sampled_ids.push_back(dist(gen));
     }
 
-    for (uint32_t sample_id : sampled_ids) {
-        const vec_ele_t* sample_vec = base_vecs.get(sample_id);
+    infra_dispatch(provider.get_dataset_info(), ARTEA_METRIC_LAMBDA(void) {
+        // Stateless functor: the dimension is a compile-time trait now.
+        dist_func_t<Metric, Dim> dist_func;
 
-        // Find minimum distance to r-net
-        distance_t min_dist_to_rnet = std::numeric_limits<distance_t>::max();
-        for (size_t i = 0; i < approx_rnet.get_num_vecs(); ++i) {
-            distance_t d = dist_func(sample_vec, approx_rnet.vecs_data.get(i));
-            min_dist_to_rnet = std::min(min_dist_to_rnet, d);
-        }
+        for (uint32_t sample_id : sampled_ids) {
+            const vec_ele_t* sample_vec = base_vecs.get(sample_id);
 
-        // Check if covered (distance < rnet_radius)
-        if (min_dist_to_rnet >= g_test_results.rnet_radius) {
-            uncovered_count++;
-            if (g_config.verbose && uncovered_count <= 10) {
-                ARTEA_WARN(fmt::format("Uncovered sample: vec[{}] has min distance {:.4f} >= {:.4f}",
-                    sample_id, min_dist_to_rnet, g_test_results.rnet_radius));
+            // Find minimum distance to r-net
+            distance_t min_dist_to_rnet = std::numeric_limits<distance_t>::max();
+            for (size_t i = 0; i < approx_rnet.get_num_vecs(); ++i) {
+                distance_t d = dist_func(sample_vec, approx_rnet.vecs_data.get(i));
+                min_dist_to_rnet = std::min(min_dist_to_rnet, d);
+            }
+
+            // Check if covered (distance < rnet_radius)
+            if (min_dist_to_rnet >= g_test_results.rnet_radius) {
+                uncovered_count++;
+                if (g_config.verbose && uncovered_count <= 10) {
+                    ARTEA_WARN(fmt::format("Uncovered sample: vec[{}] has min distance {:.4f} >= {:.4f}",
+                        sample_id, min_dist_to_rnet, g_test_results.rnet_radius));
+                }
             }
         }
-    }
+    });
 
     float empirical_coverage = 1.0f - (float)uncovered_count / g_config.num_test_samples;
     g_test_results.empirical_coverage = empirical_coverage;
@@ -340,6 +349,8 @@ int main(int argc, char** argv) {
     argparse::ArgumentParser program("test_lb_greedy_vg");
     program.add_argument("-c", "--config").default_value(artea::default_dataset_config_path());
     program.add_argument("-d", "--dataset").default_value(std::string("sift-1m"));
+    program.add_argument("--metric").default_value(std::string("euclidean"))
+        .help("Distance metric: 'euclidean', 'inner_product', or 'cosine'");
     program.add_argument("--beta").default_value(1.69f).scan<'g', float>();
     program.add_argument("-m", "--max-result-size").default_value(100000u).scan<'u', uint32_t>();
     program.add_argument("--coverage-ratio").default_value(0.999f).scan<'g', float>();
@@ -358,6 +369,7 @@ int main(int argc, char** argv) {
 
     g_config.config_path = program.get<std::string>("--config");
     g_config.dataset_name = program.get<std::string>("--dataset");
+    g_config.metric = program.get<std::string>("--metric");
     g_config.beta = program.get<float>("--beta");
     g_config.max_result_size = program.get<uint32_t>("--max-result-size");
     g_config.coverage_ratio = program.get<float>("--coverage-ratio");
@@ -375,17 +387,23 @@ int main(int argc, char** argv) {
     std::cout << "Coverage ratio: " << g_config.coverage_ratio << std::endl;
     std::cout << "Confidence: " << g_config.confidence << std::endl;
     std::cout << "Batch size: " << g_config.batch_size << std::endl;
-
-    // Compute and display term_thresh
-    uint32_t computed_term_thresh = lb_greedy_vg_t::compute_term_thresh(
-        g_config.coverage_ratio, g_config.confidence, g_config.batch_size
-    );
-    std::cout << "Computed term thresh: " << computed_term_thresh << std::endl;
     std::cout << "Num test samples: " << g_config.num_test_samples << std::endl;
     std::cout << "Verbose: " << (g_config.verbose ? "true" : "false") << std::endl;
     std::cout << "==========================\n" << std::endl;
 
     DataProvider::instance().init();
+
+    // Compute and display term_thresh (after init(), which resolves the dispatch
+    // axes from the --metric input and the loaded dataset's padded dim).
+    // compute_term_thresh is a static method, so dispatch only serves to name a
+    // concrete lb_greedy_vg_t<Metric, Dim>.
+    uint32_t computed_term_thresh = infra_dispatch(DataProvider::instance().get_dataset_info(),
+        ARTEA_METRIC_LAMBDA(uint32_t) {
+            return lb_greedy_vg_t<Metric, Dim>::compute_term_thresh(
+                g_config.coverage_ratio, g_config.confidence, g_config.batch_size
+            );
+        });
+    std::cout << "Computed term thresh: " << computed_term_thresh << std::endl;
 
     int result = RUN_ALL_TESTS();
 

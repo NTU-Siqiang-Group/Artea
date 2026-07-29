@@ -16,21 +16,29 @@
 #include <argparse/argparse.hpp>
 #include <artea/cpu/framework/artea.hpp>
 #include <artea/cpu/framework/type_context/default_context.hpp>
+#include <artea/cpu/framework/type_context/infra_dispatcher.hpp>
 #include <tbb/parallel_for.h>
 #include <tbb/blocked_range.h>
+#include <fmt/format.h>
 #include <experimental/simd>
 #include <memory>
 #include <vector>
+#include <stdexcept>
 #include <cstring>
 
 using namespace artea;
 using namespace artea::cpu;
 
-template <std::size_t U> using artea_simd_dist_t = computer_traits_t::template simd_dist_t<U>;
+// The SIMD distance functor is metric/dim-dependent now. Expose it as a
+// <Metric, Dim, U> alias so the unroll factor U stays a benchmark template axis
+// while (metric, padded-dim) — metric from --metric, padded dim from the
+// loaded dataset — are resolved via infra_dispatch().
+template <DistanceMetricsT Metric, vec_dim_t Dim, std::size_t U>
+using artea_simd_dist_t = typename computer_traits_t<Metric, Dim>::template simd_dist_t<U>;
 
 static constexpr uint32_t NUM_PAIRS = 65536;
 
-struct TestConfig { std::string config_path, dataset_name; } g_config;
+struct TestConfig { std::string config_path, dataset_name, metric; } g_config;
 
 class DataProvider {
 public:
@@ -39,6 +47,9 @@ public:
         _dataset = std::make_unique<typename base_traits_t::vector_dataset_t>(g_config.config_path, g_config.dataset_name);
         _dim = _dataset->get_base_vecs().get_vec_dim();
         _num_vecs = _dataset->get_base_vecs().get_num_vecs();
+
+        // Resolve BOTH compile-time axes: metric from --metric, padded dim from the loaded dataset.
+        _dataset_info = DatasetInfra{parse_metric(g_config.metric), _dim};
 
         random_seq_t rng_a;
         random_seq_t rng_b;
@@ -49,6 +60,7 @@ public:
     }
     uint32_t get_dim() const { return _dim; }
     uint32_t get_num_vecs() const { return _num_vecs; }
+    DatasetInfra get_dataset_info() const { return _dataset_info; }
     const float* get_vec(uint32_t id) const { return _dataset->get_base_vecs().get(id); }
     uint32_t get_id_a(uint32_t idx) const { return _ids_a[idx % NUM_PAIRS]; }
     uint32_t get_id_b(uint32_t idx) const { return _ids_b[idx % NUM_PAIRS]; }
@@ -56,6 +68,7 @@ private:
     std::unique_ptr<typename base_traits_t::vector_dataset_t> _dataset;
     uint32_t _dim;
     uint32_t _num_vecs;
+    DatasetInfra _dataset_info{};
     std::vector<uint32_t> _ids_a;
     std::vector<uint32_t> _ids_b;
 };
@@ -178,18 +191,21 @@ BENCHMARK_TEMPLATE(BM_StdSimdTail, 1)->Name("StdSimdTail_L2_U1");
 BENCHMARK_TEMPLATE(BM_StdSimdTail, 2)->Name("StdSimdTail_L2_U2");
 BENCHMARK_TEMPLATE(BM_StdSimdTail, 4)->Name("StdSimdTail_L2_U4");
 
-// 3. Artea SIMDDistance (class wrapper, runtime dim)
+// 3. Artea SIMDDistance (class wrapper, compile-time dim)
 template <std::size_t U>
 static void BM_Artea(benchmark::State& state) {
     auto& p = DataProvider::instance();
-    artea_simd_dist_t<U> func(p.get_dim());
-    uint32_t idx = 0;
-    for (auto _ : state) {
-        const float* q = p.get_vec(p.get_id_a(idx));
-        const float* t = p.get_vec(p.get_id_b(idx));
-        benchmark::DoNotOptimize(func(q, t));
-        ++idx;
-    }
+    infra_dispatch(p.get_dataset_info(), ARTEA_METRIC_LAMBDA(void) {
+        // Stateless functor: the dimension is a compile-time trait now.
+        artea_simd_dist_t<Metric, Dim, U> func;
+        uint32_t idx = 0;
+        for (auto _ : state) {
+            const float* q = p.get_vec(p.get_id_a(idx));
+            const float* t = p.get_vec(p.get_id_b(idx));
+            benchmark::DoNotOptimize(func(q, t));
+            ++idx;
+        }
+    });
     state.SetItemsProcessed(state.iterations());
 }
 BENCHMARK_TEMPLATE(BM_Artea, 1)->Name("Artea_L2_U1");
@@ -265,19 +281,22 @@ BENCHMARK_TEMPLATE(BM_StdSimdTail_Parallel, 4)->Name("Par_StdSimdTail_L2_U4")->U
 template <std::size_t U>
 static void BM_Artea_Parallel(benchmark::State& state) {
     auto& p = DataProvider::instance();
-    for (auto _ : state) {
-        tbb::parallel_for(
-            tbb::blocked_range<uint32_t>(0, PARALLEL_BATCH),
-            [&](const tbb::blocked_range<uint32_t>& r) {
-                artea_simd_dist_t<U> func(p.get_dim());
-                for (uint32_t i = r.begin(); i != r.end(); ++i) {
-                    const float* q = p.get_vec(p.get_id_a(i));
-                    const float* t = p.get_vec(p.get_id_b(i));
-                    benchmark::DoNotOptimize(func(q, t));
+    infra_dispatch(p.get_dataset_info(), ARTEA_METRIC_LAMBDA(void) {
+        for (auto _ : state) {
+            tbb::parallel_for(
+                tbb::blocked_range<uint32_t>(0, PARALLEL_BATCH),
+                [&](const tbb::blocked_range<uint32_t>& r) {
+                    // Stateless functor: the dimension is a compile-time trait now.
+                    artea_simd_dist_t<Metric, Dim, U> func;
+                    for (uint32_t i = r.begin(); i != r.end(); ++i) {
+                        const float* q = p.get_vec(p.get_id_a(i));
+                        const float* t = p.get_vec(p.get_id_b(i));
+                        benchmark::DoNotOptimize(func(q, t));
+                    }
                 }
-            }
-        );
-    }
+            );
+        }
+    });
     state.SetItemsProcessed(state.iterations() * PARALLEL_BATCH);
 }
 BENCHMARK_TEMPLATE(BM_Artea_Parallel, 1)->Name("Par_Artea_L2_U1")->UseRealTime();
@@ -288,9 +307,11 @@ int main(int argc, char** argv) {
     argparse::ArgumentParser program("bench_simd_distance");
     program.add_argument("-c", "--config").default_value(artea::default_dataset_config_path());
     program.add_argument("-d", "--dataset").default_value(std::string("sift-1m"));
+    program.add_argument("--metric").default_value(std::string("euclidean"));
     try { program.parse_args(argc, argv); } catch (...) { return 1; }
     g_config.config_path = program.get<std::string>("--config");
     g_config.dataset_name = program.get<std::string>("--dataset");
+    g_config.metric = program.get<std::string>("--metric");
     DataProvider::instance().init();
 
     ::benchmark::Initialize(&argc, argv);

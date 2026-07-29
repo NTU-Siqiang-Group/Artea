@@ -24,11 +24,13 @@
 
 #include <artea/cpu/framework/artea.hpp>
 #include <artea/cpu/framework/type_context/default_context.hpp>
+#include <artea/cpu/framework/type_context/infra_dispatcher.hpp>
 
 using namespace artea;
 using namespace artea::cpu;
 
-static auto compute_average_degree(const symmetric_knn_graph::index_t& graph) -> double {
+template <DistanceMetricsT Metric, vec_dim_t Dim>
+static auto compute_average_degree(const symmetric_knn_graph::index_t<Metric, Dim>& graph) -> double {
     const auto& nbrs_arr = graph.get_nbrs_arr();
     uint64_t total_edges = 0;
     for (const auto& nbrs : nbrs_arr) {
@@ -40,9 +42,20 @@ static auto compute_average_degree(const symmetric_knn_graph::index_t& graph) ->
 struct TestConfig {
     std::string config_path;
     std::string dataset_name;
+    std::string metric;
 
+    // layer_config_t is metric/dim-independent (IndexTraits) and can live here.
     layer_config_t knn_layer_config{64};
-    knn_graph::propagate_config_t knn_propagate_config{4, 14};
+
+    // knn_graph::propagate_config_t is now a <Metric, Dim> alias, so we keep the raw
+    // build params here and construct the metric-dependent config object inside
+    // the dispatched body (metric from --metric, padded dim from the dataset).
+    uint32_t knn_num_build_loops;
+    uint32_t knn_num_triu_iters;
+    float    knn_prefill_ratio;
+    uint32_t knn_num_routing_loops;
+    uint32_t knn_routing_topk;
+    uint32_t knn_routing_queue_size;
 
     bool verbose;
 } g_config;
@@ -71,45 +84,59 @@ public:
         const auto& base_vecs = dataset_->get_base_vecs();
         g_test_results.num_vertices = static_cast<uint32_t>(base_vecs.get_num_vecs());
 
-        // Part 1: Build KNN graph
-        ARTEA_INFO("Part 1: Building KNN graph...");
-        auto t0 = std::chrono::high_resolution_clock::now();
+        // Metric from the --metric input, padded dim from the loaded dataset;
+        // the metric-dependent build runs behind <Metric, Dim>. The dataset itself
+        // is metric/dim-independent and stays out here.
+        const auto dataset_info = DatasetInfra{parse_metric(g_config.metric), base_vecs.get_vec_dim()};
 
-        knn_graph::index_t knn_index = std::move(
-            knn_graph::factory_t::construct_graph(
-                base_vecs,
-                g_config.knn_layer_config,
-                g_config.knn_propagate_config
-            ).graph
-        );
+        infra_dispatch(dataset_info, ARTEA_METRIC_LAMBDA(void) {
+            knn_graph::propagate_config_t<Metric, Dim> knn_propagate_config(
+                g_config.knn_num_build_loops,
+                g_config.knn_num_triu_iters,
+                g_config.knn_prefill_ratio,
+                g_config.knn_num_routing_loops,
+                g_config.knn_routing_topk,
+                g_config.knn_routing_queue_size);
 
-        auto t1 = std::chrono::high_resolution_clock::now();
-        g_test_results.knn_build_time_s =
-            std::chrono::duration_cast<std::chrono::microseconds>(t1 - t0).count() / 1e6;
-        ARTEA_INFO(fmt::format("KNN graph built in {:.2f} s", g_test_results.knn_build_time_s));
+            // Part 1: Build KNN graph
+            ARTEA_INFO("Part 1: Building KNN graph...");
+            auto t0 = std::chrono::high_resolution_clock::now();
 
-        // Part 2: Convert knn_graph -> symmetric_knn_graph via move + reverse
-        ARTEA_INFO("Part 2: Converting KNN graph to symmetric KNN graph (move + reverse)...");
-        t0 = std::chrono::high_resolution_clock::now();
+            knn_graph::index_t<Metric, Dim> knn_index = std::move(
+                knn_graph::factory_t<Metric, Dim>::construct_graph(
+                    base_vecs,
+                    g_config.knn_layer_config,
+                    knn_propagate_config
+                ).graph
+            );
 
-        symknn_graph_ = std::make_unique<symmetric_knn_graph::index_t>(std::move(
-            symmetric_knn_graph::factory_t::construct_graph(std::move(knn_index)).graph
-        ));
+            auto t1 = std::chrono::high_resolution_clock::now();
+            g_test_results.knn_build_time_s =
+                std::chrono::duration_cast<std::chrono::microseconds>(t1 - t0).count() / 1e6;
+            ARTEA_INFO(fmt::format("KNN graph built in {:.2f} s", g_test_results.knn_build_time_s));
 
-        t1 = std::chrono::high_resolution_clock::now();
-        g_test_results.symknn_build_time_s =
-            std::chrono::duration_cast<std::chrono::microseconds>(t1 - t0).count() / 1e6;
-        ARTEA_INFO(fmt::format("Symmetric KNN graph built in {:.2f} s", g_test_results.symknn_build_time_s));
+            // Part 2: Convert knn_graph -> symmetric_knn_graph via move + reverse
+            ARTEA_INFO("Part 2: Converting KNN graph to symmetric KNN graph (move + reverse)...");
+            t0 = std::chrono::high_resolution_clock::now();
 
-        // Compute average degree
-        g_test_results.avg_degree = compute_average_degree(*symknn_graph_);
-        ARTEA_INFO(fmt::format("Symmetric KNN graph average degree: {:.2f}", g_test_results.avg_degree));
+            symmetric_knn_graph::index_t<Metric, Dim> symknn_graph = std::move(
+                symmetric_knn_graph::factory_t<Metric, Dim>::construct_graph(std::move(knn_index)).graph
+            );
+
+            t1 = std::chrono::high_resolution_clock::now();
+            g_test_results.symknn_build_time_s =
+                std::chrono::duration_cast<std::chrono::microseconds>(t1 - t0).count() / 1e6;
+            ARTEA_INFO(fmt::format("Symmetric KNN graph built in {:.2f} s", g_test_results.symknn_build_time_s));
+
+            // Compute average degree
+            g_test_results.avg_degree = compute_average_degree<Metric, Dim>(symknn_graph);
+            ARTEA_INFO(fmt::format("Symmetric KNN graph average degree: {:.2f}", g_test_results.avg_degree));
+        });
     }
 
 private:
     DataProvider() = default;
     std::unique_ptr<vector_dataset_t> dataset_;
-    std::unique_ptr<symmetric_knn_graph::index_t> symknn_graph_;
 };
 
 class Knn2SymKnnTest : public ::testing::Test {};
@@ -126,6 +153,7 @@ int main(int argc, char** argv) {
     argparse::ArgumentParser program("test_knn2symknn");
     program.add_argument("-c", "--config").default_value(artea::default_dataset_config_path());
     program.add_argument("-d", "--dataset").default_value(std::string("sift-1m"));
+    program.add_argument("--metric").default_value(std::string("euclidean")).help("Distance metric: 'euclidean', 'inner_product', or 'cosine'");
 
     // KNN graph params
     program.add_argument("--knn-max-nbr-size").default_value(96u).scan<'u', uint32_t>();
@@ -148,26 +176,25 @@ int main(int argc, char** argv) {
 
     g_config.config_path = program.get<std::string>("--config");
     g_config.dataset_name = program.get<std::string>("--dataset");
+    g_config.metric = program.get<std::string>("--metric");
 
     uint32_t knn_max_nbr_size = program.get<uint32_t>("--knn-max-nbr-size");
     g_config.knn_layer_config = layer_config_t(knn_max_nbr_size);
-    g_config.knn_propagate_config = knn_graph::propagate_config_t(
-        program.get<uint32_t>("--knn-num-build-loops"),
-        program.get<uint32_t>("--knn-num-triu-iters"),
-        program.get<float>("--knn-prefill-ratio"),
-        program.get<uint32_t>("--knn-num-routing-loops"),
-        program.get<uint32_t>("--routing-topk"),
-        program.get<uint32_t>("--routing-queue-size")
-    );
+    g_config.knn_num_build_loops    = program.get<uint32_t>("--knn-num-build-loops");
+    g_config.knn_num_triu_iters     = program.get<uint32_t>("--knn-num-triu-iters");
+    g_config.knn_prefill_ratio      = program.get<float>("--knn-prefill-ratio");
+    g_config.knn_num_routing_loops  = program.get<uint32_t>("--knn-num-routing-loops");
+    g_config.knn_routing_topk       = program.get<uint32_t>("--routing-topk");
+    g_config.knn_routing_queue_size = program.get<uint32_t>("--routing-queue-size");
 
     std::cout << "\n=== Configuration ===" << std::endl;
     std::cout << fmt::format("  Dataset:                  {}", g_config.dataset_name) << std::endl;
     std::cout << fmt::format("  Config path:              {}", g_config.config_path) << std::endl;
     std::cout << fmt::format("  KNN max nbr size:         {}", g_config.knn_layer_config.max_nbr_size()) << std::endl;
-    std::cout << fmt::format("  KNN build loops:          {}", g_config.knn_propagate_config.num_build_loops()) << std::endl;
-    std::cout << fmt::format("  KNN triangle updater its: {}", g_config.knn_propagate_config.num_triu_iters()) << std::endl;
-    std::cout << fmt::format("  KNN prefill ratio:        {}", g_config.knn_propagate_config.prefill_ratio()) << std::endl;
-    std::cout << fmt::format("  KNN routing loops:        {}", g_config.knn_propagate_config.num_routing_loops()) << std::endl;
+    std::cout << fmt::format("  KNN build loops:          {}", g_config.knn_num_build_loops) << std::endl;
+    std::cout << fmt::format("  KNN triangle updater its: {}", g_config.knn_num_triu_iters) << std::endl;
+    std::cout << fmt::format("  KNN prefill ratio:        {}", g_config.knn_prefill_ratio) << std::endl;
+    std::cout << fmt::format("  KNN routing loops:        {}", g_config.knn_num_routing_loops) << std::endl;
     std::cout << "=====================\n" << std::endl;
 
     DataProvider::instance().init();

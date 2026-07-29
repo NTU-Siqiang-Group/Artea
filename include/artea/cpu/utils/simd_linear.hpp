@@ -65,20 +65,13 @@ class SIMDLinear {
 public:
 
     /**
-     * @brief Construct a new SIMDLinear object
-     * @param vec_dim Dimension of the vectors. Must be a multiple of SIMD_CHUNK_SIZE.
+     * @brief Construct a new SIMDLinear object.
+     *
+     * The vector dimension is a compile-time property of ComputerTraitsT
+     * (VecDim), so SIMDLinear is a stateless functor with a trivial default
+     * constructor — it no longer takes a runtime dimension.
      */
-    SIMDLinear(const vec_dim_t vec_dim) :
-        _vec_dim(vec_dim),
-        NUM_SIMD_CHUNKS(_vec_dim / SIMD_CHUNK_SIZE)
-    {
-        // Runtime check for alignment/padding requirements
-        if (vec_dim % SIMD_CHUNK_SIZE != 0) {
-            ARTEA_ERROR(
-                "Vector dimension must be a multiple of SIMD chunk size (e.g. 16 for float type)"
-            );
-        }
-    }
+    SIMDLinear() = default;
 
     /**
      * @brief Computes the linear transformation: (vec_a . vec_x) + b
@@ -98,9 +91,12 @@ public:
 
 private:
 
-    const vec_dim_t _vec_dim;
+    static constexpr vec_dim_t _vec_dim = ComputerTraitsT::vec_dim;
+    static_assert(_vec_dim % SIMD_CHUNK_SIZE == 0,
+                  "ComputerTraitsT::vec_dim (VecDim) must be a multiple of "
+                  "SIMD_CHUNK_SIZE (16); use the SIMD-padded dimension");
     /** @brief Number of SIMD chunks that can be processed in parallel */
-    const std::size_t NUM_SIMD_CHUNKS;
+    static constexpr std::size_t NUM_SIMD_CHUNKS = _vec_dim / SIMD_CHUNK_SIZE;
 
     /**
      * @brief Internal implementation of dot product using AVX-512 with FMA and loop unrolling.

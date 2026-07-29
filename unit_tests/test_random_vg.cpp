@@ -19,6 +19,7 @@
 #include <artea/cpu/vertex_generator/random_vg.hpp>
 #include <artea/cpu/framework/artea.hpp>
 #include <artea/cpu/framework/type_context/default_context.hpp>
+#include <artea/cpu/framework/type_context/infra_dispatcher.hpp>
 #include <unordered_set>
 #include <algorithm>
 #include <filesystem>
@@ -31,6 +32,7 @@ using namespace artea::cpu;
 struct TestConfig {
     std::string config_path;
     std::string dataset_name;
+    std::string metric;
 } g_config;
 
 class RandomVGTest : public ::testing::Test {
@@ -39,6 +41,10 @@ protected:
     static const vector_array_t* vecs_data;
     static uint32_t num_vecs;
     static uint32_t vec_dim;
+    // Compile-time axes: metric from the --metric input, padded dim from the
+    // loaded dataset. The dataset/vecs stay metric/dim-independent; only
+    // random_vg_t<Metric, Dim> generation runs behind dispatch.
+    static DatasetInfra dataset_info;
 
     static void SetUpTestSuite() {
         if (!std::filesystem::exists(g_config.config_path)) {
@@ -52,6 +58,8 @@ protected:
         num_vecs = vecs_data->get_num_vecs();
         vec_dim = vecs_data->get_vec_dim();
 
+        dataset_info = DatasetInfra{parse_metric(g_config.metric), vecs_data->get_vec_dim()};
+
         ARTEA_INFO(fmt::format("Dataset loaded: {} vectors, {} dimensions", num_vecs, vec_dim));
     }
 
@@ -64,13 +72,15 @@ std::unique_ptr<vector_dataset_t> RandomVGTest::dataset = nullptr;
 const vector_array_t* RandomVGTest::vecs_data = nullptr;
 uint32_t RandomVGTest::num_vecs = 0;
 uint32_t RandomVGTest::vec_dim = 0;
+DatasetInfra RandomVGTest::dataset_info{};
 
 // Test 1: Basic functionality - returns correct number of vertices
 TEST_F(RandomVGTest, ReturnsCorrectSize) {
-    random_vg_t random_vg;
-
     uint32_t result_size = std::min(10000u, num_vecs);
-    auto result = random_vg.generate(*vecs_data, result_size);
+    auto result = infra_dispatch(dataset_info, ARTEA_METRIC_LAMBDA(vertex_subset_t) {
+        random_vg_t<Metric, Dim> random_vg;
+        return random_vg.generate(*vecs_data, result_size);
+    });
 
     EXPECT_EQ(result.get_num_vecs(), result_size);
     EXPECT_EQ(result.vec_ids.size(), result_size);
@@ -79,10 +89,11 @@ TEST_F(RandomVGTest, ReturnsCorrectSize) {
 
 // Test 2: Sampling without replacement - all IDs are unique
 TEST_F(RandomVGTest, SamplingWithoutReplacement) {
-    random_vg_t random_vg;
-
     uint32_t result_size = std::min(50000u, num_vecs / 2);
-    auto result = random_vg.generate(*vecs_data, result_size);
+    auto result = infra_dispatch(dataset_info, ARTEA_METRIC_LAMBDA(vertex_subset_t) {
+        random_vg_t<Metric, Dim> random_vg;
+        return random_vg.generate(*vecs_data, result_size);
+    });
 
     // Check all IDs are unique
     std::unordered_set<vec_id_t> unique_ids(result.vec_ids.begin(), result.vec_ids.end());
@@ -92,10 +103,11 @@ TEST_F(RandomVGTest, SamplingWithoutReplacement) {
 
 // Test 4: Vector data matches original vectors
 TEST_F(RandomVGTest, VectorDataMatchesOriginal) {
-    random_vg_t random_vg;
-
     uint32_t result_size = std::min(15000u, num_vecs / 4);
-    auto result = random_vg.generate(*vecs_data, result_size);
+    auto result = infra_dispatch(dataset_info, ARTEA_METRIC_LAMBDA(vertex_subset_t) {
+        random_vg_t<Metric, Dim> random_vg;
+        return random_vg.generate(*vecs_data, result_size);
+    });
 
     // Verify each vector matches the original
     for (uint32_t i = 0; i < result_size; ++i) {
@@ -114,10 +126,11 @@ TEST_F(RandomVGTest, VectorDataMatchesOriginal) {
 
 // Test 5: All IDs are within valid range
 TEST_F(RandomVGTest, IDsWithinValidRange) {
-    random_vg_t random_vg;
-
     uint32_t result_size = std::min(30000u, num_vecs / 2);
-    auto result = random_vg.generate(*vecs_data, result_size);
+    auto result = infra_dispatch(dataset_info, ARTEA_METRIC_LAMBDA(vertex_subset_t) {
+        random_vg_t<Metric, Dim> random_vg;
+        return random_vg.generate(*vecs_data, result_size);
+    });
 
     for (const auto& id : result.vec_ids) {
         EXPECT_GE(id, 0);
@@ -127,9 +140,10 @@ TEST_F(RandomVGTest, IDsWithinValidRange) {
 
 // Test 6: Edge case - sample size equals total size
 TEST_F(RandomVGTest, SampleSizeEqualsTotal) {
-    random_vg_t random_vg;
-
-    auto result = random_vg.generate(*vecs_data, num_vecs);
+    auto result = infra_dispatch(dataset_info, ARTEA_METRIC_LAMBDA(vertex_subset_t) {
+        random_vg_t<Metric, Dim> random_vg;
+        return random_vg.generate(*vecs_data, num_vecs);
+    });
 
     EXPECT_EQ(result.get_num_vecs(), num_vecs);
 
@@ -140,10 +154,11 @@ TEST_F(RandomVGTest, SampleSizeEqualsTotal) {
 
 // Test 7: Edge case - sample size exceeds total size (should clamp)
 TEST_F(RandomVGTest, SampleSizeExceedsTotal) {
-    random_vg_t random_vg;
-
     uint32_t oversized_request = num_vecs + 50000;
-    auto result = random_vg.generate(*vecs_data, oversized_request);
+    auto result = infra_dispatch(dataset_info, ARTEA_METRIC_LAMBDA(vertex_subset_t) {
+        random_vg_t<Metric, Dim> random_vg;
+        return random_vg.generate(*vecs_data, oversized_request);
+    });
 
     // Should return at most num_vecs
     EXPECT_LE(result.get_num_vecs(), num_vecs);
@@ -151,9 +166,10 @@ TEST_F(RandomVGTest, SampleSizeExceedsTotal) {
 
 // Test 8: Edge case - zero sample size
 TEST_F(RandomVGTest, ZeroSampleSize) {
-    random_vg_t random_vg;
-
-    auto result = random_vg.generate(*vecs_data, 0);
+    auto result = infra_dispatch(dataset_info, ARTEA_METRIC_LAMBDA(vertex_subset_t) {
+        random_vg_t<Metric, Dim> random_vg;
+        return random_vg.generate(*vecs_data, 0);
+    });
 
     EXPECT_EQ(result.get_num_vecs(), 0);
     EXPECT_EQ(result.vec_ids.size(), 0);
@@ -161,12 +177,16 @@ TEST_F(RandomVGTest, ZeroSampleSize) {
 
 // Test 9: Randomness - multiple runs produce different results
 TEST_F(RandomVGTest, ProducesRandomResults) {
-    random_vg_t random_vg1;
-    random_vg_t random_vg2;
-
     uint32_t result_size = std::min(10000u, num_vecs / 5);
-    auto result1 = random_vg1.generate(*vecs_data, result_size);
-    auto result2 = random_vg2.generate(*vecs_data, result_size);
+    auto results = infra_dispatch(dataset_info,
+        ARTEA_METRIC_LAMBDA(std::pair<vertex_subset_t, vertex_subset_t>) {
+            random_vg_t<Metric, Dim> random_vg1;
+            random_vg_t<Metric, Dim> random_vg2;
+            return {random_vg1.generate(*vecs_data, result_size),
+                    random_vg2.generate(*vecs_data, result_size)};
+        });
+    auto& result1 = results.first;
+    auto& result2 = results.second;
 
     // Results should be different (with very high probability)
     bool are_different = false;
@@ -182,10 +202,11 @@ TEST_F(RandomVGTest, ProducesRandomResults) {
 
 // Test 10: Small sample size
 TEST_F(RandomVGTest, SmallSampleSize) {
-    random_vg_t random_vg;
-
     uint32_t result_size = 100;
-    auto result = random_vg.generate(*vecs_data, result_size);
+    auto result = infra_dispatch(dataset_info, ARTEA_METRIC_LAMBDA(vertex_subset_t) {
+        random_vg_t<Metric, Dim> random_vg;
+        return random_vg.generate(*vecs_data, result_size);
+    });
 
     EXPECT_EQ(result.get_num_vecs(), result_size);
 
@@ -196,10 +217,11 @@ TEST_F(RandomVGTest, SmallSampleSize) {
 
 // Test 11: Large sample size (90% of total)
 TEST_F(RandomVGTest, LargeSampleSize) {
-    random_vg_t random_vg;
-
     uint32_t result_size = static_cast<uint32_t>(num_vecs * 0.9);
-    auto result = random_vg.generate(*vecs_data, result_size);
+    auto result = infra_dispatch(dataset_info, ARTEA_METRIC_LAMBDA(vertex_subset_t) {
+        random_vg_t<Metric, Dim> random_vg;
+        return random_vg.generate(*vecs_data, result_size);
+    });
 
     EXPECT_EQ(result.get_num_vecs(), result_size);
 
@@ -218,6 +240,9 @@ int main(int argc, char** argv) {
     program.add_argument("-d", "--dataset")
         .help("Name of the dataset to use")
         .default_value(std::string("sift-1m"));
+    program.add_argument("--metric")
+        .help("Distance metric: 'euclidean', 'inner_product', or 'cosine'")
+        .default_value(std::string("euclidean"));
 
     try {
         program.parse_args(argc, argv);
@@ -229,6 +254,7 @@ int main(int argc, char** argv) {
 
     g_config.config_path = program.get<std::string>("--config");
     g_config.dataset_name = program.get<std::string>("--dataset");
+    g_config.metric = program.get<std::string>("--metric");
 
     return RUN_ALL_TESTS();
 }

@@ -24,46 +24,86 @@
 #include <random>
 #include <algorithm>
 #include <functional>
+#include <filesystem>
+#include <memory>
 #include <gtest/gtest.h>
 #include <argparse/argparse.hpp>
 #include <fmt/format.h>
 
 // Artea Headers
 #include <artea/cpu/framework/artea.hpp>
+#include <artea/cpu/framework/type_context/default_context.hpp>
+#include <artea/cpu/framework/type_context/infra_dispatcher.hpp>
 
 using namespace artea;
 using namespace artea::cpu;
 
 // --- Type Definitions ---
-using vec_num_t = uint32_t;
-using vec_ele_t = float;
-using base_traits_t = BaseTraits<vec_num_t, vec_ele_t>;
-using computer_traits_t = ComputerTraits<base_traits_t, DistanceMetricsT::EUCLIDEAN>;
-using index_traits_t = IndexTraits<base_traits_t>;
-using router_traits_t = RouterTraits<computer_traits_t, index_traits_t, false>;
-using candidate_entry_t = typename router_traits_t::candidate_entry_t;
-using vertex_id_t = typename router_traits_t::vertex_id_t;
-using distance_t = typename router_traits_t::distance_t;
+// The four-ary heap is metric/dim-agnostic, but the metric + padded dimension
+// are now compile-time traits resolved from the user-specified dataset. We pull
+// candidate_entry_t (and friends) out of the dispatched <Metric, Dim> router_traits
+// so the heap is exercised under exactly the dataset's compile-time pair.
+template <DistanceMetricsT Metric, vec_dim_t Dim>
+using candidate_entry_for = typename router_traits_t<Metric, Dim>::candidate_entry_t;
 
-// FourAryHeap types
-template <typename Compare>
-using four_ary_heap_t = typename router_traits_t::template four_ary_heap_t<Compare>;
+template <DistanceMetricsT Metric, vec_dim_t Dim, typename Compare>
+using four_ary_heap_for = typename router_traits_t<Metric, Dim>::template four_ary_heap_t<Compare>;
 
-using max_heap_t = four_ary_heap_t<std::less<candidate_entry_t>>;
-using min_heap_t = four_ary_heap_t<std::greater<candidate_entry_t>>;
+template <DistanceMetricsT Metric, vec_dim_t Dim>
+using max_heap_for = four_ary_heap_for<Metric, Dim, std::less<candidate_entry_for<Metric, Dim>>>;
+
+template <DistanceMetricsT Metric, vec_dim_t Dim>
+using min_heap_for = four_ary_heap_for<Metric, Dim, std::greater<candidate_entry_for<Metric, Dim>>>;
 
 // --- Global Configuration ---
 struct TestConfig {
+    std::string config_path;
+    std::string dataset_name;
+    std::string metric;
     uint32_t num_operations;  // Number of push/pop operations
     uint32_t seed;            // Random seed for reproducibility
 } g_config;
+
+// --- DataProvider: loads the dataset purely to supply the padded dim; with
+// the --metric input it fixes the compile-time (metric, padded-dim) pair the
+// heap should be instantiated under. ---
+class DataProvider {
+public:
+    static DataProvider& instance() {
+        static DataProvider inst;
+        return inst;
+    }
+
+    void init() {
+        if (!std::filesystem::exists(g_config.config_path)) {
+            throw std::runtime_error("Config file not found: " + g_config.config_path);
+        }
+        ARTEA_INFO(fmt::format("Loading Dataset: {} from {}", g_config.dataset_name, g_config.config_path));
+        dataset_ = std::make_unique<vector_dataset_t>(g_config.config_path, g_config.dataset_name);
+
+        const auto& base_vecs = dataset_->get_base_vecs();
+        dataset_info_ = DatasetInfra{parse_metric(g_config.metric), base_vecs.get_vec_dim()};
+    }
+
+    DatasetInfra get_dataset_info() const { return dataset_info_; }
+
+private:
+    DataProvider() = default;
+    std::unique_ptr<vector_dataset_t> dataset_;
+    DatasetInfra dataset_info_{};
+};
 
 // --- Helper Functions ---
 
 /**
  * @brief Generate random candidate entries for testing.
  */
-std::vector<candidate_entry_t> generate_random_entries(uint32_t count, uint32_t seed) {
+template <DistanceMetricsT Metric, vec_dim_t Dim>
+std::vector<candidate_entry_for<Metric, Dim>> generate_random_entries(uint32_t count, uint32_t seed) {
+    using candidate_entry_t = candidate_entry_for<Metric, Dim>;
+    using vertex_id_t = typename router_traits_t<Metric, Dim>::vertex_id_t;
+    using distance_t = typename router_traits_t<Metric, Dim>::distance_t;
+
     std::mt19937 rng(seed);
     std::uniform_int_distribution<vertex_id_t> id_dist(0, 1000000);
     std::uniform_real_distribution<distance_t> dist_dist(0.0f, 1000.0f);
@@ -95,7 +135,12 @@ protected:
 
 // --- Tests for Max-Heap (std::less) ---
 
-TEST_F(FourAryHeapTest, MaxHeapBasicOperations) {
+template <DistanceMetricsT Metric, vec_dim_t Dim>
+void run_MaxHeapBasicOperations() {
+    using candidate_entry_t = candidate_entry_for<Metric, Dim>;
+    using max_heap_t = max_heap_for<Metric, Dim>;
+    using distance_t = typename router_traits_t<Metric, Dim>::distance_t;
+
     ARTEA_INFO(" -> Testing Max-Heap Basic Operations...");
 
     max_heap_t heap(candidate_entry_t::make_min_entry());
@@ -143,11 +188,19 @@ TEST_F(FourAryHeapTest, MaxHeapBasicOperations) {
     ARTEA_SUCCESS("Max-Heap Basic Operations passed.");
 }
 
-TEST_F(FourAryHeapTest, MaxHeapVsStdPriorityQueue) {
+TEST_F(FourAryHeapTest, MaxHeapBasicOperations) {
+    infra_dispatch(DataProvider::instance().get_dataset_info(), ARTEA_METRIC_LAMBDA(void) { run_MaxHeapBasicOperations<Metric, Dim>(); });
+}
+
+template <DistanceMetricsT Metric, vec_dim_t Dim>
+void run_MaxHeapVsStdPriorityQueue() {
+    using candidate_entry_t = candidate_entry_for<Metric, Dim>;
+    using max_heap_t = max_heap_for<Metric, Dim>;
+
     ARTEA_INFO(fmt::format(" -> Testing Max-Heap vs std::priority_queue with {} operations...",
                             g_config.num_operations));
 
-    auto entries = generate_random_entries(g_config.num_operations, g_config.seed);
+    auto entries = generate_random_entries<Metric, Dim>(g_config.num_operations, g_config.seed);
 
     // Initialize both heaps
     max_heap_t four_ary_heap(candidate_entry_t::make_min_entry());
@@ -183,10 +236,18 @@ TEST_F(FourAryHeapTest, MaxHeapVsStdPriorityQueue) {
     ARTEA_SUCCESS(fmt::format("Max-Heap matched std::priority_queue for {} operations.", compared));
 }
 
-TEST_F(FourAryHeapTest, MaxHeapInitialize) {
+TEST_F(FourAryHeapTest, MaxHeapVsStdPriorityQueue) {
+    infra_dispatch(DataProvider::instance().get_dataset_info(), ARTEA_METRIC_LAMBDA(void) { run_MaxHeapVsStdPriorityQueue<Metric, Dim>(); });
+}
+
+template <DistanceMetricsT Metric, vec_dim_t Dim>
+void run_MaxHeapInitialize() {
+    using candidate_entry_t = candidate_entry_for<Metric, Dim>;
+    using max_heap_t = max_heap_for<Metric, Dim>;
+
     ARTEA_INFO(" -> Testing Max-Heap Initialize (Floyd's construction)...");
 
-    auto entries = generate_random_entries(g_config.num_operations, g_config.seed);
+    auto entries = generate_random_entries<Metric, Dim>(g_config.num_operations, g_config.seed);
 
     // Initialize FourAryHeap using Floyd's construction
     max_heap_t four_ary_heap(candidate_entry_t::make_min_entry());
@@ -216,9 +277,18 @@ TEST_F(FourAryHeapTest, MaxHeapInitialize) {
     ARTEA_SUCCESS("Max-Heap Initialize passed.");
 }
 
+TEST_F(FourAryHeapTest, MaxHeapInitialize) {
+    infra_dispatch(DataProvider::instance().get_dataset_info(), ARTEA_METRIC_LAMBDA(void) { run_MaxHeapInitialize<Metric, Dim>(); });
+}
+
 // --- Tests for Min-Heap (std::greater) ---
 
-TEST_F(FourAryHeapTest, MinHeapBasicOperations) {
+template <DistanceMetricsT Metric, vec_dim_t Dim>
+void run_MinHeapBasicOperations() {
+    using candidate_entry_t = candidate_entry_for<Metric, Dim>;
+    using min_heap_t = min_heap_for<Metric, Dim>;
+    using distance_t = typename router_traits_t<Metric, Dim>::distance_t;
+
     ARTEA_INFO(" -> Testing Min-Heap Basic Operations...");
 
     min_heap_t heap(candidate_entry_t::make_invalid_entry());
@@ -266,11 +336,19 @@ TEST_F(FourAryHeapTest, MinHeapBasicOperations) {
     ARTEA_SUCCESS("Min-Heap Basic Operations passed.");
 }
 
-TEST_F(FourAryHeapTest, MinHeapVsStdPriorityQueue) {
+TEST_F(FourAryHeapTest, MinHeapBasicOperations) {
+    infra_dispatch(DataProvider::instance().get_dataset_info(), ARTEA_METRIC_LAMBDA(void) { run_MinHeapBasicOperations<Metric, Dim>(); });
+}
+
+template <DistanceMetricsT Metric, vec_dim_t Dim>
+void run_MinHeapVsStdPriorityQueue() {
+    using candidate_entry_t = candidate_entry_for<Metric, Dim>;
+    using min_heap_t = min_heap_for<Metric, Dim>;
+
     ARTEA_INFO(fmt::format(" -> Testing Min-Heap vs std::priority_queue with {} operations...",
                             g_config.num_operations));
 
-    auto entries = generate_random_entries(g_config.num_operations, g_config.seed);
+    auto entries = generate_random_entries<Metric, Dim>(g_config.num_operations, g_config.seed);
 
     // Initialize both heaps
     min_heap_t four_ary_heap(candidate_entry_t::make_invalid_entry());
@@ -306,10 +384,18 @@ TEST_F(FourAryHeapTest, MinHeapVsStdPriorityQueue) {
     ARTEA_SUCCESS(fmt::format("Min-Heap matched std::priority_queue for {} operations.", compared));
 }
 
-TEST_F(FourAryHeapTest, MinHeapInitialize) {
+TEST_F(FourAryHeapTest, MinHeapVsStdPriorityQueue) {
+    infra_dispatch(DataProvider::instance().get_dataset_info(), ARTEA_METRIC_LAMBDA(void) { run_MinHeapVsStdPriorityQueue<Metric, Dim>(); });
+}
+
+template <DistanceMetricsT Metric, vec_dim_t Dim>
+void run_MinHeapInitialize() {
+    using candidate_entry_t = candidate_entry_for<Metric, Dim>;
+    using min_heap_t = min_heap_for<Metric, Dim>;
+
     ARTEA_INFO(" -> Testing Min-Heap Initialize (Floyd's construction)...");
 
-    auto entries = generate_random_entries(g_config.num_operations, g_config.seed);
+    auto entries = generate_random_entries<Metric, Dim>(g_config.num_operations, g_config.seed);
 
     // Initialize FourAryHeap using Floyd's construction
     min_heap_t four_ary_heap(candidate_entry_t::make_invalid_entry());
@@ -339,9 +425,17 @@ TEST_F(FourAryHeapTest, MinHeapInitialize) {
     ARTEA_SUCCESS("Min-Heap Initialize passed.");
 }
 
+TEST_F(FourAryHeapTest, MinHeapInitialize) {
+    infra_dispatch(DataProvider::instance().get_dataset_info(), ARTEA_METRIC_LAMBDA(void) { run_MinHeapInitialize<Metric, Dim>(); });
+}
+
 // --- Edge Cases ---
 
-TEST_F(FourAryHeapTest, EdgeCaseSingleElement) {
+template <DistanceMetricsT Metric, vec_dim_t Dim>
+void run_EdgeCaseSingleElement() {
+    using candidate_entry_t = candidate_entry_for<Metric, Dim>;
+    using max_heap_t = max_heap_for<Metric, Dim>;
+
     ARTEA_INFO(" -> Testing Edge Case: Single Element...");
 
     max_heap_t heap(candidate_entry_t::make_min_entry());
@@ -359,7 +453,16 @@ TEST_F(FourAryHeapTest, EdgeCaseSingleElement) {
     ARTEA_SUCCESS("Single Element test passed.");
 }
 
-TEST_F(FourAryHeapTest, EdgeCaseDuplicateDistances) {
+TEST_F(FourAryHeapTest, EdgeCaseSingleElement) {
+    infra_dispatch(DataProvider::instance().get_dataset_info(), ARTEA_METRIC_LAMBDA(void) { run_EdgeCaseSingleElement<Metric, Dim>(); });
+}
+
+template <DistanceMetricsT Metric, vec_dim_t Dim>
+void run_EdgeCaseDuplicateDistances() {
+    using candidate_entry_t = candidate_entry_for<Metric, Dim>;
+    using max_heap_t = max_heap_for<Metric, Dim>;
+    using vertex_id_t = typename router_traits_t<Metric, Dim>::vertex_id_t;
+
     ARTEA_INFO(" -> Testing Edge Case: Duplicate Distances...");
 
     max_heap_t heap(candidate_entry_t::make_min_entry());
@@ -413,7 +516,17 @@ TEST_F(FourAryHeapTest, EdgeCaseDuplicateDistances) {
     ARTEA_SUCCESS("Duplicate Distances test passed.");
 }
 
-TEST_F(FourAryHeapTest, EdgeCaseClearAndReuse) {
+TEST_F(FourAryHeapTest, EdgeCaseDuplicateDistances) {
+    infra_dispatch(DataProvider::instance().get_dataset_info(), ARTEA_METRIC_LAMBDA(void) { run_EdgeCaseDuplicateDistances<Metric, Dim>(); });
+}
+
+template <DistanceMetricsT Metric, vec_dim_t Dim>
+void run_EdgeCaseClearAndReuse() {
+    using candidate_entry_t = candidate_entry_for<Metric, Dim>;
+    using max_heap_t = max_heap_for<Metric, Dim>;
+    using vertex_id_t = typename router_traits_t<Metric, Dim>::vertex_id_t;
+    using distance_t = typename router_traits_t<Metric, Dim>::distance_t;
+
     ARTEA_INFO(" -> Testing Edge Case: Clear and Reuse...");
 
     max_heap_t heap(candidate_entry_t::make_min_entry());
@@ -453,7 +566,17 @@ TEST_F(FourAryHeapTest, EdgeCaseClearAndReuse) {
     ARTEA_SUCCESS("Clear and Reuse test passed.");
 }
 
-TEST_F(FourAryHeapTest, StressTestMixedOperations) {
+TEST_F(FourAryHeapTest, EdgeCaseClearAndReuse) {
+    infra_dispatch(DataProvider::instance().get_dataset_info(), ARTEA_METRIC_LAMBDA(void) { run_EdgeCaseClearAndReuse<Metric, Dim>(); });
+}
+
+template <DistanceMetricsT Metric, vec_dim_t Dim>
+void run_StressTestMixedOperations() {
+    using candidate_entry_t = candidate_entry_for<Metric, Dim>;
+    using max_heap_t = max_heap_for<Metric, Dim>;
+    using vertex_id_t = typename router_traits_t<Metric, Dim>::vertex_id_t;
+    using distance_t = typename router_traits_t<Metric, Dim>::distance_t;
+
     ARTEA_INFO(fmt::format(" -> Stress Test: Mixed Push/Pop Operations with {} ops...",
                             g_config.num_operations));
 
@@ -490,6 +613,10 @@ TEST_F(FourAryHeapTest, StressTestMixedOperations) {
     ARTEA_SUCCESS(fmt::format("Stress Test passed with {} operations.", g_config.num_operations));
 }
 
+TEST_F(FourAryHeapTest, StressTestMixedOperations) {
+    infra_dispatch(DataProvider::instance().get_dataset_info(), ARTEA_METRIC_LAMBDA(void) { run_StressTestMixedOperations<Metric, Dim>(); });
+}
+
 // --- Main ---
 
 int main(int argc, char* argv[]) {
@@ -497,6 +624,14 @@ int main(int argc, char* argv[]) {
 
     // Initialize Argument Parser
     argparse::ArgumentParser program("test_four_ary_heap");
+
+    program.add_argument("-c", "--config")
+        .default_value(artea::default_dataset_config_path());
+    program.add_argument("-d", "--dataset")
+        .default_value(std::string("sift-1m"));
+    program.add_argument("--metric")
+        .default_value(std::string("euclidean"))
+        .help("Distance metric: 'euclidean', 'inner_product', or 'cosine'");
 
     program.add_argument("-n", "--num_operations")
         .help("Number of operations for stress tests")
@@ -517,14 +652,19 @@ int main(int argc, char* argv[]) {
     }
 
     // Populate Global Config
+    g_config.config_path = program.get<std::string>("--config");
+    g_config.dataset_name = program.get<std::string>("--dataset");
+    g_config.metric = program.get<std::string>("--metric");
     g_config.num_operations = program.get<uint32_t>("--num_operations");
     g_config.seed = program.get<uint32_t>("--seed");
 
     ARTEA_INFO("==========================================================");
     ARTEA_INFO("      Starting FourAryHeap Correctness Suite");
-    ARTEA_INFO(fmt::format("      Config: Operations={}, Seed={}",
-                           g_config.num_operations, g_config.seed));
+    ARTEA_INFO(fmt::format("      Config: Dataset={}, Operations={}, Seed={}",
+                           g_config.dataset_name, g_config.num_operations, g_config.seed));
     ARTEA_INFO("==========================================================");
+
+    DataProvider::instance().init();
 
     return RUN_ALL_TESTS();
 }

@@ -37,9 +37,12 @@
 
 #include <artea/cpu/framework/artea.hpp>
 #include <artea/cpu/framework/type_context/default_context.hpp>
+#include <artea/cpu/framework/type_context/infra_dispatcher.hpp>
 
 using namespace artea;
 using namespace artea::cpu;
+
+using stacked_index_t = typename index_traits_t::stacked_rgraph::index_t;
 
 // ============================================================
 //  Global configuration (populated by argparse in main())
@@ -48,6 +51,7 @@ using namespace artea::cpu;
 struct TestConfig {
     std::string config_path;
     std::string dataset_name;
+    std::string metric;
 
     // StackedRGraph parameters
     float    rnet_beta;
@@ -95,35 +99,43 @@ public:
         ARTEA_INFO(fmt::format("Dataset loaded: {} vectors, {} dims",
             base_vecs.get_num_vecs(), base_vecs.get_vec_dim()));
 
-        _dist_func = std::make_unique<dist_func_t>(base_vecs.get_vec_dim());
+        // Resolve BOTH compile-time axes: metric from the --metric input,
+        // padded dim from the loaded dataset. The dataset and the probed L0
+        // radius (a plain float) are metric/dim-independent; only the
+        // dist_func / prober run behind <Metric, Dim>.
+        _dataset_info = DatasetInfra{parse_metric(g_config.metric), base_vecs.get_vec_dim()};
 
         if (g_config.l0_radius_provided) {
             _l0_radius = g_config.l0_rnet_radius;
             ARTEA_INFO(fmt::format(
                 "Using user-provided L0 rnet_radius = {:.6f}", _l0_radius));
         } else {
-            dataset_prober_t prober(base_vecs, *_dist_func);
-            const std::vector<float> quantiles = { g_config.probe_quantile };
-            ARTEA_INFO(fmt::format(
-                "Probing L0 rnet_radius ({}th pct, {} samples)...",
-                static_cast<int>(g_config.probe_quantile * 100.0f),
-                g_config.probe_num_samples));
-            auto result = prober.probe(quantiles, g_config.probe_num_samples);
-            _l0_radius = static_cast<float>(result.table[0][0]);
+            infra_dispatch(_dataset_info, ARTEA_METRIC_LAMBDA(void) {
+                // Stateless functor: the dimension is a compile-time trait now.
+                dist_func_t<Metric, Dim> dist_func;
+                dataset_prober_t<Metric, Dim> prober(base_vecs, dist_func);
+                const std::vector<float> quantiles = { g_config.probe_quantile };
+                ARTEA_INFO(fmt::format(
+                    "Probing L0 rnet_radius ({}th pct, {} samples)...",
+                    static_cast<int>(g_config.probe_quantile * 100.0f),
+                    g_config.probe_num_samples));
+                auto result = prober.probe(quantiles, g_config.probe_num_samples);
+                _l0_radius = static_cast<float>(result.table[0][0]);
+            });
             ARTEA_INFO(fmt::format(
                 "Auto-probed L0 rnet_radius = {:.6f}", _l0_radius));
         }
     }
 
-    auto get_dataset()   -> vector_dataset_t& { return *_dataset; }
-    auto get_dist_func() -> dist_func_t&      { return *_dist_func; }
-    auto get_l0_radius() const -> float       { return _l0_radius; }
+    auto get_dataset()      -> vector_dataset_t& { return *_dataset; }
+    auto get_dataset_info() const -> DatasetInfra { return _dataset_info; }
+    auto get_l0_radius() const -> float          { return _l0_radius; }
 
 private:
     DataProvider() = default;
 
     std::unique_ptr<vector_dataset_t> _dataset;
-    std::unique_ptr<dist_func_t>      _dist_func;
+    DatasetInfra                      _dataset_info{};
     float                             _l0_radius = 0.0f;
 };
 
@@ -133,16 +145,18 @@ private:
 
 class StackedRGraphTest : public ::testing::Test {
 protected:
+    template <DistanceMetricsT Metric, vec_dim_t Dim>
     static auto build_graph(bool insert_on_L0)
-        -> std::pair<std::unique_ptr<stacked_rgraph::index_t>, int64_t>
+        -> std::pair<std::unique_ptr<stacked_index_t>, int64_t>
     {
         auto& provider = DataProvider::instance();
         const auto& base_vecs = provider.get_dataset().get_base_vecs();
-        auto& dist_func = provider.get_dist_func();
+        // Stateless functor: the dimension is a compile-time trait now.
+        dist_func_t<Metric, Dim> dist_func;
 
         const vertex_num_t total_vertices =
             static_cast<vertex_num_t>(base_vecs.get_num_vecs());
-        stacked_rgraph::rgraph_config_t rgraph_config(
+        stacked_rgraph::rgraph_config_t<Metric, Dim> rgraph_config(
             g_config.rnet_beta, provider.get_l0_radius(),
             static_cast<vertex_num_t>(g_config.search_nn_qs),
             static_cast<vertex_num_t>(g_config.ul_select_nbrs_qs),
@@ -152,17 +166,17 @@ protected:
         // stacked_rgraph::pruning_config_t is an alias of conv_graph's
         // PruningConfig; the stacked_rgraph backbone only reads
         // scale_coeffs from it, so shifted_coeffs is pinned to 0 here.
-        stacked_rgraph::pruning_config_t pruning_config(
+        stacked_rgraph::pruning_config_t<Metric, Dim> pruning_config(
             static_cast<ratio_t>(g_config.scale_coeffs),
             static_cast<ratio_t>(0));
-        auto graph = std::make_unique<stacked_rgraph::index_t>(
+        auto graph = std::make_unique<stacked_index_t>(
             total_vertices, rgraph_config, pruning_config);
 
         vector_array_t owned_batch =
             base_vecs.extract_subset(0, total_vertices);
 
         auto t0 = std::chrono::high_resolution_clock::now();
-        stacked_rgraph::factory_t::add_vertices(
+        stacked_rgraph::factory_t<Metric, Dim>::add_vertices(
             *graph, std::move(owned_batch), dist_func, insert_on_L0);
         auto t1 = std::chrono::high_resolution_clock::now();
         const int64_t ms =
@@ -172,7 +186,7 @@ protected:
     }
 
     static void dump_graph_info(
-        const stacked_rgraph::index_t& graph,
+        const dynamic::hierarchical_graph_t& graph,
         const char* label, int64_t build_ms)
     {
         const auto& base_vecs =
@@ -251,13 +265,17 @@ protected:
             g_config.ul_select_nbrs_qs, g_config.bl_select_nbrs_qs,
             g_config.scale_coeffs));
 
-        ARTEA_INFO("--- Building with insert_on_L0=false ---");
-        std::tie(_graph_no_l0, _build_ms_no_l0) = build_graph(/*insert_on_L0=*/false);
-        dump_graph_info(*_graph_no_l0, "insert_on_L0=false", _build_ms_no_l0);
+        infra_dispatch(DataProvider::instance().get_dataset_info(), ARTEA_METRIC_LAMBDA(void) {
+                ARTEA_INFO("--- Building with insert_on_L0=false ---");
+                std::tie(_graph_no_l0, _build_ms_no_l0) =
+                    build_graph<Metric, Dim>(/*insert_on_L0=*/false);
+                dump_graph_info(_graph_no_l0->get_hierarchical_graph(), "insert_on_L0=false", _build_ms_no_l0);
 
-        ARTEA_INFO("--- Building with insert_on_L0=true ---");
-        std::tie(_graph_with_l0, _build_ms_with_l0) = build_graph(/*insert_on_L0=*/true);
-        dump_graph_info(*_graph_with_l0, "insert_on_L0=true", _build_ms_with_l0);
+                ARTEA_INFO("--- Building with insert_on_L0=true ---");
+                std::tie(_graph_with_l0, _build_ms_with_l0) =
+                    build_graph<Metric, Dim>(/*insert_on_L0=*/true);
+                dump_graph_info(_graph_with_l0->get_hierarchical_graph(), "insert_on_L0=true", _build_ms_with_l0);
+            });
     }
 
     static void TearDownTestSuite() {
@@ -265,14 +283,14 @@ protected:
         _graph_with_l0.reset();
     }
 
-    static std::unique_ptr<stacked_rgraph::index_t> _graph_no_l0;
-    static std::unique_ptr<stacked_rgraph::index_t> _graph_with_l0;
+    static std::unique_ptr<stacked_index_t> _graph_no_l0;
+    static std::unique_ptr<stacked_index_t> _graph_with_l0;
     static int64_t _build_ms_no_l0;
     static int64_t _build_ms_with_l0;
 };
 
-std::unique_ptr<stacked_rgraph::index_t> StackedRGraphTest::_graph_no_l0   = nullptr;
-std::unique_ptr<stacked_rgraph::index_t> StackedRGraphTest::_graph_with_l0 = nullptr;
+std::unique_ptr<stacked_index_t> StackedRGraphTest::_graph_no_l0   = nullptr;
+std::unique_ptr<stacked_index_t> StackedRGraphTest::_graph_with_l0 = nullptr;
 int64_t StackedRGraphTest::_build_ms_no_l0  = 0;
 int64_t StackedRGraphTest::_build_ms_with_l0 = 0;
 
@@ -288,9 +306,9 @@ TEST_F(StackedRGraphTest, BuildTime) {
 
     ARTEA_INFO("=== Build summary ===");
     ARTEA_INFO(fmt::format("  dataset           : {}", g_config.dataset_name));
-    ARTEA_INFO(fmt::format("  num_vertices      : {}", _graph_no_l0->get_num_vertices()));
+    ARTEA_INFO(fmt::format("  num_vertices      : {}", _graph_no_l0->get_hierarchical_graph().get_num_vertices()));
     ARTEA_INFO(fmt::format("  max_restrict_level: {}",
-        static_cast<int>(_graph_no_l0->max_restrict_level())));
+        static_cast<int>(_graph_no_l0->get_hierarchical_graph().max_restrict_level())));
     ARTEA_INFO(fmt::format("  insert_on_L0=false: {} ms", _build_ms_no_l0));
     ARTEA_INFO(fmt::format("  insert_on_L0=true : {} ms", _build_ms_with_l0));
     ARTEA_INFO(fmt::format("  L0 overhead       : {} ms ({:.1f}%)",
@@ -313,6 +331,9 @@ int main(int argc, char** argv) {
     program.add_argument("-d", "--dataset")
         .default_value(std::string("sift-1m"))
         .help("Dataset name (as listed in datasets.json)");
+    program.add_argument("--metric")
+        .default_value(std::string("euclidean"))
+        .help("Distance metric: 'euclidean', 'inner_product', or 'cosine'");
 
     program.add_argument("--beta")
         .default_value(2.0f).scan<'g', float>()
@@ -357,6 +378,7 @@ int main(int argc, char** argv) {
 
     g_config.config_path        = program.get<std::string>("--config");
     g_config.dataset_name       = program.get<std::string>("--dataset");
+    g_config.metric             = program.get<std::string>("--metric");
     g_config.rnet_beta          = program.get<float>("--beta");
     g_config.ul_max_nbr_size    = program.get<uint32_t>("--ul-max-nbr-size");
     g_config.bl_max_nbr_size    = program.get<uint32_t>("--bl-max-nbr-size");

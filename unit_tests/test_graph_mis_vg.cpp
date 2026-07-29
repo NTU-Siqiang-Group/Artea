@@ -26,13 +26,17 @@
 
 #include <artea/cpu/framework/artea.hpp>
 #include <artea/cpu/framework/type_context/default_context.hpp>
+#include <artea/cpu/framework/type_context/infra_dispatcher.hpp>
 
 using namespace artea;
 using namespace artea::cpu;
 
+using knn_index_t = typename index_traits_t::knn_graph::index_t;
+
 struct TestConfig {
     std::string config_path;
     std::string dataset_name;
+    std::string metric;
     uint32_t max_nbr_size;
     float prefill_ratio;
     uint32_t routing_topk;
@@ -69,65 +73,76 @@ public:
 
         const auto& base_vecs = dataset_->get_base_vecs();
 
-        // Build KNN graph
-        layer_config_t layer_config(g_config.max_nbr_size);
-        knn_graph::propagate_config_t propagate_config(5, 12, g_config.prefill_ratio, 1,
-        g_config.routing_topk, g_config.routing_queue_size);
+        // Resolve BOTH compile-time axes: metric from the --metric input, padded
+        // dim from the loaded dataset; the dataset is metric/dim-independent,
+        // only the KNN build + MIS run behind <Metric, Dim>.
+        DatasetInfra dataset_info{parse_metric(g_config.metric), base_vecs.get_vec_dim()};
 
-        ARTEA_INFO("Building KNN graph...");
-        auto t0 = std::chrono::high_resolution_clock::now();
-        knn_graph_ = std::make_unique<knn_graph::index_t>(std::move(
-            knn_graph::factory_t::construct_graph(
-                base_vecs, layer_config, propagate_config
-            ).graph
-        ));
-        auto t1 = std::chrono::high_resolution_clock::now();
-        g_results.knn_build_time_s = std::chrono::duration_cast<std::chrono::microseconds>(t1 - t0).count() / 1e6;
-        g_results.num_vertices = knn_graph_->get_num_vertices();
-        ARTEA_INFO(fmt::format("KNN graph built with {} vertices in {:.2f} s",
-            g_results.num_vertices, g_results.knn_build_time_s));
+        infra_dispatch(dataset_info, ARTEA_METRIC_LAMBDA(void) {
+            // Build KNN graph
+            layer_config_t layer_config(g_config.max_nbr_size);
+            knn_graph::propagate_config_t<Metric, Dim> propagate_config(5, 12, g_config.prefill_ratio, 1,
+            g_config.routing_topk, g_config.routing_queue_size);
 
-        // Print radius quantile table for user selection
-        _print_radius_table();
+            ARTEA_INFO("Building KNN graph...");
+            auto t0 = std::chrono::high_resolution_clock::now();
+            auto knn_graph = std::make_unique<knn_index_t>(std::move(
+                knn_graph::factory_t<Metric, Dim>::construct_graph(
+                    base_vecs, layer_config, propagate_config
+                ).graph
+            ));
+            auto t1 = std::chrono::high_resolution_clock::now();
+            g_results.knn_build_time_s = std::chrono::duration_cast<std::chrono::microseconds>(t1 - t0).count() / 1e6;
+            g_results.num_vertices = knn_graph->get_num_vertices();
+            ARTEA_INFO(fmt::format("KNN graph built with {} vertices in {:.2f} s",
+                g_results.num_vertices, g_results.knn_build_time_s));
 
-        // Interactive: ask user for rnet_radius, radix, max_power
-        std::cout << "\nEnter: rnet_radius radix max_power (space-separated, e.g. 30000 2.0 3):" << std::endl;
-        std::cout << "  Start radius = rnet_radius * radix^max_power (max_power=0 for single-shot): " << std::flush;
-        std::string input;
-        std::getline(std::cin, input);
-        {
-            std::istringstream iss(input);
-            float rnet_radius, radix_val = 2.0f;
-            uint32_t max_power_val = 0;
-            iss >> rnet_radius;
-            if (iss >> radix_val) { iss >> max_power_val; }
-            g_results.min_radius = rnet_radius;
-            g_results.radix = radix_val;
-            g_results.max_power = max_power_val;
-        }
-        ARTEA_INFO(fmt::format("Parameters: rnet_radius={:.6f}, radix={:.2f}, max_power={}",
-            g_results.min_radius, g_results.radix, g_results.max_power));
+            // Print radius quantile table for user selection
+            _print_radius_table(*knn_graph);
 
-        // Run GraphMISVG
-        graph_mis_vg_t mis_vg;
-        t0 = std::chrono::high_resolution_clock::now();
-        rnet_ = std::make_unique<approx_rnet_t>(mis_vg.generate(
-            *knn_graph_, g_results.min_radius, g_results.radix, g_results.max_power));
-        t1 = std::chrono::high_resolution_clock::now();
-        g_results.mis_time_s = std::chrono::duration_cast<std::chrono::microseconds>(t1 - t0).count() / 1e6;
-        g_results.num_selected = rnet_->get_num_vecs();
-        ARTEA_INFO(fmt::format("MIS completed in {:.2f} s: selected {} / {} vertices ({:.2f}%)",
-            g_results.mis_time_s, g_results.num_selected, g_results.num_vertices,
-            100.0 * g_results.num_selected / g_results.num_vertices));
+            // Interactive: ask user for rnet_radius, radix, max_power
+            std::cout << "\nEnter: rnet_radius radix max_power (space-separated, e.g. 30000 2.0 3):" << std::endl;
+            std::cout << "  Start radius = rnet_radius * radix^max_power (max_power=0 for single-shot): " << std::flush;
+            std::string input;
+            std::getline(std::cin, input);
+            {
+                std::istringstream iss(input);
+                float rnet_radius, radix_val = 2.0f;
+                uint32_t max_power_val = 0;
+                iss >> rnet_radius;
+                if (iss >> radix_val) { iss >> max_power_val; }
+                g_results.min_radius = rnet_radius;
+                g_results.radix = radix_val;
+                g_results.max_power = max_power_val;
+            }
+            ARTEA_INFO(fmt::format("Parameters: rnet_radius={:.6f}, radix={:.2f}, max_power={}",
+                g_results.min_radius, g_results.radix, g_results.max_power));
+
+            // Run GraphMISVG. approx_rnet_t aliases the metric-independent
+            // vertex_subset_t, so we store the result in that plain type.
+            graph_mis_vg_t<Metric, Dim> mis_vg;
+            t0 = std::chrono::high_resolution_clock::now();
+            rnet_ = std::make_unique<vertex_subset_t>(mis_vg.generate(
+                *knn_graph, g_results.min_radius, g_results.radix, g_results.max_power));
+            t1 = std::chrono::high_resolution_clock::now();
+            g_results.mis_time_s = std::chrono::duration_cast<std::chrono::microseconds>(t1 - t0).count() / 1e6;
+            g_results.num_selected = rnet_->get_num_vecs();
+            ARTEA_INFO(fmt::format("MIS completed in {:.2f} s: selected {} / {} vertices ({:.2f}%)",
+                g_results.mis_time_s, g_results.num_selected, g_results.num_vertices,
+                100.0 * g_results.num_selected / g_results.num_vertices));
+
+            knn_graph_ = std::move(knn_graph);
+        });
     }
 
-    knn_graph::index_t& get_knn_graph() { return *knn_graph_; }
-    approx_rnet_t& get_rnet() { return *rnet_; }
+    knn_index_t& get_knn_graph() { return *knn_graph_; }
+    vertex_subset_t& get_rnet() { return *rnet_; }
 
 private:
     DataProvider() = default;
 
-    void _print_radius_table() {
+    template <typename GraphT>
+    void _print_radius_table(const GraphT& knn_graph) {
         radius_prober_t prober;
 
         std::vector<uint32_t> nbr_ranks = {1, 2, 4, 8, 16, 32, 64};
@@ -158,7 +173,7 @@ private:
         for (float q : quantiles) {
             std::cout << fmt::format("{:<12}", fmt::format("{:.3f}", q));
             for (auto rank : valid_ranks) {
-                auto result = prober.probe(*knn_graph_, rank, q);
+                auto result = prober.probe(knn_graph, rank, q);
                 if (result.num_vertices == 0) {
                     std::cout << fmt::format(" {:>10}", "N/A");
                 } else {
@@ -172,8 +187,8 @@ private:
     }
 
     std::unique_ptr<vector_dataset_t> dataset_;
-    std::unique_ptr<knn_graph::index_t> knn_graph_;
-    std::unique_ptr<approx_rnet_t> rnet_;
+    std::unique_ptr<knn_index_t> knn_graph_;
+    std::unique_ptr<vertex_subset_t> rnet_;
 };
 
 class GraphMISVGTest : public ::testing::Test {};
@@ -284,6 +299,8 @@ int main(int argc, char** argv) {
     argparse::ArgumentParser program("test_graph_mis_vg");
     program.add_argument("-c", "--config").default_value(artea::default_dataset_config_path());
     program.add_argument("-d", "--dataset").default_value(std::string("sift-1m"));
+    program.add_argument("--metric").default_value(std::string("euclidean"))
+        .help("Distance metric: 'euclidean', 'inner_product', or 'cosine'");
     program.add_argument("--max-nbr-size").default_value(96u).scan<'u', uint32_t>();
     program.add_argument("--prefill-ratio").default_value(0.34f).scan<'g', float>();
     program.add_argument("--routing-topk").default_value(64u).scan<'u', uint32_t>()
@@ -302,6 +319,7 @@ int main(int argc, char** argv) {
 
     g_config.config_path = program.get<std::string>("--config");
     g_config.dataset_name = program.get<std::string>("--dataset");
+    g_config.metric = program.get<std::string>("--metric");
     g_config.max_nbr_size = program.get<uint32_t>("--max-nbr-size");
     g_config.prefill_ratio = program.get<float>("--prefill-ratio");
     g_config.routing_topk = program.get<uint32_t>("--routing-topk");

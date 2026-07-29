@@ -21,6 +21,7 @@
 #include <argparse/argparse.hpp>
 #include <artea/cpu/framework/artea.hpp>
 #include <artea/cpu/framework/type_context/default_context.hpp>
+#include <artea/cpu/framework/type_context/infra_dispatcher.hpp>
 #include <iostream>
 #include <iomanip>
 #include <chrono>
@@ -40,6 +41,10 @@ int main(int argc, char** argv) {
     program.add_argument("-d", "--dataset")
         .default_value(std::string("sift-1m"))
         .help("Dataset name");
+
+    program.add_argument("--metric")
+        .default_value(std::string("euclidean"))
+        .help("Distance metric: 'euclidean', 'inner_product', or 'cosine'");
 
     // Probing parameters
     program.add_argument("-q", "--quantile")
@@ -73,6 +78,7 @@ int main(int argc, char** argv) {
     // Parse configuration
     std::string config_path = program.get<std::string>("--config");
     std::string dataset_name = program.get<std::string>("--dataset");
+    std::string metric_str = program.get<std::string>("--metric");
     bool has_quantile = program.is_used("--quantile");
     float quantile = has_quantile ? program.get<float>("--quantile") : 0.0f;
 
@@ -90,7 +96,7 @@ int main(int argc, char** argv) {
         ARTEA_ERROR("--confidence and --relative-err must be specified together");
     }
 
-    // Load dataset
+    // Load dataset (metric/dim-independent).
     ARTEA_INFO("Loading dataset...");
     vector_dataset_t dataset(config_path, dataset_name);
 
@@ -101,11 +107,18 @@ int main(int argc, char** argv) {
     ARTEA_INFO(fmt::format("  Dimension: {}", dim));
     ARTEA_INFO(fmt::format("  Base vectors: {}", num_base_vecs));
 
-    // Create distance function
-    dist_func_t dist_func(dim);
+    // Resolve both compile-time axes: metric from the --metric input, padded
+    // dim from the loaded dataset.
+    const auto dataset_info = DatasetInfra{parse_metric(metric_str), dim};
+
+    // Bridge runtime (metric, dim) -> compile-time <Metric, Dim>; the distance
+    // function and DistanceProber are metric/dim-dependent.
+    return infra_dispatch(dataset_info, ARTEA_METRIC_LAMBDA(int) {
+    // Create distance function (stateless: dim is a compile-time trait now)
+    dist_func_t<Metric, Dim> dist_func;
 
     // Create radius prober
-    distance_prober_t prober(dist_func);
+    distance_prober_t<Metric, Dim> prober(dist_func);
 
     // Check if multi-quantile mode
     if (!has_quantile) {
@@ -169,7 +182,7 @@ int main(int argc, char** argv) {
         // Mode 2: Auto-compute from confidence and relative error
         confidence = program.get<float>("--confidence");
         relative_err = program.get<float>("--relative-err");
-        num_distances = distance_prober_t::compute_num_dists_sampled(quantile, confidence, relative_err);
+        num_distances = distance_prober_t<Metric, Dim>::compute_num_dists_sampled(quantile, confidence, relative_err);
 
         ARTEA_INFO(fmt::format("Radius Probing Configuration:"));
         ARTEA_INFO(fmt::format("  Dataset: {}", dataset_name));
@@ -182,7 +195,7 @@ int main(int argc, char** argv) {
         // Default mode: use default confidence and relative error
         confidence = program.get<float>("--confidence");
         relative_err = program.get<float>("--relative-err");
-        num_distances = distance_prober_t::compute_num_dists_sampled(quantile, confidence, relative_err);
+        num_distances = distance_prober_t<Metric, Dim>::compute_num_dists_sampled(quantile, confidence, relative_err);
 
         ARTEA_INFO(fmt::format("Radius Probing Configuration:"));
         ARTEA_INFO(fmt::format("  Dataset: {}", dataset_name));
@@ -210,4 +223,5 @@ int main(int argc, char** argv) {
     ARTEA_INFO(fmt::format("  Time elapsed: {:.3f} seconds", duration.count() / 1000.0));
 
     return 0;
+    });
 }

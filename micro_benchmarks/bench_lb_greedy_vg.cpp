@@ -14,24 +14,21 @@
 
 #include <benchmark/benchmark.h>
 #include <argparse/argparse.hpp>
+#include <fmt/format.h>
 #include <artea/cpu/framework/artea.hpp>
+#include <artea/cpu/framework/type_context/default_context.hpp>
+#include <artea/cpu/framework/type_context/infra_dispatcher.hpp>
 #include <memory>
+#include <stdexcept>
 #include <cstring>
 
 using namespace artea;
 using namespace artea::cpu;
 
-using base_traits_t = BaseTraits<uint32_t, float>;
-using computer_traits_t = ComputerTraits<base_traits_t, DistanceMetricsT::EUCLIDEAN>;
-using index_traits_t = IndexTraits<base_traits_t>;
-using vg_traits_t = VertexGeneratorTraits<computer_traits_t, index_traits_t>;
-using dist_func_t = typename vg_traits_t::dist_func_t;
-using vector_array_t = typename vg_traits_t::vector_array_t;
-using lb_greedy_vg_t = typename vg_traits_t::lb_greedy_vg_t;
-
 struct BenchConfig {
     std::string config_path;
     std::string dataset_name;
+    std::string metric;
     float min_radius;
     uint32_t max_result_size;
 
@@ -57,7 +54,7 @@ public:
     }
 
     void init() {
-        auto dataset = std::make_unique<typename base_traits_t::vector_dataset_t>(
+        auto dataset = std::make_unique<vector_dataset_t>(
             g_config.config_path,
             g_config.dataset_name
         );
@@ -69,31 +66,55 @@ public:
         dim_ = dataset->get_base_vecs().get_vec_dim();
         num_base_vecs_ = dataset->get_base_vecs().get_num_vecs();
 
-        // Use all base vectors from dataset
+        // Use all base vectors from dataset (metric/dim-independent storage).
         base_vecs_ = std::move(dataset->get_base_vecs());
 
-        // Initialize distance function
-        dist_func_ = std::make_unique<dist_func_t>(dim_);
+        // Resolve BOTH compile-time axes: the metric from the --metric input,
+        // the padded dim from the loaded dataset. The dataset stays metric/dim-
+        // independent; the stateless dist_func and the lb_greedy_vg_t are
+        // rebuilt inside each dispatched <Metric, Dim> body.
+        dataset_info_ = DatasetInfra{parse_metric(g_config.metric), dim_};
     }
 
     uint32_t get_dim() const { return dim_; }
     uint32_t get_num_base_vecs() const { return num_base_vecs_; }
     const vector_array_t& get_base_vecs() const { return base_vecs_; }
-    const dist_func_t& get_dist_func() const { return *dist_func_; }
+    DatasetInfra get_dataset_info() const { return dataset_info_; }
 
 private:
     uint32_t dim_;
     uint32_t num_base_vecs_;
     vector_array_t base_vecs_;
-    std::unique_ptr<dist_func_t> dist_func_;
+    DatasetInfra dataset_info_{};
 };
 
 // Benchmark for LBGreedyVG with auto-computed parameters
 static void BM_LBGreedyVG(benchmark::State& state) {
     auto& provider = DataProvider::instance();
-    lb_greedy_vg_t generator(provider.get_dist_func());
 
-    for (auto _ : state) {
+    // Final result size, captured from the last (post-loop) generate() call so
+    // the counters below can be reported outside the dispatched <Metric, Dim> body.
+    std::size_t final_result_size = 0;
+
+    infra_dispatch(provider.get_dataset_info(), ARTEA_METRIC_LAMBDA(void) {
+        // Stateless functor: the dimension is a compile-time trait now.
+        dist_func_t<Metric, Dim> dist_func;
+        lb_greedy_vg_t<Metric, Dim> generator(dist_func);
+
+        for (auto _ : state) {
+            auto result = generator.generate(
+                provider.get_base_vecs(),
+                g_config.min_radius,
+                g_config.max_result_size,
+                g_config.coverage_ratio,
+                g_config.confidence,
+                g_config.batch_size
+            );
+            benchmark::DoNotOptimize(result);
+            benchmark::ClobberMemory();
+        }
+
+        // Report the actual result size in the last iteration
         auto result = generator.generate(
             provider.get_base_vecs(),
             g_config.min_radius,
@@ -102,24 +123,14 @@ static void BM_LBGreedyVG(benchmark::State& state) {
             g_config.confidence,
             g_config.batch_size
         );
-        benchmark::DoNotOptimize(result);
-        benchmark::ClobberMemory();
-    }
+        final_result_size = result.size();
+    });
 
-    // Report the actual result size in the last iteration
-    auto result = generator.generate(
-        provider.get_base_vecs(),
-        g_config.min_radius,
-        g_config.max_result_size,
-        g_config.coverage_ratio,
-        g_config.confidence,
-        g_config.batch_size
-    );
     state.counters["result_size"] = benchmark::Counter(
-        static_cast<double>(result.size())
+        static_cast<double>(final_result_size)
     );
     state.counters["approx_rnet_ratio(%)"] = benchmark::Counter(
-        100.0 * result.size() / provider.get_num_base_vecs()
+        100.0 * final_result_size / provider.get_num_base_vecs()
     );
 }
 BENCHMARK(BM_LBGreedyVG)
@@ -138,6 +149,10 @@ int main(int argc, char** argv) {
     program.add_argument("-d", "--dataset")
         .default_value(std::string("sift-1m"))
         .help("Dataset name");
+
+    program.add_argument("--metric")
+        .default_value(std::string("euclidean"))
+        .help("Distance metric: 'euclidean', 'inner_product', or 'cosine'");
 
     // Algorithm parameters
     program.add_argument("-r", "--min-radius")
@@ -185,6 +200,7 @@ int main(int argc, char** argv) {
     // Load configuration
     g_config.config_path = program.get<std::string>("--config");
     g_config.dataset_name = program.get<std::string>("--dataset");
+    g_config.metric = program.get<std::string>("--metric");
     g_config.min_radius = program.get<float>("--min-radius");
     g_config.max_result_size = program.get<uint32_t>("--max-result-size");
     g_config.coverage_ratio = program.get<float>("--coverage-ratio");
@@ -196,10 +212,15 @@ int main(int argc, char** argv) {
     std::cout << "Loading dataset..." << std::endl;
     DataProvider::instance().init();
 
-    // Compute term_thresh
-    uint32_t computed_term_thresh = lb_greedy_vg_t::compute_term_thresh(
-        g_config.coverage_ratio, g_config.confidence, g_config.batch_size
-    );
+    // Compute term_thresh (compute_term_thresh is a static method on the now
+    // metric-dependent lb_greedy_vg_t, so resolve <Metric, Dim> via dispatch).
+    uint32_t computed_term_thresh = infra_dispatch(
+        DataProvider::instance().get_dataset_info(),
+        ARTEA_METRIC_LAMBDA(uint32_t) {
+            return lb_greedy_vg_t<Metric, Dim>::compute_term_thresh(
+                g_config.coverage_ratio, g_config.confidence, g_config.batch_size
+            );
+        });
 
     // Print configuration
     std::cout << "\n=== Benchmark Configuration ===" << std::endl;

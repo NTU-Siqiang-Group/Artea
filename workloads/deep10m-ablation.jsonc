@@ -1,0 +1,55 @@
+{
+  "dataset-config": "./configs/datasets.json",
+  "dataset": "deep-10m",
+  "metric": "euclidean",
+  "warmup_runs": 5,
+  "test_runs": 10,
+  "indexes-config": {
+    "artea": {
+      "rnet_beta":               1.44,
+      "l0_rnet_radius":          0.43,
+      "l0_min_distance":         0.02,
+      "ul_max_nbr_size":         40,
+      "bl_max_nbr_size":         80,
+      "search_nn_qs":            30,
+      "ul_select_nbrs_qs":       100,
+      "bl_select_nbrs_qs":       100,
+      "scale_coeffs":            1.05,
+      "shifted_coeffs":          1.5,
+      "num_build_loops":         5,
+      "num_triu_iters":          12,
+      "prefill_ratio":           0.34,
+      "shuffle_insertion_order": false,
+      "insert_on_L0":            false,
+      "throughput_search": [
+        { "topk": 1, "candidate_queue_config": "1,40,1" }
+      ],
+      "latency_search": [
+        { "topk": 1, "candidate_queue_config": "1,40,1" }
+      ]
+    },
+    "alpha-cg": {
+      "R": 100,
+      "L": 100,
+      "C": 500,
+      "alpha_start": 0.9,
+      "alpha_step": 0.05,
+      "alpha_max": 1.6,
+      "tau": 0.02,
+      "T": 50,
+      "efanna_K":      200,
+      "efanna_L":      200,
+      "efanna_S":      10,
+      "efanna_trees":  8,
+      "efanna_mlevel": 8,
+      "efanna_epochs": 8,
+      "efanna_checkK": 25,
+      "throughput_search": [
+        { "topk": 1, "candidate_queue_config": "1,40,1" }
+      ],
+      "latency_search": [
+        { "topk": 1, "candidate_queue_config": "1,40,1" }
+      ]
+    }
+  }
+}

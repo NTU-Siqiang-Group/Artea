@@ -22,6 +22,12 @@
 using namespace artea;
 using namespace artea::cpu;
 
+// Synthetic, fixed-dim test: metric/dim are pinned at compile time (no dataset,
+// no dispatch). recall_estimator_t is metric-dependent, so it is named with
+// these compile-time params.
+constexpr DistanceMetricsT TEST_METRIC  = DistanceMetricsT::EUCLIDEAN;
+constexpr vec_dim_t        TEST_DIM = 128;  // multiple of SIMD chunk size (16)
+
 // Helper function to create idlist_array_t from raw data
 static idlist_array_t create_idlist_array(const std::vector<vertex_id_t>& data, uint32_t num_vecs, uint32_t dim) {
     idlist_array_t result(dim);  // Only specify dimension, not num_vecs
@@ -35,10 +41,10 @@ class RecallEstimatorTest : public ::testing::Test {
 protected:
     void SetUp() override {
         // Initialize recall estimator
-        estimator_ = std::make_unique<recall_estimator_t>();
+        estimator_ = std::make_unique<recall_estimator_t<TEST_METRIC, TEST_DIM>>();
     }
 
-    std::unique_ptr<recall_estimator_t> estimator_;
+    std::unique_ptr<recall_estimator_t<TEST_METRIC, TEST_DIM>> estimator_;
 };
 
 TEST_F(RecallEstimatorTest, PerfectRecall) {

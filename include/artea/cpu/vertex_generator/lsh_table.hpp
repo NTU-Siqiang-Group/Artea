@@ -37,27 +37,23 @@ class LSHTable {
     using hash_num_t = typename VertexGeneratorTraitsT::hash_num_t;
     using vector_t = typename VertexGeneratorTraitsT::vector_t;
     using vector_array_t = typename VertexGeneratorTraitsT::vector_array_t;
-    using fma_func_t = typename VertexGeneratorTraitsT::fma_func_t;
+    using dist_func_t = typename VertexGeneratorTraitsT::dist_func_t;
 
 public:
     /** @brief Construct an LSHTable with given projection vector array and offset vector
      *  @note Both projection_vecs and offset_vec should have size equal to num_hashes.
-     *  @note std::move is compulsory to avoid unnecessary copies:
-     *        `LSHTable<Traits> lsh(num_hashes, bucket_scale, std::move(proj), std::move(off), fma_func);`
      */
     LSHTable(
         hash_num_t num_hashes,
         vec_ele_t bucket_scale,
         vector_array_t projection_vecs,
-        vector_t offset_vec,
-        const fma_func_t& fma_func
+        vector_t offset_vec
     ) :
         _num_hashes(num_hashes),
         _bucket_scale(bucket_scale),
         _inv_bucket_scale(static_cast<vec_ele_t>(1.0) / bucket_scale),
         _projection_vecs(std::move(projection_vecs)),
-        _offset_vec(offset_vec),
-        _fma_func(fma_func) {}
+        _offset_vec(std::move(offset_vec)) {}
 
     LSHTable(LSHTable&&) noexcept = default;
     LSHTable& operator=(LSHTable&&) noexcept = default;
@@ -79,9 +75,9 @@ public:
         for (vec_num_t i = 0; i < _num_hashes; ++i) {
             const vec_ele_t* proj_vec = _projection_vecs.get(i);   // (A)
             vec_ele_t offset = _offset_vec[i];  // (b)
-            vec_ele_t fma_val = _fma_func(proj_vec, input_vec); // (A*x)
+            vec_ele_t projection = _dist_func.dot_product(proj_vec, input_vec); // (A*x)
             // Compute `floor((A*x + b) / r)`
-            result_vec[i] = std::floor((fma_val + offset) * _inv_bucket_scale);
+            result_vec[i] = std::floor((projection + offset) * _inv_bucket_scale);
         }
     }
 
@@ -92,28 +88,28 @@ public:
      * @param result_vec Pointer to the raw data of the result vector
      * @param f
      */
-    template <bool read_fma_cache, bool write_fma_cache>
-    auto compute(const vec_ele_t* input_vec, vec_ele_t* result_vec, vec_ele_t* fma_cache) const -> void {
-        static_assert(not (read_fma_cache and write_fma_cache),
-            "read_fma_cache and write_fma_cache can not be simultanuously set True, "
+    template <bool read_projection_cache, bool write_projection_cache>
+    auto compute(const vec_ele_t* input_vec, vec_ele_t* result_vec, vec_ele_t* projection_cache) const -> void {
+        static_assert(not (read_projection_cache and write_projection_cache),
+            "read_projection_cache and write_projection_cache can not be simultaneously true, "
             "otherwise this operation is meaningless.");
 
         // Iterate over all hash functions stored in the VectorArray
         for (vec_num_t i = 0; i < _num_hashes; ++i) {
-            vec_ele_t fma_val;  // (A*x)
-            if constexpr (read_fma_cache) {
-                fma_val = fma_cache[i];
+            vec_ele_t projection;  // (A*x)
+            if constexpr (read_projection_cache) {
+                projection = projection_cache[i];
             }
             else {
                 const vec_ele_t* proj_vec = _projection_vecs.get(i);
-                fma_val = _fma_func(proj_vec, input_vec);
+                projection = _dist_func.dot_product(proj_vec, input_vec);
             }
-            if constexpr (write_fma_cache) {
-                fma_cache[i] = fma_val;
+            if constexpr (write_projection_cache) {
+                projection_cache[i] = projection;
             }
             vec_ele_t offset = _offset_vec[i];  // (b)
             // Compute `floor((A*x + b) / r)`
-            result_vec[i] = std::floor((fma_val + offset) * _inv_bucket_scale);
+            result_vec[i] = std::floor((projection + offset) * _inv_bucket_scale);
         }
     }
 
@@ -167,8 +163,8 @@ private:
     /** @brief Inverse of bucket scale parameter '1/r' (for fast division) */
     vec_ele_t _inv_bucket_scale;
 
-    /** @brief FMA function used for projection */
-    fma_func_t _fma_func;
+    /** @brief SIMD distance utility; its raw dot-product API computes projections. */
+    dist_func_t _dist_func;
 
 };  // class LSHTable
 

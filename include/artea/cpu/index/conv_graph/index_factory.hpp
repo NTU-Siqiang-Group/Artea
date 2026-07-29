@@ -86,7 +86,7 @@ public:
     ) -> ConstructResult {
         const auto t_start = std::chrono::high_resolution_clock::now();
         this_index_t graph_index(base_vecs, layer_config, pruning_config, propagate_config);
-        dist_func_t dist_func(base_vecs.get_vec_dim());
+        dist_func_t dist_func;  // stateless: dim is a compile-time trait
         _build_loop(graph_index, dist_func, pruning_config, propagate_config);
         const auto t_end = std::chrono::high_resolution_clock::now();
         return ConstructResult{
@@ -125,7 +125,7 @@ public:
         graph_index.get_nbrs_arr() = std::move(src_graph.get_nbrs_arr());
 
         const vertex_num_t num_vertices = graph_index.get_num_vertices();
-        dist_func_t dist_func(graph_index.get_vecs_data().get_vec_dim());
+        dist_func_t dist_func;  // stateless: dim is a compile-time trait
 
         propagate_engine_t propagate_engine(dist_func);
         propagate_engine.set_graph(graph_index.get_refining_graph());
@@ -157,7 +157,7 @@ public:
         const ground_truth_t& groundtruth = dataset.get_gt_vecs();
 
         this_index_t graph_index(base_vecs, layer_config, pruning_config, propagate_config);
-        dist_func_t dist_func(base_vecs.get_vec_dim());
+        dist_func_t dist_func;  // stateless: dim is a compile-time trait
 
         recall_estimator_t recall_estimator;
         const vertex_num_t topk = 20;

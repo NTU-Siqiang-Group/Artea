@@ -13,8 +13,13 @@
 // limitations under the License.
 
 #include <gtest/gtest.h>
+#include <argparse/argparse.hpp>
 #include <artea/cpu/framework/artea.hpp>
 #include <artea/cpu/framework/type_context/default_context.hpp>
+#include <artea/cpu/framework/type_context/infra_dispatcher.hpp>
+#include <iostream>
+#include <string>
+#include <utility>
 #include <vector>
 #include <algorithm>
 #include <random>
@@ -23,6 +28,24 @@
 
 using namespace artea;
 using namespace artea::cpu;
+
+// ivf_partitions_t / ivf_construct_policy_t are ComputerTraits-dependent
+// (<Metric, Dim>), but the partitioning logic is metric/dimension agnostic — this
+// is a synthetic test with no vectors. We still resolve a concrete <Metric, Dim> at
+// runtime from the user-selected --metric / --dim inputs so the compile-time
+// axes stay consistent with the rest of the project rather than being
+// hand-pinned.
+struct TestConfig {
+    std::string dataset_name;
+    std::string metric;
+    uint32_t    dim;
+} g_config;
+
+// Builds the dispatch axes from the --metric / --dim inputs (this test is
+// synthetic: no dataset is loaded, so the padded dim is taken from the CLI).
+static DatasetInfra dataset_info() {
+    return DatasetInfra{parse_metric(g_config.metric), static_cast<vec_dim_t>(g_config.dim)};
+}
 
 class IVFPartitionsTest : public ::testing::Test {
 protected:
@@ -115,22 +138,24 @@ TEST_F(IVFPartitionsTest, SmallDatasetCorrectness) {
     // Serial reference
     auto [serial_offsets, serial_vids] = serial_from_partition_ids(part_ids, num_partitions);
 
-    // Parallel implementation
-    ivf_partitions_t ivf_partitions;
-    ivf_partitions.from_partition_ids(part_ids, num_partitions);
+    infra_dispatch(dataset_info(), ARTEA_METRIC_LAMBDA(void) {
+        // Parallel implementation
+        ivf_partitions_t<Metric, Dim> ivf_partitions;
+        ivf_partitions.from_partition_ids(part_ids, num_partitions);
 
-    // Extract results
-    std::vector<vertex_num_t> parallel_offsets(
-        ivf_partitions.get_partition_offsets().begin(),
-        ivf_partitions.get_partition_offsets().end()
-    );
-    std::vector<vertex_id_t> parallel_vids(
-        ivf_partitions.get_partition_vids().begin(),
-        ivf_partitions.get_partition_vids().end()
-    );
+        // Extract results
+        std::vector<vertex_num_t> parallel_offsets(
+            ivf_partitions.get_partition_offsets().begin(),
+            ivf_partitions.get_partition_offsets().end()
+        );
+        std::vector<vertex_id_t> parallel_vids(
+            ivf_partitions.get_partition_vids().begin(),
+            ivf_partitions.get_partition_vids().end()
+        );
 
-    // Verify
-    EXPECT_TRUE(verify_partitions_equal(serial_offsets, serial_vids, parallel_offsets, parallel_vids));
+        // Verify
+        EXPECT_TRUE(verify_partitions_equal(serial_offsets, serial_vids, parallel_offsets, parallel_vids));
+    });
 }
 
 // Test 2: Large dataset correctness
@@ -149,22 +174,24 @@ TEST_F(IVFPartitionsTest, LargeDatasetCorrectness) {
     // Serial reference
     auto [serial_offsets, serial_vids] = serial_from_partition_ids(part_ids, num_partitions);
 
-    // Parallel implementation
-    ivf_partitions_t ivf_partitions;
-    ivf_partitions.from_partition_ids(part_ids, num_partitions);
+    infra_dispatch(dataset_info(), ARTEA_METRIC_LAMBDA(void) {
+        // Parallel implementation
+        ivf_partitions_t<Metric, Dim> ivf_partitions;
+        ivf_partitions.from_partition_ids(part_ids, num_partitions);
 
-    // Extract results
-    std::vector<vertex_num_t> parallel_offsets(
-        ivf_partitions.get_partition_offsets().begin(),
-        ivf_partitions.get_partition_offsets().end()
-    );
-    std::vector<vertex_id_t> parallel_vids(
-        ivf_partitions.get_partition_vids().begin(),
-        ivf_partitions.get_partition_vids().end()
-    );
+        // Extract results
+        std::vector<vertex_num_t> parallel_offsets(
+            ivf_partitions.get_partition_offsets().begin(),
+            ivf_partitions.get_partition_offsets().end()
+        );
+        std::vector<vertex_id_t> parallel_vids(
+            ivf_partitions.get_partition_vids().begin(),
+            ivf_partitions.get_partition_vids().end()
+        );
 
-    // Verify
-    EXPECT_TRUE(verify_partitions_equal(serial_offsets, serial_vids, parallel_offsets, parallel_vids));
+        // Verify
+        EXPECT_TRUE(verify_partitions_equal(serial_offsets, serial_vids, parallel_offsets, parallel_vids));
+    });
 }
 
 // Test 3: Performance comparison
@@ -180,42 +207,45 @@ TEST_F(IVFPartitionsTest, PerformanceComparison) {
         part_ids[i] = dist(rng);
     }
 
-    // Measure serial time
-    ivf_partitions_t ivf_partitions_serial;
-    auto serial_start = std::chrono::high_resolution_clock::now();
-    ivf_partitions_serial.from_partition_ids<ivf_construct_policy_t::serial>(part_ids, num_partitions);
-    auto serial_end = std::chrono::high_resolution_clock::now();
-    auto serial_duration = std::chrono::duration_cast<std::chrono::milliseconds>(serial_end - serial_start);
+    auto [serial_duration, parallel_duration] = infra_dispatch(dataset_info(), ARTEA_METRIC_LAMBDA(std::pair<std::chrono::milliseconds, std::chrono::milliseconds>) {
+        // Measure serial time
+        ivf_partitions_t<Metric, Dim> ivf_partitions_serial;
+        auto serial_start = std::chrono::high_resolution_clock::now();
+        ivf_partitions_serial.template from_partition_ids<ivf_construct_policy_t<Metric, Dim>::serial>(part_ids, num_partitions);
+        auto serial_end = std::chrono::high_resolution_clock::now();
+        auto serial_duration = std::chrono::duration_cast<std::chrono::milliseconds>(serial_end - serial_start);
 
-    // Measure parallel time
-    ivf_partitions_t ivf_partitions;
-    auto parallel_start = std::chrono::high_resolution_clock::now();
-    ivf_partitions.from_partition_ids<ivf_construct_policy_t::parallel>(part_ids, num_partitions);
-    auto parallel_end = std::chrono::high_resolution_clock::now();
-    auto parallel_duration = std::chrono::duration_cast<std::chrono::milliseconds>(parallel_end - parallel_start);
+        // Measure parallel time
+        ivf_partitions_t<Metric, Dim> ivf_partitions;
+        auto parallel_start = std::chrono::high_resolution_clock::now();
+        ivf_partitions.template from_partition_ids<ivf_construct_policy_t<Metric, Dim>::parallel>(part_ids, num_partitions);
+        auto parallel_end = std::chrono::high_resolution_clock::now();
+        auto parallel_duration = std::chrono::duration_cast<std::chrono::milliseconds>(parallel_end - parallel_start);
 
-    // Extract results from serial
-    std::vector<vertex_num_t> serial_offsets(
-        ivf_partitions_serial.get_partition_offsets().begin(),
-        ivf_partitions_serial.get_partition_offsets().end()
-    );
-    std::vector<vertex_id_t> serial_vids(
-        ivf_partitions_serial.get_partition_vids().begin(),
-        ivf_partitions_serial.get_partition_vids().end()
-    );
+        // Extract results from serial
+        std::vector<vertex_num_t> serial_offsets(
+            ivf_partitions_serial.get_partition_offsets().begin(),
+            ivf_partitions_serial.get_partition_offsets().end()
+        );
+        std::vector<vertex_id_t> serial_vids(
+            ivf_partitions_serial.get_partition_vids().begin(),
+            ivf_partitions_serial.get_partition_vids().end()
+        );
 
-    // Extract results from parallel
-    std::vector<vertex_num_t> parallel_offsets(
-        ivf_partitions.get_partition_offsets().begin(),
-        ivf_partitions.get_partition_offsets().end()
-    );
-    std::vector<vertex_id_t> parallel_vids(
-        ivf_partitions.get_partition_vids().begin(),
-        ivf_partitions.get_partition_vids().end()
-    );
+        // Extract results from parallel
+        std::vector<vertex_num_t> parallel_offsets(
+            ivf_partitions.get_partition_offsets().begin(),
+            ivf_partitions.get_partition_offsets().end()
+        );
+        std::vector<vertex_id_t> parallel_vids(
+            ivf_partitions.get_partition_vids().begin(),
+            ivf_partitions.get_partition_vids().end()
+        );
 
-    // Verify correctness
-    EXPECT_TRUE(verify_partitions_equal(serial_offsets, serial_vids, parallel_offsets, parallel_vids));
+        // Verify correctness
+        EXPECT_TRUE(verify_partitions_equal(serial_offsets, serial_vids, parallel_offsets, parallel_vids));
+        return {serial_duration, parallel_duration};
+    });
 
     // Print performance results
     double speedup = static_cast<double>(serial_duration.count()) / parallel_duration.count();
@@ -240,19 +270,21 @@ TEST_F(IVFPartitionsTest, SinglePartition) {
 
     auto [serial_offsets, serial_vids] = serial_from_partition_ids(part_ids, num_partitions);
 
-    ivf_partitions_t ivf_partitions;
-    ivf_partitions.from_partition_ids(part_ids, num_partitions);
+    infra_dispatch(dataset_info(), ARTEA_METRIC_LAMBDA(void) {
+        ivf_partitions_t<Metric, Dim> ivf_partitions;
+        ivf_partitions.from_partition_ids(part_ids, num_partitions);
 
-    std::vector<vertex_num_t> parallel_offsets(
-        ivf_partitions.get_partition_offsets().begin(),
-        ivf_partitions.get_partition_offsets().end()
-    );
-    std::vector<vertex_id_t> parallel_vids(
-        ivf_partitions.get_partition_vids().begin(),
-        ivf_partitions.get_partition_vids().end()
-    );
+        std::vector<vertex_num_t> parallel_offsets(
+            ivf_partitions.get_partition_offsets().begin(),
+            ivf_partitions.get_partition_offsets().end()
+        );
+        std::vector<vertex_id_t> parallel_vids(
+            ivf_partitions.get_partition_vids().begin(),
+            ivf_partitions.get_partition_vids().end()
+        );
 
-    EXPECT_TRUE(verify_partitions_equal(serial_offsets, serial_vids, parallel_offsets, parallel_vids));
+        EXPECT_TRUE(verify_partitions_equal(serial_offsets, serial_vids, parallel_offsets, parallel_vids));
+    });
 }
 
 // Test 5: Edge case - empty partitions
@@ -271,24 +303,26 @@ TEST_F(IVFPartitionsTest, EmptyPartitions) {
 
     auto [serial_offsets, serial_vids] = serial_from_partition_ids(part_ids, num_partitions);
 
-    ivf_partitions_t ivf_partitions;
-    ivf_partitions.from_partition_ids(part_ids, num_partitions);
+    infra_dispatch(dataset_info(), ARTEA_METRIC_LAMBDA(void) {
+        ivf_partitions_t<Metric, Dim> ivf_partitions;
+        ivf_partitions.from_partition_ids(part_ids, num_partitions);
 
-    std::vector<vertex_num_t> parallel_offsets(
-        ivf_partitions.get_partition_offsets().begin(),
-        ivf_partitions.get_partition_offsets().end()
-    );
-    std::vector<vertex_id_t> parallel_vids(
-        ivf_partitions.get_partition_vids().begin(),
-        ivf_partitions.get_partition_vids().end()
-    );
+        std::vector<vertex_num_t> parallel_offsets(
+            ivf_partitions.get_partition_offsets().begin(),
+            ivf_partitions.get_partition_offsets().end()
+        );
+        std::vector<vertex_id_t> parallel_vids(
+            ivf_partitions.get_partition_vids().begin(),
+            ivf_partitions.get_partition_vids().end()
+        );
 
-    EXPECT_TRUE(verify_partitions_equal(serial_offsets, serial_vids, parallel_offsets, parallel_vids));
+        EXPECT_TRUE(verify_partitions_equal(serial_offsets, serial_vids, parallel_offsets, parallel_vids));
 
-    // Verify empty partitions have zero size
-    for (part_id_t p : {1, 2, 3, 4, 6, 7, 8, 9, 11, 12, 13, 14, 16, 17, 18, 19}) {
-        EXPECT_EQ(ivf_partitions.get_partition_size(p), 0);
-    }
+        // Verify empty partitions have zero size
+        for (part_id_t p : {1, 2, 3, 4, 6, 7, 8, 9, 11, 12, 13, 14, 16, 17, 18, 19}) {
+            EXPECT_EQ(ivf_partitions.get_partition_size(p), 0);
+        }
+    });
 }
 
 // Test 6: API functionality
@@ -301,30 +335,58 @@ TEST_F(IVFPartitionsTest, APIFunctionality) {
         part_ids[i] = i % num_partitions;  // Round-robin assignment
     }
 
-    ivf_partitions_t ivf_partitions;
-    ivf_partitions.from_partition_ids(part_ids, num_partitions);
+    infra_dispatch(dataset_info(), ARTEA_METRIC_LAMBDA(void) {
+        ivf_partitions_t<Metric, Dim> ivf_partitions;
+        ivf_partitions.from_partition_ids(part_ids, num_partitions);
 
-    // Test get_num_partitions
-    EXPECT_EQ(ivf_partitions.get_num_partitions(), num_partitions);
+        // Test get_num_partitions
+        EXPECT_EQ(ivf_partitions.get_num_partitions(), num_partitions);
 
-    // Test get_partition_size
-    for (part_num_t p = 0; p < num_partitions; ++p) {
-        EXPECT_EQ(ivf_partitions.get_partition_size(p), num_vertices / num_partitions);
-    }
-
-    // Test get_partition_vids
-    for (part_num_t p = 0; p < num_partitions; ++p) {
-        auto vids = ivf_partitions.get_partition_vids(p);
-        EXPECT_EQ(vids.size(), num_vertices / num_partitions);
-
-        // Verify all vertices in this partition have correct partition ID
-        for (vertex_id_t vid : vids) {
-            EXPECT_EQ(part_ids[vid], p);
+        // Test get_partition_size
+        for (part_num_t p = 0; p < num_partitions; ++p) {
+            EXPECT_EQ(ivf_partitions.get_partition_size(p), num_vertices / num_partitions);
         }
-    }
+
+        // Test get_partition_vids
+        for (part_num_t p = 0; p < num_partitions; ++p) {
+            auto vids = ivf_partitions.get_partition_vids(p);
+            EXPECT_EQ(vids.size(), num_vertices / num_partitions);
+
+            // Verify all vertices in this partition have correct partition ID
+            for (vertex_id_t vid : vids) {
+                EXPECT_EQ(part_ids[vid], p);
+            }
+        }
+    });
 }
 
 int main(int argc, char** argv) {
     ::testing::InitGoogleTest(&argc, argv);
+
+    argparse::ArgumentParser program("test_ivf_partitions");
+    program.add_argument("-d", "--dataset")
+        .default_value(std::string("sift-1m"))
+        .help("Dataset name (kept for CLI consistency; the synthetic partition "
+              "logic loads no vectors).");
+    program.add_argument("--metric")
+        .default_value(std::string("euclidean"))
+        .help("Distance metric: 'euclidean', 'inner_product', or 'cosine'");
+    program.add_argument("--dim")
+        .default_value(128u).scan<'u', uint32_t>()
+        .help("SIMD-padded dimension used to pick the compile-time <Metric, Dim> "
+              "pair (no dataset is loaded; default 128 = sift-1m's padded dim).");
+
+    try {
+        program.parse_args(argc, argv);
+    } catch (const std::exception& err) {
+        std::cerr << err.what() << std::endl;
+        std::cerr << program;
+        return 1;
+    }
+
+    g_config.dataset_name = program.get<std::string>("--dataset");
+    g_config.metric = program.get<std::string>("--metric");
+    g_config.dim = program.get<uint32_t>("--dim");
+
     return RUN_ALL_TESTS();
 }

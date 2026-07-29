@@ -14,9 +14,12 @@
 
 #include <benchmark/benchmark.h>
 #include <argparse/argparse.hpp>
+#include <fmt/format.h>
 #include <artea/cpu/framework/artea.hpp>
 #include <artea/cpu/framework/type_context/default_context.hpp>
+#include <artea/cpu/framework/type_context/infra_dispatcher.hpp>
 #include <memory>
+#include <stdexcept>
 #include <vector>
 
 using namespace artea::cpu;
@@ -25,9 +28,10 @@ using namespace artea;
 struct BenchConfig {
     std::string config_path;
     std::string dataset_name;
+    std::string metric;
     layer_config_t layer_config{16};
-    conv_graph::pruning_config_t pruning_config{1.0, 0.0};
-    conv_graph::propagate_config_t propagate_config{4, 14, 0.6};
+    ratio_t prefill_ratio{ratio_t(0.6)};
+    // updater params
     vec_num_t rand_gen_size;
     iter_t num_iters;
     ratio_t scale_coeffs;
@@ -36,6 +40,8 @@ struct BenchConfig {
 };
 
 BenchConfig g_config;
+
+using refining_graph_t = typename index_traits_t::dynamic::refining_graph_t;
 
 class DataProvider {
 public:
@@ -53,25 +59,22 @@ public:
         dim_ = dataset->get_base_vecs().get_vec_dim();
         num_base_vecs_ = dataset->get_base_vecs().get_num_vecs();
 
-        // Move base vectors from dataset
+        // Move base vectors from dataset (metric/dim-independent storage).
         base_vecs_ = std::move(dataset->get_base_vecs());
 
-        // Initialize distance function
-        dist_func_ = std::make_unique<dist_func_t>(dim_);
+        // Resolve the metric and padded dimension for the metric-dependent
+        // generators and updaters. RefiningGraph itself is independent of both.
+        dataset_info_ = DatasetInfra{parse_metric(g_config.metric), dim_};
 
         // Initialize flat graph with random edges
         ARTEA_INFO("Initializing descent graph with random edges...");
-        graph_index_ = std::make_unique<conv_graph::index_t>(
-            base_vecs_,
-            g_config.layer_config,
-            g_config.pruning_config,
-            g_config.propagate_config
-        );
-
-        random_eg_t random_eg(*dist_func_);
-        random_eg.generate(graph_index_->get_refining_graph(), static_cast<vec_num_t>(
-            g_config.layer_config.max_nbr_size() * g_config.propagate_config.prefill_ratio()
-        ));
+        graph_ = std::make_unique<refining_graph_t>(base_vecs_, g_config.layer_config);
+        infra_dispatch(dataset_info_, ARTEA_METRIC_LAMBDA(void) {
+            // Stateless functor: the dimension is a compile-time trait now.
+            dist_func_t<Metric, Dim> dist_func;
+            random_eg_t<Metric, Dim> random_eg(dist_func);
+            random_eg.generate(*graph_, static_cast<vec_num_t>(g_config.layer_config.max_nbr_size() * g_config.prefill_ratio));
+        });
         ARTEA_INFO("Descent graph initialization complete.");
 
         // Save initial graph state for benchmark reset
@@ -80,13 +83,12 @@ public:
 
     vec_dim_t get_dim() const { return dim_; }
     vec_num_t get_num_base_vecs() const { return num_base_vecs_; }
-    const vector_array_t& get_base_vecs() const { return base_vecs_; }
-    const dist_func_t& get_dist_func() const { return *dist_func_; }
-    conv_graph::index_t& get_graph_index() const { return *graph_index_; }
+    DatasetInfra get_dataset_info() const { return dataset_info_; }
+    refining_graph_t& get_graph() { return *graph_; }
 
     // Reset graph to initial state
     void reset_graph() {
-        auto& nbrs_arr = graph_index_->get_nbrs_arr();
+        auto& nbrs_arr = graph_->get_nbrs_arr();
         for (size_t i = 0; i < nbrs_arr.size(); ++i) {
             nbrs_arr[i] = initial_nbrs_[i];
         }
@@ -94,7 +96,7 @@ public:
 
 private:
     void save_initial_state() {
-        const auto& nbrs_arr = graph_index_->get_nbrs_arr();
+        const auto& nbrs_arr = graph_->get_nbrs_arr();
         initial_nbrs_.resize(nbrs_arr.size());
         for (size_t i = 0; i < nbrs_arr.size(); ++i) {
             initial_nbrs_[i] = nbrs_arr[i];
@@ -104,42 +106,47 @@ private:
     vec_dim_t dim_;
     vec_num_t num_base_vecs_;
     vector_array_t base_vecs_;
-    std::unique_ptr<dist_func_t> dist_func_;
-    std::unique_ptr<conv_graph::index_t> graph_index_;
+    DatasetInfra dataset_info_{};
+    std::unique_ptr<refining_graph_t> graph_;
     std::vector<nbr_arr_t> initial_nbrs_;
 };
 
 // Benchmark for PropagateEngine with TriangleUpdater (with selective scheduling)
 static void BM_TriangleUpdater(benchmark::State& state) {
     auto& provider = DataProvider::instance();
-    const auto& dist_func = provider.get_dist_func();
-    conv_graph::index_t& graph_index = provider.get_graph_index();
+    refining_graph_t& graph = provider.get_graph();
     const vec_num_t num_vertices = provider.get_num_base_vecs();
 
     // Set max_nbr_size on the flat graph
-    graph_index.layer_config().max_nbr_size(g_config.layer_config.max_nbr_size());
+    graph.layer_config().max_nbr_size(g_config.layer_config.max_nbr_size());
 
-    // Create PropagateEngine instance
-    propagate_engine_t propagate_engine(dist_func);
-    propagate_engine.set_graph(graph_index.get_refining_graph());
+    infra_dispatch(provider.get_dataset_info(), ARTEA_METRIC_LAMBDA(void) {
+        // Stateless functor: the dimension is a compile-time trait now.
+        dist_func_t<Metric, Dim> dist_func;
 
-    // Create TriangleUpdater using the factory method
-    auto triangle_updater = propagate_engine.make_updater<triangle_updater_t>(
-        g_config.scale_coeffs, g_config.shifted_coeffs);
+        // Create PropagateEngine instance
+        propagate_engine_t<Metric, Dim> propagate_engine(dist_func);
+        propagate_engine.set_graph(graph);
 
-    for (auto _ : state) {
-        // Reset graph to initial state before each benchmark iteration
-        state.PauseTiming();
-        provider.reset_graph();
-        state.ResumeTiming();
+        // Create TriangleUpdater using the factory method (engine type is now
+        // dependent, so disambiguate the member template).
+        auto triangle_updater = propagate_engine.template make_updater<triangle_updater_t<Metric, Dim>>(
+            g_config.scale_coeffs, g_config.shifted_coeffs);
 
-        // Run the propagation for specified iterations
-        propagate_engine.run(g_config.num_iters, triangle_updater);
+        for (auto _ : state) {
+            // Reset graph to initial state before each benchmark iteration
+            state.PauseTiming();
+            provider.reset_graph();
+            state.ResumeTiming();
 
-        // Prevent optimization from removing the work
-        benchmark::DoNotOptimize(graph_index);
-        benchmark::ClobberMemory();
-    }
+            // Run the propagation for specified iterations
+            propagate_engine.run(g_config.num_iters, triangle_updater);
+
+            // Prevent optimization from removing the work
+            benchmark::DoNotOptimize(graph);
+            benchmark::ClobberMemory();
+        }
+    });
 
     state.SetItemsProcessed(state.iterations() * num_vertices * g_config.num_iters);
     state.SetLabel(fmt::format(
@@ -153,34 +160,38 @@ static void BM_TriangleUpdater(benchmark::State& state) {
 // Benchmark for PropagateEngine with TriangleUpdater (without selective scheduling)
 static void BM_TriangleUpdater_NoSS(benchmark::State& state) {
     auto& provider = DataProvider::instance();
-    const auto& dist_func = provider.get_dist_func();
-    conv_graph::index_t& graph_index = provider.get_graph_index();
+    refining_graph_t& graph = provider.get_graph();
     const vec_num_t num_vertices = provider.get_num_base_vecs();
 
     // Set max_nbr_size on the flat graph
-    graph_index.layer_config().max_nbr_size(g_config.layer_config.max_nbr_size());
+    graph.layer_config().max_nbr_size(g_config.layer_config.max_nbr_size());
 
-    // Create PropagateEngine instance without selective scheduling
-    propagate_engine_t propagate_engine(dist_func);
-    propagate_engine.set_graph(graph_index.get_refining_graph());
+    infra_dispatch(provider.get_dataset_info(), ARTEA_METRIC_LAMBDA(void) {
+        // Stateless functor: the dimension is a compile-time trait now.
+        dist_func_t<Metric, Dim> dist_func;
 
-    // Create TriangleUpdater using the factory method
-    auto triangle_updater = propagate_engine.make_updater<triangle_updater_t>(
-        g_config.scale_coeffs, g_config.shifted_coeffs);
+        // Create PropagateEngine instance without selective scheduling
+        propagate_engine_t<Metric, Dim> propagate_engine(dist_func);
+        propagate_engine.set_graph(graph);
 
-    for (auto _ : state) {
-        // Reset graph to initial state before each benchmark iteration
-        state.PauseTiming();
-        provider.reset_graph();
-        state.ResumeTiming();
+        // Create TriangleUpdater using the factory method
+        auto triangle_updater = propagate_engine.template make_updater<triangle_updater_t<Metric, Dim>>(
+            g_config.scale_coeffs, g_config.shifted_coeffs);
 
-        // Run the propagation for specified iterations
-        propagate_engine.run(g_config.num_iters, triangle_updater);
+        for (auto _ : state) {
+            // Reset graph to initial state before each benchmark iteration
+            state.PauseTiming();
+            provider.reset_graph();
+            state.ResumeTiming();
 
-        // Prevent optimization from removing the work
-        benchmark::DoNotOptimize(graph_index);
-        benchmark::ClobberMemory();
-    }
+            // Run the propagation for specified iterations
+            propagate_engine.run(g_config.num_iters, triangle_updater);
+
+            // Prevent optimization from removing the work
+            benchmark::DoNotOptimize(graph);
+            benchmark::ClobberMemory();
+        }
+    });
 
     state.SetItemsProcessed(state.iterations() * num_vertices * g_config.num_iters);
     state.SetLabel(fmt::format(
@@ -194,30 +205,34 @@ static void BM_TriangleUpdater_NoSS(benchmark::State& state) {
 // Benchmark for PropagateEngine with ReverseUpdater
 static void BM_ReverseUpdater(benchmark::State& state) {
     auto& provider = DataProvider::instance();
-    const auto& dist_func = provider.get_dist_func();
-    conv_graph::index_t& graph_index = provider.get_graph_index();
+    refining_graph_t& graph = provider.get_graph();
     const vec_num_t num_vertices = provider.get_num_base_vecs();
 
-    // Create PropagateEngine instance
-    propagate_engine_t propagate_engine(dist_func);
-    propagate_engine.set_graph(graph_index.get_refining_graph());
+    infra_dispatch(provider.get_dataset_info(), ARTEA_METRIC_LAMBDA(void) {
+        // Stateless functor: the dimension is a compile-time trait now.
+        dist_func_t<Metric, Dim> dist_func;
 
-    // Create ReverseUpdater using the factory method
-    auto reverse_updater = propagate_engine.make_updater<reverse_updater_t>();
+        // Create PropagateEngine instance
+        propagate_engine_t<Metric, Dim> propagate_engine(dist_func);
+        propagate_engine.set_graph(graph);
 
-    for (auto _ : state) {
-        // Reset graph to initial state before each benchmark iteration
-        state.PauseTiming();
-        provider.reset_graph();
-        state.ResumeTiming();
+        // Create ReverseUpdater using the factory method
+        auto reverse_updater = propagate_engine.template make_updater<reverse_updater_t<Metric, Dim>>();
 
-        // Run the propagation for specified iterations
-        propagate_engine.run(g_config.num_iters, reverse_updater);
+        for (auto _ : state) {
+            // Reset graph to initial state before each benchmark iteration
+            state.PauseTiming();
+            provider.reset_graph();
+            state.ResumeTiming();
 
-        // Prevent optimization from removing the work
-        benchmark::DoNotOptimize(graph_index);
-        benchmark::ClobberMemory();
-    }
+            // Run the propagation for specified iterations
+            propagate_engine.run(g_config.num_iters, reverse_updater);
+
+            // Prevent optimization from removing the work
+            benchmark::DoNotOptimize(graph);
+            benchmark::ClobberMemory();
+        }
+    });
 
     state.SetItemsProcessed(state.iterations() * num_vertices * g_config.num_iters);
     state.SetLabel(fmt::format(
@@ -231,30 +246,34 @@ static void BM_ReverseUpdater(benchmark::State& state) {
 // Benchmark for PropagateEngine with ReverseUpdater (without selective scheduling)
 static void BM_ReverseUpdater_NoSS(benchmark::State& state) {
     auto& provider = DataProvider::instance();
-    const auto& dist_func = provider.get_dist_func();
-    conv_graph::index_t& graph_index = provider.get_graph_index();
+    refining_graph_t& graph = provider.get_graph();
     const vec_num_t num_vertices = provider.get_num_base_vecs();
 
-    // Create PropagateEngine instance without selective scheduling
-    propagate_engine_t propagate_engine(dist_func);
-    propagate_engine.set_graph(graph_index.get_refining_graph());
+    infra_dispatch(provider.get_dataset_info(), ARTEA_METRIC_LAMBDA(void) {
+        // Stateless functor: the dimension is a compile-time trait now.
+        dist_func_t<Metric, Dim> dist_func;
 
-    // Create ReverseUpdater using the factory method
-    auto reverse_updater = propagate_engine.make_updater<reverse_updater_t>();
+        // Create PropagateEngine instance without selective scheduling
+        propagate_engine_t<Metric, Dim> propagate_engine(dist_func);
+        propagate_engine.set_graph(graph);
 
-    for (auto _ : state) {
-        // Reset graph to initial state before each benchmark iteration
-        state.PauseTiming();
-        provider.reset_graph();
-        state.ResumeTiming();
+        // Create ReverseUpdater using the factory method
+        auto reverse_updater = propagate_engine.template make_updater<reverse_updater_t<Metric, Dim>>();
 
-        // Run the propagation for specified iterations
-        propagate_engine.run(g_config.num_iters, reverse_updater);
+        for (auto _ : state) {
+            // Reset graph to initial state before each benchmark iteration
+            state.PauseTiming();
+            provider.reset_graph();
+            state.ResumeTiming();
 
-        // Prevent optimization from removing the work
-        benchmark::DoNotOptimize(graph_index);
-        benchmark::ClobberMemory();
-    }
+            // Run the propagation for specified iterations
+            propagate_engine.run(g_config.num_iters, reverse_updater);
+
+            // Prevent optimization from removing the work
+            benchmark::DoNotOptimize(graph);
+            benchmark::ClobberMemory();
+        }
+    });
 
     state.SetItemsProcessed(state.iterations() * num_vertices * g_config.num_iters);
     state.SetLabel(fmt::format(
@@ -268,31 +287,35 @@ static void BM_ReverseUpdater_NoSS(benchmark::State& state) {
 // Benchmark for PropagateEngine with RandomUpdater
 static void BM_RandomUpdater(benchmark::State& state) {
     auto& provider = DataProvider::instance();
-    const auto& dist_func = provider.get_dist_func();
-    conv_graph::index_t& graph_index = provider.get_graph_index();
+    refining_graph_t& graph = provider.get_graph();
     const vec_num_t num_vertices = provider.get_num_base_vecs();
 
-    // Create PropagateEngine instance
-    propagate_engine_t propagate_engine(dist_func);
-    propagate_engine.set_graph(graph_index.get_refining_graph());
+    infra_dispatch(provider.get_dataset_info(), ARTEA_METRIC_LAMBDA(void) {
+        // Stateless functor: the dimension is a compile-time trait now.
+        dist_func_t<Metric, Dim> dist_func;
 
-    // Create RandomUpdater using the factory method
-    auto random_updater = propagate_engine.make_updater<random_updater_t>(
-        g_config.rand_gen_size, vertex_id_t{0}, num_vertices);
+        // Create PropagateEngine instance
+        propagate_engine_t<Metric, Dim> propagate_engine(dist_func);
+        propagate_engine.set_graph(graph);
 
-    for (auto _ : state) {
-        // Reset graph to initial state before each benchmark iteration
-        state.PauseTiming();
-        provider.reset_graph();
-        state.ResumeTiming();
+        // Create RandomUpdater using the factory method
+        auto random_updater = propagate_engine.template make_updater<random_updater_t<Metric, Dim>>(
+            g_config.rand_gen_size, vertex_id_t{0}, num_vertices);
 
-        // Run the propagation for specified iterations
-        propagate_engine.run(g_config.num_iters, random_updater);
+        for (auto _ : state) {
+            // Reset graph to initial state before each benchmark iteration
+            state.PauseTiming();
+            provider.reset_graph();
+            state.ResumeTiming();
 
-        // Prevent optimization from removing the work
-        benchmark::DoNotOptimize(graph_index);
-        benchmark::ClobberMemory();
-    }
+            // Run the propagation for specified iterations
+            propagate_engine.run(g_config.num_iters, random_updater);
+
+            // Prevent optimization from removing the work
+            benchmark::DoNotOptimize(graph);
+            benchmark::ClobberMemory();
+        }
+    });
 
     state.SetItemsProcessed(state.iterations() * num_vertices * g_config.num_iters);
     state.SetLabel(fmt::format(
@@ -306,31 +329,35 @@ static void BM_RandomUpdater(benchmark::State& state) {
 // Benchmark for PropagateEngine with RandomUpdater (without selective scheduling)
 static void BM_RandomUpdater_NoSS(benchmark::State& state) {
     auto& provider = DataProvider::instance();
-    const auto& dist_func = provider.get_dist_func();
-    conv_graph::index_t& graph_index = provider.get_graph_index();
+    refining_graph_t& graph = provider.get_graph();
     const vec_num_t num_vertices = provider.get_num_base_vecs();
 
-    // Create PropagateEngine instance without selective scheduling
-    propagate_engine_t propagate_engine(dist_func);
-    propagate_engine.set_graph(graph_index.get_refining_graph());
+    infra_dispatch(provider.get_dataset_info(), ARTEA_METRIC_LAMBDA(void) {
+        // Stateless functor: the dimension is a compile-time trait now.
+        dist_func_t<Metric, Dim> dist_func;
 
-    // Create RandomUpdater using the factory method
-    auto random_updater = propagate_engine.make_updater<random_updater_t>(
-        g_config.rand_gen_size, vertex_id_t{0}, num_vertices);
+        // Create PropagateEngine instance without selective scheduling
+        propagate_engine_t<Metric, Dim> propagate_engine(dist_func);
+        propagate_engine.set_graph(graph);
 
-    for (auto _ : state) {
-        // Reset graph to initial state before each benchmark iteration
-        state.PauseTiming();
-        provider.reset_graph();
-        state.ResumeTiming();
+        // Create RandomUpdater using the factory method
+        auto random_updater = propagate_engine.template make_updater<random_updater_t<Metric, Dim>>(
+            g_config.rand_gen_size, vertex_id_t{0}, num_vertices);
 
-        // Run the propagation for specified iterations
-        propagate_engine.run(g_config.num_iters, random_updater);
+        for (auto _ : state) {
+            // Reset graph to initial state before each benchmark iteration
+            state.PauseTiming();
+            provider.reset_graph();
+            state.ResumeTiming();
 
-        // Prevent optimization from removing the work
-        benchmark::DoNotOptimize(graph_index);
-        benchmark::ClobberMemory();
-    }
+            // Run the propagation for specified iterations
+            propagate_engine.run(g_config.num_iters, random_updater);
+
+            // Prevent optimization from removing the work
+            benchmark::DoNotOptimize(graph);
+            benchmark::ClobberMemory();
+        }
+    });
 
     state.SetItemsProcessed(state.iterations() * num_vertices * g_config.num_iters);
     state.SetLabel(fmt::format(
@@ -359,12 +386,11 @@ int main(int argc, char** argv) {
         .default_value(std::string("sift-1m"))
         .help("Dataset name");
 
-    // Algorithm parameters
-    program.add_argument("--init-nbrs")
-        .default_value(32)
-        .scan<'i', int>()
-        .help("Number of random neighbors to generate for initial graph");
+    program.add_argument("--metric")
+        .default_value(std::string("euclidean"))
+        .help("Distance metric: 'euclidean', 'inner_product', or 'cosine'");
 
+    // Algorithm parameters
     program.add_argument("--max-nbrs")
         .default_value(16)
         .scan<'i', int>()
@@ -421,6 +447,7 @@ int main(int argc, char** argv) {
 
     g_config.config_path = program.get<std::string>("--config");
     g_config.dataset_name = program.get<std::string>("--dataset");
+    g_config.metric = program.get<std::string>("--metric");
     g_config.layer_config = layer_config_t(
         static_cast<vec_num_t>(program.get<int>("--max-nbrs"))
     );
@@ -428,7 +455,7 @@ int main(int argc, char** argv) {
     g_config.num_iters = static_cast<iter_t>(program.get<int>("--num-iters"));
     g_config.scale_coeffs = static_cast<ratio_t>(program.get<double>("--scale-coeffs"));
     g_config.shifted_coeffs = static_cast<ratio_t>(program.get<double>("--shifted-coeffs"));
-    g_config.propagate_config.prefill_ratio(program.get<float>("--prefill-ratio"));
+    g_config.prefill_ratio = static_cast<ratio_t>(program.get<float>("--prefill-ratio"));
     g_config.repetitions = program.get<int64_t>("--repetitions");
 
     ARTEA_INFO(fmt::format("Benchmark Configuration:"));

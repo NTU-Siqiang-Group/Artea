@@ -38,7 +38,13 @@ using namespace artea::cpu;
 using vec_num_t = uint32_t;
 using vec_ele_t = float;
 using base_traits_t = BaseTraits<vec_num_t, vec_ele_t>;
-using computer_traits_t = ComputerTraits<base_traits_t, DistanceMetricsT::EUCLIDEAN>;
+
+// Purely synthetic suite (fixed-dim 128 synthetic vectors): no dataset, so no
+// metric/dim dispatch. Pin the compile-time axes here instead.
+constexpr DistanceMetricsT          TEST_METRIC  = DistanceMetricsT::EUCLIDEAN;
+constexpr base_traits_t::vec_dim_t  TEST_DIM = 128;   // synthetic dim, multiple of 16
+
+using computer_traits_t = ComputerTraits<base_traits_t, TEST_METRIC, TEST_DIM>;
 using index_traits_t = IndexTraits<base_traits_t>;
 using router_traits_t = RouterTraits<computer_traits_t, index_traits_t, false>;
 using candidate_entry_t = typename router_traits_t::candidate_entry_t;
@@ -278,7 +284,7 @@ TEST_F(CandidateQueueTest, RandomInitialize_StdQueue) {
     }
 
     // Create distance function and random sequence
-    dist_func_t dist_func(dim);
+    dist_func_t dist_func;
     random_seq_t random_seq;
 
     // Create visited table
@@ -331,7 +337,7 @@ TEST_F(CandidateQueueTest, RandomInitialize_LinearQueue) {
         query_vec[j] = dist(rng);
     }
 
-    dist_func_t dist_func(dim);
+    dist_func_t dist_func;
     random_seq_t random_seq;
 
     // Create visited table
@@ -381,7 +387,7 @@ TEST_F(CandidateQueueTest, RandomInitialize_FHQueue) {
         query_vec[j] = dist(rng);
     }
 
-    dist_func_t dist_func(dim);
+    dist_func_t dist_func;
     random_seq_t random_seq;
 
     // Create visited table
@@ -430,7 +436,7 @@ TEST_F(CandidateQueueTest, RandomInitialize_BoostQueue) {
         query_vec[j] = dist(rng);
     }
 
-    dist_func_t dist_func(dim);
+    dist_func_t dist_func;
     random_seq_t random_seq;
     visited_table_t visited_table(num_vecs);
 
@@ -1310,7 +1316,7 @@ TEST_F(CandidateQueueTest, SeededInitialize_StdQueue) {
         init_vids.push_back(static_cast<vertex_id_t>(i));
     }
 
-    dist_func_t dist_func(dim);
+    dist_func_t dist_func;
 
     // Create visited table
     visited_table_t visited_table(num_vecs);
@@ -1365,7 +1371,7 @@ TEST_F(CandidateQueueTest, SeededInitialize_LinearQueue) {
         init_vids.push_back(static_cast<vertex_id_t>(i));
     }
 
-    dist_func_t dist_func(dim);
+    dist_func_t dist_func;
 
     // Create visited table
     visited_table_t visited_table(num_vecs);
@@ -1418,7 +1424,7 @@ TEST_F(CandidateQueueTest, SeededInitialize_FHQueue) {
         init_vids.push_back(static_cast<vertex_id_t>(i));
     }
 
-    dist_func_t dist_func(dim);
+    dist_func_t dist_func;
 
     // Create visited table
     visited_table_t visited_table(num_vecs);
@@ -1471,7 +1477,7 @@ TEST_F(CandidateQueueTest, SeededInitialize_BoostQueue) {
         init_vids.push_back(static_cast<vertex_id_t>(i));
     }
 
-    dist_func_t dist_func(dim);
+    dist_func_t dist_func;
     visited_table_t visited_table(num_vecs);
 
     boost_queue_t q(K);
@@ -1527,7 +1533,7 @@ TEST_F(CandidateQueueTest, SeededInitialize_ExceedsCapacity_StdQueue) {
         init_vids.push_back(static_cast<vertex_id_t>(i));
     }
 
-    dist_func_t dist_func(dim);
+    dist_func_t dist_func;
 
     // Create visited table
     visited_table_t visited_table(num_vecs);
@@ -1583,7 +1589,7 @@ TEST_F(CandidateQueueTest, SeededInitialize_ExceedsCapacity_LinearQueue) {
         init_vids.push_back(static_cast<vertex_id_t>(i));
     }
 
-    dist_func_t dist_func(dim);
+    dist_func_t dist_func;
 
     // Create visited table
     visited_table_t visited_table(num_vecs);
@@ -1637,7 +1643,7 @@ TEST_F(CandidateQueueTest, SeededInitialize_ExceedsCapacity_FHQueue) {
         init_vids.push_back(static_cast<vertex_id_t>(i));
     }
 
-    dist_func_t dist_func(dim);
+    dist_func_t dist_func;
 
     // Create visited table
     visited_table_t visited_table(num_vecs);
@@ -1691,7 +1697,7 @@ TEST_F(CandidateQueueTest, SeededInitialize_ExceedsCapacity_BoostQueue) {
         init_vids.push_back(static_cast<vertex_id_t>(i));
     }
 
-    dist_func_t dist_func(dim);
+    dist_func_t dist_func;
     visited_table_t visited_table(num_vecs);
 
     boost_queue_t q(K);

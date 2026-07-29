@@ -33,6 +33,13 @@
 using namespace artea;
 using namespace artea::cpu;
 
+// Synthetic, fixed-dim test: metric + SIMD-padded dim are pinned at compile
+// time (no dataset, no dispatch). The metric-dependent types (dist_func_t,
+// conv_graph::*) are named with these compile-time params; the chosen
+// dimension matches the synthetic vector dimension below.
+constexpr DistanceMetricsT TEST_METRIC  = DistanceMetricsT::EUCLIDEAN;
+constexpr vec_dim_t        TEST_DIM = 128;  // multiple of SIMD chunk size (16)
+
 // ============================================================
 //  Shared fixture: builds a conv_graph::index_t with random vectors
 //  and populates its neighbor arrays with random neighbors.
@@ -41,7 +48,7 @@ using namespace artea::cpu;
 class RefiningGraphTest : public ::testing::Test {
 protected:
     static constexpr vertex_num_t num_vertices = 10'000;
-    static constexpr vec_dim_t    vec_dim      = 128;
+    static constexpr vec_dim_t    vec_dim      = TEST_DIM;
 
     void SetUp() override {
         vecs_ = std::make_unique<vector_array_t>(vec_dim);
@@ -55,13 +62,14 @@ protected:
             vecs_->append_vec(v.data());
         }
 
-        dist_func_ = std::make_unique<dist_func_t>(vec_dim);
+        // Stateless functor: the dimension is a compile-time trait now.
+        dist_func_ = std::make_unique<dist_func_t<TEST_METRIC, TEST_DIM>>();
 
         layer_config_ = layer_config_t(64);
-        graph_index_ = std::make_unique<conv_graph::index_t>(
+        graph_index_ = std::make_unique<conv_graph::index_t<TEST_METRIC, TEST_DIM>>(
             *vecs_, layer_config_,
-            conv_graph::pruning_config_t(1.0, 0.0),
-            conv_graph::propagate_config_t(4, 14));
+            conv_graph::pruning_config_t<TEST_METRIC, TEST_DIM>(1.0, 0.0),
+            conv_graph::propagate_config_t<TEST_METRIC, TEST_DIM>(4, 14));
     }
 
     void populate_random_neighbors(const vertex_num_t max_nbrs_per_vertex) {
@@ -88,8 +96,8 @@ protected:
 
     layer_config_t layer_config_{64};
     std::unique_ptr<vector_array_t> vecs_;
-    std::unique_ptr<dist_func_t>    dist_func_;
-    std::unique_ptr<conv_graph::index_t> graph_index_;
+    std::unique_ptr<dist_func_t<TEST_METRIC, TEST_DIM>>    dist_func_;
+    std::unique_ptr<conv_graph::index_t<TEST_METRIC, TEST_DIM>> graph_index_;
 };
 
 // ============================================================
@@ -143,7 +151,7 @@ TEST_F(RefiningGraphTest, MoveSemantics) {
     const auto& nbrs_before = graph_index_->get_nbrs_arr();
     const size_t edges_v0 = nbrs_before[0].size();
 
-    conv_graph::index_t moved = std::move(*graph_index_);
+    conv_graph::index_t<TEST_METRIC, TEST_DIM> moved = std::move(*graph_index_);
     EXPECT_EQ(moved.get_num_vertices(), num_vertices);
     EXPECT_EQ(moved.get_nbrs_arr()[0].size(), edges_v0);
 }

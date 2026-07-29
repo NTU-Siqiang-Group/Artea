@@ -29,6 +29,13 @@ message(STATUS "TBB_DIR: ${TBB_DIR}")
 # libtbb_debug.so is not available on most distros; always use the release TBB library
 set_target_properties(TBB::tbb PROPERTIES MAP_IMPORTED_CONFIG_DEBUG "RELEASE")
 
+# Force oneAPI TBB headers ahead of the system classic-TBB headers so tbb/*.h
+# matches the linked oneTBB lib (else tbb::task link errors).
+set(ARTEA_ONEAPI_TBB_INCLUDE "$ENV{TBBROOT}/include" CACHE PATH "oneAPI TBB include dir")
+if(EXISTS "${ARTEA_ONEAPI_TBB_INCLUDE}/oneapi/tbb")
+    include_directories(BEFORE SYSTEM "${ARTEA_ONEAPI_TBB_INCLUDE}")
+endif()
+
 # --- Find Intel MKL ---
 find_package(MKL REQUIRED)
 
@@ -122,8 +129,16 @@ target_include_directories(artea INTERFACE
   	"${CMAKE_CURRENT_SOURCE_DIR}/include"
 )
 
-# Add compiler flags for SIMD and architecture-specific optimization
-target_compile_options(artea INTERFACE -march=native -mavx512f -mfma -funroll-loops)
+# Add compiler flags for SIMD and architecture-specific optimization.
+# `-mprefer-vector-width=512` overrides GCC's default 256-bit auto-vector
+# choice: without it GCC autovectorises into ymm registers even under
+# `-mavx512f -march=native` (a Skylake-X frequency-throttling precaution that
+# no longer applies to Ice Lake / Sapphire Rapids). The hand-written _mm512
+# kernels are unaffected; this widens the autovectorised periphery (queue
+# maintenance, traversal helpers) to full zmm width, matching the
+# bench-artea build flags in artea-benchmark/cmake/common.cmake.
+target_compile_options(artea INTERFACE
+    -march=native -mavx512f -mfma -funroll-loops -mprefer-vector-width=512)
 
 # --- Compile Definitions (Macros) ---
 target_compile_definitions(artea INTERFACE

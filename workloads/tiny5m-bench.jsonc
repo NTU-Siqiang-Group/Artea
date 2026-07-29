@@ -1,0 +1,235 @@
+{
+  "dataset-config": "./configs/datasets.json",
+  "dataset": "tiny5m",
+  "metric": "euclidean",
+  "warmup_runs": 5,
+  "test_runs": 25,
+  "indexes-config": {
+    "hnsw": {
+      "M": 32,
+      "efConstruction": 500,
+      "throughput_search": [
+        { "topk": 1,   "candidate_queue_config": "1,130,5" },
+        { "topk": 5,   "candidate_queue_config": "5,130,5" },
+        { "topk": 20,  "candidate_queue_config": "30,390,30" },
+        { "topk": 50,  "candidate_queue_config": "50,500,25" },
+        { "topk": 100, "candidate_queue_config": "100,700,50" }
+      ],
+      "latency_search": [
+        { "topk": 1,   "candidate_queue_config": "1,20,1" },
+        { "topk": 5,   "candidate_queue_config": "5,20,1" },
+        { "topk": 20,  "candidate_queue_config": "30,390,30" },
+        { "topk": 50,  "candidate_queue_config": "50,500,25" },
+        { "topk": 100, "candidate_queue_config": "100,700,50" }
+      ]
+    },
+    "nsg": {
+      "R": 100,
+      "L": 100,
+      "C": 500,
+      "efanna_K":      200,
+      "efanna_L":      200,
+      "efanna_S":      10,
+      "efanna_trees":  8,
+      "efanna_mlevel": 8,
+      "efanna_epochs": 8,
+      "efanna_checkK": 25,
+      "throughput_search": [
+        { "topk": 1,   "candidate_queue_config": "1,130,5" },
+        { "topk": 5,   "candidate_queue_config": "5,130,5" },
+        { "topk": 20,  "candidate_queue_config": "30,390,30" },
+        { "topk": 50,  "candidate_queue_config": "50,500,25" },
+        { "topk": 100, "candidate_queue_config": "100,700,50" }
+      ],
+      "latency_search": [
+        { "topk": 1,   "candidate_queue_config": "1,20,1" },
+        { "topk": 5,   "candidate_queue_config": "5,20,1" },
+        { "topk": 20,  "candidate_queue_config": "30,390,30" },
+        { "topk": 50,  "candidate_queue_config": "50,500,25" },
+        { "topk": 100, "candidate_queue_config": "100,700,50" }
+      ]
+    },
+    "mirage": {
+      "S": 32,
+      "R": 4,
+      "iter": 15,
+      "M": 32,
+      "throughput_search": [
+        { "topk": 1,   "candidate_queue_config": "1,130,5" },
+        { "topk": 5,   "candidate_queue_config": "5,130,5" },
+        { "topk": 20,  "candidate_queue_config": "30,480,30" },
+        { "topk": 50,  "candidate_queue_config": "50,500,25" },
+        { "topk": 100, "candidate_queue_config": "100,850,50" }
+      ],
+      "latency_search": [
+        { "topk": 1,   "candidate_queue_config": "1,20,1" },
+        { "topk": 5,   "candidate_queue_config": "5,20,1" },
+        { "topk": 20,  "candidate_queue_config": "30,480,30" },
+        { "topk": 50,  "candidate_queue_config": "50,500,25" },
+        { "topk": 100, "candidate_queue_config": "100,850,50" }
+      ]
+    },
+    "rnndescent": {
+      "S": 20,
+      "R": 96,
+      "T1": 5,
+      "T2": 12,
+      "K0": 32,
+      "throughput_search": [
+        { "topk": 1,   "candidate_queue_config": "1,130,5" },
+        { "topk": 5,   "candidate_queue_config": "5,130,5" },
+        { "topk": 20,  "candidate_queue_config": "30,390,30" },
+        { "topk": 50,  "candidate_queue_config": "50,500,25" },
+        { "topk": 100, "candidate_queue_config": "100,700,50" }
+      ],
+      "latency_search": [
+        { "topk": 1,   "candidate_queue_config": "1,20,1" },
+        { "topk": 5,   "candidate_queue_config": "5,20,1" },
+        { "topk": 20,  "candidate_queue_config": "30,390,30" },
+        { "topk": 50,  "candidate_queue_config": "50,500,25" },
+        { "topk": 100, "candidate_queue_config": "100,700,50" }
+      ]
+    },
+    "hcnng": {
+      "num_cl":         30,
+      "max_mst_degree": 3,
+      "throughput_search": [
+        { "topk": 1,   "max_calc_config": "50,1000,50" },
+        { "topk": 5,   "max_calc_config": "450,4500,200" },
+        { "topk": 20,  "max_calc_config": "2000,18000,800" },
+        { "topk": 50,  "max_calc_config": "2200,23000,1000" },
+        { "topk": 100, "max_calc_config": "2500,28000,1300" }
+      ],
+      "latency_search": [
+        { "topk": 1,   "max_calc_config": "50,1000,50" },
+        { "topk": 5,   "max_calc_config": "450,4500,200" },
+        { "topk": 20,  "max_calc_config": "2000,18000,800" },
+        { "topk": 50,  "max_calc_config": "2200,23000,1000" },
+        { "topk": 100, "max_calc_config": "2500,28000,1300" }
+      ]
+    },
+    "vamana": {
+      "R": 70,
+      "L": 75,
+      "alpha": 1.2,
+      "throughput_search": [
+        { "topk": 1,   "candidate_queue_config": "1,130,5" },
+        { "topk": 5,   "candidate_queue_config": "5,130,5" },
+        { "topk": 20,  "candidate_queue_config": "30,480,30" },
+        { "topk": 50,  "candidate_queue_config": "50,500,25" },
+        { "topk": 100, "candidate_queue_config": "100,850,50" }
+      ],
+      "latency_search": [
+        { "topk": 1,   "candidate_queue_config": "1,20,1" },
+        { "topk": 5,   "candidate_queue_config": "5,20,1" },
+        { "topk": 20,  "candidate_queue_config": "30,480,30" },
+        { "topk": 50,  "candidate_queue_config": "50,500,25" },
+        { "topk": 100, "candidate_queue_config": "100,850,50" }
+      ]
+    },
+    "alpha-cg": {
+      "R": 100,
+      "L": 100,
+      "C": 500,
+      "alpha_start": 0.9,
+      "alpha_step": 0.05,
+      "alpha_max": 1.6,
+      "tau": 0.002,
+      "T": 50,
+      "efanna_K": 200,
+      "efanna_L":      200,
+      "efanna_S":      10,
+      "efanna_trees":  8,
+      "efanna_mlevel": 8,
+      "efanna_epochs": 8,
+      "efanna_checkK": 25,
+      "throughput_search": [
+        { "topk": 1,   "candidate_queue_config": "1,130,5" },
+        { "topk": 5,   "candidate_queue_config": "5,130,5" },
+        { "topk": 20,  "candidate_queue_config": "30,390,30" },
+        { "topk": 50,  "candidate_queue_config": "50,500,25" },
+        { "topk": 100, "candidate_queue_config": "100,700,50" }
+      ],
+      "latency_search": [
+        { "topk": 1,   "candidate_queue_config": "1,20,1" },
+        { "topk": 5,   "candidate_queue_config": "5,20,1" },
+        { "topk": 20,  "candidate_queue_config": "30,390,30" },
+        { "topk": 50,  "candidate_queue_config": "50,500,25" },
+        { "topk": 100, "candidate_queue_config": "100,700,50" }
+      ]
+    },
+    "tau-mng": {
+      "R": 100,
+      "L": 100,
+      "C": 500,
+      "tau": 0.002,
+      "angle": 60.0,
+      "efanna_K": 200,
+      "efanna_L":      200,
+      "efanna_S":      10,
+      "efanna_trees":  8,
+      "efanna_mlevel": 8,
+      "efanna_epochs": 8,
+      "efanna_checkK": 25,
+      "throughput_search": [
+        { "topk": 1,   "candidate_queue_config": "1,130,5" },
+        { "topk": 5,   "candidate_queue_config": "5,130,5" },
+        { "topk": 20,  "candidate_queue_config": "30,390,30" },
+        { "topk": 50,  "candidate_queue_config": "50,500,25" },
+        { "topk": 100, "candidate_queue_config": "100,700,50" }
+      ],
+      "latency_search": [
+        { "topk": 1,   "candidate_queue_config": "1,20,1" },
+        { "topk": 5,   "candidate_queue_config": "5,20,1" },
+        { "topk": 20,  "candidate_queue_config": "30,390,30" },
+        { "topk": 50,  "candidate_queue_config": "50,500,25" },
+        { "topk": 100, "candidate_queue_config": "100,700,50" }
+      ]
+    },
+    "artea": {
+      "rnet_beta":               2.0,
+      "l0_rnet_radius":          0.35,
+      "l0_min_distance":         0.01,
+      "ul_max_nbr_size":         40,
+      "bl_max_nbr_size":         80,
+      "search_nn_qs":            30,
+      "ul_select_nbrs_qs":       100,
+      "bl_select_nbrs_qs":       100,
+      "scale_coeffs":            1.10,
+      "shifted_coeffs":          2.0,
+      "num_build_loops":         5,
+      "num_triu_iters":          12,
+      "prefill_ratio":           0.34,
+      "shuffle_insertion_order": false,
+      "insert_on_L0":            false,
+      "throughput_search": [
+        { "topk": 1,   "candidate_queue_config": "1,130,5" },
+        { "topk": 5,   "candidate_queue_config": "5,130,5" },
+        { "topk": 20,  "candidate_queue_config": "30,390,30" },
+        { "topk": 50,  "candidate_queue_config": "50,500,25" },
+        { "topk": 100, "candidate_queue_config": "100,700,50" }
+      ],
+      "latency_search": [
+        { "topk": 1,   "candidate_queue_config": "1,20,1" },
+        { "topk": 5,   "candidate_queue_config": "5,20,1" },
+        { "topk": 20,  "candidate_queue_config": "30,390,30" },
+        { "topk": 50,  "candidate_queue_config": "50,500,25" },
+        { "topk": 100, "candidate_queue_config": "100,700,50" }
+      ]
+    }
+  },
+  "throughput_search": [
+    { "topk": 1,   "candidate_queue_config": "1,130,5" },
+    { "topk": 5,   "candidate_queue_config": "5,130,5" },
+    { "topk": 20,  "candidate_queue_config": "30,390,30" },
+    { "topk": 50,  "candidate_queue_config": "50,500,25" },
+    { "topk": 100, "candidate_queue_config": "100,700,50" }
+  ],
+  "latency_search": [
+    { "topk": 1,   "candidate_queue_config": "1,20,1" },
+    { "topk": 5,   "candidate_queue_config": "5,20,1" },
+    { "topk": 20,  "candidate_queue_config": "30,390,30" },
+    { "topk": 50,  "candidate_queue_config": "50,500,25" },
+    { "topk": 100, "candidate_queue_config": "100,700,50" }
+  ]
+}

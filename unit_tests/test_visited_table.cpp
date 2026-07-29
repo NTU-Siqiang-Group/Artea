@@ -37,10 +37,14 @@ using namespace artea;
 using namespace artea::cpu;
 
 // --- Type Definitions ---
+// Synthetic test: metric + SIMD-padded dim are pinned at compile time (no
+// dataset, no dispatch). ComputerTraits now also takes the dimension.
 using vec_num_t = uint32_t;
 using vec_ele_t = float;
 using base_traits_t = BaseTraits<vec_num_t, vec_ele_t>;
-using computer_traits_t = ComputerTraits<base_traits_t, DistanceMetricsT::EUCLIDEAN>;
+constexpr DistanceMetricsT      TEST_METRIC  = DistanceMetricsT::EUCLIDEAN;
+constexpr base_traits_t::vec_dim_t TEST_DIM = 128;  // multiple of SIMD chunk size (16)
+using computer_traits_t = ComputerTraits<base_traits_t, TEST_METRIC, TEST_DIM>;
 using index_traits_t = IndexTraits<base_traits_t>;
 using router_traits_t = RouterTraits<computer_traits_t, index_traits_t, false>;
 

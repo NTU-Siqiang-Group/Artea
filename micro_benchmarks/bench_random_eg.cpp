@@ -16,17 +16,20 @@
 #include <argparse/argparse.hpp>
 #include <artea/cpu/framework/artea.hpp>
 #include <artea/cpu/framework/type_context/default_context.hpp>
+#include <artea/cpu/framework/type_context/infra_dispatcher.hpp>
 #include <memory>
 
 using namespace artea;
 using namespace artea::cpu;
 
+// layer_config_t is metric/dim-independent; the conv_graph pruning/propagate
+// configs are now <Metric, Dim> aliases, so keep their raw params here and build the
+// objects inside the dispatched benchmark body.
 struct BenchConfig {
     std::string config_path;
     std::string dataset_name;
+    std::string metric;
     layer_config_t layer_config{32};
-    conv_graph::pruning_config_t pruning_config{1.0, 0.0};
-    conv_graph::propagate_config_t propagate_config{4, 14};
     int64_t iterations;
 };
 
@@ -51,48 +54,56 @@ public:
         // Move base vectors from dataset
         base_vecs_ = std::move(dataset->get_base_vecs());
 
-        // Initialize distance function
-        dist_func_ = std::make_unique<dist_func_t>(dim_);
+        // Resolve both compile-time axes: metric from the --metric input,
+        // padded dim from the loaded dataset.
+        dataset_info_ = DatasetInfra{parse_metric(g_config.metric), dim_};
     }
 
     vec_dim_t get_dim() const { return dim_; }
     vec_num_t get_num_base_vecs() const { return num_base_vecs_; }
     const vector_array_t& get_base_vecs() const { return base_vecs_; }
-    const dist_func_t& get_dist_func() const { return *dist_func_; }
+    DatasetInfra get_dataset_info() const { return dataset_info_; }
 
 private:
     vec_dim_t dim_;
     vec_num_t num_base_vecs_;
     vector_array_t base_vecs_;
-    std::unique_ptr<dist_func_t> dist_func_;
+    DatasetInfra dataset_info_{};
 };
 
 // Benchmark for RandomEG
 static void BM_RandomEG(benchmark::State& state) {
     auto& provider = DataProvider::instance();
     const auto& base_vecs = provider.get_base_vecs();
-    const auto& dist_func = provider.get_dist_func();
     const vec_num_t num_vertices = provider.get_num_base_vecs();
 
-    // Create RandomEG instance
-    random_eg_t random_eg(dist_func);
+    infra_dispatch(provider.get_dataset_info(), ARTEA_METRIC_LAMBDA(void) {
+        // Stateless functor: the dimension is a compile-time trait now.
+        dist_func_t<Metric, Dim> dist_func;
+        // Build the metric-dependent configs from raw scalars.
+        conv_graph::pruning_config_t<Metric, Dim> pruning_config(1.0, 0.0);
+        conv_graph::propagate_config_t<Metric, Dim> propagate_config(4, 14);
 
-    for (auto _ : state) {
-        // Create a new graph_index (included in timing)
-        conv_graph::index_t graph_index(
-            base_vecs,
-            g_config.layer_config,
-            g_config.pruning_config,
-            g_config.propagate_config
-        );
+        // Create RandomEG instance
+        random_eg_t<Metric, Dim> random_eg(dist_func);
 
-        // Perform the random edge generation
-        random_eg.generate(graph_index.get_refining_graph(), g_config.layer_config.max_nbr_size());
+        for (auto _ : state) {
+            // Create a new graph_index (included in timing)
+            conv_graph::index_t<Metric, Dim> graph_index(
+                base_vecs,
+                g_config.layer_config,
+                pruning_config,
+                propagate_config
+            );
 
-        // Prevent optimization from removing the work
-        benchmark::DoNotOptimize(graph_index);
-        benchmark::ClobberMemory();
-    }
+            // Perform the random edge generation
+            random_eg.generate(graph_index.get_refining_graph(), g_config.layer_config.max_nbr_size());
+
+            // Prevent optimization from removing the work
+            benchmark::DoNotOptimize(graph_index);
+            benchmark::ClobberMemory();
+        }
+    });
 
     state.SetItemsProcessed(state.iterations() * num_vertices);
     state.SetLabel(fmt::format("vertices={}, max_nbrs={}", num_vertices, g_config.layer_config.max_nbr_size()));
@@ -114,6 +125,10 @@ int main(int argc, char** argv) {
     program.add_argument("-d", "--dataset")
         .default_value(std::string("sift-1m"))
         .help("Dataset name");
+
+    program.add_argument("--metric")
+        .default_value(std::string("euclidean"))
+        .help("Distance metric: 'euclidean', 'inner_product', or 'cosine'");
 
     // Algorithm parameters
     program.add_argument("--max-nbrs")
@@ -147,6 +162,7 @@ int main(int argc, char** argv) {
 
     g_config.config_path = program.get<std::string>("--config");
     g_config.dataset_name = program.get<std::string>("--dataset");
+    g_config.metric = program.get<std::string>("--metric");
     vec_num_t max_nbr_size = static_cast<vec_num_t>(program.get<int>("--max-nbrs"));
     g_config.layer_config = layer_config_t(max_nbr_size);
     g_config.iterations = program.get<int64_t>("--iterations");

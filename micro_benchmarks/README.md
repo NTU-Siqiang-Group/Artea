@@ -74,24 +74,17 @@ Benchmarks the LSH (Locality-Sensitive Hashing) table operations.
 
 ---
 
-### 4. bench_radius_prober
+### 5. bench_radius_prober
 Benchmarks the radius probing functionality.
 
 **Purpose**: Measures the performance of radius-based neighbor probing.
 
 ---
 
-### 5. bench_simd_distance
+### 6. bench_simd_distance
 Benchmarks SIMD-optimized distance calculations.
 
 **Purpose**: Measures the performance of vectorized distance computations (Euclidean, Inner Product, etc.).
-
----
-
-### 6. bench_simd_fma
-Benchmarks SIMD FMA (Fused Multiply-Add) operations.
-
-**Purpose**: Measures the performance of FMA operations using SIMD instructions.
 
 ---
 

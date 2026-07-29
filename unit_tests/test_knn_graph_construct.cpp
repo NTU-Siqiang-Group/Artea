@@ -25,6 +25,7 @@
 
 #include <artea/cpu/framework/artea.hpp>
 #include <artea/cpu/framework/type_context/default_context.hpp>
+#include <artea/cpu/framework/type_context/infra_dispatcher.hpp>
 
 using namespace artea;
 using namespace artea::cpu;
@@ -32,8 +33,17 @@ using namespace artea::cpu;
 struct TestConfig {
     std::string config_path;
     std::string dataset_name;
+    std::string metric;
+    // layer_config_t is metric/dim-independent; the propagate config is now a
+    // <Metric, Dim> alias, so we keep its raw params here and build the object
+    // inside the dispatched body.
     layer_config_t layer_config{16};
-    knn_graph::propagate_config_t propagate_config{4, 14};
+    uint32_t num_build_loops;
+    uint32_t num_triu_iters;
+    float    prefill_ratio;
+    uint32_t num_routing_loops;
+    uint32_t routing_topk;
+    uint32_t routing_queue_size;
     uint32_t extracted_nbr_size;
     uint32_t topk;
     uint32_t queue_start;
@@ -73,66 +83,81 @@ public:
         }
         ARTEA_INFO(fmt::format("Loading Dataset: {} from {}", g_config.dataset_name, g_config.config_path));
         dataset_ = std::make_unique<vector_dataset_t>(g_config.config_path, g_config.dataset_name);
-        dist_func_ = std::make_unique<dist_func_t>(dataset_->get_base_vecs().get_vec_dim());
 
         const auto& base_vecs = dataset_->get_base_vecs();
         if (g_config.verbose) {
             ARTEA_INFO(fmt::format("Base vectors size: {}", base_vecs.get_num_vecs()));
             ARTEA_INFO(fmt::format("Max nbr size: {}", g_config.layer_config.max_nbr_size()));
             ARTEA_INFO(fmt::format("Extracted nbr size: {}", g_config.extracted_nbr_size));
-            ARTEA_INFO(fmt::format("Build loops: {}", g_config.propagate_config.num_build_loops()));
-            ARTEA_INFO(fmt::format("Triangle updater iterations: {}", g_config.propagate_config.num_triu_iters()));
+            ARTEA_INFO(fmt::format("Build loops: {}", g_config.num_build_loops));
+            ARTEA_INFO(fmt::format("Triangle updater iterations: {}", g_config.num_triu_iters));
             ARTEA_INFO(fmt::format("Top-k: {}", g_config.topk));
             ARTEA_INFO(fmt::format("Candidate queue size range: {} to {} step {}",
                 g_config.queue_start, g_config.queue_end, g_config.queue_step));
         }
 
-        // Build KNN graph
-        ARTEA_INFO("Building KNN graph...");
-        auto start_time = std::chrono::high_resolution_clock::now();
+        // Resolve BOTH compile-time axes: metric from the --metric input,
+        // padded dim from the loaded dataset; the dataset and the resulting
+        // compact::refining_graph_t are metric/dim-independent, so only the
+        // build runs behind <Metric, Dim>.
+        dataset_info_ = DatasetInfra{parse_metric(g_config.metric), base_vecs.get_vec_dim()};
 
-        refining_graph_ = std::make_unique<knn_graph::index_t>(std::move(
-            knn_graph::factory_t::construct_graph(
-                base_vecs,
-                g_config.layer_config,
-                g_config.propagate_config
-            ).graph
-        ));
+        infra_dispatch(dataset_info_, ARTEA_METRIC_LAMBDA(void) {
+            knn_graph::propagate_config_t<Metric, Dim> propagate_config(
+                g_config.num_build_loops,
+                g_config.num_triu_iters,
+                g_config.prefill_ratio,
+                g_config.num_routing_loops,
+                g_config.routing_topk,
+                g_config.routing_queue_size);
 
-        auto end_time = std::chrono::high_resolution_clock::now();
-        auto duration = std::chrono::duration_cast<std::chrono::microseconds>(end_time - start_time);
-        g_test_results.build_time_s = duration.count() / 1000000.0;
-        g_test_results.num_vertices = refining_graph_->get_num_vertices();
+            // Build KNN graph
+            ARTEA_INFO("Building KNN graph...");
+            auto start_time = std::chrono::high_resolution_clock::now();
 
-        ARTEA_INFO(fmt::format("Graph built with {} vertices", g_test_results.num_vertices));
-        ARTEA_INFO(fmt::format("Build time: {:.2f} s", g_test_results.build_time_s));
+            knn_graph::index_t<Metric, Dim> refining_graph = std::move(
+                knn_graph::factory_t<Metric, Dim>::construct_graph(
+                    base_vecs,
+                    g_config.layer_config,
+                    propagate_config
+                ).graph
+            );
 
-        // Sample neighbor counts for debugging
-        {
-            std::mt19937 rng(42);
-            std::uniform_int_distribution<uint32_t> dist(0, g_test_results.num_vertices - 1);
-            std::cout << "\n--- Sample Neighbor Counts (20 random vertices) ---" << std::endl;
-            for (int i = 0; i < 20; ++i) {
-                uint32_t vid = dist(rng);
-                const auto& nbrs = refining_graph_->fetch_nbrs(vid);
-                std::cout << fmt::format("  vertex {:>8}: {} neighbors", vid, nbrs.size()) << std::endl;
+            auto end_time = std::chrono::high_resolution_clock::now();
+            auto duration = std::chrono::duration_cast<std::chrono::microseconds>(end_time - start_time);
+            g_test_results.build_time_s = duration.count() / 1000000.0;
+            g_test_results.num_vertices = refining_graph.get_num_vertices();
+
+            ARTEA_INFO(fmt::format("Graph built with {} vertices", g_test_results.num_vertices));
+            ARTEA_INFO(fmt::format("Build time: {:.2f} s", g_test_results.build_time_s));
+
+            // Sample neighbor counts for debugging
+            {
+                std::mt19937 rng(42);
+                std::uniform_int_distribution<uint32_t> dist(0, g_test_results.num_vertices - 1);
+                std::cout << "\n--- Sample Neighbor Counts (20 random vertices) ---" << std::endl;
+                for (int i = 0; i < 20; ++i) {
+                    uint32_t vid = dist(rng);
+                    const auto& nbrs = refining_graph.fetch_nbrs(vid);
+                    std::cout << fmt::format("  vertex {:>8}: {} neighbors", vid, nbrs.size()) << std::endl;
+                }
+                std::cout << std::endl;
             }
-            std::cout << std::endl;
-        }
 
-        // Convert to flat search graph
-        ARTEA_INFO("Converting to flat search graph...");
-        start_time = std::chrono::high_resolution_clock::now();
+            // Convert to flat search graph (metric/dim-independent result)
+            ARTEA_INFO("Converting to flat search graph...");
+            start_time = std::chrono::high_resolution_clock::now();
 
-        compact_refining_graph_ = std::make_unique<compact::refining_graph_t>(
-            refining_graph_compactor_t::compact_graph(*refining_graph_, g_config.extracted_nbr_size)
-        );
+            compact_refining_graph_ = std::make_unique<compact::refining_graph_t>(
+                refining_graph_compactor_t::compact_graph(refining_graph, g_config.extracted_nbr_size)
+            );
 
-        end_time = std::chrono::high_resolution_clock::now();
-        duration = std::chrono::duration_cast<std::chrono::microseconds>(end_time - start_time);
-        g_test_results.conversion_time_ms = duration.count() / 1000.0;
+            end_time = std::chrono::high_resolution_clock::now();
+            duration = std::chrono::duration_cast<std::chrono::microseconds>(end_time - start_time);
+            g_test_results.conversion_time_ms = duration.count() / 1000.0;
 
-        ARTEA_INFO(fmt::format("Conversion time: {:.2f} ms", g_test_results.conversion_time_ms));
+            ARTEA_INFO(fmt::format("Conversion time: {:.2f} ms", g_test_results.conversion_time_ms));
+        });
 
         // Get ground truth from dataset
         const auto& query_vecs = dataset_->get_query_vecs();
@@ -142,16 +167,15 @@ public:
     }
 
     vector_dataset_t& get_dataset() { return *dataset_; }
-    dist_func_t& get_dist_func() { return *dist_func_; }
+    DatasetInfra get_dataset_info() const { return dataset_info_; }
     compact::refining_graph_t& get_compact_refining_graph() { return *compact_refining_graph_; }
     const idlist_array_t& get_groundtruth() { return dataset_->get_gt_vecs(); }
 
 private:
     DataProvider() = default;
     std::unique_ptr<vector_dataset_t> dataset_;
-    std::unique_ptr<dist_func_t> dist_func_;
-    std::unique_ptr<knn_graph::index_t> refining_graph_;
     std::unique_ptr<compact::refining_graph_t> compact_refining_graph_;
+    DatasetInfra dataset_info_{};
 };
 
 class KnnGraphTest : public ::testing::Test {};
@@ -159,7 +183,6 @@ class KnnGraphTest : public ::testing::Test {};
 TEST_F(KnnGraphTest, QueryRecall) {
     auto& provider = DataProvider::instance();
     auto& dataset = provider.get_dataset();
-    auto& dist_func = provider.get_dist_func();
     auto& compact_refining_graph = provider.get_compact_refining_graph();
     const auto& groundtruth = provider.get_groundtruth();
 
@@ -173,49 +196,53 @@ TEST_F(KnnGraphTest, QueryRecall) {
         g_config.queue_start, g_config.queue_end, g_config.queue_step));
     ARTEA_INFO("");
 
-    recall_estimator_t recall_estimator;
+    infra_dispatch(provider.get_dataset_info(), ARTEA_METRIC_LAMBDA(void) {
+        // Stateless functor: the dimension is a compile-time trait now.
+        dist_func_t<Metric, Dim> dist_func;
+        recall_estimator_t<Metric, Dim> recall_estimator;
 
-    for (uint32_t queue_size = g_config.queue_start; queue_size <= g_config.queue_end; queue_size += g_config.queue_step) {
-        // Create single-layer router with current queue size
-        single_layer_router_t router(
-            base_vecs,
-            dist_func,
-            g_config.topk,
-            queue_size
-        );
-        router.initialize();
+        for (uint32_t queue_size = g_config.queue_start; queue_size <= g_config.queue_end; queue_size += g_config.queue_step) {
+            // Create single-layer router with current queue size
+            single_layer_router_t<Metric, Dim> router(
+                base_vecs,
+                dist_func,
+                g_config.topk,
+                queue_size
+            );
+            router.initialize();
 
-        // Warmup runs
-        for (uint32_t w = 0; w < g_config.warmup_runs; ++w) {
-            [[maybe_unused]] auto _ = router.batch_query(query_vecs, compact_refining_graph);
+            // Warmup runs
+            for (uint32_t w = 0; w < g_config.warmup_runs; ++w) {
+                [[maybe_unused]] auto _ = router.batch_query(query_vecs, compact_refining_graph);
+            }
+
+            // Test runs with averaging
+            double total_time_us = 0.0;
+            float total_recall = 0.0f;
+            for (uint32_t r = 0; r < g_config.test_runs; ++r) {
+                auto start_time = std::chrono::high_resolution_clock::now();
+                knn_results_t<Metric, Dim> results = router.batch_query(query_vecs, compact_refining_graph);
+                auto end_time = std::chrono::high_resolution_clock::now();
+                total_time_us += std::chrono::duration_cast<std::chrono::microseconds>(end_time - start_time).count();
+                total_recall += recall_estimator.calculate_recall_at_k(results, groundtruth, g_config.topk, query_vecs.get_num_vecs());
+            }
+            double avg_time_us = total_time_us / g_config.test_runs;
+
+            // Compute metrics
+            QueryResult result;
+            result.candidate_queue_size = queue_size;
+            result.query_time_ms = avg_time_us / 1000.0;
+            result.avg_query_time_us = avg_time_us / query_vecs.get_num_vecs();
+            result.throughput_qps = query_vecs.get_num_vecs() * 1000000.0 / avg_time_us;
+            result.recall = total_recall / g_config.test_runs;
+
+            g_test_results.query_results.push_back(result);
+
+            ARTEA_INFO(fmt::format("CandidateQueue={:3}: Recall@{}={:.4f}, QPS={:8.2f}, AvgTime={:.2f}ms ({}w+{}r)",
+                queue_size, g_config.topk, result.recall, result.throughput_qps, result.query_time_ms,
+                g_config.warmup_runs, g_config.test_runs));
         }
-
-        // Test runs with averaging
-        double total_time_us = 0.0;
-        float total_recall = 0.0f;
-        for (uint32_t r = 0; r < g_config.test_runs; ++r) {
-            auto start_time = std::chrono::high_resolution_clock::now();
-            knn_results_t results = router.batch_query(query_vecs, compact_refining_graph);
-            auto end_time = std::chrono::high_resolution_clock::now();
-            total_time_us += std::chrono::duration_cast<std::chrono::microseconds>(end_time - start_time).count();
-            total_recall += recall_estimator.calculate_recall_at_k(results, groundtruth, g_config.topk, query_vecs.get_num_vecs());
-        }
-        double avg_time_us = total_time_us / g_config.test_runs;
-
-        // Compute metrics
-        QueryResult result;
-        result.candidate_queue_size = queue_size;
-        result.query_time_ms = avg_time_us / 1000.0;
-        result.avg_query_time_us = avg_time_us / query_vecs.get_num_vecs();
-        result.throughput_qps = query_vecs.get_num_vecs() * 1000000.0 / avg_time_us;
-        result.recall = total_recall / g_config.test_runs;
-
-        g_test_results.query_results.push_back(result);
-
-        ARTEA_INFO(fmt::format("CandidateQueue={:3}: Recall@{}={:.4f}, QPS={:8.2f}, AvgTime={:.2f}ms ({}w+{}r)",
-            queue_size, g_config.topk, result.recall, result.throughput_qps, result.query_time_ms,
-            g_config.warmup_runs, g_config.test_runs));
-    }
+    });
 
     // Expect reasonable recall for at least one configuration
     bool has_good_recall = false;
@@ -234,6 +261,8 @@ int main(int argc, char** argv) {
     argparse::ArgumentParser program("test_knn_graph");
     program.add_argument("-c", "--config").default_value(artea::default_dataset_config_path());
     program.add_argument("-d", "--dataset").default_value(std::string("sift-1m"));
+    program.add_argument("--metric").default_value(std::string("euclidean"))
+        .help("Distance metric: 'euclidean', 'inner_product', or 'cosine'");
     program.add_argument("--max-nbr-size").default_value(96u).scan<'u', uint32_t>();
     program.add_argument("--extracted-nbr-size").default_value(96u).scan<'u', uint32_t>();
     program.add_argument("--num-build-loops").default_value(5u).scan<'u', uint32_t>();
@@ -262,18 +291,17 @@ int main(int argc, char** argv) {
 
     g_config.config_path = program.get<std::string>("--config");
     g_config.dataset_name = program.get<std::string>("--dataset");
+    g_config.metric = program.get<std::string>("--metric");
 
     uint32_t max_nbr_size = program.get<uint32_t>("--max-nbr-size");
 
     g_config.layer_config = layer_config_t(max_nbr_size);
-    g_config.propagate_config = knn_graph::propagate_config_t(
-        program.get<uint32_t>("--num-build-loops"),
-        program.get<uint32_t>("--num-triu-iters"),
-        program.get<float>("--prefill-ratio"),
-        program.get<uint32_t>("--num-routing-loops"),
-        program.get<uint32_t>("--routing-topk"),
-        program.get<uint32_t>("--routing-queue-size")
-    );
+    g_config.num_build_loops    = program.get<uint32_t>("--num-build-loops");
+    g_config.num_triu_iters     = program.get<uint32_t>("--num-triu-iters");
+    g_config.prefill_ratio      = program.get<float>("--prefill-ratio");
+    g_config.num_routing_loops  = program.get<uint32_t>("--num-routing-loops");
+    g_config.routing_topk       = program.get<uint32_t>("--routing-topk");
+    g_config.routing_queue_size = program.get<uint32_t>("--routing-queue-size");
     g_config.extracted_nbr_size = program.get<uint32_t>("--extracted-nbr-size");
     g_config.topk = program.get<uint32_t>("--topk");
 
@@ -305,10 +333,10 @@ int main(int argc, char** argv) {
     std::cout << "Config path: " << g_config.config_path << std::endl;
     std::cout << "Max nbr size: " << g_config.layer_config.max_nbr_size() << std::endl;
     std::cout << "Extracted nbr size: " << g_config.extracted_nbr_size << std::endl;
-    std::cout << "Build loops: " << g_config.propagate_config.num_build_loops() << std::endl;
-    std::cout << "Triangle updater iterations: " << g_config.propagate_config.num_triu_iters() << std::endl;
-    std::cout << "Prefill ratio: " << g_config.propagate_config.prefill_ratio() << std::endl;
-    std::cout << "Routing loops: " << g_config.propagate_config.num_routing_loops() << std::endl;
+    std::cout << "Build loops: " << g_config.num_build_loops << std::endl;
+    std::cout << "Triangle updater iterations: " << g_config.num_triu_iters << std::endl;
+    std::cout << "Prefill ratio: " << g_config.prefill_ratio << std::endl;
+    std::cout << "Routing loops: " << g_config.num_routing_loops << std::endl;
     std::cout << "Top-k: " << g_config.topk << std::endl;
     std::cout << "Candidate queue config: " << g_config.queue_start << "," << g_config.queue_end << "," << g_config.queue_step << std::endl;
     std::cout << "Warmup runs: " << g_config.warmup_runs << std::endl;
@@ -328,10 +356,10 @@ int main(int argc, char** argv) {
     std::cout << fmt::format("  Dataset:                {}", g_config.dataset_name) << std::endl;
     std::cout << fmt::format("  Max Nbr Size:           {}", g_config.layer_config.max_nbr_size()) << std::endl;
     std::cout << fmt::format("  Extracted Nbr Size:     {}", g_config.extracted_nbr_size) << std::endl;
-    std::cout << fmt::format("  Build Loops:            {}", g_config.propagate_config.num_build_loops()) << std::endl;
-    std::cout << fmt::format("  Triangle Updater Iters: {}", g_config.propagate_config.num_triu_iters()) << std::endl;
-    std::cout << fmt::format("  Prefill Ratio:          {}", g_config.propagate_config.prefill_ratio()) << std::endl;
-    std::cout << fmt::format("  Routing Loops:          {}", g_config.propagate_config.num_routing_loops()) << std::endl;
+    std::cout << fmt::format("  Build Loops:            {}", g_config.num_build_loops) << std::endl;
+    std::cout << fmt::format("  Triangle Updater Iters: {}", g_config.num_triu_iters) << std::endl;
+    std::cout << fmt::format("  Prefill Ratio:          {}", g_config.prefill_ratio) << std::endl;
+    std::cout << fmt::format("  Routing Loops:          {}", g_config.num_routing_loops) << std::endl;
     std::cout << fmt::format("  Top-k:                  {}", g_config.topk) << std::endl;
     std::cout << fmt::format("  Warmup runs:            {}", g_config.warmup_runs) << std::endl;
     std::cout << fmt::format("  Test runs:              {}", g_config.test_runs) << std::endl;

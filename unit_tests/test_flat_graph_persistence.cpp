@@ -23,6 +23,7 @@
 
 #include <artea/cpu/framework/artea.hpp>
 #include <artea/cpu/framework/type_context/default_context.hpp>
+#include <artea/cpu/framework/type_context/infra_dispatcher.hpp>
 
 using namespace artea;
 using namespace artea::cpu;
@@ -30,10 +31,16 @@ using namespace artea::cpu;
 struct TestConfig {
     std::string config_path;
     std::string dataset_name;
+    std::string metric;
     std::string temp_dir;
+    // layer_config_t is metric/dim-independent; the conv_graph pruning/propagate
+    // configs are now <Metric, Dim> aliases, so we keep their raw params here and
+    // build the objects inside the dispatched body.
     layer_config_t layer_config{16};
-    conv_graph::pruning_config_t pruning_config{1.0f, 0.0f};
-    conv_graph::propagate_config_t propagate_config{4, 14};
+    float    scale_coeffs    = 1.0f;
+    float    shifted_coeffs  = 0.0f;
+    uint32_t num_build_loops = 4;
+    uint32_t num_triu_iters  = 14;
     bool verbose;
 } g_config;
 
@@ -50,13 +57,17 @@ public:
         }
         ARTEA_INFO(fmt::format("Loading Dataset: {} from {}", g_config.dataset_name, g_config.config_path));
         dataset_ = std::make_unique<vector_dataset_t>(g_config.config_path, g_config.dataset_name);
-        dist_func_ = std::make_unique<dist_func_t>(dataset_->get_base_vecs().get_vec_dim());
 
         const auto& base_vecs = dataset_->get_base_vecs();
         if (g_config.verbose) {
             ARTEA_INFO(fmt::format("Base vectors size: {}", base_vecs.get_num_vecs()));
             ARTEA_INFO(fmt::format("Vector dimension: {}", base_vecs.get_vec_dim()));
         }
+
+        // Metric from the --metric input, padded dim from the loaded dataset;
+        // the dataset is metric/dim-independent and the conv_graph build runs
+        // behind <Metric, Dim>.
+        dataset_info_ = DatasetInfra{parse_metric(g_config.metric), base_vecs.get_vec_dim()};
 
         // Create temp directory for snapshots
         std::filesystem::create_directories(g_config.temp_dir);
@@ -69,12 +80,12 @@ public:
     }
 
     vector_dataset_t& get_dataset() { return *dataset_; }
-    dist_func_t& get_dist_func() { return *dist_func_; }
+    DatasetInfra get_dataset_info() const { return dataset_info_; }
 
 private:
     DataProvider() = default;
     std::unique_ptr<vector_dataset_t> dataset_;
-    std::unique_ptr<dist_func_t> dist_func_;
+    DatasetInfra dataset_info_{};
 };
 
 class FlatGraphPersistenceTest : public ::testing::Test {
@@ -82,11 +93,9 @@ protected:
     void SetUp() override {
         auto& provider = DataProvider::instance();
         dataset_ = &provider.get_dataset();
-        dist_func_ = &provider.get_dist_func();
     }
 
     vector_dataset_t* dataset_;
-    dist_func_t* dist_func_;
 };
 
 TEST_F(FlatGraphPersistenceTest, RefiningGraphSnapshotRestore) {
@@ -94,82 +103,90 @@ TEST_F(FlatGraphPersistenceTest, RefiningGraphSnapshotRestore) {
 
     ARTEA_INFO("Building descent graph for persistence test...");
 
-    // Build original flat graph
-    conv_graph::index_t original_graph = std::move(
-        conv_graph::factory_t::construct_graph(
-            base_vecs,
-            g_config.layer_config,
-            g_config.pruning_config,
-            g_config.propagate_config
-        ).graph
-    );
+    infra_dispatch(DataProvider::instance().get_dataset_info(), ARTEA_METRIC_LAMBDA(void) {
+        conv_graph::pruning_config_t<Metric, Dim> pruning_config(
+            g_config.scale_coeffs, g_config.shifted_coeffs);
+        conv_graph::propagate_config_t<Metric, Dim> propagate_config(
+            g_config.num_build_loops, g_config.num_triu_iters);
 
-    ARTEA_INFO(fmt::format("Original graph built with {} vertices", original_graph.get_num_vertices()));
+        // Build original flat graph
+        conv_graph::index_t<Metric, Dim> original_graph = std::move(
+            conv_graph::factory_t<Metric, Dim>::construct_graph(
+                base_vecs,
+                g_config.layer_config,
+                pruning_config,
+                propagate_config
+            ).graph
+        );
 
-    // Snapshot the graph
-    std::string snapshot_dir = g_config.temp_dir + "/flat_graph_snapshot";
-    nlohmann::json metadata;
-    metadata["test_name"] = "RefiningGraphSnapshotRestore";
-    metadata["dataset"] = g_config.dataset_name;
+        ARTEA_INFO(fmt::format("Original graph built with {} vertices", original_graph.get_num_vertices()));
 
-    ARTEA_INFO(fmt::format("Snapshotting graph to {}", snapshot_dir));
-    flat_graph_file_manager_t::snapshot(original_graph, snapshot_dir, metadata);
+        // Snapshot the graph
+        std::string snapshot_dir = g_config.temp_dir + "/flat_graph_snapshot";
+        nlohmann::json metadata;
+        metadata["test_name"] = "RefiningGraphSnapshotRestore";
+        metadata["dataset"] = g_config.dataset_name;
 
-    // Restore the graph
-    ARTEA_INFO("Restoring graph from snapshot...");
-    conv_graph::index_t restored_graph = flat_graph_file_manager_t::restore<conv_graph::index_t>(snapshot_dir, base_vecs);
+        ARTEA_INFO(fmt::format("Snapshotting graph to {}", snapshot_dir));
+        flat_graph_file_manager_t::snapshot(original_graph, snapshot_dir, metadata);
 
-    // Verify consistency
-    ARTEA_INFO("Verifying graph consistency...");
+        // Restore the graph
+        ARTEA_INFO("Restoring graph from snapshot...");
+        conv_graph::index_t<Metric, Dim> restored_graph =
+            flat_graph_file_manager_t::restore<conv_graph::index_t<Metric, Dim>>(snapshot_dir, base_vecs);
 
-    // Check basic properties
-    EXPECT_EQ(original_graph.get_num_vertices(), restored_graph.get_num_vertices())
-        << "Number of vertices should match";
+        // Verify consistency
+        ARTEA_INFO("Verifying graph consistency...");
 
-    EXPECT_EQ(original_graph.layer_config().max_nbr_size(), restored_graph.layer_config().max_nbr_size())
-        << "Max neighbor size should match";
+        // Check basic properties
+        EXPECT_EQ(original_graph.get_num_vertices(), restored_graph.get_num_vertices())
+            << "Number of vertices should match";
 
-    EXPECT_FLOAT_EQ(original_graph.pruning_config().scale_coeffs(), restored_graph.pruning_config().scale_coeffs())
-        << "Scale coefficients should match";
+        EXPECT_EQ(original_graph.layer_config().max_nbr_size(), restored_graph.layer_config().max_nbr_size())
+            << "Max neighbor size should match";
 
-    EXPECT_FLOAT_EQ(original_graph.pruning_config().shifted_coeffs(), restored_graph.pruning_config().shifted_coeffs())
-        << "Shifted coefficients should match";
+        EXPECT_FLOAT_EQ(original_graph.pruning_config().scale_coeffs(), restored_graph.pruning_config().scale_coeffs())
+            << "Scale coefficients should match";
 
-    EXPECT_EQ(original_graph.propagate_config().num_build_loops(), restored_graph.propagate_config().num_build_loops())
-        << "Number of build loops should match";
+        EXPECT_FLOAT_EQ(original_graph.pruning_config().shifted_coeffs(), restored_graph.pruning_config().shifted_coeffs())
+            << "Shifted coefficients should match";
 
-    EXPECT_EQ(original_graph.propagate_config().num_triu_iters(), restored_graph.propagate_config().num_triu_iters())
-        << "Number of triangle updater iterations should match";
+        EXPECT_EQ(original_graph.propagate_config().num_build_loops(), restored_graph.propagate_config().num_build_loops())
+            << "Number of build loops should match";
 
-    // Check neighbor arrays
-    const auto& original_nbrs = original_graph.get_nbrs_arr();
-    const auto& restored_nbrs = restored_graph.get_nbrs_arr();
+        EXPECT_EQ(original_graph.propagate_config().num_triu_iters(), restored_graph.propagate_config().num_triu_iters())
+            << "Number of triangle updater iterations should match";
 
-    EXPECT_EQ(original_nbrs.size(), restored_nbrs.size())
-        << "Neighbor array size should match";
+        // Check neighbor arrays
+        const auto& original_nbrs = original_graph.get_nbrs_arr();
+        const auto& restored_nbrs = restored_graph.get_nbrs_arr();
 
-    uint32_t mismatch_count = 0;
-    for (uint32_t i = 0; i < original_nbrs.size(); ++i) {
-        if (original_nbrs[i].size() != restored_nbrs[i].size()) {
-            mismatch_count++;
-            if (mismatch_count <= 5 && g_config.verbose) {
-                ARTEA_WARN(fmt::format("Vertex {} neighbor count mismatch: {} vs {}",
-                    i, original_nbrs[i].size(), restored_nbrs[i].size()));
-            }
-        } else {
-            // Check neighbor content
-            for (uint32_t j = 0; j < original_nbrs[i].size(); ++j) {
-                EXPECT_EQ(original_nbrs[i][j].get_vid(), restored_nbrs[i][j].get_vid())
-                    << fmt::format("Vertex {} neighbor {} ID mismatch", i, j);
-                EXPECT_FLOAT_EQ(original_nbrs[i][j].get_distance(), restored_nbrs[i][j].get_distance())
-                    << fmt::format("Vertex {} neighbor {} distance mismatch", i, j);
+        EXPECT_EQ(original_nbrs.size(), restored_nbrs.size())
+            << "Neighbor array size should match";
+
+        uint32_t mismatch_count = 0;
+        for (uint32_t i = 0; i < original_nbrs.size(); ++i) {
+            if (original_nbrs[i].size() != restored_nbrs[i].size()) {
+                mismatch_count++;
+                if (mismatch_count <= 5 && g_config.verbose) {
+                    ARTEA_WARN(fmt::format("Vertex {} neighbor count mismatch: {} vs {}",
+                        i, original_nbrs[i].size(), restored_nbrs[i].size()));
+                }
+            } else {
+                // Check neighbor content
+                for (uint32_t j = 0; j < original_nbrs[i].size(); ++j) {
+                    EXPECT_EQ(original_nbrs[i][j].get_vid(), restored_nbrs[i][j].get_vid())
+                        << fmt::format("Vertex {} neighbor {} ID mismatch", i, j);
+                    EXPECT_FLOAT_EQ(original_nbrs[i][j].get_distance(), restored_nbrs[i][j].get_distance())
+                        << fmt::format("Vertex {} neighbor {} distance mismatch", i, j);
+                }
             }
         }
-    }
 
-    EXPECT_EQ(mismatch_count, 0) << "All neighbor arrays should match exactly";
+        EXPECT_EQ(mismatch_count, 0) << "All neighbor arrays should match exactly";
 
-    ARTEA_INFO("Descent graph snapshot/restore test passed!");
+        ARTEA_INFO("Descent graph snapshot/restore test passed!");
+    });
 }
 
 int main(int argc, char** argv) {
@@ -178,6 +195,7 @@ int main(int argc, char** argv) {
     argparse::ArgumentParser program("test_flat_graph_persistence");
     program.add_argument("-c", "--config").default_value(artea::default_dataset_config_path());
     program.add_argument("-d", "--dataset").default_value(std::string("sift-1m"));
+    program.add_argument("--metric").default_value(std::string("euclidean")).help("Distance metric: 'euclidean', 'inner_product', or 'cosine'");
     program.add_argument("--temp-dir").default_value(std::string("./test_flat_graph_persistence_temp"));
     program.add_argument("-v", "--verbose").default_value(false).implicit_value(true);
 
@@ -191,6 +209,7 @@ int main(int argc, char** argv) {
 
     g_config.config_path = program.get<std::string>("--config");
     g_config.dataset_name = program.get<std::string>("--dataset");
+    g_config.metric = program.get<std::string>("--metric");
     g_config.temp_dir = program.get<std::string>("--temp-dir");
     g_config.verbose = program.get<bool>("--verbose");
 

@@ -31,7 +31,15 @@
 using namespace artea;
 using namespace artea::cpu;
 
-template <std::size_t U> using artea_simd_dist_t = computer_traits_t::template simd_dist_t<U>;
+// The vector dimension is now a compile-time trait. This test runs on the
+// default sift-1m dataset (128-dim, already SIMD-aligned); DIM is asserted to
+// match the loaded dataset in DataProvider::init(). Cosine is covered with
+// synthetic data in test_cosine_distance.cpp; here we verify the L2 kernel.
+constexpr DistanceMetricsT TEST_METRIC  = DistanceMetricsT::EUCLIDEAN;
+constexpr vec_dim_t        TEST_DIM = 128;
+
+template <std::size_t U>
+using artea_simd_dist_t = computer_traits_t<TEST_METRIC, TEST_DIM>::template simd_dist_t<U>;
 
 struct TestConfig {
     std::string config_path, dataset_name;
@@ -45,6 +53,12 @@ public:
     void init() {
         auto dataset = std::make_unique<vector_dataset_t>(g_config.config_path, g_config.dataset_name);
         _dim = dataset->get_base_vecs().get_vec_dim();
+        if (_dim != TEST_DIM) {
+            throw std::runtime_error(
+                "test_simd_distance is pinned to TEST_DIM=" + std::to_string(TEST_DIM) +
+                " (default sift-1m); loaded dataset dim=" + std::to_string(_dim) +
+                ". Pass a 128-dim dataset or adjust TEST_DIM.");
+        }
         _query_vec.resize(_dim);
         _targets.resize(g_config.num_samples * _dim);
         std::memcpy(_query_vec.data(), dataset->get_query_vecs().get(0), _dim * sizeof(float));
@@ -81,10 +95,10 @@ TEST(DistanceCorrectness, VerifyMultiTargetAndEngines) {
         float* t = p.get_target(i);
         float gt = simple_L2sqr(q, t, dim);
 
-        // 1. Artea SIMDDistance U1/U2/U4
-        artea_simd_dist_t<1> u1(dim);
-        artea_simd_dist_t<2> u2(dim);
-        artea_simd_dist_t<4> u4(dim);
+        // 1. Artea SIMDDistance U1/U2/U4 (stateless: dim is a compile-time trait)
+        artea_simd_dist_t<1> u1;
+        artea_simd_dist_t<2> u2;
+        artea_simd_dist_t<4> u4;
 
         EXPECT_NEAR(u1(q, t), gt, 1e-3) << "Artea U1 failed at target " << i;
         EXPECT_NEAR(u2(q, t), gt, 1e-3) << "Artea U2 failed at target " << i;

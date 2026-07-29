@@ -42,9 +42,12 @@
 
 #include <artea/cpu/framework/artea.hpp>
 #include <artea/cpu/framework/type_context/default_context.hpp>
+#include <artea/cpu/framework/type_context/infra_dispatcher.hpp>
 
 using namespace artea;
 using namespace artea::cpu;
+
+using hier_conv_index_t = typename index_traits_t::hier_conv_graph::index_t;
 
 // ============================================================
 //  Global configuration (populated by argparse in main())
@@ -53,6 +56,7 @@ using namespace artea::cpu;
 struct TestConfig {
     std::string config_path;
     std::string dataset_name;
+    std::string metric;
 
     // Hierarchy shape
     uint32_t ul_max_nbr_size;
@@ -143,17 +147,21 @@ public:
         ARTEA_INFO(fmt::format("Dataset loaded: {} vectors, {} dims",
             base_vecs.get_num_vecs(), base_vecs.get_vec_dim()));
 
-        _dist_func = std::make_unique<dist_func_t>(base_vecs.get_vec_dim());
+        // Resolve BOTH compile-time axes: metric from the --metric input,
+        // padded dim from the loaded dataset. The dataset is metric/dim-
+        // independent and stays out here; the stateless dist_func is rebuilt
+        // inside each dispatched <Metric, Dim> body.
+        _dataset_info = DatasetInfra{parse_metric(g_config.metric), base_vecs.get_vec_dim()};
     }
 
-    auto get_dataset()   -> vector_dataset_t& { return *_dataset; }
-    auto get_dist_func() -> dist_func_t&      { return *_dist_func; }
+    auto get_dataset()      -> vector_dataset_t& { return *_dataset; }
+    auto get_dataset_info() const -> DatasetInfra { return _dataset_info; }
 
 private:
     DataProvider() = default;
 
     std::unique_ptr<vector_dataset_t> _dataset;
-    std::unique_ptr<dist_func_t>      _dist_func;
+    DatasetInfra                      _dataset_info{};
 };
 
 // ============================================================
@@ -165,76 +173,82 @@ protected:
     static void SetUpTestSuite() {
         auto& provider  = DataProvider::instance();
         const auto& base_vecs = provider.get_dataset().get_base_vecs();
-        auto& dist_func = provider.get_dist_func();
 
         const vertex_num_t total_vertices = static_cast<vertex_num_t>(base_vecs.get_num_vecs());
 
-        hier_conv_graph::hierarchy_config_t hierarchy_config(
-            g_config.ul_max_nbr_size, g_config.bl_max_nbr_size,
-            static_cast<ratio_t>(g_config.sample_ratio));
+        infra_dispatch(provider.get_dataset_info(), ARTEA_METRIC_LAMBDA(void) {
+            // Stateless functor: the dimension is a compile-time trait now.
+            dist_func_t<Metric, Dim> dist_func;
 
-        hier_conv_graph::propagate_config_t propagate_config(
-            static_cast<iter_t>(g_config.num_build_loops),
-            static_cast<iter_t>(g_config.num_triu_iters),
-            static_cast<ratio_t>(g_config.prefill_ratio),
-            static_cast<iter_t>(g_config.num_routing_loops),
-            static_cast<vertex_num_t>(g_config.routing_topk),
-            static_cast<vertex_num_t>(g_config.routing_queue_size));
+            hier_conv_graph::hierarchy_config_t<Metric, Dim> hierarchy_config(
+                g_config.ul_max_nbr_size, g_config.bl_max_nbr_size,
+                static_cast<ratio_t>(g_config.sample_ratio));
 
-        hier_conv_graph::pruning_config_t pruning_config(
-            static_cast<ratio_t>(g_config.scale_coeffs),
-            static_cast<ratio_t>(g_config.shifted_coeffs));
+            hier_conv_graph::propagate_config_t<Metric, Dim> propagate_config(
+                static_cast<iter_t>(g_config.num_build_loops),
+                static_cast<iter_t>(g_config.num_triu_iters),
+                static_cast<ratio_t>(g_config.prefill_ratio),
+                static_cast<iter_t>(g_config.num_routing_loops),
+                static_cast<vertex_num_t>(g_config.routing_topk),
+                static_cast<vertex_num_t>(g_config.routing_queue_size));
 
-        _graph = std::make_unique<hier_conv_graph::index_t>(
-            total_vertices, hierarchy_config, propagate_config, pruning_config);
+            hier_conv_graph::pruning_config_t<Metric, Dim> pruning_config(
+                static_cast<ratio_t>(g_config.scale_coeffs),
+                static_cast<ratio_t>(g_config.shifted_coeffs));
 
-        ARTEA_INFO("Building hier_conv_graph (2 steps: random level assignment → per-layer refine)...");
-        auto wallclock_start = std::chrono::high_resolution_clock::now();
+            auto graph = std::make_unique<hier_conv_index_t>(
+                total_vertices, hierarchy_config, propagate_config, pruning_config);
 
-        vector_array_t owned_batch = base_vecs.extract_subset(0, total_vertices);
-        hier_conv_graph::factory_t::add_vertices(*_graph, std::move(owned_batch), dist_func);
+            ARTEA_INFO("Building hier_conv_graph (2 steps: random level assignment → per-layer refine)...");
+            auto wallclock_start = std::chrono::high_resolution_clock::now();
 
-        auto wallclock_end = std::chrono::high_resolution_clock::now();
-        _build_ms = std::chrono::duration_cast<std::chrono::milliseconds>(
-            wallclock_end - wallclock_start).count();
+            vector_array_t owned_batch = base_vecs.extract_subset(0, total_vertices);
+            hier_conv_graph::factory_t<Metric, Dim>::add_vertices(*graph, std::move(owned_batch), dist_func);
 
-        const layer_id_t top_level_id = _graph->top_occupied_level_id();
-        ARTEA_INFO(fmt::format(
-            "hier_conv_graph built in {} ms: top_occupied_level={}, max_restrict_level={}",
-            _build_ms,
-            (top_level_id == dynamic::hierarchical_graph_t::unassigned_highest_level_id)
-                ? -1 : static_cast<int>(top_level_id),
-            _graph->max_restrict_level()));
+            auto wallclock_end = std::chrono::high_resolution_clock::now();
+            _build_ms = std::chrono::duration_cast<std::chrono::milliseconds>(
+                wallclock_end - wallclock_start).count();
 
-        // Compactor trim preview — same rule as test_artea_graph: the
-        // first bucket (walking top-down) with >= min_layer_cap vids
-        // becomes the new top; anything above is demoted.
-        constexpr vertex_num_t min_cap = hierarchical_graph_compactor_t::min_layer_cap;
-        const bool has_vertices = (top_level_id !=
-            dynamic::hierarchical_graph_t::unassigned_highest_level_id);
-        layer_id_t compactor_new_top = 0;
-        if (has_vertices) {
-            for (layer_id_t h = top_level_id; ; --h) {
-                if (_graph->get_vids_with_highest_level(h).size() >= min_cap) {
-                    compactor_new_top = h;
-                    break;
-                }
-                if (h == 0) { compactor_new_top = 0; break; }
-            }
+            const layer_id_t top_level_id = graph->top_occupied_level_id();
             ARTEA_INFO(fmt::format(
-                "Compactor trim preview: min_layer_cap={}, new_top=L{}",
-                min_cap, compactor_new_top));
-        }
+                "hier_conv_graph built in {} ms: top_occupied_level={}, max_restrict_level={}",
+                _build_ms,
+                (top_level_id == dynamic::hierarchical_graph_t::unassigned_highest_level_id)
+                    ? -1 : static_cast<int>(top_level_id),
+                graph->max_restrict_level()));
+
+            // Compactor trim preview — same rule as test_artea_graph: the
+            // first bucket (walking top-down) with >= min_layer_cap vids
+            // becomes the new top; anything above is demoted.
+            constexpr vertex_num_t min_cap = hierarchical_graph_compactor_t::min_layer_cap;
+            const bool has_vertices = (top_level_id !=
+                dynamic::hierarchical_graph_t::unassigned_highest_level_id);
+            layer_id_t compactor_new_top = 0;
+            if (has_vertices) {
+                for (layer_id_t h = top_level_id; ; --h) {
+                    if (graph->get_vids_with_highest_level(h).size() >= min_cap) {
+                        compactor_new_top = h;
+                        break;
+                    }
+                    if (h == 0) { compactor_new_top = 0; break; }
+                }
+                ARTEA_INFO(fmt::format(
+                    "Compactor trim preview: min_layer_cap={}, new_top=L{}",
+                    min_cap, compactor_new_top));
+            }
+
+            _graph = std::move(graph);
+        });
     }
 
     static void TearDownTestSuite() { _graph.reset(); }
 
-    static std::unique_ptr<hier_conv_graph::index_t> _graph;
-    static int64_t                                   _build_ms;
+    static std::unique_ptr<hier_conv_index_t> _graph;
+    static int64_t                            _build_ms;
 };
 
-std::unique_ptr<hier_conv_graph::index_t> HierConvGraphTest::_graph = nullptr;
-int64_t                                   HierConvGraphTest::_build_ms = 0;
+std::unique_ptr<hier_conv_index_t> HierConvGraphTest::_graph = nullptr;
+int64_t                            HierConvGraphTest::_build_ms = 0;
 
 // ============================================================
 //  Build sanity: vertex count + roughly-geometric layer decay.
@@ -242,24 +256,25 @@ int64_t                                   HierConvGraphTest::_build_ms = 0;
 
 TEST_F(HierConvGraphTest, BuildSanity) {
     ASSERT_NE(_graph, nullptr);
+    const auto& graph = _graph->get_hierarchical_graph();
     const auto& base_vecs = DataProvider::instance().get_dataset().get_base_vecs();
     const auto total_vertices = static_cast<vertex_num_t>(base_vecs.get_num_vecs());
-    EXPECT_EQ(_graph->get_num_vertices(), total_vertices);
+    EXPECT_EQ(graph.get_num_vertices(), total_vertices);
 
     using HG = dynamic::hierarchical_graph_t;
-    const layer_id_t top_level_id = _graph->top_occupied_level_id();
+    const layer_id_t top_level_id = graph.top_occupied_level_id();
     ASSERT_NE(top_level_id, HG::unassigned_highest_level_id);
 
     // L_h vid count is everything-with-highest_level_id >= h, i.e. the
     // running total when walking from the apex down. The factory
     // prints the same breakdown, but we recompute it here so we can
     // assert on the shape.
-    const layer_id_t max_level = _graph->max_restrict_level();
+    const layer_id_t max_level = graph.max_restrict_level();
     std::vector<vertex_num_t> vids_at_or_above(max_level + 1, 0);
     {
         vertex_num_t running = 0;
         for (layer_id_t h = max_level; ; --h) {
-            running += static_cast<vertex_num_t>(_graph->get_vids_with_highest_level(h).size());
+            running += static_cast<vertex_num_t>(graph.get_vids_with_highest_level(h).size());
             vids_at_or_above[h] = running;
             if (h == 0) break;
         }
@@ -297,21 +312,12 @@ TEST_F(HierConvGraphTest, BuildSanity) {
 // ============================================================
 
 TEST_F(HierConvGraphTest, SearchRecallAndThroughput) {
+    ASSERT_NE(_graph, nullptr);
     auto& provider = DataProvider::instance();
     const auto& dataset    = provider.get_dataset();
     const auto& base_vecs  = dataset.get_base_vecs();
     const auto& query_vecs = dataset.get_query_vecs();
     const auto& gt         = dataset.get_gt_vecs();
-    auto&       dist_func  = provider.get_dist_func();
-
-    // ---- Compact the dynamic hierarchical graph ----
-    const auto& dyn_hg = _graph->get_hierarchical_graph();
-    auto compact_t0 = std::chrono::high_resolution_clock::now();
-    auto compact_hg = hierarchical_graph_compactor_t::compact_graph(dyn_hg, base_vecs, dist_func);
-    auto compact_t1 = std::chrono::high_resolution_clock::now();
-    const int64_t compact_ms =
-        std::chrono::duration_cast<std::chrono::milliseconds>(compact_t1 - compact_t0).count();
-    ARTEA_INFO(fmt::format("Hierarchical graph compacted in {} ms", compact_ms));
 
     // ---- Grid search over candidate queue size ----
     const uint32_t topk = std::min<uint32_t>(g_config.query_topk, gt.get_vec_dim());
@@ -324,7 +330,6 @@ TEST_F(HierConvGraphTest, SearchRecallAndThroughput) {
         g_config.queue_size_step, topk,
         g_config.warmup_runs, g_config.test_runs));
 
-    recall_estimator_t re;
     struct Row {
         uint32_t queue_size;
         double   batch_ms;
@@ -332,61 +337,78 @@ TEST_F(HierConvGraphTest, SearchRecallAndThroughput) {
         float    recall_at_k;
     };
     std::vector<Row> rows;
+    int64_t compact_ms = 0;
 
-    auto time_batch = [&](auto&& batch_call)
-        -> std::tuple<double, float, knn_results_t>
-    {
-        for (uint32_t w = 0; w < g_config.warmup_runs; ++w) {
-            [[maybe_unused]] auto _ = batch_call();
-        }
-        double total_us = 0.0;
-        float  total_recall = 0.0f;
-        knn_results_t last_results;
-        for (uint32_t r = 0; r < g_config.test_runs; ++r) {
-            auto t0 = std::chrono::high_resolution_clock::now();
-            last_results = batch_call();
-            auto t1 = std::chrono::high_resolution_clock::now();
-            total_us += std::chrono::duration_cast<std::chrono::microseconds>(t1 - t0).count();
-            total_recall += re.calculate_recall_at_k(last_results, gt, topk, num_queries);
-        }
-        return {
-            total_us / g_config.test_runs,
-            total_recall / g_config.test_runs,
-            std::move(last_results)
+    infra_dispatch(provider.get_dataset_info(), ARTEA_METRIC_LAMBDA(void) {
+        // Stateless functor: the dimension is a compile-time trait now.
+        dist_func_t<Metric, Dim> dist_func;
+
+        // ---- Compact the dynamic hierarchical graph ----
+        const auto& dyn_hg = _graph->get_hierarchical_graph();
+        auto compact_t0 = std::chrono::high_resolution_clock::now();
+        auto compact_hg = hierarchical_graph_compactor_t::compact_graph(dyn_hg, base_vecs, dist_func);
+        auto compact_t1 = std::chrono::high_resolution_clock::now();
+        compact_ms =
+            std::chrono::duration_cast<std::chrono::milliseconds>(compact_t1 - compact_t0).count();
+        ARTEA_INFO(fmt::format("Hierarchical graph compacted in {} ms", compact_ms));
+
+        recall_estimator_t<Metric, Dim> re;
+
+        auto time_batch = [&](auto&& batch_call)
+            -> std::tuple<double, float, knn_results_t<Metric, Dim>>
+        {
+            for (uint32_t w = 0; w < g_config.warmup_runs; ++w) {
+                [[maybe_unused]] auto _ = batch_call();
+            }
+            double total_us = 0.0;
+            float  total_recall = 0.0f;
+            knn_results_t<Metric, Dim> last_results;
+            for (uint32_t r = 0; r < g_config.test_runs; ++r) {
+                auto t0 = std::chrono::high_resolution_clock::now();
+                last_results = batch_call();
+                auto t1 = std::chrono::high_resolution_clock::now();
+                total_us += std::chrono::duration_cast<std::chrono::microseconds>(t1 - t0).count();
+                total_recall += re.calculate_recall_at_k(last_results, gt, topk, num_queries);
+            }
+            return {
+                total_us / g_config.test_runs,
+                total_recall / g_config.test_runs,
+                std::move(last_results)
+            };
         };
-    };
 
-    for (uint32_t queue_size = g_config.queue_size_start;
-         queue_size <= g_config.queue_size_end;
-         queue_size += g_config.queue_size_step)
-    {
-        const uint32_t effective_queue_size = std::max<uint32_t>(queue_size, topk);
+        for (uint32_t queue_size = g_config.queue_size_start;
+             queue_size <= g_config.queue_size_end;
+             queue_size += g_config.queue_size_step)
+        {
+            const uint32_t effective_queue_size = std::max<uint32_t>(queue_size, topk);
 
-        hierarchical_graph_router_t router(
-            base_vecs, dist_func,
-            /*topk=*/topk,
-            /*candidate_queue_size=*/effective_queue_size);
-        router.initialize();
+            hierarchical_graph_router_t<Metric, Dim> router(
+                base_vecs, dist_func,
+                /*topk=*/topk,
+                /*candidate_queue_size=*/effective_queue_size);
+            router.initialize();
 
-        // Hierarchical router: compact hier_graph, greedy-upper + beam-L0
-        // (RandomSeeding=false uses compact_hg.entry_point_vid()).
-        auto [avg_us, recall, last_results] = time_batch([&]() {
-            return router.template batch_query</*RandomSeeding=*/false, /*UpperLevelBeamSearch=*/false>(
-                query_vecs, compact_hg);
-        });
-        ASSERT_EQ(last_results.size(), static_cast<std::size_t>(num_queries) * topk);
+            // Hierarchical router: compact hier_graph, greedy-upper + beam-L0
+            // (RandomSeeding=false uses compact_hg.entry_point_vid()).
+            auto [avg_us, recall, last_results] = time_batch([&]() {
+                return router.template batch_query</*RandomSeeding=*/false, /*UpperLevelBeamSearch=*/false>(
+                    query_vecs, compact_hg);
+            });
+            ASSERT_EQ(last_results.size(), static_cast<std::size_t>(num_queries) * topk);
 
-        Row row;
-        row.queue_size  = effective_queue_size;
-        row.batch_ms    = avg_us / 1000.0;
-        row.qps         = num_queries * 1e6 / avg_us;
-        row.recall_at_k = recall;
-        rows.push_back(row);
+            Row row;
+            row.queue_size  = effective_queue_size;
+            row.batch_ms    = avg_us / 1000.0;
+            row.qps         = num_queries * 1e6 / avg_us;
+            row.recall_at_k = recall;
+            rows.push_back(row);
 
-        ARTEA_INFO(fmt::format(
-            "CandidateQueue={:4}: hierarchical [R@{}={:.4f}, QPS={:8.1f}, batch={:.2f} ms]",
-            effective_queue_size, topk, row.recall_at_k, row.qps, row.batch_ms));
-    }
+            ARTEA_INFO(fmt::format(
+                "CandidateQueue={:4}: hierarchical [R@{}={:.4f}, QPS={:8.1f}, batch={:.2f} ms]",
+                effective_queue_size, topk, row.recall_at_k, row.qps, row.batch_ms));
+        }
+    });
 
     ARTEA_INFO("=== hier_conv_graph hierarchical router summary ===");
     ARTEA_INFO(fmt::format("  build_time    : {} ms", _build_ms));
@@ -423,6 +445,9 @@ int main(int argc, char** argv) {
     program.add_argument("-d", "--dataset")
         .default_value(std::string("sift-1m"))
         .help("Dataset name (as listed in datasets.json)");
+    program.add_argument("--metric")
+        .default_value(std::string("euclidean"))
+        .help("Distance metric: 'euclidean', 'inner_product', or 'cosine'");
 
     // Hierarchy shape
     program.add_argument("--ul-max-nbr-size")
@@ -477,6 +502,7 @@ int main(int argc, char** argv) {
 
     g_config.config_path        = program.get<std::string>("--config");
     g_config.dataset_name       = program.get<std::string>("--dataset");
+    g_config.metric             = program.get<std::string>("--metric");
     g_config.ul_max_nbr_size    = program.get<uint32_t>("--ul-max-nbr-size");
     g_config.bl_max_nbr_size    = program.get<uint32_t>("--bl-max-nbr-size");
     g_config.sample_ratio       = program.get<float>("--sample-ratio");

@@ -32,6 +32,12 @@
 using namespace artea;
 using namespace artea::cpu;
 
+// Purely synthetic micro-benchmark (no dataset): pin the compile-time metric/dim
+// axes. The candidate-queue types are metric-dependent aliases; the dimension is
+// irrelevant to queue mechanics, so any SIMD-padded value works.
+constexpr DistanceMetricsT TEST_METRIC  = DistanceMetricsT::EUCLIDEAN;
+constexpr vec_dim_t        TEST_DIM = 128;
+
 // --- Global Configuration ---
 struct BenchConfig {
     uint32_t seed;
@@ -75,7 +81,7 @@ static void BM_TryPush_StdQueue(benchmark::State& state) {
     const auto& distances = DataProvider::instance().distances();
 
     for (auto _ : state) {
-        std_candidate_queue_t q(K);
+        std_candidate_queue_t<TEST_METRIC, TEST_DIM> q(K);
         for (std::size_t i = 0; i < K; ++i) {
             q.try_push(vertex_ids[i], distances[i]);
         }
@@ -92,7 +98,7 @@ static void BM_TryPush_LinearQueue(benchmark::State& state) {
     const auto& distances = DataProvider::instance().distances();
 
     for (auto _ : state) {
-        linear_candidate_queue_t q(K);
+        linear_candidate_queue_t<TEST_METRIC, TEST_DIM> q(K);
         for (std::size_t i = 0; i < K; ++i) {
             q.try_push(vertex_ids[i], distances[i]);
         }
@@ -109,7 +115,7 @@ static void BM_TryPush_FHQueue(benchmark::State& state) {
     const auto& distances = DataProvider::instance().distances();
 
     for (auto _ : state) {
-        fh_candidate_queue_t q(K);
+        fh_candidate_queue_t<TEST_METRIC, TEST_DIM> q(K);
         for (std::size_t i = 0; i < K; ++i) {
             q.try_push(vertex_ids[i], distances[i]);
         }
@@ -126,7 +132,7 @@ static void BM_TryPush_BoostQueue(benchmark::State& state) {
     const auto& distances = DataProvider::instance().distances();
 
     for (auto _ : state) {
-        boost_candidate_queue_t q(K);
+        boost_candidate_queue_t<TEST_METRIC, TEST_DIM> q(K);
         for (std::size_t i = 0; i < K; ++i) {
             q.try_push(vertex_ids[i], distances[i]);
         }
@@ -148,7 +154,7 @@ static void BM_TryPushEvict_StdQueue(benchmark::State& state) {
     const auto& distances = DataProvider::instance().distances();
 
     for (auto _ : state) {
-        std_candidate_queue_t q(K);
+        std_candidate_queue_t<TEST_METRIC, TEST_DIM> q(K);
         for (std::size_t i = 0; i < N; ++i) {
             q.try_push(vertex_ids[i], distances[i]);
         }
@@ -166,7 +172,7 @@ static void BM_TryPushEvict_LinearQueue(benchmark::State& state) {
     const auto& distances = DataProvider::instance().distances();
 
     for (auto _ : state) {
-        linear_candidate_queue_t q(K);
+        linear_candidate_queue_t<TEST_METRIC, TEST_DIM> q(K);
         for (std::size_t i = 0; i < N; ++i) {
             q.try_push(vertex_ids[i], distances[i]);
         }
@@ -184,7 +190,7 @@ static void BM_TryPushEvict_FHQueue(benchmark::State& state) {
     const auto& distances = DataProvider::instance().distances();
 
     for (auto _ : state) {
-        fh_candidate_queue_t q(K);
+        fh_candidate_queue_t<TEST_METRIC, TEST_DIM> q(K);
         for (std::size_t i = 0; i < N; ++i) {
             q.try_push(vertex_ids[i], distances[i]);
         }
@@ -202,7 +208,7 @@ static void BM_TryPushEvict_BoostQueue(benchmark::State& state) {
     const auto& distances = DataProvider::instance().distances();
 
     for (auto _ : state) {
-        boost_candidate_queue_t q(K);
+        boost_candidate_queue_t<TEST_METRIC, TEST_DIM> q(K);
         for (std::size_t i = 0; i < N; ++i) {
             q.try_push(vertex_ids[i], distances[i]);
         }
@@ -222,14 +228,14 @@ static void BM_GetBest_StdQueue(benchmark::State& state) {
     const auto& vertex_ids = DataProvider::instance().vertex_ids();
     const auto& distances = DataProvider::instance().distances();
     // Initialize with candidate entries
-        std::vector<candidate_entry_t> init_data;
+        std::vector<candidate_entry_t<TEST_METRIC, TEST_DIM>> init_data;
         init_data.reserve(K);
         for (std::size_t i = 0; i < K; ++i) {
             init_data.emplace_back(vertex_ids[i], distances[i]);
         }
 
     for (auto _ : state) {
-        std_candidate_queue_t q(K);
+        std_candidate_queue_t<TEST_METRIC, TEST_DIM> q(K);
         q.initialize(init_data);
 
         for (std::size_t i = 0; i < K; ++i) {
@@ -250,12 +256,12 @@ static void BM_GetBest_LinearQueue(benchmark::State& state) {
 
     for (auto _ : state) {
         // Initialize with candidate entries
-        std::vector<candidate_entry_t> init_data;
+        std::vector<candidate_entry_t<TEST_METRIC, TEST_DIM>> init_data;
         init_data.reserve(K);
         for (std::size_t i = 0; i < K; ++i) {
             init_data.emplace_back(vertex_ids[i], distances[i]);
         }
-        linear_candidate_queue_t q(K);
+        linear_candidate_queue_t<TEST_METRIC, TEST_DIM> q(K);
         q.initialize(init_data);
 
         for (std::size_t i = 0; i < K; ++i) {
@@ -274,14 +280,14 @@ static void BM_GetBest_FHQueue(benchmark::State& state) {
     const auto& vertex_ids = DataProvider::instance().vertex_ids();
     const auto& distances = DataProvider::instance().distances();
     // Initialize with candidate entries
-        std::vector<candidate_entry_t> init_data;
+        std::vector<candidate_entry_t<TEST_METRIC, TEST_DIM>> init_data;
         init_data.reserve(K);
         for (std::size_t i = 0; i < K; ++i) {
             init_data.emplace_back(vertex_ids[i], distances[i]);
         }
 
     for (auto _ : state) {
-        fh_candidate_queue_t q(K);
+        fh_candidate_queue_t<TEST_METRIC, TEST_DIM> q(K);
         q.initialize(init_data);
 
         for (std::size_t i = 0; i < K; ++i) {
@@ -300,14 +306,14 @@ static void BM_GetBest_BoostQueue(benchmark::State& state) {
     const auto& vertex_ids = DataProvider::instance().vertex_ids();
     const auto& distances = DataProvider::instance().distances();
     // Initialize with candidate entries
-        std::vector<candidate_entry_t> init_data;
+        std::vector<candidate_entry_t<TEST_METRIC, TEST_DIM>> init_data;
         init_data.reserve(K);
         for (std::size_t i = 0; i < K; ++i) {
             init_data.emplace_back(vertex_ids[i], distances[i]);
         }
 
     for (auto _ : state) {
-        boost_candidate_queue_t q(K);
+        boost_candidate_queue_t<TEST_METRIC, TEST_DIM> q(K);
         q.initialize(init_data);
 
         for (std::size_t i = 0; i < K; ++i) {
@@ -332,7 +338,7 @@ static void BM_Mixed_StdQueue(benchmark::State& state) {
     const auto& distances = DataProvider::instance().distances();
 
     for (auto _ : state) {
-        std_candidate_queue_t q(K);
+        std_candidate_queue_t<TEST_METRIC, TEST_DIM> q(K);
         for (std::size_t i = 0; i < K; ++i) {
             q.try_push(vertex_ids[i], distances[i]);
         }
@@ -359,7 +365,7 @@ static void BM_Mixed_LinearQueue(benchmark::State& state) {
     const auto& distances = DataProvider::instance().distances();
 
     for (auto _ : state) {
-        linear_candidate_queue_t q(K);
+        linear_candidate_queue_t<TEST_METRIC, TEST_DIM> q(K);
         for (std::size_t i = 0; i < K; ++i) {
             q.try_push(vertex_ids[i], distances[i]);
         }
@@ -385,7 +391,7 @@ static void BM_Mixed_FHQueue(benchmark::State& state) {
     const auto& distances = DataProvider::instance().distances();
 
     for (auto _ : state) {
-        fh_candidate_queue_t q(K);
+        fh_candidate_queue_t<TEST_METRIC, TEST_DIM> q(K);
         for (std::size_t i = 0; i < K; ++i) {
             q.try_push(vertex_ids[i], distances[i]);
         }
@@ -409,7 +415,7 @@ static void BM_Mixed_BoostQueue(benchmark::State& state) {
     const auto& distances = DataProvider::instance().distances();
 
     for (auto _ : state) {
-        boost_candidate_queue_t q(K);
+        boost_candidate_queue_t<TEST_METRIC, TEST_DIM> q(K);
         for (std::size_t i = 0; i < K; ++i) {
             q.try_push(vertex_ids[i], distances[i]);
         }

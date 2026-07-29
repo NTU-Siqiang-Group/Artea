@@ -32,9 +32,13 @@
 
 #include <artea/cpu/framework/artea.hpp>
 #include <artea/cpu/framework/type_context/default_context.hpp>
+#include <artea/cpu/framework/type_context/infra_dispatcher.hpp>
 
 using namespace artea;
 using namespace artea::cpu;
+
+using dynamic_refining_graph_t = typename index_traits_t::dynamic::refining_graph_t;
+using conv_index_t = typename index_traits_t::conv_graph::index_t;
 
 // ============================================================
 // Config & results
@@ -43,6 +47,7 @@ using namespace artea::cpu;
 struct TestConfig {
     std::string config_path;
     std::string dataset_name;
+    std::string metric;
     uint32_t max_nbr_size       = 64;
     float scale_coeffs          = 1.0f;
     float shifted_coeffs        = 0.0f;
@@ -84,7 +89,6 @@ public:
         ARTEA_INFO(fmt::format("Loading dataset '{}' from {}",
             g_config.dataset_name, g_config.config_path));
         dataset_   = std::make_unique<vector_dataset_t>(g_config.config_path, g_config.dataset_name);
-        dist_func_ = std::make_unique<dist_func_t>(dataset_->get_base_vecs().get_vec_dim());
 
         const auto& base_vecs = dataset_->get_base_vecs();
         g_results.dataset_name = g_config.dataset_name;
@@ -92,50 +96,59 @@ public:
         g_results.num_queries  = dataset_->get_query_vecs().get_num_vecs();
         g_results.vec_dim      = base_vecs.get_vec_dim();
 
-        // Build convergent graph
-        layer_config_t layer_cfg(g_config.max_nbr_size);
-        conv_graph::pruning_config_t pruning_cfg(g_config.scale_coeffs, g_config.shifted_coeffs);
-        conv_graph::propagate_config_t propagate_cfg(
-            g_config.num_build_loops, g_config.num_triu_iters, g_config.prefill_ratio,
-            g_config.num_routing_loops);
+        // Metric from the --metric input, padded dim from the loaded dataset;
+        // the dataset and the compact::refining_graph_t are metric/dim-
+        // independent, so only the build runs behind <Metric, Dim>.
+        dataset_info_ = DatasetInfra{parse_metric(g_config.metric), base_vecs.get_vec_dim()};
 
-        ARTEA_INFO("Building convergent graph...");
-        auto t0 = std::chrono::high_resolution_clock::now();
-        graph_index_ = std::make_unique<conv_graph::index_t>(std::move(
-            conv_graph::factory_t::construct_graph(base_vecs, layer_cfg, pruning_cfg, propagate_cfg).graph
-        ));
-        auto t1 = std::chrono::high_resolution_clock::now();
-        g_results.build_time_s =
-            std::chrono::duration_cast<std::chrono::microseconds>(t1 - t0).count() / 1e6;
-        ARTEA_INFO(fmt::format("Graph built: {} vertices in {:.2f} s",
-            graph_index_->get_num_vertices(), g_results.build_time_s));
+        infra_dispatch(dataset_info_, ARTEA_METRIC_LAMBDA(void) {
+            // Build convergent graph
+            layer_config_t layer_cfg(g_config.max_nbr_size);
+            conv_graph::pruning_config_t<Metric, Dim> pruning_cfg(g_config.scale_coeffs, g_config.shifted_coeffs);
+            conv_graph::propagate_config_t<Metric, Dim> propagate_cfg(
+                g_config.num_build_loops, g_config.num_triu_iters, g_config.prefill_ratio,
+                g_config.num_routing_loops);
 
-        // Convert to flat search graph
-        ARTEA_INFO("Converting to flat search graph...");
-        auto tc0 = std::chrono::high_resolution_clock::now();
-        compact_refining_graph_ = std::make_unique<compact::refining_graph_t>(
-            refining_graph_compactor_t::compact_graph(*graph_index_, g_config.extracted_nbr_size)
-        );
-        auto tc1 = std::chrono::high_resolution_clock::now();
-        g_results.conversion_time_ms =
-            std::chrono::duration_cast<std::chrono::microseconds>(tc1 - tc0).count() / 1e3;
-        ARTEA_INFO(fmt::format("Conversion done in {:.2f} ms", g_results.conversion_time_ms));
+            ARTEA_INFO("Building convergent graph...");
+            auto t0 = std::chrono::high_resolution_clock::now();
+            conv_index_t graph_index = std::move(
+                conv_graph::factory_t<Metric, Dim>::construct_graph(base_vecs, layer_cfg, pruning_cfg, propagate_cfg).graph
+            );
+            auto t1 = std::chrono::high_resolution_clock::now();
+            g_results.build_time_s =
+                std::chrono::duration_cast<std::chrono::microseconds>(t1 - t0).count() / 1e6;
+            ARTEA_INFO(fmt::format("Graph built: {} vertices in {:.2f} s",
+                graph_index.get_num_vertices(), g_results.build_time_s));
+
+            // Convert to flat search graph (metric/dim-independent result)
+            ARTEA_INFO("Converting to flat search graph...");
+            auto tc0 = std::chrono::high_resolution_clock::now();
+            compact_refining_graph_ = std::make_unique<compact::refining_graph_t>(
+                refining_graph_compactor_t::compact_graph(graph_index, g_config.extracted_nbr_size)
+            );
+            auto tc1 = std::chrono::high_resolution_clock::now();
+            g_results.conversion_time_ms =
+                std::chrono::duration_cast<std::chrono::microseconds>(tc1 - tc0).count() / 1e3;
+            ARTEA_INFO(fmt::format("Conversion done in {:.2f} ms", g_results.conversion_time_ms));
+
+            graph_index_ = std::make_unique<conv_index_t>(std::move(graph_index));
+        });
 
         ARTEA_INFO("DataProvider ready.");
     }
 
     vector_dataset_t&    get_dataset()           { return *dataset_; }
-    dist_func_t&         get_dist_func()          { return *dist_func_; }
-    conv_graph::index_t&        get_graph_index()          { return *graph_index_; }
+    DatasetInfra         get_dataset_info() const { return dataset_info_; }
+    dynamic_refining_graph_t& get_dynamic_refining_graph() { return graph_index_->get_refining_graph(); }
     compact::refining_graph_t& get_compact_refining_graph()  { return *compact_refining_graph_; }
     const idlist_array_t& get_gt()               { return dataset_->get_gt_vecs(); }
 
 private:
     DataProvider() = default;
     std::unique_ptr<vector_dataset_t>    dataset_;
-    std::unique_ptr<dist_func_t>         dist_func_;
-    std::unique_ptr<conv_graph::index_t>        graph_index_;
+    std::unique_ptr<conv_index_t>        graph_index_;
     std::unique_ptr<compact::refining_graph_t> compact_refining_graph_;
+    DatasetInfra dataset_info_{};
 };
 
 // ============================================================
@@ -153,26 +166,31 @@ TEST_F(RouterComparisonTest, ConstructModeRouter) {
     const auto& base_vecs  = p.get_dataset().get_base_vecs();
     const auto& query_vecs = p.get_dataset().get_query_vecs();
 
-    single_layer_router_t router(
-        base_vecs, p.get_dist_func(),
-        g_config.topk, g_config.queue_size
-    );
-    router.initialize();
+    infra_dispatch(p.get_dataset_info(), ARTEA_METRIC_LAMBDA(void) {
+        // Stateless functor: the dimension is a compile-time trait now.
+        dist_func_t<Metric, Dim> dist_func;
 
-    auto t0 = std::chrono::high_resolution_clock::now();
-    knn_results_t results = router.batch_query(
-        query_vecs, p.get_graph_index().get_refining_graph());
-    auto t1 = std::chrono::high_resolution_clock::now();
-    double us = std::chrono::duration_cast<std::chrono::microseconds>(t1 - t0).count();
+        single_layer_router_t<Metric, Dim> router(
+            base_vecs, dist_func,
+            g_config.topk, g_config.queue_size
+        );
+        router.initialize();
 
-    ASSERT_EQ(results.size(), static_cast<size_t>(g_results.num_queries * g_config.topk));
+        auto t0 = std::chrono::high_resolution_clock::now();
+        knn_results_t<Metric, Dim> results = router.batch_query(
+            query_vecs, p.get_dynamic_refining_graph());
+        auto t1 = std::chrono::high_resolution_clock::now();
+        double us = std::chrono::duration_cast<std::chrono::microseconds>(t1 - t0).count();
 
-    recall_estimator_t re;
-    g_results.construct_recall = re.calculate_recall_at_k(
-        results, p.get_gt(), g_config.topk, g_results.num_queries);
-    g_results.construct_qps = g_results.num_queries * 1e6 / us;
+        ASSERT_EQ(results.size(), static_cast<size_t>(g_results.num_queries * g_config.topk));
 
-    EXPECT_GT(g_results.construct_recall, 0.0f);
+        recall_estimator_t<Metric, Dim> re;
+        g_results.construct_recall = re.calculate_recall_at_k(
+            results, p.get_gt(), g_config.topk, g_results.num_queries);
+        g_results.construct_qps = g_results.num_queries * 1e6 / us;
+
+        EXPECT_GT(g_results.construct_recall, 0.0f);
+    });
 }
 
 // ============================================================
@@ -184,26 +202,31 @@ TEST_F(RouterComparisonTest, SearchModeRouter) {
     const auto& base_vecs  = p.get_dataset().get_base_vecs();
     const auto& query_vecs = p.get_dataset().get_query_vecs();
 
-    single_layer_router_t router(
-        base_vecs, p.get_dist_func(),
-        g_config.topk, g_config.queue_size
-    );
-    router.initialize();
+    infra_dispatch(p.get_dataset_info(), ARTEA_METRIC_LAMBDA(void) {
+        // Stateless functor: the dimension is a compile-time trait now.
+        dist_func_t<Metric, Dim> dist_func;
 
-    auto t0 = std::chrono::high_resolution_clock::now();
-    knn_results_t results = router.batch_query(
-        query_vecs, p.get_compact_refining_graph());
-    auto t1 = std::chrono::high_resolution_clock::now();
-    double us = std::chrono::duration_cast<std::chrono::microseconds>(t1 - t0).count();
+        single_layer_router_t<Metric, Dim> router(
+            base_vecs, dist_func,
+            g_config.topk, g_config.queue_size
+        );
+        router.initialize();
 
-    ASSERT_EQ(results.size(), static_cast<size_t>(g_results.num_queries * g_config.topk));
+        auto t0 = std::chrono::high_resolution_clock::now();
+        knn_results_t<Metric, Dim> results = router.batch_query(
+            query_vecs, p.get_compact_refining_graph());
+        auto t1 = std::chrono::high_resolution_clock::now();
+        double us = std::chrono::duration_cast<std::chrono::microseconds>(t1 - t0).count();
 
-    recall_estimator_t re;
-    g_results.search_recall = re.calculate_recall_at_k(
-        results, p.get_gt(), g_config.topk, g_results.num_queries);
-    g_results.search_qps = g_results.num_queries * 1e6 / us;
+        ASSERT_EQ(results.size(), static_cast<size_t>(g_results.num_queries * g_config.topk));
 
-    EXPECT_GT(g_results.search_recall, 0.0f);
+        recall_estimator_t<Metric, Dim> re;
+        g_results.search_recall = re.calculate_recall_at_k(
+            results, p.get_gt(), g_config.topk, g_results.num_queries);
+        g_results.search_qps = g_results.num_queries * 1e6 / us;
+
+        EXPECT_GT(g_results.search_recall, 0.0f);
+    });
 }
 
 // ============================================================
@@ -216,6 +239,7 @@ int main(int argc, char** argv) {
     argparse::ArgumentParser program("search_router_vs_construct_router");
     program.add_argument("-c", "--config").default_value(artea::default_dataset_config_path());
     program.add_argument("-d", "--dataset").default_value(std::string("sift-1m"));
+    program.add_argument("--metric").default_value(std::string("euclidean")).help("Distance metric: 'euclidean', 'inner_product', or 'cosine'");
     program.add_argument("--max-nbr-size").default_value(64u).scan<'u', uint32_t>();
     program.add_argument("--scale-coeffs").default_value(1.0f).scan<'g', float>();
     program.add_argument("--shifted-coeffs").default_value(0.0f).scan<'g', float>();
@@ -234,6 +258,7 @@ int main(int argc, char** argv) {
 
     g_config.config_path     = program.get<std::string>("--config");
     g_config.dataset_name    = program.get<std::string>("--dataset");
+    g_config.metric          = program.get<std::string>("--metric");
     g_config.max_nbr_size    = program.get<uint32_t>("--max-nbr-size");
     g_config.scale_coeffs    = program.get<float>("--scale-coeffs");
     g_config.shifted_coeffs  = program.get<float>("--shifted-coeffs");

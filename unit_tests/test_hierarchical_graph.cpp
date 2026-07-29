@@ -48,6 +48,7 @@
 
 #include <artea/cpu/framework/artea.hpp>
 #include <artea/cpu/framework/type_context/default_context.hpp>
+#include <artea/cpu/framework/type_context/infra_dispatcher.hpp>
 
 using namespace artea;
 using namespace artea::cpu;
@@ -59,6 +60,7 @@ using namespace artea::cpu;
 struct TestConfig {
     std::string config_path;
     std::string dataset_name;
+    std::string metric;
     uint32_t    num_vertices;          // scale for the fixture graph
     uint32_t    ul_max_nbr_size;
     uint32_t    bl_max_nbr_size;
@@ -90,6 +92,12 @@ public:
         ARTEA_INFO(fmt::format(
             "Dataset loaded: {} vectors, {} dims (using first {} for tests)",
             base.get_num_vecs(), base.get_vec_dim(), g_config.num_vertices));
+
+        // Metric from the --metric input, padded dim from the loaded dataset.
+        // The hierarchical-graph primitives are metric/dim-independent;
+        // only the compactor's centroid pass and the refiner/propagate helpers
+        // run behind <Metric, Dim>.
+        _dataset_info = DatasetInfra{parse_metric(g_config.metric), base.get_vec_dim()};
     }
 
     auto dataset_size() const -> uint32_t {
@@ -101,9 +109,12 @@ public:
         return _dataset->get_base_vecs();
     }
 
+    auto get_dataset_info() const -> DatasetInfra { return _dataset_info; }
+
 private:
     DataProvider() = default;
     std::unique_ptr<vector_dataset_t> _dataset;
+    DatasetInfra _dataset_info{};
 };
 
 // ============================================================
@@ -548,10 +559,11 @@ TEST_F(HierarchicalGraphTest, IndexFactoryLikeWorkload) {
 
 // ---- 9. Compactor fidelity: dynamic → compact preserves topology ----
 TEST_F(HierarchicalGraphTest, CompactorPreservesTopology) {
+  infra_dispatch(DataProvider::instance().get_dataset_info(), ARTEA_METRIC_LAMBDA(void) {
     // Compactor now requires vecs_data + dist_func to compute the
     // top-bucket centroid and entry point.
-    const auto&       base_vecs = DataProvider::instance().vectors();
-    const dist_func_t dist_func(base_vecs.get_vec_dim());
+    const auto&             base_vecs = DataProvider::instance().vectors();
+    const dist_func_t<Metric, Dim> dist_func;  // stateless: dim is a compile-time trait
     auto compact_graph = compactor_t::compact_graph(
         *_graph, base_vecs, dist_func);
 
@@ -672,6 +684,7 @@ TEST_F(HierarchicalGraphTest, CompactorPreservesTopology) {
             }
         }
     }
+  });
 }
 
 // ============================================================
@@ -691,6 +704,7 @@ using TestRefiningGraph = dynamic::RefiningGraph<index_traits_t>;
 // → assert the mutation round-tripped. Covers L0 (identity-mapped) and L1+
 // (sparse-mapped) paths in one pass.
 TEST_F(HierarchicalGraphTest, LayerRefiningGraphRoundTrip) {
+  infra_dispatch(DataProvider::instance().get_dataset_info(), ARTEA_METRIC_LAMBDA(void) {
     // Construct a sized-down VectorArray matching the fixture's vid space.
     // Values are not read by this test (fill/writeback never call dist_func),
     // so an uninitialized buffer of the right shape is sufficient.
@@ -724,13 +738,13 @@ TEST_F(HierarchicalGraphTest, LayerRefiningGraphRoundTrip) {
         }
 
         // ---- Fill from the layer. ----
-        refiner_utils_t::fill_refining_graph_from_layer(
+        refiner_utils_t<Metric, Dim>::fill_refining_graph_from_layer(
             *_graph, *refining_graph, h);
 
         // For freshly-built indexes the slot is all-invalid (no edges
         // written by the fixture), so num_valid_nbrs == 0 and refining_graph
         // rows are empty. Just sanity-check counts and identity round-trip.
-        propagate_engine_t::parallel_for_each_vertex(
+        propagate_engine_t<Metric, Dim>::parallel_for_each_vertex(
             *refining_graph,
             [&](const vertex_id_t /*layer_vid*/, const vertex_id_t storage_vid) {
                 if (!_graph->is_vertex_assigned(storage_vid)) return;
@@ -750,7 +764,7 @@ TEST_F(HierarchicalGraphTest, LayerRefiningGraphRoundTrip) {
         refining_graph->fetch_nbrs(pivot_global).emplace_back(
             other_global, distance_t{1}, /*is_new=*/true);
 
-        refiner_utils_t::writeback_layer_from_refining_graph(
+        refiner_utils_t<Metric, Dim>::writeback_layer_from_refining_graph(
             *_graph, *refining_graph, h);
 
         // Re-read the slot directly from hier_graph.
@@ -764,6 +778,7 @@ TEST_F(HierarchicalGraphTest, LayerRefiningGraphRoundTrip) {
                 << "writeback must terminate the slot with a sentinel";
         }
     }
+  });
 }
 
 // ============================================================
@@ -778,6 +793,9 @@ int main(int argc, char** argv) {
         .default_value(artea::default_dataset_config_path());
     program.add_argument("-d", "--dataset")
         .default_value(std::string("sift-1m"));
+    program.add_argument("--metric")
+        .default_value(std::string("euclidean"))
+        .help("Distance metric: 'euclidean', 'inner_product', or 'cosine'");
     program.add_argument("--num-vertices")
         .default_value(100'000u).scan<'u', uint32_t>()
         .help("Number of vertices to simulate (bounded by dataset size).");
@@ -802,6 +820,7 @@ int main(int argc, char** argv) {
 
     g_config.config_path          = program.get<std::string>("--config");
     g_config.dataset_name         = program.get<std::string>("--dataset");
+    g_config.metric               = program.get<std::string>("--metric");
     g_config.num_vertices         = program.get<uint32_t>("--num-vertices");
     g_config.ul_max_nbr_size      = program.get<uint32_t>("--ul-max-nbr-size");
     g_config.bl_max_nbr_size      = program.get<uint32_t>("--bl-max-nbr-size");

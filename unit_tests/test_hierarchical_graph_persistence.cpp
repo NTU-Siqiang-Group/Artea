@@ -49,6 +49,7 @@
 
 #include <artea/cpu/framework/artea.hpp>
 #include <artea/cpu/framework/type_context/default_context.hpp>
+#include <artea/cpu/framework/type_context/infra_dispatcher.hpp>
 
 using namespace artea;
 using namespace artea::cpu;
@@ -60,6 +61,7 @@ using namespace artea::cpu;
 struct TestConfig {
     std::string config_path;
     std::string dataset_name;
+    std::string metric;
     std::string snapshot_path;
 
     // Graph build params (mirror test_stacked_rgraph.cpp defaults
@@ -108,23 +110,31 @@ public:
         ARTEA_INFO(fmt::format("Dataset loaded: {} vectors, {} dims",
             base_vecs.get_num_vecs(), base_vecs.get_vec_dim()));
 
-        _dist_func = std::make_unique<dist_func_t>(base_vecs.get_vec_dim());
+        // Resolve BOTH compile-time axes: metric from the --metric input,
+        // padded dim from the loaded dataset. The dataset is metric/dim-
+        // independent; the metric-dependent prober / dist_func live behind
+        // the dispatched <Metric, Dim> body.
+        _dataset_info = DatasetInfra{parse_metric(g_config.metric), base_vecs.get_vec_dim()};
 
         if (g_config.l0_radius_provided) {
             _l0_radius = g_config.l0_rnet_radius;
             ARTEA_INFO(fmt::format(
                 "Using user-provided L0 rnet_radius = {:.6f}", _l0_radius));
         } else {
-            dataset_prober_t prober(base_vecs, *_dist_func);
-            const std::vector<float> quantiles = { g_config.probe_quantile };
-            ARTEA_INFO(fmt::format(
-                "Probing L0 rnet_radius ({}th pct, {} samples)...",
-                static_cast<int>(g_config.probe_quantile * 100.0f),
-                g_config.probe_num_samples));
-            auto result = prober.probe(quantiles, g_config.probe_num_samples);
-            _l0_radius = static_cast<float>(result.table[0][0]);
-            ARTEA_INFO(fmt::format(
-                "Auto-probed L0 rnet_radius = {:.6f}", _l0_radius));
+            infra_dispatch(_dataset_info, ARTEA_METRIC_LAMBDA(void) {
+                // Stateless functor: the dimension is a compile-time trait now.
+                dist_func_t<Metric, Dim> dist_func;
+                dataset_prober_t<Metric, Dim> prober(base_vecs, dist_func);
+                const std::vector<float> quantiles = { g_config.probe_quantile };
+                ARTEA_INFO(fmt::format(
+                    "Probing L0 rnet_radius ({}th pct, {} samples)...",
+                    static_cast<int>(g_config.probe_quantile * 100.0f),
+                    g_config.probe_num_samples));
+                auto result = prober.probe(quantiles, g_config.probe_num_samples);
+                _l0_radius = static_cast<float>(result.table[0][0]);
+                ARTEA_INFO(fmt::format(
+                    "Auto-probed L0 rnet_radius = {:.6f}", _l0_radius));
+            });
         }
     }
 
@@ -133,14 +143,14 @@ public:
         std::filesystem::remove(g_config.snapshot_path, ec);
     }
 
-    auto get_dataset()   -> vector_dataset_t& { return *_dataset; }
-    auto get_dist_func() -> dist_func_t&      { return *_dist_func; }
+    auto get_dataset()      -> vector_dataset_t& { return *_dataset; }
+    auto get_dataset_info() const -> DatasetInfra { return _dataset_info; }
     auto get_l0_radius() const -> float       { return _l0_radius; }
 
 private:
     DataProvider() = default;
     std::unique_ptr<vector_dataset_t> _dataset;
-    std::unique_ptr<dist_func_t>      _dist_func;
+    DatasetInfra                      _dataset_info{};
     float                             _l0_radius = 0.0f;
 };
 
@@ -156,50 +166,56 @@ protected:
     {
         auto& provider = DataProvider::instance();
         const auto& base_vecs = provider.get_dataset().get_base_vecs();
-        auto& dist_func = provider.get_dist_func();
 
         const vertex_num_t total_vertices =
             static_cast<vertex_num_t>(base_vecs.get_num_vecs());
 
-        stacked_rgraph::rgraph_config_t rgraph_config(
-            g_config.rnet_beta, provider.get_l0_radius(),
-            static_cast<vertex_num_t>(g_config.search_nn_qs),
-            static_cast<vertex_num_t>(g_config.ul_select_nbrs_qs),
-            static_cast<vertex_num_t>(g_config.bl_select_nbrs_qs),
-            g_config.ul_max_nbr_size,
-            g_config.bl_max_nbr_size);
-        stacked_rgraph::pruning_config_t pruning_config(
-            static_cast<ratio_t>(g_config.scale_coeffs),
-            static_cast<ratio_t>(0));
+        // The compact::hierarchical_graph_t result is metric/dim-independent; the
+        // metric-dependent backbone build + compaction run behind <Metric, Dim>.
+        return infra_dispatch(provider.get_dataset_info(), ARTEA_METRIC_LAMBDA(std::unique_ptr<compact::hierarchical_graph_t>) {
+            // Stateless functor: the dimension is a compile-time trait now.
+            dist_func_t<Metric, Dim> dist_func;
 
-        auto graph = std::make_unique<stacked_rgraph::index_t>(
-            total_vertices, rgraph_config, pruning_config);
+            stacked_rgraph::rgraph_config_t<Metric, Dim> rgraph_config(
+                g_config.rnet_beta, provider.get_l0_radius(),
+                static_cast<vertex_num_t>(g_config.search_nn_qs),
+                static_cast<vertex_num_t>(g_config.ul_select_nbrs_qs),
+                static_cast<vertex_num_t>(g_config.bl_select_nbrs_qs),
+                g_config.ul_max_nbr_size,
+                g_config.bl_max_nbr_size);
+            stacked_rgraph::pruning_config_t<Metric, Dim> pruning_config(
+                static_cast<ratio_t>(g_config.scale_coeffs),
+                static_cast<ratio_t>(0));
 
-        vector_array_t owned_batch =
-            base_vecs.extract_subset(0, total_vertices);
+            auto graph = std::make_unique<stacked_rgraph::index_t<Metric, Dim>>(
+                total_vertices, rgraph_config, pruning_config);
 
-        auto t0 = std::chrono::high_resolution_clock::now();
-        stacked_rgraph::factory_t::add_vertices(
-            *graph, std::move(owned_batch), dist_func,
-            /*insert_on_L0=*/true);
-        auto t1 = std::chrono::high_resolution_clock::now();
-        ARTEA_INFO(fmt::format("Built stacked_rgraph in {} ms",
-            std::chrono::duration_cast<std::chrono::milliseconds>(t1 - t0)
-                .count()));
+            vector_array_t owned_batch =
+                base_vecs.extract_subset(0, total_vertices);
 
-        auto t2 = std::chrono::high_resolution_clock::now();
-        auto compact_hg = hierarchical_graph_compactor_t::compact_graph(
-            graph->get_hierarchical_graph(), base_vecs, dist_func);
-        auto t3 = std::chrono::high_resolution_clock::now();
-        ARTEA_INFO(fmt::format("Compacted in {} ms; "
-            "max_restrict_level={}, num_vertices={}",
-            std::chrono::duration_cast<std::chrono::milliseconds>(t3 - t2)
-                .count(),
-            static_cast<int>(compact_hg.max_restrict_level()),
-            compact_hg.get_num_vertices()));
+            auto t0 = std::chrono::high_resolution_clock::now();
+            stacked_rgraph::factory_t<Metric, Dim>::add_vertices(
+                *graph, std::move(owned_batch), dist_func,
+                /*insert_on_L0=*/true);
+            auto t1 = std::chrono::high_resolution_clock::now();
+            ARTEA_INFO(fmt::format("Built stacked_rgraph in {} ms",
+                std::chrono::duration_cast<std::chrono::milliseconds>(t1 - t0)
+                    .count()));
 
-        return std::make_unique<compact::hierarchical_graph_t>(
-            std::move(compact_hg));
+            auto t2 = std::chrono::high_resolution_clock::now();
+            auto compact_hg = hierarchical_graph_compactor_t::compact_graph(
+                graph->get_hierarchical_graph(), base_vecs, dist_func);
+            auto t3 = std::chrono::high_resolution_clock::now();
+            ARTEA_INFO(fmt::format("Compacted in {} ms; "
+                "max_restrict_level={}, num_vertices={}",
+                std::chrono::duration_cast<std::chrono::milliseconds>(t3 - t2)
+                    .count(),
+                static_cast<int>(compact_hg.max_restrict_level()),
+                compact_hg.get_num_vertices()));
+
+            return std::make_unique<compact::hierarchical_graph_t>(
+                std::move(compact_hg));
+        });
     }
 
     static void SetUpTestSuite() {
@@ -359,6 +375,9 @@ int main(int argc, char** argv) {
     program.add_argument("-d", "--dataset")
         .default_value(std::string("sift-1m"))
         .help("Dataset name (as listed in datasets.json)");
+    program.add_argument("--metric")
+        .default_value(std::string("euclidean"))
+        .help("Distance metric: 'euclidean', 'inner_product', or 'cosine'");
     program.add_argument("--snapshot-path")
         .default_value(std::string(
             "./test_hierarchical_graph_persistence_snapshot.graph"))
@@ -401,6 +420,7 @@ int main(int argc, char** argv) {
 
     g_config.config_path        = program.get<std::string>("--config");
     g_config.dataset_name       = program.get<std::string>("--dataset");
+    g_config.metric             = program.get<std::string>("--metric");
     g_config.snapshot_path      = program.get<std::string>("--snapshot-path");
     g_config.rnet_beta          = program.get<float>("--beta");
     g_config.ul_max_nbr_size    = program.get<uint32_t>("--ul-max-nbr-size");

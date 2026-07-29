@@ -1,0 +1,185 @@
+{
+  "dataset-config": "./configs/datasets.json",
+  "dataset": "crawl",
+  "metric": "euclidean",
+  "warmup_runs": 5,
+  "test_runs": 10,
+  "indexes-config": {
+    "hnsw": {
+      "M": 32,
+      "efConstruction": 500,
+      "throughput_search": [
+        { "topk": 20,  "candidate_queue_config": "20,300,20" },
+        { "topk": 100, "candidate_queue_config": "100,500,40" }
+      ],
+      "latency_search": [
+        { "topk": 1,   "candidate_queue_config": "1,20,1" },
+        { "topk": 20,  "candidate_queue_config": "20,300,20" },
+        { "topk": 100, "candidate_queue_config": "100,500,40" }
+      ]
+    },
+    "nsg": {
+      "R": 100,
+      "L": 100,
+      "C": 500,
+      "efanna_K":      200,
+      "efanna_L":      300,
+      "efanna_S":      15,
+      "efanna_trees":  16,
+      "efanna_mlevel": 10,
+      "efanna_epochs": 12,
+      "efanna_checkK": 25,
+      "throughput_search": [
+        { "topk": 20,  "candidate_queue_config": "20,300,20" },
+        { "topk": 100, "candidate_queue_config": "100,500,40" }
+      ],
+      "latency_search": [
+        { "topk": 1,   "candidate_queue_config": "1,20,1" },
+        { "topk": 20,  "candidate_queue_config": "20,300,20" },
+        { "topk": 100, "candidate_queue_config": "100,500,40" }
+      ]
+    },
+    "mirage": {
+      "S": 32,
+      "R": 4,
+      "iter": 15,
+      "M": 32,
+      "throughput_search": [
+        { "topk": 20,  "candidate_queue_config": "20,300,20" },
+        { "topk": 100, "candidate_queue_config": "100,500,40" }
+      ],
+      "latency_search": [
+        { "topk": 1,   "candidate_queue_config": "1,20,1" },
+        { "topk": 20,  "candidate_queue_config": "20,300,20" },
+        { "topk": 100, "candidate_queue_config": "100,500,40" }
+      ]
+    },
+    "rnndescent": {
+      "S": 20,
+      "R": 96,
+      "T1": 5,
+      "T2": 12,
+      "K0": 32,
+      "throughput_search": [
+        { "topk": 20,  "candidate_queue_config": "20,300,20" },
+        { "topk": 100, "candidate_queue_config": "100,500,40" }
+      ],
+      "latency_search": [
+        { "topk": 1,   "candidate_queue_config": "1,20,1" },
+        { "topk": 20,  "candidate_queue_config": "20,300,20" },
+        { "topk": 100, "candidate_queue_config": "100,500,40" }
+      ]
+    },
+    "hcnng": {
+      "num_cl":         70,
+      "max_mst_degree": 3,
+      "throughput_search": [
+        { "topk": 20,  "max_calc_config": "1500,10000,450" },
+        { "topk": 100, "max_calc_config": "1500,15000,700" }
+      ],
+      "latency_search": [
+        { "topk": 1,   "max_calc_config": "50,1000,50"     },
+        { "topk": 20,  "max_calc_config": "1500,10000,450" },
+        { "topk": 100, "max_calc_config": "1500,15000,700" }
+      ]
+    },
+    "vamana": {
+      "R": 70,
+      "L": 75,
+      "alpha": 1.2,
+      "throughput_search": [
+        { "topk": 20,  "candidate_queue_config": "20,300,20" },
+        { "topk": 100, "candidate_queue_config": "100,500,40" }
+      ],
+      "latency_search": [
+        { "topk": 1,   "candidate_queue_config": "1,20,1" },
+        { "topk": 20,  "candidate_queue_config": "20,300,20" },
+        { "topk": 100, "candidate_queue_config": "100,500,40" }
+      ]
+    },
+    "alpha-cg": {
+      "R": 100,
+      "L": 100,
+      "C": 500,
+      "alpha_start": 0.9,
+      "alpha_step": 0.05,
+      "alpha_max": 1.6,
+      "tau": 1.80,
+      "T": 50,
+      "efanna_K":      200,
+      "efanna_L":      300,
+      "efanna_S":      15,
+      "efanna_trees":  16,
+      "efanna_mlevel": 10,
+      "efanna_epochs": 12,
+      "efanna_checkK": 25,
+      "throughput_search": [
+        { "topk": 20,  "candidate_queue_config": "20,300,20" },
+        { "topk": 100, "candidate_queue_config": "100,500,40" }
+      ],
+      "latency_search": [
+        { "topk": 1,   "candidate_queue_config": "1,20,1" },
+        { "topk": 20,  "candidate_queue_config": "20,300,20" },
+        { "topk": 100, "candidate_queue_config": "100,500,40" }
+      ]
+    },
+    "tau-mng": {
+      "R": 100,
+      "L": 100,
+      "C": 500,
+      "tau": 0.15,
+      "angle": 60.0,
+      "efanna_K":      200,
+      "efanna_L":      300,
+      "efanna_S":      15,
+      "efanna_trees":  16,
+      "efanna_mlevel": 10,
+      "efanna_epochs": 12,
+      "efanna_checkK": 25,
+      "throughput_search": [
+        { "topk": 20,  "candidate_queue_config": "20,300,20" },
+        { "topk": 100, "candidate_queue_config": "100,500,40" }
+      ],
+      "latency_search": [
+        { "topk": 1,   "candidate_queue_config": "1,20,1" },
+        { "topk": 20,  "candidate_queue_config": "20,300,20" },
+        { "topk": 100, "candidate_queue_config": "100,500,40" }
+      ]
+    },
+    "artea": {
+      "rnet_beta":               2.0,
+      "l0_rnet_radius":          23.51,
+      "l0_min_distance":         1.81,
+      "ul_max_nbr_size":         40,
+      "bl_max_nbr_size":         80,
+      "search_nn_qs":            30,
+      "ul_select_nbrs_qs":       100,
+      "bl_select_nbrs_qs":       100,
+      "scale_coeffs":            1.1,
+      "shifted_coeffs":          0.0,
+      "num_build_loops":         5,
+      "num_triu_iters":          12,
+      "prefill_ratio":           0.34,
+      "shuffle_insertion_order": false,
+      "insert_on_L0":            false,
+      "throughput_search": [
+        { "topk": 20,  "candidate_queue_config": "20,300,20" },
+        { "topk": 100, "candidate_queue_config": "100,500,40" }
+      ],
+      "latency_search": [
+        { "topk": 1,   "candidate_queue_config": "1,20,1" },
+        { "topk": 20,  "candidate_queue_config": "20,300,20" },
+        { "topk": 100, "candidate_queue_config": "100,500,40" }
+      ]
+    }
+  },
+  "throughput_search": [
+    { "topk": 20,  "candidate_queue_config": "20,300,20" },
+    { "topk": 100, "candidate_queue_config": "100,500,40" }
+  ],
+  "latency_search": [
+    { "topk": 1,   "candidate_queue_config": "1,20,1" },
+    { "topk": 20,  "candidate_queue_config": "20,300,20" },
+    { "topk": 100, "candidate_queue_config": "100,500,40" }
+  ]
+}
