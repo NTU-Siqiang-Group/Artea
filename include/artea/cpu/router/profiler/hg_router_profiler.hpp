@@ -125,7 +125,7 @@ public:
 
         Profile1NNResult result;
         result.trajectories.assign(num_sampled, typename Profile1NNResult::trajectory_t{});
-        if (top_level_id == HierarchicalGraphT::unassigned_highest_level_id || num_sampled == 0) {
+        if (top_level_id == HierarchicalGraphT::invalid_level_id || num_sampled == 0) {
             return result;
         }
 
@@ -247,7 +247,7 @@ public:
         LatencyProfileResult result;
         result.latencies_us.assign(num_queries, 0.0);
         result.num_queries = num_queries;
-        if (top_level_id == HierarchicalGraphT::unassigned_highest_level_id || num_queries == 0) {
+        if (top_level_id == HierarchicalGraphT::invalid_level_id || num_queries == 0) {
             return result;
         }
 
@@ -338,7 +338,7 @@ public:
 
         EdgeLengthProfileResult result;
         result.num_queries = num_queries;
-        if (top_level_id == HierarchicalGraphT::unassigned_highest_level_id || num_queries == 0) {
+        if (top_level_id == HierarchicalGraphT::invalid_level_id || num_queries == 0) {
             return result;
         }
 

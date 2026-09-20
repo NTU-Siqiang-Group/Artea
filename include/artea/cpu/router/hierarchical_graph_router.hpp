@@ -160,7 +160,7 @@ public:
     template <bool RandomSeeding = false, bool UpperLevelBeamSearch = false, typename HierarchicalGraphT>
     auto query(const vec_ele_t* query_vec, const HierarchicalGraphT& hier_graph) const -> knn_results_t {
         const layer_id_t top_level_id = hier_graph.top_occupied_level_id();
-        if (top_level_id == HierarchicalGraphT::unassigned_highest_level_id) {
+        if (top_level_id == HierarchicalGraphT::invalid_level_id) {
             return knn_results_t{};
         }
 

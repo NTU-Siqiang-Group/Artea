@@ -127,7 +127,7 @@ public:
         const layer_id_t   src_top         = src.top_occupied_level_id();
 
         // ---- Empty source: return a degenerate compact graph. ----
-        if (num_vertices == 0 || src_top == src_graph_t::unassigned_highest_level_id) {
+        if (num_vertices == 0 || src_top == src_graph_t::invalid_level_id) {
             std::vector<std::size_t> empty_cap(1, 0);
             return compact_graph_t(
                 layer_id_t{0}, ul_max_nbr_size, bl_max_nbr_size,
@@ -299,7 +299,7 @@ public:
                 for (vertex_id_t vid = r.begin(); vid != r.end(); ++vid) {
                     const auto& vinfo = compact_vit[vid];
                     const layer_id_t H_new = vinfo.highest_level_id;
-                    if (H_new == compact_graph_t::unassigned_highest_level_id) {
+                    if (H_new == compact_graph_t::invalid_level_id) {
                         continue;
                     }
                     vertex_id_t* slot_base =

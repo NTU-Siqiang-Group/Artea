@@ -82,7 +82,7 @@ public:
     /** @brief Sentinel for vertices that have not been assigned to any
      *         level. Matches the dynamic graph's convention so the
      *         compactor can copy @c highest_level_id verbatim. */
-    static constexpr layer_id_t unassigned_highest_level_id =
+    static constexpr layer_id_t invalid_level_id =
         std::numeric_limits<layer_id_t>::max();
 
     /**
@@ -92,7 +92,7 @@ public:
      *        the dynamic version.
      */
     struct VertexInfo {
-        layer_id_t  highest_level_id = unassigned_highest_level_id;
+        layer_id_t  highest_level_id = invalid_level_id;
         std::size_t slot_offset      = 0;   // in vertex_id_t units
     };
 
@@ -100,8 +100,7 @@ public:
      * @brief Construct a compact graph sized to hold every vid's slot
      *        from a source dynamic graph.
      *
-     * @param max_restrict_level          Inclusive upper bound of
-     *                                      per-vertex @c highest_level_id.
+     * @param top_level_id                  Highest level retained after compaction; use 0 for an empty graph.
      * @param ul_max_nbr_size               Per-vertex capacity at upper
      *                                      levels (level_id > 0).
      * @param bl_max_nbr_size               Per-vertex capacity at the
@@ -116,19 +115,19 @@ public:
      *                                      into that arena.
      */
     HierarchicalGraph(
-        const layer_num_t              max_restrict_level,
+        const layer_id_t               top_level_id,
         const vertex_num_t             ul_max_nbr_size,
         const vertex_num_t             bl_max_nbr_size,
         const vertex_num_t             num_vertices,
         std::vector<std::size_t>       arena_vid_capacity_per_group
     ) :
-        _max_restrict_level(max_restrict_level),
+        _top_level_id(top_level_id),
         _ul_max_nbr_size(ul_max_nbr_size),
         _bl_max_nbr_size(bl_max_nbr_size),
         _num_vertices(num_vertices),
         _entry_point_vid(invalid_vertex_id),
-        _arenas(static_cast<std::size_t>(max_restrict_level) + 1),
-        _vids_by_highest_level(static_cast<std::size_t>(max_restrict_level) + 1),
+        _arenas(static_cast<std::size_t>(top_level_id) + 1),
+        _vids_by_highest_level(static_cast<std::size_t>(top_level_id) + 1),
         _vertex_info_table(num_vertices)
     {
         for (std::size_t h = 0; h < _arenas.size(); ++h) {
@@ -152,11 +151,6 @@ public:
     __attribute__((always_inline))
     auto get_num_vertices() const -> vertex_num_t {
         return _num_vertices;
-    }
-
-    __attribute__((always_inline))
-    auto max_restrict_level() const -> layer_id_t {
-        return _max_restrict_level;
     }
 
     /** @brief Per-vertex capacity at every upper layer. */
@@ -235,21 +229,19 @@ public:
         return std::span<const vertex_id_t>(_vids_by_highest_level[h].data(), _vids_by_highest_level[h].size());
     }
 
+    /** @brief Read-only top bucket, matching the dynamic graph's sampling interface. */
+    __attribute__((always_inline))
+    auto get_top_level_vids() const -> std::span<const vertex_id_t> {
+        const auto top_level_id = top_occupied_level_id();
+        if (top_level_id == invalid_level_id) return {};
+        return get_vids_with_highest_level(top_level_id);
+    }
+
     /**
-     * @brief Largest @c h with a non-empty bucket, or
-     *        @c unassigned_highest_level_id if every bucket is empty.
-     *
-     * The compactor (@c HierarchicalGraphCompactor) trims the compact
-     * graph's @c _max_restrict_level down to exactly the source's
-     * top_occupied_level_id at construction time, so the invariant
-     * here is: any non-empty compact graph has
-     * @c top_occupied_level_id == _max_restrict_level. We therefore
-     * return that constant directly instead of scanning buckets.
+     * @brief Highest retained level after compaction/restoration, or @c invalid_level_id for an empty graph.
      */
     auto top_occupied_level_id() const -> layer_id_t {
-        return (_num_vertices == 0)
-            ? unassigned_highest_level_id
-            : _max_restrict_level;
+        return _num_vertices == 0 ? invalid_level_id : _top_level_id;
     }
 
     /**
@@ -305,7 +297,7 @@ public:
     }
 
 private:
-    layer_num_t  _max_restrict_level;
+    layer_id_t   _top_level_id;
     vertex_num_t _ul_max_nbr_size;
     vertex_num_t _bl_max_nbr_size;
     vertex_num_t _num_vertices;
@@ -316,7 +308,7 @@ private:
     vertex_id_t  _entry_point_vid;
 
     /** @brief One arena per highest_level_id in
-     *         @c [0, _max_restrict_level]. */
+     *         @c [0, _top_level_id]. */
     std::vector<vid_arena_container_t>    _arenas;
 
     /** @brief _vids_by_highest_level[h] lists every vid with

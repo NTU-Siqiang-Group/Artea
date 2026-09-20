@@ -207,10 +207,10 @@ protected:
                 graph->get_hierarchical_graph(), base_vecs, dist_func);
             auto t3 = std::chrono::high_resolution_clock::now();
             ARTEA_INFO(fmt::format("Compacted in {} ms; "
-                "max_restrict_level={}, num_vertices={}",
+                "top_level_id={}, num_vertices={}",
                 std::chrono::duration_cast<std::chrono::milliseconds>(t3 - t2)
                     .count(),
-                static_cast<int>(compact_hg.max_restrict_level()),
+                static_cast<int>(compact_hg.top_occupied_level_id()),
                 compact_hg.get_num_vertices()));
 
             return std::make_unique<compact::hierarchical_graph_t>(
@@ -243,7 +243,6 @@ static auto expect_compact_graphs_equal(
 ) -> void {
     // Scalar metadata.
     ASSERT_EQ(original.get_num_vertices(),     restored.get_num_vertices());
-    ASSERT_EQ(original.max_restrict_level(),   restored.max_restrict_level());
     ASSERT_EQ(original.top_occupied_level_id(),
               restored.top_occupied_level_id());
     ASSERT_EQ(original.ul_max_nbr_size(),      restored.ul_max_nbr_size());
@@ -251,7 +250,8 @@ static auto expect_compact_graphs_equal(
     ASSERT_EQ(original.entry_point_vid(),      restored.entry_point_vid());
 
     const vertex_num_t num_vertices = original.get_num_vertices();
-    const layer_id_t   max_level    = original.max_restrict_level();
+    if (num_vertices == 0) return;
+    const layer_id_t top_level_id = original.top_occupied_level_id();
 
     // Per-vid highest_level_id.
     for (vertex_id_t vid = 0; vid < num_vertices; ++vid) {
@@ -261,7 +261,7 @@ static auto expect_compact_graphs_equal(
     }
 
     // Per-h bucket as a set (order may differ — see file header).
-    for (layer_id_t h = 0; h <= max_level; ++h) {
+    for (layer_id_t h = 0; h <= top_level_id; ++h) {
         const auto orig_bucket = original.get_vids_with_highest_level(h);
         const auto rest_bucket = restored.get_vids_with_highest_level(h);
         ASSERT_EQ(orig_bucket.size(), rest_bucket.size())
@@ -280,7 +280,7 @@ static auto expect_compact_graphs_equal(
     constexpr vertex_id_t invalid_vid =
         compact::hierarchical_graph_t::invalid_vertex_id;
     constexpr layer_id_t  unassigned_h =
-        compact::hierarchical_graph_t::unassigned_highest_level_id;
+        compact::hierarchical_graph_t::invalid_level_id;
 
     std::size_t total_levels_checked = 0;
     std::size_t total_valid_edges    = 0;

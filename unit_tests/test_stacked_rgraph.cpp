@@ -196,7 +196,7 @@ protected:
             "[{}] built in {} ms: top_occupied_level={}, max_restrict_level={}",
             label, build_ms,
             (top_level_id == dynamic::hierarchical_graph_t
-                ::unassigned_highest_level_id)
+                ::invalid_level_id)
                 ? -1 : static_cast<int>(top_level_id),
             graph.max_restrict_level()));
         // Preview what HierarchicalGraphCompactor would trim, using the
@@ -208,7 +208,7 @@ protected:
         constexpr vertex_num_t min_cap =
             hierarchical_graph_compactor_t::min_layer_cap;
         const bool has_vertices = (top_level_id !=
-            dynamic::hierarchical_graph_t::unassigned_highest_level_id);
+            dynamic::hierarchical_graph_t::invalid_level_id);
         layer_id_t compactor_new_top = 0;
         if (has_vertices) {
             for (layer_id_t h = top_level_id; ; --h) {

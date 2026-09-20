@@ -32,9 +32,12 @@
 #include <cstddef>
 #include <cstdint>
 #include <deque>
+#include <exception>
 #include <execution>
 #include <limits>
 #include <memory>
+#include <mutex>
+#include <ranges>
 #include <span>
 #include <utility>
 #include <vector>
@@ -125,6 +128,15 @@ public:
 
 private:
     using level_group_arena_t = LevelGroupArena<IndexTraitsT>;
+    using vid_range_t = std::ranges::subrange<typename tbb::concurrent_vector<vertex_id_t>::const_iterator>;
+
+    struct TopLevelSnapshot {
+        layer_id_t top_level_id;
+        vertex_num_t published_size;
+    };
+
+    using top_level_snapshot_t = TopLevelSnapshot;
+    static_assert(std::atomic<top_level_snapshot_t>::is_always_lock_free);
 
 public:
     /** @brief Marks this graph as the dynamic (concurrently mutated)
@@ -138,7 +150,7 @@ public:
      *         been passed through @c assign_layer. Chosen to be
      *         distinguishable from any valid level id in the usable
      *         range @c [0, max_restrict_level]. */
-    static constexpr layer_id_t unassigned_highest_level_id =
+    static constexpr layer_id_t invalid_level_id =
         std::numeric_limits<layer_id_t>::max();
 
     /**
@@ -160,7 +172,7 @@ public:
 
         /** @brief Largest level at which this vertex participates. Valid
          *         only after @c assign_layer; until then it holds
-         *         @c unassigned_highest_level_id. */
+         *         @c invalid_level_id. */
         layer_id_t highest_level_id;
 
         /** @brief Offset (in @c nbr_t units) of this vertex's slot
@@ -171,7 +183,7 @@ public:
         VertexInfo()
             : nbrs_lock(0),
               _padding{0, 0, 0},
-              highest_level_id(unassigned_highest_level_id),
+              highest_level_id(invalid_level_id),
               slot_offset(0) {}
 
         VertexInfo(const VertexInfo&)            = delete;
@@ -299,57 +311,33 @@ public:
         vinfo.highest_level_id = highest_level_id;
         vinfo.slot_offset      = slot_offset;
 
-        // Publish: ensure the vinfo writes above are visible to any thread
-        // that later observes `vid` in _vids_by_highest_level. Without
-        // this fence, a concurrent sample_entries / descent may read vid
-        // from the bucket but see vinfo.highest_level_id ==
-        // unassigned_highest_level_id, then index _arenas[unassigned] in
-        // fetch_layer_nbrs and segfault.
-        std::atomic_thread_fence(std::memory_order_release);
-
-        // Record vid into the bucket keyed by its highest_level_id so
-        // that router seeding and compactor materialization can both
-        // enumerate this group without linear-scanning the full info
-        // table.
-        _vids_by_highest_level[highest_level_id].push_back(vid);
-
-        // ORDERING IS LOAD-BEARING: the bucket push above must precede
-        // the _top_occupied_level_id bump below. Readers of
-        // top_occupied_level_id() do
-        //     top = _top_occupied_level_id.load();
-        //     bucket = _vids_by_highest_level[top];
-        //     ...sample from bucket
-        // If we bumped the top first, a reader could observe the new
-        // top but find the bucket still empty (the pusher not having
-        // reached push_back yet), producing a spurious "empty top
-        // bucket" error. By ordering push_back → CAS, every observer
-        // of an elevated top is guaranteed to see at least the vid
-        // that caused the bump already present in the bucket.
-        //
-        // Monotonic CAS fetch-max: only try to raise the cached top,
-        // never lower it. Release on success pairs with acquire in
-        // top_occupied_level_id()'s reader.
-        //
-        // unassigned_highest_level_id is layer_id_t::max() (the largest
-        // possible integer), so a naive `highest_level_id > prev_top`
-        // check would be FALSE when prev_top is still the sentinel —
-        // the cached top would stay at sentinel forever and every
-        // reader would see "empty hierarchy". Handle the sentinel
-        // explicitly as "smaller than any valid level".
-        layer_id_t prev_top =
-            _top_occupied_level_id.load(std::memory_order_relaxed);
-        while ((prev_top == unassigned_highest_level_id ||
-                highest_level_id > prev_top) &&
-               !_top_occupied_level_id.compare_exchange_weak(
-                   prev_top, highest_level_id,
-                   std::memory_order_release,
-                   std::memory_order_relaxed))
-        {
-            // CAS failed with prev_top refreshed; loop if we still see
-            // a sentinel or a smaller cached top, otherwise exit
-            // (another pusher already published an equal-or-higher
-            // valid top for us).
+        auto& bucket = _vids_by_highest_level[highest_level_id];
+        auto top_level_id = top_occupied_level_id();
+        // The top only increases. Readers of an older top retain its already-published prefix.
+        if (top_level_id != invalid_level_id && highest_level_id < top_level_id) {
+            bucket.push_back(vid);
+            return;
         }
+
+        std::unique_lock lock(_top_publish_mutex);
+        top_level_id = top_occupied_level_id();
+        if (top_level_id != invalid_level_id && highest_level_id < top_level_id) {
+            lock.unlock();
+            bucket.push_back(vid);
+            return;
+        }
+
+        // concurrent_vector increments size before constructing the element. Publish only after completion.
+        if (_top_publish_failure) std::rethrow_exception(_top_publish_failure);
+        try {
+            bucket.push_back(vid);
+        } catch (...) {
+            // A failed append can leave an unconstructed tail; never publish it in a later snapshot.
+            _top_publish_failure = std::current_exception();
+            throw;
+        }
+        _top_snapshot.store({highest_level_id, static_cast<vertex_num_t>(bucket.size())},
+                            std::memory_order_release);
     }
 
     // =================================================================
@@ -488,7 +476,7 @@ public:
     __attribute__((always_inline))
     auto is_vertex_assigned(const vertex_id_t vid) const -> bool {
         return _vertex_info_table[vid].highest_level_id !=
-               unassigned_highest_level_id;
+               invalid_level_id;
     }
 
     __attribute__((always_inline))
@@ -498,8 +486,8 @@ public:
 
     /**
      * @brief Vids whose @c highest_level_id equals @p h. Populated by
-     *        @c assign_layer; consumed by router seeding and the
-     *        compactor.
+     *        @c assign_layer; read only after insertion has stopped.
+     *        Concurrent router seeding must use @c get_top_level_vids.
      */
     __attribute__((always_inline))
     auto get_vids_with_highest_level(const layer_id_t h) const
@@ -508,18 +496,18 @@ public:
         return _vids_by_highest_level[h];
     }
 
-    /**
-     * @brief Largest @c h in @c [0, max_restrict_level] with a non-empty
-     *        bucket, or @c unassigned_highest_level_id if every bucket
-     *        is empty (i.e. no vertex has been assigned yet).
-     *
-     * Single atomic load of @c _top_occupied_level_id, maintained by
-     * @c assign_layer via a CAS fetch-max. The push_back → CAS ordering
-     * inside @c assign_layer guarantees that any observer of the
-     * returned top sees at least one vid in the corresponding bucket.
-     */
+    /** @brief Fixed, fully initialized top-bucket prefix, valid through subsequent insertions/top changes. */
+    __attribute__((always_inline))
+    auto get_top_level_vids() const -> vid_range_t {
+        const auto snapshot = _top_snapshot.load(std::memory_order_acquire);
+        if (snapshot.top_level_id == invalid_level_id) return {};
+        const auto first = _vids_by_highest_level[snapshot.top_level_id].cbegin();
+        return {first, first + snapshot.published_size};
+    }
+
+    /** @brief Highest published layer, or @c invalid_level_id for an empty graph. */
     auto top_occupied_level_id() const -> layer_id_t {
-        return _top_occupied_level_id.load(std::memory_order_acquire);
+        return _top_snapshot.load(std::memory_order_acquire).top_level_id;
     }
 
     /** @brief Per-vertex slot offset inside its group's arena
@@ -693,14 +681,12 @@ private:
      *               graph by walking each bucket in order. */
     std::vector<tbb::concurrent_vector<vertex_id_t>> _vids_by_highest_level;
 
-    /** @brief Cached monotonically non-decreasing top-occupied level.
-     *         Maintained by @c assign_layer via a CAS fetch-max AFTER the
-     *         new vid has been pushed into its bucket, so any reader that
-     *         observes an elevated top is guaranteed to also see at least
-     *         that one vid in the corresponding bucket. Read by
-     *         @c top_occupied_level_id() as a single atomic load instead
-     *         of scanning every bucket. */
-    std::atomic<layer_id_t> _top_occupied_level_id{unassigned_highest_level_id};
+    /** @brief Only top/new-top appenders take this lock; lower-layer appenders and readers do not. */
+    std::mutex _top_publish_mutex;
+    std::exception_ptr _top_publish_failure;
+
+    /** @brief Publish the layer and completed prefix together, including vertex metadata initialization. */
+    std::atomic<top_level_snapshot_t> _top_snapshot{{invalid_level_id, 0}};
 
 };  // class HierarchicalGraph
 

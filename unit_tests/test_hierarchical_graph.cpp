@@ -230,7 +230,7 @@ TEST(HierarchicalGraphStandalone, AddVerticesBasics) {
                /*total_vertices=*/1024);
     EXPECT_EQ(fresh.get_num_vertices(), 0u);
     EXPECT_EQ(fresh.top_occupied_level_id(),
-              hg_t::unassigned_highest_level_id);
+              hg_t::invalid_level_id);
 
     const vertex_id_t first_a = fresh.add_vertices(200);
     EXPECT_EQ(first_a, 0u);
@@ -243,11 +243,11 @@ TEST(HierarchicalGraphStandalone, AddVerticesBasics) {
     for (vertex_id_t vid = 0; vid < 250; ++vid) {
         EXPECT_FALSE(fresh.is_vertex_assigned(vid));
         EXPECT_EQ(fresh.get_highest_level_id(vid),
-                  hg_t::unassigned_highest_level_id);
+                  hg_t::invalid_level_id);
     }
     // No bucket populated yet.
     EXPECT_EQ(fresh.top_occupied_level_id(),
-              hg_t::unassigned_highest_level_id);
+              hg_t::invalid_level_id);
 }
 
 // ---- 3. Parallel assign_layer produces unique slot_offsets per arena. ----
@@ -583,9 +583,7 @@ TEST_F(HierarchicalGraphTest, CompactorPreservesTopology) {
         if (h == 0) { expected_new_top = 0; break; }
     }
 
-    // Structural metadata. max_restrict_level is pinned to the new
-    // (possibly trimmed) top by the compactor.
-    EXPECT_EQ(compact_graph.max_restrict_level(), expected_new_top);
+    // Structural metadata uses the top retained by the compactor.
     EXPECT_EQ(compact_graph.top_occupied_level_id(), expected_new_top);
     EXPECT_EQ(compact_graph.ul_max_nbr_size(), _graph->ul_max_nbr_size());
     EXPECT_EQ(compact_graph.bl_max_nbr_size(), _graph->bl_max_nbr_size());
@@ -713,7 +711,7 @@ TEST_F(HierarchicalGraphTest, LayerRefiningGraphRoundTrip) {
     const layer_config_t layer_cfg(_ul_max_nbr);
 
     const layer_id_t top_h = _graph->top_occupied_level_id();
-    ASSERT_NE(top_h, hg_t::unassigned_highest_level_id);
+    ASSERT_NE(top_h, hg_t::invalid_level_id);
 
     for (layer_id_t h = 0; h <= top_h; ++h) {
         // ---- Build the (l2g, g2l) maps and construct the matching RG. ----

@@ -35,13 +35,13 @@
  *                   magic              : uint32 = 0x48475241  ('HGRA')
  *                   version            : uint32 = 1
  *                   num_vertices       : uint32
- *                   max_restrict_level : uint32
+ *                   top_level_id       : uint32 (0 for an empty graph)
  *                   ul_max_nbr_size    : uint32
  *                   bl_max_nbr_size    : uint32
  *                   entry_point_vid    : uint32
  *                 [Per-vid records, vid = 0 .. num_vertices-1]
  *                   highest_level_id   : uint32
- *                   if highest_level_id == unassigned_highest_level_id:
+ *                   if highest_level_id == invalid_level_id:
  *                       (no further payload for this vid)
  *                   else for level_id = highest_level_id down to 0:
  *                       valid_nbr_count : uint32
@@ -108,7 +108,9 @@ public:
         const uint32_t     magic              = k_file_magic;
         const uint32_t     version            = k_file_version;
         const vertex_num_t num_vertices       = compact_hg.get_num_vertices();
-        const layer_num_t  max_restrict_level = compact_hg.max_restrict_level();
+        // Empty graphs keep the version-1 header's L0 placeholder instead of the invalid level sentinel.
+        const layer_id_t   top_level_id =
+            num_vertices == 0 ? layer_id_t{0} : compact_hg.top_occupied_level_id();
         const vertex_num_t ul_max_nbr_size    = compact_hg.ul_max_nbr_size();
         const vertex_num_t bl_max_nbr_size    = compact_hg.bl_max_nbr_size();
         const vertex_id_t  entry_point_vid    = compact_hg.entry_point_vid();
@@ -116,13 +118,13 @@ public:
         ofs.write(reinterpret_cast<const char*>(&magic),              sizeof(uint32_t));
         ofs.write(reinterpret_cast<const char*>(&version),            sizeof(uint32_t));
         ofs.write(reinterpret_cast<const char*>(&num_vertices),       sizeof(uint32_t));
-        ofs.write(reinterpret_cast<const char*>(&max_restrict_level), sizeof(uint32_t));
+        ofs.write(reinterpret_cast<const char*>(&top_level_id),       sizeof(uint32_t));
         ofs.write(reinterpret_cast<const char*>(&ul_max_nbr_size),    sizeof(uint32_t));
         ofs.write(reinterpret_cast<const char*>(&bl_max_nbr_size),    sizeof(uint32_t));
         ofs.write(reinterpret_cast<const char*>(&entry_point_vid),    sizeof(uint32_t));
 
         constexpr vertex_id_t invalid_vertex_id_sentinel = compact_hg_t::invalid_vertex_id;
-        constexpr layer_id_t  unassigned_highest_level_sentinel = compact_hg_t::unassigned_highest_level_id;
+        constexpr layer_id_t  unassigned_highest_level_sentinel = compact_hg_t::invalid_level_id;
 
         for (vertex_id_t vid = 0; vid < num_vertices; ++vid) {
             const layer_id_t highest_level_id = compact_hg.get_highest_level_id(vid);
@@ -170,7 +172,7 @@ public:
         uint32_t     magic              = 0;
         uint32_t     version            = 0;
         vertex_num_t num_vertices       = 0;
-        layer_num_t  max_restrict_level = 0;
+        layer_id_t   top_level_id       = 0;
         vertex_num_t ul_max_nbr_size    = 0;
         vertex_num_t bl_max_nbr_size    = 0;
         vertex_id_t  entry_point_vid    = 0;
@@ -178,7 +180,7 @@ public:
         ifs.read(reinterpret_cast<char*>(&magic),              sizeof(uint32_t));
         ifs.read(reinterpret_cast<char*>(&version),            sizeof(uint32_t));
         ifs.read(reinterpret_cast<char*>(&num_vertices),       sizeof(uint32_t));
-        ifs.read(reinterpret_cast<char*>(&max_restrict_level), sizeof(uint32_t));
+        ifs.read(reinterpret_cast<char*>(&top_level_id),       sizeof(uint32_t));
         ifs.read(reinterpret_cast<char*>(&ul_max_nbr_size),    sizeof(uint32_t));
         ifs.read(reinterpret_cast<char*>(&bl_max_nbr_size),    sizeof(uint32_t));
         ifs.read(reinterpret_cast<char*>(&entry_point_vid),    sizeof(uint32_t));
@@ -200,12 +202,12 @@ public:
         }
 
         const std::size_t num_groups =
-            static_cast<std::size_t>(max_restrict_level) + 1;
+            static_cast<std::size_t>(top_level_id) + 1;
 
         // Empty graph: zero-capacity arenas, entry point sentinel.
         if (num_vertices == 0) {
             std::vector<std::size_t> empty_arena_caps(num_groups, 0);
-            compact_hg_t compact_hg(max_restrict_level,
+            compact_hg_t compact_hg(top_level_id,
                                     ul_max_nbr_size,
                                     bl_max_nbr_size,
                                     num_vertices,
@@ -215,7 +217,7 @@ public:
         }
 
         constexpr layer_id_t unassigned_highest_level_sentinel =
-            compact_hg_t::unassigned_highest_level_id;
+            compact_hg_t::invalid_level_id;
 
         // Single-pass read into staging buffers.
         std::vector<layer_id_t> highest_level_table(num_vertices);
@@ -235,11 +237,11 @@ public:
             highest_level_table[vid] = highest_level_id;
             if (highest_level_id == unassigned_highest_level_sentinel) continue;
 
-            if (highest_level_id > max_restrict_level) {
+            if (highest_level_id > top_level_id) {
                 ARTEA_ERROR(fmt::format(
                     "HierarchicalGraphFileManager::restore: vid {} has "
-                    "highest_level_id {} > max_restrict_level {} in {}",
-                    vid, highest_level_id, max_restrict_level, bin_path));
+                    "highest_level_id {} > top_level_id {} in {}",
+                    vid, highest_level_id, top_level_id, bin_path));
             }
 
             highest_level_histogram[highest_level_id] += 1;
@@ -302,7 +304,7 @@ public:
                 * slot_size;
         }
 
-        compact_hg_t compact_hg(max_restrict_level,
+        compact_hg_t compact_hg(top_level_id,
                                 ul_max_nbr_size,
                                 bl_max_nbr_size,
                                 num_vertices,

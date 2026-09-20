@@ -84,8 +84,8 @@ public:
      *         insertion hot path). */
     static constexpr bool is_compacted = hierarchical_graph_t::is_compacted;
 
-    static constexpr layer_id_t unassigned_highest_level_id =
-        hierarchical_graph_t::unassigned_highest_level_id;
+    static constexpr layer_id_t invalid_level_id =
+        hierarchical_graph_t::invalid_level_id;
 
     /**
      * @brief Construct an empty IndexStructure.
@@ -201,6 +201,11 @@ public:
         -> const tbb::concurrent_vector<vertex_id_t>&
     {
         return _hierarchical_graph->get_vids_with_highest_level(h);
+    }
+
+    __attribute__((always_inline))
+    auto get_top_level_vids() const {
+        return _hierarchical_graph->get_top_level_vids();
     }
 
     __attribute__((always_inline))

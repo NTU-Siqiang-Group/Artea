@@ -111,7 +111,7 @@ class IndexFactory {
     static constexpr vertex_id_t invalid_vertex_id = GraphFactoryTraitsT::invalid_vertex_id;
     static constexpr distance_t  max_distance      = GraphFactoryTraitsT::max_distance;
 
-    static constexpr layer_id_t  unassigned_highest_level_id = hierarchical_graph_t::unassigned_highest_level_id;
+    static constexpr layer_id_t  invalid_level_id = hierarchical_graph_t::invalid_level_id;
 
 public:
     /** @brief Number of vertices inserted serially during bootstrap
@@ -279,7 +279,7 @@ private:
         std::vector<std::optional<std_candidate_queue_t>> descent_queue_per_level(num_cached_queues);
         for (auto& slot : descent_queue_per_level) { slot.emplace(search_nn_qs); }
 
-        if (top_level_id != unassigned_highest_level_id && top_level_id >= 1) {
+        if (top_level_id != invalid_level_id && top_level_id >= 1) {
             std_candidate_queue_t cur_queue(search_nn_qs);
             candidate_sample_utils_t::sample_single_entry(index.get_vecs_storage(), dist_func, index, new_vec, cur_queue);
 
@@ -332,7 +332,7 @@ private:
         //   Step B — Compute highest_insert_level_id (match legacy)
         // ==============================================================
         layer_id_t highest_insert_level_id;
-        if (top_level_id == unassigned_highest_level_id) {
+        if (top_level_id == invalid_level_id) {
             // Empty hierarchy: first vertex seeds L_1.
             highest_insert_level_id = 1;
         } else {

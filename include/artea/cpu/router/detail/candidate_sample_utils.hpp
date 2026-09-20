@@ -24,7 +24,6 @@
 #pragma once
 
 #include <algorithm>
-#include <atomic>
 #include <cstddef>
 #include <random>
 #include <utility>
@@ -39,7 +38,6 @@ template <typename RouterTraitsT>
 class CandidateSampleUtils {
 
     using vertex_id_t           = typename RouterTraitsT::vertex_id_t;
-    using layer_id_t            = typename RouterTraitsT::layer_id_t;
     using vec_ele_t             = typename RouterTraitsT::vec_ele_t;
     using distance_t            = typename RouterTraitsT::distance_t;
     using dist_func_t           = typename RouterTraitsT::dist_func_t;
@@ -56,17 +54,12 @@ public:
         const vec_ele_t*          query_vec,
         std_candidate_queue_t&    candidate_queue
     ) -> void {
-        const layer_id_t top_level_id = hier_graph.top_occupied_level_id();
-        if (top_level_id == HierarchicalGraphT::unassigned_highest_level_id) {
-            ARTEA_ERROR("sample_entries: hierarchy has no occupied levels");
-        }
-        const auto& bucket = hier_graph.get_vids_with_highest_level(top_level_id);
-        if (bucket.empty()) {
+        const auto top_level_vids = hier_graph.get_top_level_vids();
+        if (top_level_vids.empty()) {
             ARTEA_ERROR("sample_entries: top-level bucket is empty");
         }
-        std::atomic_thread_fence(std::memory_order_acquire);
 
-        const std::size_t pool_size = bucket.size();
+        const std::size_t pool_size = top_level_vids.size();
         const std::size_t queue_cap = candidate_queue.capacity();
         const std::size_t start  = _draw_random_index(pool_size);
         const std::size_t stride = (pool_size <= queue_cap) ? 1 : (pool_size / queue_cap);
@@ -74,7 +67,7 @@ public:
 
         for (std::size_t i = 0; i < take; ++i) {
             const std::size_t random_idx = (start + i * stride) % pool_size;
-            const vertex_id_t sampled_vid  = bucket[random_idx];
+            const vertex_id_t sampled_vid  = top_level_vids[random_idx];
             const distance_t  sampled_dist = dist_func(query_vec, vecs_data.get(sampled_vid));
             candidate_queue.try_push(sampled_vid, sampled_dist);
         }
@@ -89,17 +82,12 @@ public:
         const vec_ele_t*          query_vec,
         const std::size_t         num_entries
     ) -> std::vector<std::pair<vertex_id_t, distance_t>> {
-        const layer_id_t top_level_id = hier_graph.top_occupied_level_id();
-        if (top_level_id == HierarchicalGraphT::unassigned_highest_level_id) {
-            ARTEA_ERROR("sample_entries: hierarchy has no occupied levels");
-        }
-        const auto& bucket = hier_graph.get_vids_with_highest_level(top_level_id);
-        if (bucket.empty()) {
+        const auto top_level_vids = hier_graph.get_top_level_vids();
+        if (top_level_vids.empty()) {
             ARTEA_ERROR("sample_entries: top-level bucket is empty");
         }
-        std::atomic_thread_fence(std::memory_order_acquire);
 
-        const std::size_t pool_size = bucket.size();
+        const std::size_t pool_size = top_level_vids.size();
         const std::size_t start  = _draw_random_index(pool_size);
         const std::size_t stride = (pool_size <= num_entries) ? 1 : (pool_size / num_entries);
         const std::size_t take   = std::min(num_entries, pool_size);
@@ -108,7 +96,7 @@ public:
         seeds.reserve(take);
         for (std::size_t i = 0; i < take; ++i) {
             const std::size_t random_idx = (start + i * stride) % pool_size;
-            const vertex_id_t sampled_vid  = bucket[random_idx];
+            const vertex_id_t sampled_vid  = top_level_vids[random_idx];
             const distance_t  sampled_dist = dist_func(query_vec, vecs_data.get(sampled_vid));
             seeds.emplace_back(sampled_vid, sampled_dist);
         }
@@ -124,17 +112,12 @@ public:
         const vec_ele_t*          query_vec,
         std_candidate_queue_t&    candidate_queue
     ) -> void {
-        const layer_id_t top_level_id = hier_graph.top_occupied_level_id();
-        if (top_level_id == HierarchicalGraphT::unassigned_highest_level_id) {
-            ARTEA_ERROR("sample_single_entry: hierarchy has no occupied levels");
-        }
-        const auto& bucket = hier_graph.get_vids_with_highest_level(top_level_id);
-        if (bucket.empty()) {
+        const auto top_level_vids = hier_graph.get_top_level_vids();
+        if (top_level_vids.empty()) {
             ARTEA_ERROR("sample_single_entry: top-level bucket is empty");
         }
-        std::atomic_thread_fence(std::memory_order_acquire);
-        const std::size_t random_idx = _draw_random_index(bucket.size());
-        const vertex_id_t vid  = bucket[random_idx];
+        const std::size_t random_idx = _draw_random_index(top_level_vids.size());
+        const vertex_id_t vid  = top_level_vids[random_idx];
         const distance_t  dist = dist_func(query_vec, vecs_data.get(vid));
         candidate_queue.try_push(vid, dist);
     }
@@ -147,17 +130,12 @@ public:
         const HierarchicalGraphT& hier_graph,
         const vec_ele_t*          query_vec
     ) -> std::pair<vertex_id_t, distance_t> {
-        const layer_id_t top_level_id = hier_graph.top_occupied_level_id();
-        if (top_level_id == HierarchicalGraphT::unassigned_highest_level_id) {
-            ARTEA_ERROR("sample_single_entry: hierarchy has no occupied levels");
-        }
-        const auto& bucket = hier_graph.get_vids_with_highest_level(top_level_id);
-        if (bucket.empty()) {
+        const auto top_level_vids = hier_graph.get_top_level_vids();
+        if (top_level_vids.empty()) {
             ARTEA_ERROR("sample_single_entry: top-level bucket is empty");
         }
-        std::atomic_thread_fence(std::memory_order_acquire);
-        const std::size_t random_idx = _draw_random_index(bucket.size());
-        const vertex_id_t vid  = bucket[random_idx];
+        const std::size_t random_idx = _draw_random_index(top_level_vids.size());
+        const vertex_id_t vid  = top_level_vids[random_idx];
         const distance_t  dist = dist_func(query_vec, vecs_data.get(vid));
         return {vid, dist};
     }
