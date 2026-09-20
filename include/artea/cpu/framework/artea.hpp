@@ -101,9 +101,6 @@
 #include <artea/cpu/router/profiler/profile_1nn_result.hpp>
 
 #include <artea/cpu/vertex_generator/vertex_generator.hpp>
-#include <artea/cpu/vertex_generator/lsh_table.hpp>
-#include <artea/cpu/vertex_generator/pstable_lsh_generator.hpp>
-#include <artea/cpu/vertex_generator/ortho_lsh_generator.hpp>
 #include <artea/cpu/vertex_generator/lb_greedy_vg.hpp>
 #include <artea/cpu/vertex_generator/mb_greedy_vg.hpp>
 #include <artea/cpu/vertex_generator/random_vg.hpp>
@@ -134,7 +131,6 @@
 #include <artea/cpu/utils/radius_prober.hpp>
 #include <artea/cpu/utils/index_register_util.hpp>
 #include <artea/cpu/utils/simd_distance.hpp>
-#include <artea/cpu/utils/simd_linear.hpp>
 #include <artea/cpu/utils/vector_sampler.hpp>
 #include <artea/cpu/utils/recall_estimator.hpp>
 #include <artea/cpu/utils/adr_estimator.hpp>

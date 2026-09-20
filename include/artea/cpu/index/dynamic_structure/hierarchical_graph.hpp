@@ -16,7 +16,7 @@
  * @FilePath: /Artea/include/artea/cpu/index/dynamic_structure/hierarchical_graph.hpp
  * @Author: Chandler (Weitang Ye) <weitang.ye@ntu.edu.sg>
  * @Description: Dynamic hierarchical graph with a vertex-info table and
- *               one contiguous per-level-group neighbor arena each. A
+ *               one segmented per-level-group neighbor arena each. A
  *               vertex whose highest_level_id == H owns one slot in the
  *               arena keyed by H; that slot stores the vertex's neighbors
  *               for every level H, H-1, ..., 1, 0 contiguously (high level
@@ -36,6 +36,7 @@
 #include <limits>
 #include <memory>
 #include <span>
+#include <utility>
 #include <vector>
 
 #include <immintrin.h>
@@ -66,7 +67,7 @@ namespace dynamic {
  *                            slot inside the arena keyed by
  *                            @c highest_level_id. Stored as an offset
  *                            rather than a raw pointer so it stays valid
- *                            across any future arena reallocation. Set
+ *                            across arena growth. Set
  *                            by @c assign_layer().
  *
  * Vertices that share the same @c highest_level_id share a single
@@ -82,20 +83,17 @@ namespace dynamic {
  * bottom level uses @c bl_max_nbr_size independently — no hard-coded
  * 2× coupling.
  *
- * @c fetch_layer_nbrs() composes the arena base pointer with the
- * vertex's @c slot_offset and the level-local offset with no branching:
+ * @c fetch_layer_nbrs() resolves the vertex's @c slot_offset through
+ * @c LevelGroupArena::slot_ptr, then applies the level-local offset:
  *   - Level offset: @c (H - level_id) * ul_max_nbr_size  (correct for
  *     @c level_id == 0 because @c H - 0 == H, which places us at the
  *     start of the L0 block.)
  *   - Level length: @c level_id == 0 ? bl_max_nbr_size : ul_max_nbr_size.
  *
- * Arena pre-allocation
- * --------------------
- * Arena @c h is pre-sized to hold roughly @c N / 2^h vertices where @c N
- * is the total vertex count after the latest @c add_vertices. Subsequent
- * @c add_vertices calls that would require a larger arena fail loudly —
- * see @c LevelGroupArena::ensure_slot_capacity for the policy. TODO:
- * reintroduce live growth once real workloads hit the static cap.
+ * Arena allocation
+ * ----------------
+ * Arenas start empty. @c assign_layer claims a slot from the chosen group,
+ * growing its storage in pointer-stable blocks only when needed.
  *
  * Two-phase vertex creation
  * -------------------------
@@ -183,9 +181,8 @@ public:
     };
 
     /**
-     * @brief Construct an empty hierarchical graph with every arena
-     *        pre-sized so no later call to @c add_vertices needs to
-     *        grow storage.
+     * @brief Construct an empty hierarchical graph. Neighbor storage is
+     *        allocated on demand when vertices are assigned to level groups.
      *
      * @param max_restrict_level  Inclusive upper bound on the value of
      *                              @c highest_level_id for any vertex in
@@ -200,16 +197,15 @@ public:
      *                              bottom level (level_id == 0).
      *                              Independent of @p ul_max_nbr_size —
      *                              no 2× coupling.
-     * @param total_vertices        Expected eventual base-set size. Each
-     *                              arena is sized to its worst-case cap
-     *                              so live slot claims never need a
-     *                              concurrent-unsafe @c resize.
+     * @param total_vertices        Expected eventual base-set size, retained
+     *                              for interface compatibility. Does not
+     *                              reserve or limit arena capacity.
      */
     HierarchicalGraph(
         const layer_num_t  max_restrict_level,
         const vertex_num_t ul_max_nbr_size,
         const vertex_num_t bl_max_nbr_size,
-        const vertex_num_t total_vertices
+        [[maybe_unused]] const vertex_num_t total_vertices
     ) :
         _max_restrict_level(max_restrict_level),
         _ul_max_nbr_size(ul_max_nbr_size),
@@ -220,11 +216,9 @@ public:
         _arenas.reserve(num_arenas);
         for (std::size_t h = 0; h < num_arenas; ++h) {
             const layer_id_t layer = static_cast<layer_id_t>(h);
-            auto arena = std::make_unique<level_group_arena_t>(
+            _arenas.emplace_back(std::make_unique<level_group_arena_t>(
                 /*highest_level_id=*/layer,
-                /*slot_nbrs_count=*/_compute_slots_nbr_count(layer));
-            arena->ensure_slot_capacity(_default_slot_capacity_for_arena(layer, total_vertices));
-            _arenas.emplace_back(std::move(arena));
+                /*slot_nbrs_count=*/_compute_slots_nbr_count(layer)));
         }
         _vids_by_highest_level.resize(num_arenas);
     }
@@ -244,8 +238,8 @@ public:
     // =================================================================
 
     /**
-     * @brief Append @p num_new_vertices rows to @c _vertex_info_table and
-     *        grow every arena to match the new total vertex count.
+     * @brief Append @p num_new_vertices rows to @c _vertex_info_table.
+     *        Neighbor storage is allocated later by @c assign_layer.
      *
      * Thread-safety: NOT concurrent with itself or with @c assign_layer.
      * Callers invoke @c add_vertices once per batch from a single thread,
@@ -265,8 +259,6 @@ public:
             _vertex_info_table.emplace_back();
         }
 
-        // Arenas are pre-sized at construction for the expected
-        // total_vertices, so no resize-on-growth path is triggered here.
         return first_new_vertex_id;
     }
 
@@ -284,10 +276,7 @@ public:
      * Bulk-initializes the entire claimed slot to the invalid sentinel
      * so scans for the first invalid entry start in a clean state.
      */
-    auto assign_layer(
-        const vertex_id_t vid,
-        const layer_id_t  highest_level_id
-    ) -> void {
+    auto assign_layer(const vertex_id_t vid, const layer_id_t highest_level_id) -> void {
         if (highest_level_id > _max_restrict_level) {
             ARTEA_ERROR(fmt::format(
                 "assign_layer: highest_level_id ({}) exceeds max_restrict_level ({})",
@@ -296,7 +285,7 @@ public:
 
         auto& arena = *_arenas[highest_level_id];
         const std::size_t slot_offset = arena.claim_slot();
-        nbr_t* slot_base = arena.base_ptr() + slot_offset;
+        nbr_t* slot_base = arena.slot_ptr(slot_offset);
 
         // Bulk fill — nbr_t is trivially copyable (asserted in
         // neighbor.hpp) so std::fill_n lowers to a memset-style
@@ -371,44 +360,34 @@ public:
      * @brief Return a mutable span over the neighbor array of vertex
      *        @p vid at level @p level_id.
      *
-     * Branchless: the level-local offset and length both fold into
-     * single arithmetic expressions. Precondition: @p level_id must be
+     * The level-local offset and length fold into single arithmetic
+     * expressions. Precondition: @p level_id must be
      * in @c [0, get_highest_level_id(vid)].
      */
     __attribute__((always_inline))
-    auto fetch_layer_nbrs(
-        const vertex_id_t vid,
-        const layer_id_t  level_id
-    ) -> std::span<nbr_t> {
+    auto fetch_layer_nbrs(const vertex_id_t vid, const layer_id_t level_id) -> std::span<nbr_t> {
         const auto& vinfo = _vertex_info_table[vid];
         const layer_id_t H = vinfo.highest_level_id;
-        nbr_t* slot_base = _arenas[H]->base_ptr() + vinfo.slot_offset;
+        nbr_t* slot_base = _arenas[H]->slot_ptr(vinfo.slot_offset);
 
-        const std::size_t level_offset =
-            static_cast<std::size_t>(H - level_id) * _ul_max_nbr_size;
+        const std::size_t level_offset = static_cast<std::size_t>(H - level_id) * _ul_max_nbr_size;
         const std::size_t level_nbrs_count =
-            (level_id == 0)
-                ? static_cast<std::size_t>(_bl_max_nbr_size)
-                : static_cast<std::size_t>(_ul_max_nbr_size);
+            (level_id == 0) ? static_cast<std::size_t>(_bl_max_nbr_size)
+                            : static_cast<std::size_t>(_ul_max_nbr_size);
 
         return std::span<nbr_t>(slot_base + level_offset, level_nbrs_count);
     }
 
     __attribute__((always_inline))
-    auto fetch_layer_nbrs(
-        const vertex_id_t vid,
-        const layer_id_t  level_id
-    ) const -> std::span<const nbr_t> {
+    auto fetch_layer_nbrs(const vertex_id_t vid, const layer_id_t level_id) const -> std::span<const nbr_t> {
         const auto& vinfo = _vertex_info_table[vid];
         const layer_id_t H = vinfo.highest_level_id;
-        const nbr_t* slot_base = _arenas[H]->base_ptr() + vinfo.slot_offset;
+        const nbr_t* slot_base = std::as_const(*_arenas[H]).slot_ptr(vinfo.slot_offset);
 
-        const std::size_t level_offset =
-            static_cast<std::size_t>(H - level_id) * _ul_max_nbr_size;
+        const std::size_t level_offset = static_cast<std::size_t>(H - level_id) * _ul_max_nbr_size;
         const std::size_t level_nbrs_count =
-            (level_id == 0)
-                ? static_cast<std::size_t>(_bl_max_nbr_size)
-                : static_cast<std::size_t>(_ul_max_nbr_size);
+            (level_id == 0) ? static_cast<std::size_t>(_bl_max_nbr_size)
+                            : static_cast<std::size_t>(_ul_max_nbr_size);
 
         return std::span<const nbr_t>(slot_base + level_offset, level_nbrs_count);
     }
@@ -544,18 +523,32 @@ public:
     }
 
     /** @brief Per-vertex slot offset inside its group's arena
-     *         (nbr_t-count units from arena base). Valid only after
+     *         (logical nbr_t-count units). Valid only after
      *         @c assign_layer. */
     __attribute__((always_inline))
     auto get_slot_offset(const vertex_id_t vid) const -> std::size_t {
         return _vertex_info_table[vid].slot_offset;
     }
 
-    /** @brief Current bump-allocator capacity (in slots) of arena @p h.
-     *         Used by the compactor to size the compact arena. */
+    /** @brief Published capacity (in slots) of arena @p h, including TLS
+     *         reservations and block tails. Used by the compactor. */
     __attribute__((always_inline))
     auto get_arena_capacity_in_arena(const layer_id_t h) const -> vertex_num_t {
         return _arenas[h]->slot_capacity();
+    }
+
+    /** @brief Sum arena data and block-table storage after growth has stopped.
+     *         Excludes vertex metadata, TLS caches and allocator bookkeeping. */
+    auto arena_memory_usage() const -> typename level_group_arena_t::MemoryUsage {
+        typename level_group_arena_t::MemoryUsage total{};
+        for (const auto& arena : _arenas) {
+            const auto usage = arena->memory_usage();
+            total.data_bytes += usage.data_bytes;
+            total.block_count += usage.block_count;
+            total.block_table_capacity += usage.block_table_capacity;
+            total.block_table_bytes += usage.block_table_bytes;
+        }
+        return total;
     }
 
     // =================================================================
@@ -649,32 +642,6 @@ private:
     auto _compute_slots_nbr_count(const layer_id_t highest_level_id) const -> vertex_num_t {
         return static_cast<vertex_num_t>(highest_level_id) * _ul_max_nbr_size
              + _bl_max_nbr_size;
-    }
-
-    /** @brief Heuristic pre-allocation: arena @p highest_level_id expects
-     *         to host up to @c total_vertices / conservative_beta^h
-     *         vertices. Using a pessimistic beta (1.2) + 2x safety
-     *         absorbs early-build skew (sparse upper layers inflate
-     *         NN estimates and push more vertices into arena[1..2] than
-     *         the steady-state r-net geometry predicts). Hard-capped
-     *         at @c total_vertices — any single arena trivially
-     *         bounded by N. Floored at @c min_arena_slot_capacity. */
-    auto _default_slot_capacity_for_arena(
-        const layer_id_t   highest_level_id,
-        const vertex_num_t total_vertices
-    ) const -> vertex_num_t {
-        constexpr vertex_num_t min_arena_slot_capacity = 64;
-        constexpr double conservative_beta  = 1.2;
-        constexpr double safety_multiplier  = 2.0;
-
-        double cap = static_cast<double>(total_vertices) * safety_multiplier;
-        for (layer_id_t i = 0; i < highest_level_id; ++i) {
-            cap /= conservative_beta;
-        }
-        cap = std::min(cap, static_cast<double>(total_vertices));
-
-        return std::max<vertex_num_t>(
-            static_cast<vertex_num_t>(cap), min_arena_slot_capacity);
     }
 
     __attribute__((always_inline))

@@ -25,9 +25,6 @@ namespace cpu {
 
 /** ------ Forward Declaration  ------ **/
 template <typename VertexGeneratorTraitsT, typename DerivedClassT> class VertexGenerator;
-template <typename VertexGeneratorTraitsT> class OrthoLSHGenerator;
-template <typename VertexGeneratorTraitsT> class PStableLSHGenerator;
-template <typename VertexGeneratorTraitsT> class LSHTable;
 template <typename VertexGeneratorTraitsT> class LBGreedyVG;
 template <typename VertexGeneratorTraitsT> class MBGreedyVG;
 template <typename VertexGeneratorTraitsT> class RandomVG;
@@ -47,15 +44,6 @@ struct VertexGeneratorTraits :
 
     /** @brief Approximate r-net result type (alias for vertex_subset_t). */
     using approx_rnet_t = vertex_subset_t;
-
-    /** @brief Ortho LSH generator. */
-    using ortho_lsh_generator_t = OrthoLSHGenerator<vertex_generator_traits_t>;
-
-    /** @brief P-Stable LSH generator. */
-    using pstable_lsh_generator_t = PStableLSHGenerator<vertex_generator_traits_t>;
-
-    /** @brief LSH function table type. */
-    using lsh_table_t = LSHTable<vertex_generator_traits_t>;
 
     /** @brief Large batch greedy vertex generator. */
     using lb_greedy_vg_t = LBGreedyVG<vertex_generator_traits_t>;

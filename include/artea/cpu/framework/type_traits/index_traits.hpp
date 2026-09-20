@@ -20,6 +20,8 @@
 
 #pragma once
 
+#include <cstddef>
+
 namespace artea {
 namespace cpu {
 
@@ -72,6 +74,9 @@ struct IndexTraits : virtual public BaseTraitsT {
      *         trimming. Consumed by @c stacked_rgraph::RGraphConfig and
      *         @c HierarchicalGraphCompactor. */
     static constexpr typename BaseTraitsT::vertex_num_t min_layer_cap = 512;
+
+    /** @brief Number of complete vertex slots in each dynamic arena block. */
+    static constexpr std::size_t slots_per_block = 2048;
 
     /** @brief Layer configuration type. */
     using layer_config_t = LayerConfig<index_traits_t>;

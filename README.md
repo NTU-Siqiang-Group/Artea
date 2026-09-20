@@ -32,17 +32,48 @@ competitive build time.
 
 ## Build & Compile
 
-```sh
-# 1. Activate the Intel oneAPI environment (provides the SIMD/MKL toolchain)
-source $HOME/intel/oneapi/setvars.sh
+Use a C++20 compiler, CMake 3.24+, and Boost development packages.
+CMake builds oneTBB v2022.3.0 and its allocator from the benchmark's sibling
+`third-party/oneTBB` submodule. A standalone Artea checkout automatically fetches
+the same pinned revision into `build/_deps/`. No system TBB installation is needed;
+executables load the libraries directly from the build directory.
+CMake downloads the official MKL 2025.3.0 packages, verifies their SHA256 hashes,
+and assembles the headers, static libraries, CMake config, and licenses into
+`build/_deps/mkl-2025.3.0/`.
+No system MKL installation, Intel compiler, or oneAPI activation is needed.
+The automatic download supports Linux x86-64 with glibc 2.28+ and is about 220 MB.
 
-# 2. Configure + build (clean rebuild optional)
-rm -rf build
+```sh
+# Configure + build
 bash ./scripts/install.sh
 
-# 3. Smoke-test the build
+# Smoke-test the build
 ./build/unit_tests/test_artea_graph --help
 ```
+
+Artea uses MKL only for `vslNewStream`, `viRngUniform`, and `vslDeleteStream`.
+Each TBB worker owns a separate MT19937 stream. MKL is therefore fixed to `sequential`,
+preserving batched SIMD generation and concurrent calls from TBB workers without MKL's internal threading.
+Reconfiguring an existing build replaces old threading/linkage settings with `sequential` and `static`.
+No MKL threading runtime is downloaded or linked.
+
+Download metadata is centralized in [`cmake/mkl-packages.cmake`](cmake/mkl-packages.cmake).
+Update its version, package download paths, and SHA256 checksums together when upgrading MKL.
+The assembled prefix has a conventional layout:
+
+```text
+build/_deps/mkl-2025.3.0/
+├── include/
+├── lib/
+│   └── cmake/mkl/
+└── share/doc/mkl/
+```
+
+Files are hard-linked from the extracted packages when possible, with copying as a fallback.
+Offline builds can reuse the populated `_deps/` cache, or set
+`-DARTEA_MKL_ROOT=/path/to/mkl` to a prefix containing headers, static libraries,
+and `lib/cmake/mkl`. The downloaded libraries retain their Intel license; include
+the supplied license and copyright notices when redistributing a linked application.
 
 ## Quick Start
 
@@ -113,4 +144,3 @@ If you use ARTEA, please cite the repository:
   url       = {https://github.com/NTU-Siqiang-Group/Artea}
 }
 ```
-

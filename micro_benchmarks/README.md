@@ -67,35 +67,21 @@ Benchmarks the PropagateEngine with ReverseUpdater for bidirectional edge genera
 
 ---
 
-### 4. bench_lsh_table
-Benchmarks the LSH (Locality-Sensitive Hashing) table operations.
-
-**Purpose**: Measures the performance of LSH hash computation and table operations.
-
----
-
-### 5. bench_radius_prober
+### 4. bench_radius_prober
 Benchmarks the radius probing functionality.
 
 **Purpose**: Measures the performance of radius-based neighbor probing.
 
 ---
 
-### 6. bench_simd_distance
+### 5. bench_simd_distance
 Benchmarks SIMD-optimized distance calculations.
 
 **Purpose**: Measures the performance of vectorized distance computations (Euclidean, Inner Product, etc.).
 
 ---
 
-### 7. bench_simd_linear
-Benchmarks SIMD linear operations.
-
-**Purpose**: Measures the performance of linear algebra operations using SIMD.
-
----
-
-### 8. bench_vertex_generator
+### 6. bench_vertex_generator
 Benchmarks vertex generation strategies.
 
 **Purpose**: Measures the performance of various vertex generator implementations.

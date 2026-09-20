@@ -81,8 +81,7 @@ public:
      *
      * This is intentionally distinct from operator() for the DOT metric:
      * operator() returns -dot so the result follows the library's
-     * smaller-is-closer distance convention, while projection users such as
-     * p-stable LSH need the algebraic dot product itself.
+     * smaller-is-closer distance convention.
      */
     __attribute__((always_inline))
     auto dot_product(const vec_ele_t* vec1, const vec_ele_t* vec2) const -> distance_t {

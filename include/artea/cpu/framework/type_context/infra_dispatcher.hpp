@@ -50,7 +50,6 @@ namespace cpu {
  *         directly without a metric/dim. */
 enum class InfraKind : uint8_t {
     SimdDistance,
-    SimdLinear,
     DistanceProber,
     RecallEstimator,
     AdrEstimator,
@@ -85,7 +84,6 @@ struct InfraResolver;
     }
 
 ARTEA_DEFINE_INFRA_RESOLVER(SimdDistance,      dist_func_t);
-ARTEA_DEFINE_INFRA_RESOLVER(SimdLinear,        linear_func_t);
 ARTEA_DEFINE_INFRA_RESOLVER(DistanceProber,    distance_prober_t);
 ARTEA_DEFINE_INFRA_RESOLVER(RecallEstimator,   recall_estimator_t);
 ARTEA_DEFINE_INFRA_RESOLVER(AdrEstimator,      adr_estimator_t);

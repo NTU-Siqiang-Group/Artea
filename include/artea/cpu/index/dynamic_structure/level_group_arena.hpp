@@ -15,11 +15,8 @@
 /*
  * @FilePath: /Artea/include/artea/cpu/index/dynamic_structure/level_group_arena.hpp
  * @Author: Chandler (Weitang Ye) <weitang.ye@ntu.edu.sg>
- * @Description: Per-highest-level slot arena used by the new
- *               dynamic::HierarchicalGraph. Stores one contiguous
- *               pre-allocated buffer of nbr_t and hands out fixed-size
- *               slots to concurrent threads through a CAS-driven bump
- *               counter fronted by a thread-local slot-chunk cache.
+ * @Description: Per-highest-level slot arena with pointer-stable blocks
+ *               and a CAS bump counter fronted by thread-local chunks.
  */
 
 #pragma once
@@ -27,7 +24,15 @@
 #include <algorithm>
 #include <atomic>
 #include <cstddef>
+#include <exception>
+#include <limits>
+#include <mutex>
+#include <stdexcept>
+#include <type_traits>
+#include <utility>
+#include <vector>
 
+#include <tbb/concurrent_vector.h>
 #include <tbb/enumerable_thread_specific.h>
 
 #include <artea/common/logger.hpp>
@@ -40,39 +45,32 @@ namespace dynamic {
 /**
  * @brief Per-@c highest_level_id slot pool used by @c HierarchicalGraph.
  *
- * An arena owns one contiguous buffer of @c nbr_t whose logical unit is a
- * "slot" of @c slot_nbrs_count consecutive entries. Each vertex whose
- * highest_level_id matches this arena claims exactly one slot; that slot
- * stores the vertex's neighbors for all levels @c [0, highest_level_id]
- * packed from high to low.
+ * Each block owns @c slots_per_block contiguous slots. A slot contains
+ * @c slot_nbrs_count neighbors for one vertex, packed from its highest
+ * level down to L0, and never crosses a block boundary. Offsets remain
+ * logical @c nbr_t offsets; @c slot_ptr resolves them through the block
+ * table instead of a single base pointer.
  *
  * Slot allocation uses a CAS-based bump counter fronted by a per-thread
  * slot-chunk cache (@c tbb::enumerable_thread_specific). Every thread,
  * on a cache miss, reserves @c slot_chunk_size slots at once via a single
- * successful CAS; subsequent @c claim_slot calls are then served from the
- * thread-local cache with zero synchronization until it runs dry.
+ * successful CAS (or the final smaller batch at the capacity limit).
+ * Subsequent claims use the thread-local cache without synchronization.
  *
- * The CAS pattern is "look-before-you-leap": we only attempt to advance
- * the counter if the target value still fits inside the current capacity.
- * We never post-fix a failed reservation with a subtraction, which would
- * otherwise let two threads overshoot capacity and both "roll back" to
- * the same index (handing out the same slot twice and silently
- * corrupting neighbor data).
+ * Claims grow the arena on demand; callers may also reserve capacity with
+ * @c ensure_slot_capacity. Growth is serialized, but cached claims and
+ * existing neighbor access do not take the growth lock. Blocks are fully
+ * constructed before a release-store publishes their capacity; claims
+ * and lookup acquire that publication. Published
+ * blocks are never resized or moved, so existing pointers stay valid.
+ * The capacity publication does not synchronize writes to neighbors:
+ * callers still own vertex initialization and neighbor locking.
  *
- * Growth policy (intentionally minimal for now)
- * ---------------------------------------------
- * Capacity is (re)sized only by @c ensure_slot_capacity, which is meant
- * to be called single-threadedly from
- * @c HierarchicalGraph::add_vertices while no thread is inside
- * @c claim_slot. Resizing is allowed only before any slot has been
- * claimed. If more slots are needed after claims have started the arena
- * raises @c ARTEA_ERROR — the @c N / 2^h decay heuristic applied by
- * @c HierarchicalGraph is expected to be generous enough in practice.
- *
- * @todo Once real workloads hit the static cap, reintroduce live growth
- *       so callers issued before growth can still resolve their
- *       @c slot_offset (offsets are stable across reallocations, which
- *       is the whole point of storing offsets rather than pointers).
+ * A data-block allocation failure leaves growth retryable. A block-table
+ * append failure poisons further growth and propagates the exception;
+ * the previously published prefix remains accessible. End the build and
+ * join all users before destroying the arena. Destruction is not concurrent
+ * with any operation.
  *
  * @tparam IndexTraitsT The index traits type (supplies nbr_t, vertex_num_t,
  *                      layer_id_t and the cache-aligned allocator policy).
@@ -84,29 +82,37 @@ class LevelGroupArena {
     using vertex_num_t   = typename IndexTraitsT::vertex_num_t;
     using layer_id_t     = typename IndexTraitsT::layer_id_t;
 
-    using nbr_arena_container_t = cache_aligned_container_t<nbr_t>;
+    using slot_block_t = cache_aligned_container_t<nbr_t>;
+
+    static_assert(std::is_unsigned_v<vertex_num_t> && sizeof(vertex_num_t) <= sizeof(std::size_t));
 
     /** @brief Assumed L1-cache line size for anti-false-sharing padding. */
     static constexpr std::size_t cache_line_size = 64;
 
 public:
+    /** @brief Number of complete vertex slots in a normal data block. */
+    static constexpr std::size_t slots_per_block = IndexTraitsT::slots_per_block;
+    static_assert(slots_per_block > 0);
+
     /** @brief How many slots each thread acquires per successful CAS. */
     static constexpr vertex_num_t slot_chunk_size = 8;
 
     /**
      * @brief Per-thread slot-chunk cache.
      *
-     * Stores the offset (in @c nbr_t units from the arena base) of the
+     * Stores the logical offset (in @c nbr_t units) of the
      * next slot to hand out — the same unit as
      * @c HierarchicalGraph::VertexInfo::slot_offset, so the claim path
      * does a single integer advance with no unit conversion.
      */
-    struct LocalSlotChunk {
+    struct ThreadLocalSlotChunk {
         /** @brief Offset of the next unconsumed slot (in @c nbr_t units). */
         std::size_t  next_slot_offset = 0;
         /** @brief Remaining unconsumed slots in the chunk. */
         vertex_num_t slots_remaining  = 0;
     };
+
+    using tl_slot_chunk_t = ThreadLocalSlotChunk;
 
     /**
      * @brief Construct an empty arena bound to one @c highest_level_id.
@@ -116,14 +122,20 @@ public:
      * @param slot_nbrs_count    How many @c nbr_t entries live in one
      *                           slot of this arena.
      */
-    LevelGroupArena(
-        const layer_id_t   highest_level_id,
-        const vertex_num_t slot_nbrs_count
-    ) :
-        _highest_level_id(highest_level_id),
-        _slot_nbrs_count(slot_nbrs_count),
-        _slot_capacity(0),
-        _next_slot_idx(0) {}
+    LevelGroupArena(const layer_id_t highest_level_id, const vertex_num_t slot_nbrs_count)
+        : _highest_level_id(highest_level_id), _slot_nbrs_count(slot_nbrs_count) {
+        if (slot_nbrs_count == 0) {
+            throw std::invalid_argument("LevelGroupArena: slot length must be nonzero");
+        }
+        if (slot_nbrs_count > slot_block_t{}.max_size() / slots_per_block) {
+            throw std::length_error("LevelGroupArena: block size exceeds vector limit");
+        }
+        _block_nbrs_count = slots_per_block * slot_nbrs_count;
+        // Bound both logical offsets and reported data bytes.
+        _max_slot_capacity = std::min<std::size_t>(
+            std::numeric_limits<vertex_num_t>::max(),
+            std::numeric_limits<std::size_t>::max() / sizeof(nbr_t) / slot_nbrs_count);
+    }
 
     // Copy/move deleted: owns an atomic counter and a tbb TLS container.
     LevelGroupArena(const LevelGroupArena&)            = delete;
@@ -134,44 +146,48 @@ public:
     ~LevelGroupArena() = default;
 
     /**
-     * @brief Ensure the arena can host at least @p target_slot_capacity
-     *        slots. Single-threaded — call from
-     *        @c HierarchicalGraph::add_vertices before any concurrent
-     *        @c claim_slot is in flight.
+     * @brief Publish enough complete blocks for @p target_slot_capacity.
+     *        May run concurrently with growth, claims and neighbor access.
      *
-     * Resizing is permitted only while no slot has been claimed yet.
-     * Attempting to grow after claims have started raises
-     * @c ARTEA_ERROR — growing would relocate @c _storage and while
-     * offsets would stay valid, live threads could already be reading
-     * via stale base pointers cached in registers.
+     * The final block may be shorter at the representable capacity limit.
+     * Publication is per block, so a failed request may still have grown
+     * the valid prefix. Growth never changes the slot-claim counter.
      */
     auto ensure_slot_capacity(const vertex_num_t target_slot_capacity) -> void {
-        if (target_slot_capacity <= _slot_capacity) return;
+        if (target_slot_capacity <= slot_capacity()) return;
 
-        if (_next_slot_idx.load(std::memory_order_relaxed) > 0) {
-            // TODO: re-enable live growth. For now we rely on the
-            // caller's N / 2^h decay heuristic being generous enough.
-            ARTEA_ERROR(fmt::format(
-                "LevelGroupArena[{}]: cannot grow from {} to {} slots — "
-                "{} slots have already been claimed. TODO: implement "
-                "pointer-stable growth.",
-                _highest_level_id, _slot_capacity, target_slot_capacity,
-                _next_slot_idx.load(std::memory_order_relaxed)));
+        if (target_slot_capacity > _max_slot_capacity) {
+            throw std::length_error("LevelGroupArena: slot capacity overflows storage size");
         }
 
-        _storage.resize(
-            static_cast<std::size_t>(target_slot_capacity) * _slot_nbrs_count);
-        _slot_capacity = target_slot_capacity;
+        std::lock_guard lock(_growth_mutex);
+        std::size_t capacity = _slot_capacity.load(std::memory_order_relaxed);
+        if (target_slot_capacity <= capacity) return;
+        if (_growth_failure) std::rethrow_exception(_growth_failure);
+
+        while (capacity < target_slot_capacity) {
+            const std::size_t block_slots_count = std::min(slots_per_block, _max_slot_capacity - capacity);
+            // Allocate locally: if this fails, the block table is untouched.
+            slot_block_t slot_block(block_slots_count * _slot_nbrs_count);
+            try {
+                _slot_blocks.emplace_back(std::move(slot_block));
+            } catch (...) {
+                // A failed concurrent_vector allocation can break its tail.
+                _growth_failure = std::current_exception();
+                throw;
+            }
+            capacity += block_slots_count;
+            _slot_capacity.store(static_cast<vertex_num_t>(capacity), std::memory_order_release);
+        }
     }
 
     /**
      * @brief Claim exactly one slot. Fast path: integer advance on the
-     *        thread-local cache. Slow path: CAS the bump counter to
-     *        reserve another @c slot_chunk_size slots.
+     *        thread-local cache. Slow path: ensure capacity, then CAS
+     *        the bump counter to reserve another @c slot_chunk_size slots.
      *
-     * @return Offset (in @c nbr_t units) of the claimed slot, measured
-     *         from the arena's @c base_ptr(). Suitable for persistent
-     *         storage in @c VertexInfo::slot_offset.
+     * @return Logical offset in @c nbr_t units, suitable for
+     *         @c VertexInfo::slot_offset and @c slot_ptr.
      */
     auto claim_slot() -> std::size_t {
         auto& local = _local_chunks.local();
@@ -184,19 +200,26 @@ public:
         return offset;
     }
 
-    // ---- Base-pointer accessor ----
+    // ---- Slot access ----
 
     /**
-     * @brief Raw base pointer of the arena buffer. Combine with a
-     *        @c slot_offset returned by @c claim_slot to resolve a slot.
-     *        Reads straight from @c _storage.data() — no cached copy —
-     *        so any future reallocation is automatically visible.
+     * @brief Resolve an aligned offset within the published capacity.
+     *        The full slot is contiguous and stays valid across growth.
+     *        Callers initialize their claimed slots before sharing them.
      */
     __attribute__((always_inline))
-    auto base_ptr() const -> const nbr_t* { return _storage.data(); }
+    auto slot_ptr(const std::size_t slot_offset) const -> const nbr_t* {
+        const std::size_t capacity = slot_capacity();
+        if (slot_offset >= capacity * _slot_nbrs_count || slot_offset % _slot_nbrs_count != 0) {
+            throw std::out_of_range("LevelGroupArena: invalid or unpublished slot offset");
+        }
+        return _slot_blocks[slot_offset / _block_nbrs_count].data() + slot_offset % _block_nbrs_count;
+    }
 
     __attribute__((always_inline))
-    auto base_ptr() -> nbr_t* { return _storage.data(); }
+    auto slot_ptr(const std::size_t slot_offset) -> nbr_t* {
+        return const_cast<nbr_t*>(std::as_const(*this).slot_ptr(slot_offset));
+    }
 
     // ---- Diagnostics ----
 
@@ -212,7 +235,7 @@ public:
 
     __attribute__((always_inline))
     auto slot_capacity() const -> vertex_num_t {
-        return _slot_capacity;
+        return _slot_capacity.load(std::memory_order_acquire);
     }
 
     __attribute__((always_inline))
@@ -220,34 +243,54 @@ public:
         return _next_slot_idx.load(std::memory_order_relaxed);
     }
 
+    struct MemoryUsage {
+        std::size_t data_bytes;
+        std::size_t block_count;
+        std::size_t block_table_capacity;
+        std::size_t block_table_bytes;
+    };
+
+    /**
+     * @brief Inspect only after growth has stopped. Data bytes count the
+     *        published neighbor storage; table bytes estimate vector-object
+     *        storage separately, excluding TBB/allocator bookkeeping.
+     */
+    auto memory_usage() const -> MemoryUsage {
+        const std::size_t capacity = slot_capacity();
+        const std::size_t table_capacity = _slot_blocks.capacity();
+        return {
+            capacity * _slot_nbrs_count * sizeof(nbr_t),
+            capacity / slots_per_block + (capacity % slots_per_block != 0),
+            table_capacity,
+            table_capacity * sizeof(slot_block_t)
+        };
+    }
+
 private:
     /**
      * @brief Reserve @c slot_chunk_size slots for @p local via CAS.
      *
-     * Look-before-you-leap: only attempt to advance the counter if the
-     * target still fits inside @c _slot_capacity. If capacity is
-     * exhausted raise @c ARTEA_ERROR without ever touching the counter.
-     * This protects against the "overshoot then retract" pseudo-rollback
-     * that would let the same slot be handed out twice.
+     * Publish storage before advancing the counter. Allocation failure
+     * leaves this claim and its TLS cache unchanged. A failed CAS refreshes
+     * the high-water mark, so every retry checks capacity again.
      */
-    auto _refill_local_chunk(LocalSlotChunk& local) -> void {
+    auto _refill_local_chunk(tl_slot_chunk_t& local) -> void {
         std::size_t cur = _next_slot_idx.load(std::memory_order_relaxed);
         while (true) {
-            const std::size_t next = cur + slot_chunk_size;
-            if (next > _slot_capacity) {
-                // TODO: reintroduce dynamic growth. See class-level note.
+            if (cur >= _max_slot_capacity) {
                 ARTEA_ERROR(fmt::format(
                     "LevelGroupArena[{}]: slot pool exhausted "
                     "(claimed={}, capacity={}, chunk_size={}).",
-                    _highest_level_id, cur, _slot_capacity, slot_chunk_size));
+                    _highest_level_id, cur, _max_slot_capacity, slot_chunk_size));
             }
-            if (_next_slot_idx.compare_exchange_weak(
-                    cur, next,
-                    std::memory_order_relaxed,
-                    std::memory_order_relaxed))
-            {
+            const auto chunk_size = static_cast<vertex_num_t>(
+                std::min<std::size_t>(slot_chunk_size, _max_slot_capacity - cur));
+            const std::size_t next = cur + chunk_size;
+            ensure_slot_capacity(static_cast<vertex_num_t>(next));
+            if (_next_slot_idx.compare_exchange_weak(cur, next, std::memory_order_relaxed,
+                                                    std::memory_order_relaxed)) {
                 local.next_slot_offset = cur * _slot_nbrs_count;
-                local.slots_remaining  = slot_chunk_size;
+                local.slots_remaining  = chunk_size;
                 return;
             }
             // CAS failure already refreshed `cur`; loop and retry.
@@ -258,15 +301,18 @@ private:
     //   State
     // -----------------------------------------------------------------
 
-    layer_id_t   _highest_level_id;
-    vertex_num_t _slot_nbrs_count;   // nbr_t entries per slot
+    const layer_id_t   _highest_level_id;
+    const vertex_num_t _slot_nbrs_count;   // nbr_t entries per slot
+    std::size_t _block_nbrs_count = 0;
+    std::size_t _max_slot_capacity = 0;
 
-    /** @brief Single contiguous buffer of this arena. Never reallocates
-     *         once @c claim_slot has started — see @c ensure_slot_capacity. */
-    nbr_arena_container_t _storage;
+    /** @brief Append-only table of fixed-size, separately owned buffers. */
+    tbb::concurrent_vector<slot_block_t> _slot_blocks;
+    std::mutex _growth_mutex;
+    std::exception_ptr _growth_failure;  // guarded by _growth_mutex
 
-    /** @brief Current bump-allocator capacity (in slots). */
-    vertex_num_t _slot_capacity;
+    /** @brief Constructed and published prefix, never the TBB table size. */
+    std::atomic<vertex_num_t> _slot_capacity{0};
 
     /**
      * @brief Hot atomic bump counter (in slots). Isolated on its own
@@ -275,10 +321,10 @@ private:
      *        read-only members to ping-pong every time a thread bumps
      *        the counter).
      */
-    alignas(cache_line_size) std::atomic<std::size_t> _next_slot_idx;
+    alignas(cache_line_size) std::atomic<std::size_t> _next_slot_idx{0};
 
     /** @brief Per-thread slot-chunk cache fronting @c _next_slot_idx. */
-    tbb::enumerable_thread_specific<LocalSlotChunk> _local_chunks;
+    tbb::enumerable_thread_specific<tl_slot_chunk_t> _local_chunks;
 
 };  // class LevelGroupArena
 

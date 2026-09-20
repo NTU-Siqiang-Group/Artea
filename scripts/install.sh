@@ -20,8 +20,6 @@ PROJECT_ROOT="$(cd -- "${SCRIPT_DIR}/.." && pwd -P)"
 
 # shellcheck source=./utils/log.sh
 source "${SCRIPT_DIR}/utils/log.sh"
-# shellcheck source=./utils/oneapi.sh
-source "${SCRIPT_DIR}/utils/oneapi.sh"
 # shellcheck source=./utils/version.sh
 source "${SCRIPT_DIR}/utils/version.sh"
 
@@ -75,13 +73,6 @@ if [[ -n "${EXTRA_CXX_FLAGS}" ]]; then
   log_info "Extra CXX flags: ${EXTRA_CXX_FLAGS}"
 fi
 check_cmake_version "${CMAKE_BIN}" "${MIN_CMAKE_VERSION}"
-
-if ! oneapi_is_active; then
-  log_warn "oneAPI environment not detected (needed for TBB). Activating..."
-  oneapi_activate
-else
-  log_success "oneAPI environment already active."
-fi
 
 log_info "Running CMake configure..."
 "${CMAKE_BIN}" -B "${BUILD_DIR}" \

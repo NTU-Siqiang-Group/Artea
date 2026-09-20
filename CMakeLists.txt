@@ -12,7 +12,7 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 add_link_options("-Wl,-rpath,/usr/local/gcc-14/lib64")
 
 set(CMAKE_INSTALL_RPATH_USE_LINK_PATH ON)
-set(CMAKE_BUILD_WITH_INSTALL_RPATH ON)
+set(CMAKE_BUILD_WITH_INSTALL_RPATH OFF)
 
 set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE} -O3")
 set(CMAKE_CXX_FLAGS_RELWITHDEBINFO "${CMAKE_CXX_FLAGS_RELWITHDEBINFO} -O3 -g -fno-omit-frame-pointer")
@@ -21,23 +21,11 @@ set(CMAKE_CXX_FLAGS_RELWITHDEBINFO "${CMAKE_CXX_FLAGS_RELWITHDEBINFO} -O3 -g -fn
 include(FetchContent)
 find_package(OpenMP REQUIRED)
 
-# source the setvars.sh script from Intel oneAPI
+# --- Project-managed oneTBB ---
+include(${CMAKE_CURRENT_SOURCE_DIR}/cmake/tbb.cmake)
 
-# --- Find Intel TBB ---
-find_package(TBB REQUIRED)
-message(STATUS "TBB_DIR: ${TBB_DIR}")
-# libtbb_debug.so is not available on most distros; always use the release TBB library
-set_target_properties(TBB::tbb PROPERTIES MAP_IMPORTED_CONFIG_DEBUG "RELEASE")
-
-# Force oneAPI TBB headers ahead of the system classic-TBB headers so tbb/*.h
-# matches the linked oneTBB lib (else tbb::task link errors).
-set(ARTEA_ONEAPI_TBB_INCLUDE "$ENV{TBBROOT}/include" CACHE PATH "oneAPI TBB include dir")
-if(EXISTS "${ARTEA_ONEAPI_TBB_INCLUDE}/oneapi/tbb")
-    include_directories(BEFORE SYSTEM "${ARTEA_ONEAPI_TBB_INCLUDE}")
-endif()
-
-# --- Find Intel MKL ---
-find_package(MKL REQUIRED)
+# --- Project-managed Intel MKL ---
+include(${CMAKE_CURRENT_SOURCE_DIR}/cmake/mkl.cmake)
 
 # --- Find Boost (for math/statistics) ---
 find_package(Boost REQUIRED)
@@ -72,12 +60,6 @@ FetchContent_Declare(
 )
 
 FetchContent_Declare(
-    eigen
-    GIT_REPOSITORY https://gitlab.com/libeigen/eigen.git
-    GIT_TAG "5.0.1"
-)
-
-FetchContent_Declare(
     googletest
     GIT_REPOSITORY https://github.com/google/googletest.git
     GIT_TAG "v1.17.0"
@@ -106,9 +88,7 @@ FetchContent_Declare(
 set(BENCHMARK_ENABLE_TESTING OFF CACHE BOOL "Disable benchmark testing" FORCE)
 set(BENCHMARK_INSTALL_DOCS OFF CACHE BOOL "Disable benchmark docs" FORCE)
 
-# --- Aigen Configuration ---
-set(EIGEN_BUILD_DOC OFF CACHE BOOL "" FORCE)
-set(EIGEN_BUILD_PKGCONFIG OFF CACHE BOOL "" FORCE)
+# --- Dependency test configuration ---
 set(BUILD_TESTING OFF CACHE BOOL "" FORCE)
 
 # --- Downloads and configures all declared content ---
@@ -118,7 +98,6 @@ FetchContent_MakeAvailable(
 	termcolor
 	fmt
 	range-v3
-	eigen
 	googletest
 	benchmark
 )
@@ -144,9 +123,6 @@ target_compile_options(artea INTERFACE
 target_compile_definitions(artea INTERFACE
 	# avoid error caused by fmt library
 	FMT_USE_CONSTEVAL=0
-	# tells Eigen to redirect QR, LU, Cholesky, etc. to MKL routines
-	EIGEN_USE_MKL_ALL
-
 )
 
 target_link_libraries(artea INTERFACE
@@ -158,7 +134,6 @@ target_link_libraries(artea INTERFACE
     TBB::tbb
     MKL::MKL
 	range-v3::range-v3
-	eigen
 	Boost::boost
 )
 

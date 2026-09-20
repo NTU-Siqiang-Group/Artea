@@ -144,9 +144,6 @@ public:
     /** @brief batch identifiers. */
     using batch_id_t = VertexNumT;
 
-    /** @brief number of hash functions. */
-    using hash_num_t  = uint32_t;
-
     /** @brief iteration counts. */
     using iter_t = uint32_t;
 
