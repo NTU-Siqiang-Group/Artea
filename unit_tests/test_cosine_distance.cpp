@@ -146,11 +146,12 @@ TEST(InfraDispatcher, ParseMetric) {
     EXPECT_EQ(parse_metric("mips"),          IP);
     EXPECT_EQ(parse_metric("cosine"),        COS);
     EXPECT_EQ(parse_metric("angular"),       COS);
-    EXPECT_THROW(parse_metric("euclidean"), std::runtime_error);
-    EXPECT_THROW(parse_metric("l2"), std::runtime_error);
+    EXPECT_EQ(parse_metric("euclidean"), DistanceMetricsT::EUCLIDEAN);
+    EXPECT_EQ(parse_metric("l2"), DistanceMetricsT::EUCLIDEAN);
     EXPECT_THROW(parse_metric("no-such-metric"), std::runtime_error);
 
     // metric_name round-trips the canonical spellings.
+    EXPECT_STREQ(metric_name(DistanceMetricsT::EUCLIDEAN), "euclidean");
     EXPECT_STREQ(metric_name(L2_SQR),  "euclidean_sqr");
     EXPECT_STREQ(metric_name(IP),  "inner_product");
     EXPECT_STREQ(metric_name(COS), "cosine");

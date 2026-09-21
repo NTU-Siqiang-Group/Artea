@@ -65,6 +65,8 @@ public:
     auto operator()(const vec_ele_t* vec1, const vec_ele_t* vec2) const -> distance_t {
         if constexpr (distance_metrics == distance_metrics_t::EUCLIDEAN_SQR) {
             return _impl_euclidean_sqr(vec1, vec2);
+        } else if constexpr (distance_metrics == distance_metrics_t::EUCLIDEAN) {
+            return std::sqrt(_impl_euclidean_sqr(vec1, vec2));
         } else if constexpr (distance_metrics == distance_metrics_t::DOT) {
             // Inner-product search is expressed as a distance, so larger dot
             // products become smaller (negated) distances.

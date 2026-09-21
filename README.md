@@ -82,11 +82,13 @@ the supplied license and copyright notices when redistributing a linked applicat
 
 ## Quick Start
 
-Distance selection uses `euclidean_sqr` (alias `l2_sqr`), `inner_product`, or
-`cosine` in workload `metric` fields and `--metric` options. Squared Euclidean
-distance returns the sum of squared coordinate differences without a square root;
-its C++ enum is `DistanceMetricsT::EUCLIDEAN_SQR`. The former `euclidean` / `l2`
-spellings and `EUCLIDEAN` enum have been replaced by these explicit squared names.
+Distance selection uses `euclidean` (alias `l2`), `euclidean_sqr` (alias `l2_sqr`),
+`inner_product`, or `cosine` in workload `metric` fields and `--metric` options.
+`DistanceMetricsT::EUCLIDEAN` returns the Euclidean distance,
+`sqrt(sum_i (a_i - b_i)^2)`. `DistanceMetricsT::EUCLIDEAN_SQR` returns the sum of
+squared coordinate differences without a square root. The default remains
+`euclidean_sqr`; `euclidean` and `l2` now explicitly select the square-rooted
+distance, rather than acting as aliases for the squared distance.
 
 A minimal build-then-search pipeline (mirrors `bench-artea/build_and_run_artea`):
 

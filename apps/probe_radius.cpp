@@ -44,7 +44,7 @@ int main(int argc, char** argv) {
 
     program.add_argument("--metric")
         .default_value(std::string("euclidean_sqr"))
-        .help("Distance metric: 'euclidean_sqr', 'inner_product', or 'cosine'");
+        .help("Distance metric: 'euclidean', 'euclidean_sqr', 'inner_product', or 'cosine'");
 
     // Probing parameters
     program.add_argument("-q", "--quantile")

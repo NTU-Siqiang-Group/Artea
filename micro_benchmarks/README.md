@@ -77,11 +77,12 @@ Benchmarks the radius probing functionality.
 ### 5. bench_simd_distance
 Benchmarks SIMD-optimized distance calculations.
 
-**Purpose**: Measures the performance of vectorized squared Euclidean, inner-product, and cosine distance computations.
+**Purpose**: Measures the performance of vectorized Euclidean, squared Euclidean, inner-product, and cosine distance computations.
 
-Select the distance with `--metric euclidean_sqr` (alias `l2_sqr`),
+Select the distance with `--metric euclidean` (alias `l2`),
+`--metric euclidean_sqr` (alias `l2_sqr`),
 `--metric inner_product`, or `--metric cosine`. Result names contain the canonical
-metric, for example `Artea_euclidean_sqr_U1`, `Artea_inner_product_U1`, and
+metric, for example `Artea_euclidean_U1`, `Artea_euclidean_sqr_U1`, `Artea_inner_product_U1`, and
 `Artea_cosine_U1`; parallel cases add the `Par_` prefix. The scalar and standard
 SIMD reference kernels are registered only for `euclidean_sqr`, which is the
 distance they implement. Google Benchmark options such as

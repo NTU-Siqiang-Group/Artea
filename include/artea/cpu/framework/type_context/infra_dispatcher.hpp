@@ -130,10 +130,13 @@ struct DatasetInfra {
 };
 
 /** @brief Parse a distance-metric name (workload `metric` field / CLI flag)
- *         into its DistanceMetricsT. Canonical spellings are 'euclidean_sqr',
- *         'inner_product', and 'cosine'; common aliases are accepted. Throws
- *         on an unrecognized name. */
+ *         into its DistanceMetricsT. Canonical spellings are 'euclidean',
+ *         'euclidean_sqr', 'inner_product', and 'cosine'; common aliases are
+ *         accepted. Throws on an unrecognized name. */
 inline auto parse_metric(std::string_view name) -> DistanceMetricsT {
+    if (name == "euclidean" || name == "l2") {
+        return DistanceMetricsT::EUCLIDEAN;
+    }
     if (name == "euclidean_sqr" || name == "l2_sqr") {
         return DistanceMetricsT::EUCLIDEAN_SQR;
     }
@@ -143,13 +146,14 @@ inline auto parse_metric(std::string_view name) -> DistanceMetricsT {
     if (name == "cosine" || name == "angular") {
         return DistanceMetricsT::COSINE;
     }
-    ARTEA_ERROR(fmt::format("Unknown distance metric '{}': expected 'euclidean_sqr', "
-                            "'inner_product', or 'cosine'", name));
+    ARTEA_ERROR(fmt::format("Unknown distance metric '{}': expected 'euclidean', "
+                            "'euclidean_sqr', 'inner_product', or 'cosine'", name));
 }
 
 /** @brief Canonical display name for a metric (the workload spelling). */
 inline auto metric_name(DistanceMetricsT metric) -> const char* {
     switch (metric) {
+        case DistanceMetricsT::EUCLIDEAN: return "euclidean";
         case DistanceMetricsT::EUCLIDEAN_SQR: return "euclidean_sqr";
         case DistanceMetricsT::DOT:       return "inner_product";
         case DistanceMetricsT::COSINE:    return "cosine";
@@ -185,6 +189,18 @@ decltype(auto) infra_dispatch(DatasetInfra info, Fn&& fn) {
                 case 304: return fn.template operator()<DistanceMetricsT::EUCLIDEAN_SQR, vec_dim_t{304}>();  // crawl, yahoomusic (300 -> 304)
                 case 384: return fn.template operator()<DistanceMetricsT::EUCLIDEAN_SQR, vec_dim_t{384}>();  // tiny5m
                 case 960: return fn.template operator()<DistanceMetricsT::EUCLIDEAN_SQR, vec_dim_t{960}>();  // gist-1m
+                default: break;
+            }
+            break;
+        case DistanceMetricsT::EUCLIDEAN:
+            // Same supported dataset dimensions as squared Euclidean distance.
+            switch (info.dim) {
+                case  96: return fn.template operator()<DistanceMetricsT::EUCLIDEAN, vec_dim_t{ 96}>();
+                case 112: return fn.template operator()<DistanceMetricsT::EUCLIDEAN, vec_dim_t{112}>();
+                case 128: return fn.template operator()<DistanceMetricsT::EUCLIDEAN, vec_dim_t{128}>();
+                case 304: return fn.template operator()<DistanceMetricsT::EUCLIDEAN, vec_dim_t{304}>();
+                case 384: return fn.template operator()<DistanceMetricsT::EUCLIDEAN, vec_dim_t{384}>();
+                case 960: return fn.template operator()<DistanceMetricsT::EUCLIDEAN, vec_dim_t{960}>();
                 default: break;
             }
             break;

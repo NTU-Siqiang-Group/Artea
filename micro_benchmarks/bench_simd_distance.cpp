@@ -318,7 +318,7 @@ int main(int argc, char** argv) {
     program.add_argument("-c", "--config").default_value(artea::default_dataset_config_path());
     program.add_argument("-d", "--dataset").default_value(std::string("sift-1m"));
     program.add_argument("--metric").default_value(std::string("euclidean_sqr"))
-        .help("Distance metric: 'euclidean_sqr' ('l2_sqr'), 'inner_product', or 'cosine'");
+        .help("Distance metric: 'euclidean' ('l2'), 'euclidean_sqr' ('l2_sqr'), 'inner_product', or 'cosine'");
     std::vector<std::string> benchmark_args;
     try {
         benchmark_args = program.parse_known_args(argc, argv);

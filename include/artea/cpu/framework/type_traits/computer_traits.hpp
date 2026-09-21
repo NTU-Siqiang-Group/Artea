@@ -38,7 +38,8 @@ template <typename ComputerTraitsT> class DatasetProber;
 enum class DistanceMetricsT : uint8_t {
     EUCLIDEAN_SQR,  // Squared Euclidean distance: sum_i (a_i - b_i)^2.
     DOT,
-    COSINE
+    COSINE,
+    EUCLIDEAN,      // Euclidean distance: sqrt(sum_i (a_i - b_i)^2).
 };  // enum class DistanceMetricsT
 
 /** @brief Traits for computing distances between vectors.
