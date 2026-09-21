@@ -630,8 +630,8 @@ int main(int argc, char* argv[]) {
     program.add_argument("-d", "--dataset")
         .default_value(std::string("sift-1m"));
     program.add_argument("--metric")
-        .default_value(std::string("euclidean"))
-        .help("Distance metric: 'euclidean', 'inner_product', or 'cosine'");
+        .default_value(std::string("euclidean_sqr"))
+        .help("Distance metric: 'euclidean_sqr', 'inner_product', or 'cosine'");
 
     program.add_argument("-n", "--num_operations")
         .help("Number of operations for stress tests")

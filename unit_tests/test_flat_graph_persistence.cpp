@@ -195,7 +195,7 @@ int main(int argc, char** argv) {
     argparse::ArgumentParser program("test_flat_graph_persistence");
     program.add_argument("-c", "--config").default_value(artea::default_dataset_config_path());
     program.add_argument("-d", "--dataset").default_value(std::string("sift-1m"));
-    program.add_argument("--metric").default_value(std::string("euclidean")).help("Distance metric: 'euclidean', 'inner_product', or 'cosine'");
+    program.add_argument("--metric").default_value(std::string("euclidean_sqr")).help("Distance metric: 'euclidean_sqr', 'inner_product', or 'cosine'");
     program.add_argument("--temp-dir").default_value(std::string("./test_flat_graph_persistence_temp"));
     program.add_argument("-v", "--verbose").default_value(false).implicit_value(true);
 

@@ -25,7 +25,7 @@ using namespace artea::cpu;
 // Synthetic, fixed-dim test: metric/dim are pinned at compile time (no dataset,
 // no dispatch). recall_estimator_t is metric-dependent, so it is named with
 // these compile-time params.
-constexpr DistanceMetricsT TEST_METRIC  = DistanceMetricsT::EUCLIDEAN;
+constexpr DistanceMetricsT TEST_METRIC  = DistanceMetricsT::EUCLIDEAN_SQR;
 constexpr vec_dim_t        TEST_DIM = 128;  // multiple of SIMD chunk size (16)
 
 // Helper function to create idlist_array_t from raw data

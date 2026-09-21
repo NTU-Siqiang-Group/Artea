@@ -239,7 +239,7 @@ int main(int argc, char** argv) {
     argparse::ArgumentParser program("search_router_vs_construct_router");
     program.add_argument("-c", "--config").default_value(artea::default_dataset_config_path());
     program.add_argument("-d", "--dataset").default_value(std::string("sift-1m"));
-    program.add_argument("--metric").default_value(std::string("euclidean")).help("Distance metric: 'euclidean', 'inner_product', or 'cosine'");
+    program.add_argument("--metric").default_value(std::string("euclidean_sqr")).help("Distance metric: 'euclidean_sqr', 'inner_product', or 'cosine'");
     program.add_argument("--max-nbr-size").default_value(64u).scan<'u', uint32_t>();
     program.add_argument("--scale-coeffs").default_value(1.0f).scan<'g', float>();
     program.add_argument("--shifted-coeffs").default_value(0.0f).scan<'g', float>();

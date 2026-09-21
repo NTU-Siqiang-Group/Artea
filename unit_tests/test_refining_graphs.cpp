@@ -37,7 +37,7 @@ using namespace artea::cpu;
 // time (no dataset, no dispatch). The metric-dependent types (dist_func_t,
 // conv_graph::*) are named with these compile-time params; the chosen
 // dimension matches the synthetic vector dimension below.
-constexpr DistanceMetricsT TEST_METRIC  = DistanceMetricsT::EUCLIDEAN;
+constexpr DistanceMetricsT TEST_METRIC  = DistanceMetricsT::EUCLIDEAN_SQR;
 constexpr vec_dim_t        TEST_DIM = 128;  // multiple of SIMD chunk size (16)
 
 // ============================================================

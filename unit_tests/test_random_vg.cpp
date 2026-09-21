@@ -241,8 +241,8 @@ int main(int argc, char** argv) {
         .help("Name of the dataset to use")
         .default_value(std::string("sift-1m"));
     program.add_argument("--metric")
-        .help("Distance metric: 'euclidean', 'inner_product', or 'cosine'")
-        .default_value(std::string("euclidean"));
+        .help("Distance metric: 'euclidean_sqr', 'inner_product', or 'cosine'")
+        .default_value(std::string("euclidean_sqr"));
 
     try {
         program.parse_args(argc, argv);

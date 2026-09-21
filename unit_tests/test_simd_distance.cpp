@@ -35,7 +35,7 @@ using namespace artea::cpu;
 // default sift-1m dataset (128-dim, already SIMD-aligned); DIM is asserted to
 // match the loaded dataset in DataProvider::init(). Cosine is covered with
 // synthetic data in test_cosine_distance.cpp; here we verify the L2 kernel.
-constexpr DistanceMetricsT TEST_METRIC  = DistanceMetricsT::EUCLIDEAN;
+constexpr DistanceMetricsT TEST_METRIC  = DistanceMetricsT::EUCLIDEAN_SQR;
 constexpr vec_dim_t        TEST_DIM = 128;
 
 template <std::size_t U>

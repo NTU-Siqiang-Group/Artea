@@ -42,7 +42,7 @@ using namespace artea::cpu;
 using vec_num_t = uint32_t;
 using vec_ele_t = float;
 using base_traits_t = BaseTraits<vec_num_t, vec_ele_t>;
-constexpr DistanceMetricsT      TEST_METRIC  = DistanceMetricsT::EUCLIDEAN;
+constexpr DistanceMetricsT      TEST_METRIC  = DistanceMetricsT::EUCLIDEAN_SQR;
 constexpr base_traits_t::vec_dim_t TEST_DIM = 128;  // multiple of SIMD chunk size (16)
 using computer_traits_t = ComputerTraits<base_traits_t, TEST_METRIC, TEST_DIM>;
 using index_traits_t = IndexTraits<base_traits_t>;

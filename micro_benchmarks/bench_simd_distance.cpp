@@ -21,6 +21,7 @@
 #include <tbb/blocked_range.h>
 #include <fmt/format.h>
 #include <experimental/simd>
+#include <iostream>
 #include <memory>
 #include <vector>
 #include <stdexcept>
@@ -99,7 +100,6 @@ static void BM_SimpleForLoop(benchmark::State& state) {
     }
     state.SetItemsProcessed(state.iterations());
 }
-BENCHMARK(BM_SimpleForLoop)->Name("SimpleForLoop_L2");
 
 // 1. StdSimd (no tail processing, requires SIMD-aligned dim)
 namespace stdx = std::experimental;
@@ -140,9 +140,6 @@ static void BM_StdSimd(benchmark::State& state) {
     }
     state.SetItemsProcessed(state.iterations());
 }
-BENCHMARK_TEMPLATE(BM_StdSimd, 1)->Name("StdSimd_L2_U1");
-BENCHMARK_TEMPLATE(BM_StdSimd, 2)->Name("StdSimd_L2_U2");
-BENCHMARK_TEMPLATE(BM_StdSimd, 4)->Name("StdSimd_L2_U4");
 
 // 2. StdSimdTail (with scalar tail processing, supports any dim)
 template <std::size_t U>
@@ -187,9 +184,6 @@ static void BM_StdSimdTail(benchmark::State& state) {
     }
     state.SetItemsProcessed(state.iterations());
 }
-BENCHMARK_TEMPLATE(BM_StdSimdTail, 1)->Name("StdSimdTail_L2_U1");
-BENCHMARK_TEMPLATE(BM_StdSimdTail, 2)->Name("StdSimdTail_L2_U2");
-BENCHMARK_TEMPLATE(BM_StdSimdTail, 4)->Name("StdSimdTail_L2_U4");
 
 // 3. Artea SIMDDistance (class wrapper, compile-time dim)
 template <std::size_t U>
@@ -208,9 +202,6 @@ static void BM_Artea(benchmark::State& state) {
     });
     state.SetItemsProcessed(state.iterations());
 }
-BENCHMARK_TEMPLATE(BM_Artea, 1)->Name("Artea_L2_U1");
-BENCHMARK_TEMPLATE(BM_Artea, 2)->Name("Artea_L2_U2");
-BENCHMARK_TEMPLATE(BM_Artea, 4)->Name("Artea_L2_U4");
 
 // ============================================================
 // Parallel benchmarks (TBB)
@@ -234,7 +225,6 @@ static void BM_SimpleForLoop_Parallel(benchmark::State& state) {
     }
     state.SetItemsProcessed(state.iterations() * PARALLEL_BATCH);
 }
-BENCHMARK(BM_SimpleForLoop_Parallel)->Name("Par_SimpleForLoop_L2")->UseRealTime();
 
 template <std::size_t U>
 static void BM_StdSimd_Parallel(benchmark::State& state) {
@@ -253,9 +243,6 @@ static void BM_StdSimd_Parallel(benchmark::State& state) {
     }
     state.SetItemsProcessed(state.iterations() * PARALLEL_BATCH);
 }
-BENCHMARK_TEMPLATE(BM_StdSimd_Parallel, 1)->Name("Par_StdSimd_L2_U1")->UseRealTime();
-BENCHMARK_TEMPLATE(BM_StdSimd_Parallel, 2)->Name("Par_StdSimd_L2_U2")->UseRealTime();
-BENCHMARK_TEMPLATE(BM_StdSimd_Parallel, 4)->Name("Par_StdSimd_L2_U4")->UseRealTime();
 
 template <std::size_t U>
 static void BM_StdSimdTail_Parallel(benchmark::State& state) {
@@ -274,9 +261,6 @@ static void BM_StdSimdTail_Parallel(benchmark::State& state) {
     }
     state.SetItemsProcessed(state.iterations() * PARALLEL_BATCH);
 }
-BENCHMARK_TEMPLATE(BM_StdSimdTail_Parallel, 1)->Name("Par_StdSimdTail_L2_U1")->UseRealTime();
-BENCHMARK_TEMPLATE(BM_StdSimdTail_Parallel, 2)->Name("Par_StdSimdTail_L2_U2")->UseRealTime();
-BENCHMARK_TEMPLATE(BM_StdSimdTail_Parallel, 4)->Name("Par_StdSimdTail_L2_U4")->UseRealTime();
 
 template <std::size_t U>
 static void BM_Artea_Parallel(benchmark::State& state) {
@@ -299,22 +283,64 @@ static void BM_Artea_Parallel(benchmark::State& state) {
     });
     state.SetItemsProcessed(state.iterations() * PARALLEL_BATCH);
 }
-BENCHMARK_TEMPLATE(BM_Artea_Parallel, 1)->Name("Par_Artea_L2_U1")->UseRealTime();
-BENCHMARK_TEMPLATE(BM_Artea_Parallel, 2)->Name("Par_Artea_L2_U2")->UseRealTime();
-BENCHMARK_TEMPLATE(BM_Artea_Parallel, 4)->Name("Par_Artea_L2_U4")->UseRealTime();
+
+template <std::size_t U>
+static void register_unrolled_benchmarks(DistanceMetricsT metric) {
+    const auto name = metric_name(metric);
+    benchmark::RegisterBenchmark(fmt::format("Artea_{}_U{}", name, U), BM_Artea<U>);
+    benchmark::RegisterBenchmark(fmt::format("Par_Artea_{}_U{}", name, U), BM_Artea_Parallel<U>)
+        ->UseRealTime();
+
+    // These reference kernels only implement squared Euclidean distance.
+    if (metric == DistanceMetricsT::EUCLIDEAN_SQR) {
+        benchmark::RegisterBenchmark(fmt::format("StdSimd_{}_U{}", name, U), BM_StdSimd<U>);
+        benchmark::RegisterBenchmark(fmt::format("StdSimdTail_{}_U{}", name, U), BM_StdSimdTail<U>);
+        benchmark::RegisterBenchmark(fmt::format("Par_StdSimd_{}_U{}", name, U), BM_StdSimd_Parallel<U>)
+            ->UseRealTime();
+        benchmark::RegisterBenchmark(fmt::format("Par_StdSimdTail_{}_U{}", name, U), BM_StdSimdTail_Parallel<U>)
+            ->UseRealTime();
+    }
+}
+
+static void register_benchmarks(DistanceMetricsT metric) {
+    if (metric == DistanceMetricsT::EUCLIDEAN_SQR) {
+        benchmark::RegisterBenchmark("SimpleForLoop_euclidean_sqr", BM_SimpleForLoop);
+        benchmark::RegisterBenchmark("Par_SimpleForLoop_euclidean_sqr", BM_SimpleForLoop_Parallel)
+            ->UseRealTime();
+    }
+    register_unrolled_benchmarks<1>(metric);
+    register_unrolled_benchmarks<2>(metric);
+    register_unrolled_benchmarks<4>(metric);
+}
 
 int main(int argc, char** argv) {
     argparse::ArgumentParser program("bench_simd_distance");
     program.add_argument("-c", "--config").default_value(artea::default_dataset_config_path());
     program.add_argument("-d", "--dataset").default_value(std::string("sift-1m"));
-    program.add_argument("--metric").default_value(std::string("euclidean"));
-    try { program.parse_args(argc, argv); } catch (...) { return 1; }
+    program.add_argument("--metric").default_value(std::string("euclidean_sqr"))
+        .help("Distance metric: 'euclidean_sqr' ('l2_sqr'), 'inner_product', or 'cosine'");
+    std::vector<std::string> benchmark_args;
+    try {
+        benchmark_args = program.parse_known_args(argc, argv);
+    } catch (const std::exception& error) {
+        std::cerr << error.what() << '\n' << program;
+        return 1;
+    }
     g_config.config_path = program.get<std::string>("--config");
     g_config.dataset_name = program.get<std::string>("--dataset");
     g_config.metric = program.get<std::string>("--metric");
-    DataProvider::instance().init();
+    // Forward only Google Benchmark flags after consuming the dataset/metric options.
+    benchmark_args.insert(benchmark_args.begin(), argv[0]);
+    std::vector<char*> benchmark_argv;
+    for (auto& arg : benchmark_args) benchmark_argv.push_back(arg.data());
+    int benchmark_argc = static_cast<int>(benchmark_argv.size());
+    benchmark_argv.push_back(nullptr);
+    ::benchmark::Initialize(&benchmark_argc, benchmark_argv.data());
+    if (::benchmark::ReportUnrecognizedArguments(benchmark_argc, benchmark_argv.data())) return 1;
 
-    ::benchmark::Initialize(&argc, argv);
+    DataProvider::instance().init();
+    register_benchmarks(DataProvider::instance().get_dataset_info().metric);
     ::benchmark::RunSpecifiedBenchmarks();
+    ::benchmark::Shutdown();
     return 0;
 }

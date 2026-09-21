@@ -151,8 +151,8 @@ int main(int argc, char** argv) {
         .help("Dataset name");
 
     program.add_argument("--metric")
-        .default_value(std::string("euclidean"))
-        .help("Distance metric: 'euclidean', 'inner_product', or 'cosine'");
+        .default_value(std::string("euclidean_sqr"))
+        .help("Distance metric: 'euclidean_sqr', 'inner_product', or 'cosine'");
 
     // Algorithm parameters
     program.add_argument("-r", "--min-radius")

@@ -332,8 +332,8 @@ int main(int argc, char** argv) {
         .default_value(std::string("sift-1m"))
         .help("Dataset name (as listed in datasets.json)");
     program.add_argument("--metric")
-        .default_value(std::string("euclidean"))
-        .help("Distance metric: 'euclidean', 'inner_product', or 'cosine'");
+        .default_value(std::string("euclidean_sqr"))
+        .help("Distance metric: 'euclidean_sqr', 'inner_product', or 'cosine'");
 
     program.add_argument("--beta")
         .default_value(2.0f).scan<'g', float>()

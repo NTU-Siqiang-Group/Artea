@@ -42,7 +42,7 @@ using namespace artea::cpu;
 namespace {
 
 constexpr DistanceMetricsT COS = DistanceMetricsT::COSINE;
-constexpr DistanceMetricsT L2  = DistanceMetricsT::EUCLIDEAN;
+constexpr DistanceMetricsT L2_SQR  = DistanceMetricsT::EUCLIDEAN_SQR;
 constexpr DistanceMetricsT IP  = DistanceMetricsT::DOT;        // inner product / MIPS
 constexpr vec_dim_t        DIM = 64;   // multiple of SIMD chunk size (16)
 
@@ -138,18 +138,20 @@ TEST(InfraDispatcher, ParseMetric) {
     // parse_metric turns workload/CLI metric spellings (plus aliases) into the
     // DistanceMetricsT consumed by infra_dispatch(); callers pair it with the loaded
     // dataset's SIMD-padded dim to form a DatasetInfra.
-    EXPECT_EQ(parse_metric("euclidean"),     L2);
-    EXPECT_EQ(parse_metric("l2"),            L2);
+    EXPECT_EQ(parse_metric("euclidean_sqr"),     L2_SQR);
+    EXPECT_EQ(parse_metric("l2_sqr"),            L2_SQR);
     EXPECT_EQ(parse_metric("inner_product"), IP);
     EXPECT_EQ(parse_metric("dot"),           IP);
     EXPECT_EQ(parse_metric("ip"),            IP);
     EXPECT_EQ(parse_metric("mips"),          IP);
     EXPECT_EQ(parse_metric("cosine"),        COS);
     EXPECT_EQ(parse_metric("angular"),       COS);
+    EXPECT_THROW(parse_metric("euclidean"), std::runtime_error);
+    EXPECT_THROW(parse_metric("l2"), std::runtime_error);
     EXPECT_THROW(parse_metric("no-such-metric"), std::runtime_error);
 
     // metric_name round-trips the canonical spellings.
-    EXPECT_STREQ(metric_name(L2),  "euclidean");
+    EXPECT_STREQ(metric_name(L2_SQR),  "euclidean_sqr");
     EXPECT_STREQ(metric_name(IP),  "inner_product");
     EXPECT_STREQ(metric_name(COS), "cosine");
 }
@@ -158,8 +160,8 @@ TEST(InfraDispatcher, InfraTypeAndAcquire) {
     // infra_t resolves to the metric/dim-correct alias.
     static_assert(std::is_same_v<infra_t<COS, DIM, InfraKind::SimdDistance>,
                                  dist_func_t<COS, DIM>>);
-    static_assert(std::is_same_v<infra_t<L2, 128, InfraKind::HierRouter>,
-                                 hierarchical_graph_router_t<L2, 128>>);
+    static_assert(std::is_same_v<infra_t<L2_SQR, 128, InfraKind::HierRouter>,
+                                 hierarchical_graph_router_t<L2_SQR, 128>>);
 
     // acquire constructs a usable functor (no ctor dim arg).
     auto d = acquire<COS, DIM, InfraKind::SimdDistance>();
@@ -180,11 +182,11 @@ TEST(InfraDispatcher, DispatchResolvesCompileTimePair) {
     });
     EXPECT_EQ(cos_tag, 42);
 
-    // And the euclidean branch (e.g. sift-1m's padded dim).
-    const int l2_tag = infra_dispatch(DatasetInfra{L2, 128}, ARTEA_METRIC_LAMBDA(int) {
-            return (Metric == L2 && Dim == 128) ? 7 : 0;
+    // And the euclidean_sqr branch (e.g. sift-1m's padded dim).
+    const int l2_sqr_tag = infra_dispatch(DatasetInfra{L2_SQR, 128}, ARTEA_METRIC_LAMBDA(int) {
+            return (Metric == L2_SQR && Dim == 128) ? 7 : 0;
         });
-    EXPECT_EQ(l2_tag, 7);
+    EXPECT_EQ(l2_sqr_tag, 7);
 }
 
 int main(int argc, char** argv) {

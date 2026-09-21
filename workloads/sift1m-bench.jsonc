@@ -1,7 +1,7 @@
 {
   "dataset-config": "./configs/datasets.json",
   "dataset": "sift-1m",
-  "metric": "euclidean",
+  "metric": "euclidean_sqr",
   "warmup_runs": 5,
   "test_runs": 10,
   "indexes-config": {

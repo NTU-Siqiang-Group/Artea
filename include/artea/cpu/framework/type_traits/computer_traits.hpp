@@ -36,7 +36,7 @@ template <typename ComputerTraitsT> class DatasetProber;
 
 /** @brief Distance metrics used for computing distances between vectors */
 enum class DistanceMetricsT : uint8_t {
-    EUCLIDEAN,
+    EUCLIDEAN_SQR,  // Squared Euclidean distance: sum_i (a_i - b_i)^2.
     DOT,
     COSINE
 };  // enum class DistanceMetricsT

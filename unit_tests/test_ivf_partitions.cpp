@@ -369,8 +369,8 @@ int main(int argc, char** argv) {
         .help("Dataset name (kept for CLI consistency; the synthetic partition "
               "logic loads no vectors).");
     program.add_argument("--metric")
-        .default_value(std::string("euclidean"))
-        .help("Distance metric: 'euclidean', 'inner_product', or 'cosine'");
+        .default_value(std::string("euclidean_sqr"))
+        .help("Distance metric: 'euclidean_sqr', 'inner_product', or 'cosine'");
     program.add_argument("--dim")
         .default_value(128u).scan<'u', uint32_t>()
         .help("SIMD-padded dimension used to pick the compile-time <Metric, Dim> "

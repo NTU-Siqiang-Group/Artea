@@ -552,7 +552,7 @@ int main(int argc, char** argv) {
 
     g_config.config_path  = wl["dataset-config"];
     g_config.dataset_name = wl["dataset"];
-    g_config.metric       = wl.value("metric", "euclidean");
+    g_config.metric       = wl.value("metric", "euclidean_sqr");
     g_config.warmup_runs  = wl.value("warmup_runs", 1u);
     g_config.test_runs    = wl.value("test_runs", 3u);
 

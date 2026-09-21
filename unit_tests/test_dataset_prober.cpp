@@ -369,8 +369,8 @@ int main(int argc, char** argv) {
     argparse::ArgumentParser program("test_dataset_prober");
     program.add_argument("-c", "--config").default_value(artea::default_dataset_config_path());
     program.add_argument("-d", "--dataset").default_value(std::string("sift-1m"));
-    program.add_argument("--metric").default_value(std::string("euclidean"))
-        .help("Distance metric: 'euclidean', 'inner_product', or 'cosine'");
+    program.add_argument("--metric").default_value(std::string("euclidean_sqr"))
+        .help("Distance metric: 'euclidean_sqr', 'inner_product', or 'cosine'");
     program.add_argument("--num-samples").default_value(1000u).scan<'u', uint32_t>();
 
     try {

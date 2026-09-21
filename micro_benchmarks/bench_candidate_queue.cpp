@@ -35,7 +35,7 @@ using namespace artea::cpu;
 // Purely synthetic micro-benchmark (no dataset): pin the compile-time metric/dim
 // axes. The candidate-queue types are metric-dependent aliases; the dimension is
 // irrelevant to queue mechanics, so any SIMD-padded value works.
-constexpr DistanceMetricsT TEST_METRIC  = DistanceMetricsT::EUCLIDEAN;
+constexpr DistanceMetricsT TEST_METRIC  = DistanceMetricsT::EUCLIDEAN_SQR;
 constexpr vec_dim_t        TEST_DIM = 128;
 
 // --- Global Configuration ---

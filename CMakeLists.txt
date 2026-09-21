@@ -18,6 +18,8 @@ set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE} -O3")
 set(CMAKE_CXX_FLAGS_RELWITHDEBINFO "${CMAKE_CXX_FLAGS_RELWITHDEBINFO} -O3 -g -fno-omit-frame-pointer")
 
 # --- Dependency management ---
+set(FETCHCONTENT_FULLY_DISCONNECTED OFF CACHE BOOL
+    "Skip dependency downloads and updates when all sources are already available")
 include(FetchContent)
 find_package(OpenMP REQUIRED)
 

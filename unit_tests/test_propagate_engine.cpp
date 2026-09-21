@@ -35,7 +35,7 @@ using namespace artea::cpu;
 // TEST_DIM is the SIMD-padded dimension (multiple of 16); the grid uses only
 // the first 2 coordinates and zero-pads the rest, so all pairwise Euclidean
 // distances are identical to the original 2D grid.
-constexpr DistanceMetricsT TEST_METRIC = DistanceMetricsT::EUCLIDEAN;
+constexpr DistanceMetricsT TEST_METRIC = DistanceMetricsT::EUCLIDEAN_SQR;
 constexpr vec_dim_t TEST_DIM = 16;
 
 class PropagateEngineCorrectnessTest : public ::testing::Test {

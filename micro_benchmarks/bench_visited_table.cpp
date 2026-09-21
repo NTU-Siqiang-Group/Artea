@@ -37,7 +37,7 @@ using namespace artea::cpu;
 // Purely synthetic micro-benchmark (no dataset): pin the compile-time metric/dim
 // axes. The visited-table pool is metric/dim-independent in behavior; the
 // dimension only flows through the self-defined ComputerTraits instantiation.
-constexpr DistanceMetricsT TEST_METRIC = DistanceMetricsT::EUCLIDEAN;
+constexpr DistanceMetricsT TEST_METRIC = DistanceMetricsT::EUCLIDEAN_SQR;
 
 // --- Type Definitions ---
 using vec_num_t = uint32_t;

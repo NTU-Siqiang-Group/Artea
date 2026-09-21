@@ -63,8 +63,8 @@ public:
 
     __attribute__((always_inline))
     auto operator()(const vec_ele_t* vec1, const vec_ele_t* vec2) const -> distance_t {
-        if constexpr (distance_metrics == distance_metrics_t::EUCLIDEAN) {
-            return _impl_euclidean(vec1, vec2);
+        if constexpr (distance_metrics == distance_metrics_t::EUCLIDEAN_SQR) {
+            return _impl_euclidean_sqr(vec1, vec2);
         } else if constexpr (distance_metrics == distance_metrics_t::DOT) {
             // Inner-product search is expressed as a distance, so larger dot
             // products become smaller (negated) distances.
@@ -95,7 +95,7 @@ private:
     static constexpr std::size_t NUM_SIMD_CHUNKS = _vec_dim / SIMD_CHUNK_SIZE;
 
     __attribute__((always_inline))
-    auto _impl_euclidean(const vec_ele_t* vec1, const vec_ele_t* vec2) const -> distance_t {
+    auto _impl_euclidean_sqr(const vec_ele_t* vec1, const vec_ele_t* vec2) const -> distance_t {
         // AVX512 implementation
         // sum_chunk serves as the first accumulator (sum_chunk_0)
         __m512 vec1_chunk, vec2_chunk, diff_chunk, sum_chunk = _mm512_set1_ps(0.0f);

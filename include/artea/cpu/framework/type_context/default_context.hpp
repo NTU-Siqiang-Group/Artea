@@ -26,7 +26,7 @@
  *
  *   The <Metric, Dim> aliases have NO defaults: downstream code MUST state both,
  *   e.g.
- *       dist_func_t<DistanceMetricsT::EUCLIDEAN, 128> dist;     // no ctor arg
+ *       dist_func_t<DistanceMetricsT::EUCLIDEAN_SQR, 128> dist;     // no ctor arg
  *       artea_graph::index_t<DistanceMetricsT::COSINE, 112> idx(...);
  *   Metric-independent aliases (vector_dataset_t, distance_t, the compactor, the
  *   compact graph, base scalars, ...) are used without angle brackets as before.

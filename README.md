@@ -42,6 +42,11 @@ and assembles the headers, static libraries, CMake config, and licenses into
 `build/_deps/mkl-2025.3.0/`.
 No system MKL installation, Intel compiler, or oneAPI activation is needed.
 The automatic download supports Linux x86-64 with glibc 2.28+ and is about 220 MB.
+`FETCHCONTENT_FULLY_DISCONNECTED` defaults to `OFF`, allowing missing dependencies
+to be downloaded. If an existing build caches `ON` but an MKL package is missing,
+CMake reports the missing package and resets the option to `OFF`. A populated
+MKL package cache keeps `ON`; explicit `FETCHCONTENT_SOURCE_DIR_*` overrides and
+`ARTEA_MKL_ROOT` are honored without this reset.
 
 ```sh
 # Configure + build
@@ -76,6 +81,12 @@ and `lib/cmake/mkl`. The downloaded libraries retain their Intel license; includ
 the supplied license and copyright notices when redistributing a linked application.
 
 ## Quick Start
+
+Distance selection uses `euclidean_sqr` (alias `l2_sqr`), `inner_product`, or
+`cosine` in workload `metric` fields and `--metric` options. Squared Euclidean
+distance returns the sum of squared coordinate differences without a square root;
+its C++ enum is `DistanceMetricsT::EUCLIDEAN_SQR`. The former `euclidean` / `l2`
+spellings and `EUCLIDEAN` enum have been replaced by these explicit squared names.
 
 A minimal build-then-search pipeline (mirrors `bench-artea/build_and_run_artea`):
 

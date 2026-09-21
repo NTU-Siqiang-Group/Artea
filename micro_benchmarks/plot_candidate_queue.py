@@ -214,7 +214,7 @@ def run_simd_benchmark(bin_path: str) -> float:
     try:
         items_per_second_values = []
 
-        # Pattern: Artea_L2_U1    14.3 ns    14.3 ns   44705261   items_per_second=69.9M/s
+        # Pattern: Artea_euclidean_sqr_U1    14.3 ns    14.3 ns   44705261   items_per_second=69.9M/s
         pattern = r'^\w+\s+[\d.]+\s+[a-z]+\s+[\d.]+\s+[a-z]+\s+\d+\s+items_per_second=([\d.]+)([KMG]?)/s'
 
         for line in output.split('\n'):
