@@ -19,7 +19,7 @@ project(ArteaExamples CXX)
 # Create bin directory in project root
 file(MAKE_DIRECTORY ${CMAKE_SOURCE_DIR}/bin)
 
-file(GLOB EXAMPLE_SOURCES "*.cpp")
+file(GLOB EXAMPLE_SOURCES CONFIGURE_DEPENDS "*.cpp")
 
 foreach(sourcefile ${EXAMPLE_SOURCES})
     get_filename_component(example_target ${sourcefile} NAME_WE)
