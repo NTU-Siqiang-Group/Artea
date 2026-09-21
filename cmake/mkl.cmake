@@ -19,6 +19,21 @@ function(_artea_setup_mkl)
                 DOWNLOAD_NAME "${package}-${mkl_version}.zip"
                 URL_HASH "SHA256=${${package}_sha256}"
             )
+
+            # Older build trees may cache disconnected mode before MKL was added.
+            # Keep it only when this package is present; explicit source overrides
+            # remain the caller's responsibility, including validation of the path.
+            string(TOUPPER "artea_${package}" package_key)
+            set(package_source "${FETCHCONTENT_BASE_DIR}/artea_${package}-src")
+            if(FETCHCONTENT_FULLY_DISCONNECTED
+               AND NOT FETCHCONTENT_SOURCE_DIR_${package_key}
+               AND NOT EXISTS "${package_source}/${package}-${mkl_version}.dist-info/METADATA")
+                message(STATUS
+                    "MKL package ${package} is missing; setting FETCHCONTENT_FULLY_DISCONNECTED=OFF to download dependencies")
+                set(FETCHCONTENT_FULLY_DISCONNECTED OFF CACHE BOOL
+                    "Skip dependency downloads and updates when all sources are already available" FORCE)
+                set(FETCHCONTENT_FULLY_DISCONNECTED OFF)
+            endif()
             FetchContent_MakeAvailable(artea_${package})
 
             # Assemble one native prefix; hard links avoid duplicating the large static libraries.

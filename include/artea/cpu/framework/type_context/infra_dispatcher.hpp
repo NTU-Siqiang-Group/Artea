@@ -179,11 +179,12 @@ decltype(auto) infra_dispatch(DatasetInfra info, Fn&& fn) {
             break;
         case DistanceMetricsT::EUCLIDEAN:
             switch (info.dim) {
-                case  96: return fn.template operator()<DistanceMetricsT::EUCLIDEAN, vec_dim_t{ 96}>();
-                case 112: return fn.template operator()<DistanceMetricsT::EUCLIDEAN, vec_dim_t{112}>();
-                case 128: return fn.template operator()<DistanceMetricsT::EUCLIDEAN, vec_dim_t{128}>();
-                case 304: return fn.template operator()<DistanceMetricsT::EUCLIDEAN, vec_dim_t{304}>();
-                case 960: return fn.template operator()<DistanceMetricsT::EUCLIDEAN, vec_dim_t{960}>();
+                case  96: return fn.template operator()<DistanceMetricsT::EUCLIDEAN, vec_dim_t{ 96}>();  // deep-10m, deep-100m
+                case 112: return fn.template operator()<DistanceMetricsT::EUCLIDEAN, vec_dim_t{112}>();  // glove-100d, spacev-10m (100 -> 112)
+                case 128: return fn.template operator()<DistanceMetricsT::EUCLIDEAN, vec_dim_t{128}>();  // sift-1m, bigann-10m
+                case 304: return fn.template operator()<DistanceMetricsT::EUCLIDEAN, vec_dim_t{304}>();  // crawl, yahoomusic (300 -> 304)
+                case 384: return fn.template operator()<DistanceMetricsT::EUCLIDEAN, vec_dim_t{384}>();  // tiny5m
+                case 960: return fn.template operator()<DistanceMetricsT::EUCLIDEAN, vec_dim_t{960}>();  // gist-1m
                 default: break;
             }
             break;
