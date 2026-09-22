@@ -106,7 +106,8 @@ if [ $# -lt 1 ]; then
     echo ""
     print_available_benchmarks
     echo ""
-    echo "Example: $0 bench_random_eg --init-nbrs 64 -i 20"
+    echo "Example: $0 bench_random_eg --max-nbrs 64 -i 20"
+    echo "Example: $0 bench_propagate_engine --max-nbrs 16 --prefill-ratio 0.6 --num-iters 5 --repetitions 10"
     echo "Example: $0 all"
     exit 1
 fi
@@ -116,8 +117,8 @@ shift  # Remove first argument, rest are passed to benchmark
 
 # Default parameters for each benchmark
 declare -A DEFAULT_PARAMS
-DEFAULT_PARAMS["bench_random_eg"]="--config ${PROJECT_ROOT}/configs/datasets.json --dataset sift-1m --init-nbrs 32 -i 10"
-DEFAULT_PARAMS["bench_propagate_engine"]="--config ${PROJECT_ROOT}/configs/datasets.json --dataset sift-1m --init-nbrs 32 --max-nbrs 16 --num-iters 5 --scale-coeffs 1.0 --shifted-coeffs 0.0 -i 10"
+DEFAULT_PARAMS["bench_random_eg"]="--config ${PROJECT_ROOT}/configs/datasets.json --dataset sift-1m --max-nbrs 32 -i 10"
+DEFAULT_PARAMS["bench_propagate_engine"]="--config ${PROJECT_ROOT}/configs/datasets.json --dataset sift-1m --max-nbrs 16 --prefill-ratio 0.6 --num-iters 5 --scale-coeffs 1.0 --shifted-coeffs 0.0 --repetitions 10"
 
 if [ "$BENCH_NAME" = "all" ]; then
     if [ ! -d "${BENCH_DIR}" ] || ! ls -1 "${BENCH_DIR}"/bench_* >/dev/null 2>&1; then
