@@ -17,7 +17,7 @@ cmake_minimum_required(VERSION 3.16)
 # Renamed project to reflect that these are benchmarks
 project(ArteaMicroBench CXX)
 
-file(GLOB MICROBENCH_SOURCES "*.cpp")
+file(GLOB MICROBENCH_SOURCES CONFIGURE_DEPENDS "*.cpp")
 
 foreach(sourcefile ${MICROBENCH_SOURCES})
     get_filename_component(bench_target ${sourcefile} NAME_WE)

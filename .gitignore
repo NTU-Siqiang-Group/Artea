@@ -22,3 +22,18 @@ temp/
 backup_prefill/
 build-tsan/
 test_artea_graph.output
+
+# Retain these archived sources while keeping other backup files local.
+!/backup/
+/backup/*
+!/backup/graph_mis_vg.hpp
+!/backup/lb_greedy_vg.hpp
+!/backup/mb_greedy_vg.hpp
+!/backup/test_graph_mis_vg.cpp
+!/backup/test_lb_greedy_vg.cpp
+!/backup/bench_lb_greedy_vg.cpp
+!/backup/vertex_generator.hpp
+!/backup/random_vg.hpp
+!/backup/vertex_generator_traits.hpp
+!/backup/test_random_vg.cpp
+!/backup/bench_random_vg.cpp

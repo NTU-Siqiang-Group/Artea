@@ -127,9 +127,6 @@ template <DistanceMetricsT Metric, vec_dim_t Dim>
 using computer_traits_t = ComputerTraits<base_traits_t, Metric, Dim>;
 
 template <DistanceMetricsT Metric, vec_dim_t Dim>
-using vertex_generator_traits_t = VertexGeneratorTraits<computer_traits_t<Metric, Dim>, index_traits_t>;
-
-template <DistanceMetricsT Metric, vec_dim_t Dim>
 using router_traits_t = RouterTraits<computer_traits_t<Metric, Dim>, index_traits_t, false>;
 
 template <DistanceMetricsT Metric, vec_dim_t Dim>
@@ -137,7 +134,6 @@ using refiner_traits_t = RefinerTraits<computer_traits_t<Metric, Dim>, buffer_tr
 
 template <DistanceMetricsT Metric, vec_dim_t Dim>
 using graph_factory_traits_t = GraphFactoryTraits<
-    vertex_generator_traits_t<Metric, Dim>,
     refiner_traits_t<Metric, Dim>,
     router_traits_t<Metric, Dim>
 >;
@@ -188,13 +184,6 @@ template <DistanceMetricsT Metric, vec_dim_t Dim> using ivf_partitions_t = typen
 template <DistanceMetricsT Metric, vec_dim_t Dim> using ivf_construct_policy_t = typename refiner_traits_t<Metric, Dim>::ivf_construct_policy_t;
 template <DistanceMetricsT Metric, vec_dim_t Dim> using refiner_utils_t = typename refiner_traits_t<Metric, Dim>::refiner_utils_t;
 template <DistanceMetricsT Metric, vec_dim_t Dim> using propagate_engine_t = typename refiner_traits_t<Metric, Dim>::propagate_engine_t;
-
-// Vertex generator types from VertexGeneratorTraits
-template <DistanceMetricsT Metric, vec_dim_t Dim> using approx_rnet_t = typename vertex_generator_traits_t<Metric, Dim>::approx_rnet_t;
-template <DistanceMetricsT Metric, vec_dim_t Dim> using lb_greedy_vg_t = typename vertex_generator_traits_t<Metric, Dim>::lb_greedy_vg_t;
-template <DistanceMetricsT Metric, vec_dim_t Dim> using mb_greedy_vg_t = typename vertex_generator_traits_t<Metric, Dim>::mb_greedy_vg_t;
-template <DistanceMetricsT Metric, vec_dim_t Dim> using random_vg_t = typename vertex_generator_traits_t<Metric, Dim>::random_vg_t;
-template <DistanceMetricsT Metric, vec_dim_t Dim> using graph_mis_vg_t = typename vertex_generator_traits_t<Metric, Dim>::graph_mis_vg_t;
 
 // Namespace-scoped graph factories / indexes / configs from GraphFactoryTraits
 namespace conv_graph {

@@ -44,15 +44,13 @@ namespace hier_conv_graph {
 }
 
 template <
-    typename VertexGeneratorTraitsT,
     typename RefinerTraitsT,
     typename RouterTraitsT
 >
 struct GraphFactoryTraits :
-    public VertexGeneratorTraitsT,
     public RefinerTraitsT
 {
-    using graph_factory_traits_t = GraphFactoryTraits<VertexGeneratorTraitsT, RefinerTraitsT, RouterTraitsT>;
+    using graph_factory_traits_t = GraphFactoryTraits<RefinerTraitsT, RouterTraitsT>;
 
     /** @brief Namespace-scoped factory types for conv_graph, extending IndexTraits::conv_graph. */
     struct conv_graph : RefinerTraitsT::conv_graph {

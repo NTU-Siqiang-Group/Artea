@@ -91,13 +91,6 @@ the dataset and metric options.
 
 ---
 
-### 6. bench_vertex_generator
-Benchmarks vertex generation strategies.
-
-**Purpose**: Measures the performance of various vertex generator implementations.
-
----
-
 ## Running Benchmarks
 
 ### Quick Run Script
@@ -134,7 +127,7 @@ Most benchmarks share these common parameters:
 ## About Metrics
 
 Graph construction benchmarks (`bench_random_eg`, `bench_propagate_engine`,
-`bench_lb_greedy_vg`, `bench_random_vg`, and `bench_radius_prober`) use
+and `bench_radius_prober`) use
 `build_infra_dispatch`: Euclidean tasks compute true L2 throughout construction,
 including any internal routing. Their default `--metric` is `euclidean`;
 `euclidean_sqr`, `l2`, and `l2_sqr` select the same construction policy.

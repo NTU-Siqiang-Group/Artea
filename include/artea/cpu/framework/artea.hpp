@@ -29,7 +29,6 @@
 #include <artea/cpu/framework/type_traits/computer_traits.hpp>
 #include <artea/cpu/framework/type_traits/buffer_traits.hpp>
 #include <artea/cpu/framework/type_traits/router_traits.hpp>
-#include <artea/cpu/framework/type_traits/vertex_generator_traits.hpp>
 #include <artea/cpu/framework/type_traits/refiner_traits.hpp>
 #include <artea/cpu/framework/type_traits/index_traits.hpp>
 #include <artea/cpu/framework/type_traits/graph_factory_traits.hpp>
@@ -99,12 +98,6 @@
 #include <artea/cpu/router/data_structures/linear_candidate_queue.hpp>
 #include <artea/cpu/router/data_structures/boost_candidate_queue.hpp>
 #include <artea/cpu/router/profiler/profile_1nn_result.hpp>
-
-#include <artea/cpu/vertex_generator/vertex_generator.hpp>
-#include <artea/cpu/vertex_generator/lb_greedy_vg.hpp>
-#include <artea/cpu/vertex_generator/mb_greedy_vg.hpp>
-#include <artea/cpu/vertex_generator/random_vg.hpp>
-#include <artea/cpu/vertex_generator/graph_mis_vg.hpp>
 
 #include <artea/cpu/refiner/nbr_log_table.hpp>
 #include <artea/cpu/refiner/updaters/neighbor_updater.hpp>

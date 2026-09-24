@@ -25,10 +25,7 @@ namespace cpu {
 
 /** ------ Forward Declaration  ------ **/
 template <typename VertexGeneratorTraitsT, typename DerivedClassT> class VertexGenerator;
-template <typename VertexGeneratorTraitsT> class LBGreedyVG;
-template <typename VertexGeneratorTraitsT> class MBGreedyVG;
 template <typename VertexGeneratorTraitsT> class RandomVG;
-template <typename VertexGeneratorTraitsT> class GraphMISVG;
 
 template <typename ComputerTraitsT, typename IndexTraitsT>
 struct VertexGeneratorTraits :
@@ -42,20 +39,8 @@ struct VertexGeneratorTraits :
     /** @brief Vertex subset result type. */
     using vertex_subset_t = typename ComputerTraitsT::vertex_subset_t;
 
-    /** @brief Approximate r-net result type (alias for vertex_subset_t). */
-    using approx_rnet_t = vertex_subset_t;
-
-    /** @brief Large batch greedy vertex generator. */
-    using lb_greedy_vg_t = LBGreedyVG<vertex_generator_traits_t>;
-
-    /** @brief Mini batch greedy vertex generator. */
-    using mb_greedy_vg_t = MBGreedyVG<vertex_generator_traits_t>;
-
     /** @brief Random vertex generator. */
     using random_vg_t = RandomVG<vertex_generator_traits_t>;
-
-    /** @brief Graph-based MIS vertex generator. */
-    using graph_mis_vg_t = GraphMISVG<vertex_generator_traits_t>;
 
     template <typename DerivedClassT>
     using vertex_generator_t = VertexGenerator<vertex_generator_traits_t, DerivedClassT>;

@@ -6,7 +6,7 @@ include(GoogleTest)
 
 find_package(Threads REQUIRED)
 
-file(GLOB TEST_SOURCES "*.cpp")
+file(GLOB TEST_SOURCES CONFIGURE_DEPENDS "*.cpp")
 
 foreach(sourcefile ${TEST_SOURCES})
     get_filename_component(test_target ${sourcefile} NAME_WE)
