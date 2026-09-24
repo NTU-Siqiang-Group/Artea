@@ -125,7 +125,7 @@ auto dump_config(const char* banner) -> void {
 
 // ============================================================
 //  DataProvider singleton (same shape as test_artea_graph, minus the
-//  L0-radius probe — hier_conv_graph has no r-net radius)
+//  r-net distance probe — hier_conv_graph has no r-net radius)
 // ============================================================
 
 class DataProvider {
@@ -149,7 +149,7 @@ public:
 
         // Resolve BOTH compile-time axes: metric from the --metric input,
         // padded dim from the loaded dataset. The dataset is metric/dim-
-        // independent and stays out here; the stateless dist_func is rebuilt
+        // independent and stays out here; the stateless build_dist is rebuilt
         // inside each dispatched <Metric, Dim> body.
         _dataset_info = DatasetInfra{parse_metric(g_config.metric), base_vecs.get_vec_dim()};
     }
@@ -176,9 +176,9 @@ protected:
 
         const vertex_num_t total_vertices = static_cast<vertex_num_t>(base_vecs.get_num_vecs());
 
-        infra_dispatch(provider.get_dataset_info(), ARTEA_METRIC_LAMBDA(void) {
+        build_infra_dispatch(provider.get_dataset_info(), ARTEA_METRIC_LAMBDA(void) {
             // Stateless functor: the dimension is a compile-time trait now.
-            dist_func_t<Metric, Dim> dist_func;
+            dist_func_t<Metric, Dim> build_dist;
 
             hier_conv_graph::hierarchy_config_t<Metric, Dim> hierarchy_config(
                 g_config.ul_max_nbr_size, g_config.bl_max_nbr_size,
@@ -203,7 +203,7 @@ protected:
             auto wallclock_start = std::chrono::high_resolution_clock::now();
 
             vector_array_t owned_batch = base_vecs.extract_subset(0, total_vertices);
-            hier_conv_graph::factory_t<Metric, Dim>::add_vertices(*graph, std::move(owned_batch), dist_func);
+            hier_conv_graph::factory_t<Metric, Dim>::add_vertices(*graph, std::move(owned_batch), build_dist);
 
             auto wallclock_end = std::chrono::high_resolution_clock::now();
             _build_ms = std::chrono::duration_cast<std::chrono::milliseconds>(
@@ -339,19 +339,24 @@ TEST_F(HierConvGraphTest, SearchRecallAndThroughput) {
     std::vector<Row> rows;
     int64_t compact_ms = 0;
 
-    infra_dispatch(provider.get_dataset_info(), ARTEA_METRIC_LAMBDA(void) {
+    const auto dataset_info = provider.get_dataset_info();
+    auto compact_hg = build_infra_dispatch(dataset_info, ARTEA_METRIC_LAMBDA(compact::hierarchical_graph_t) {
         // Stateless functor: the dimension is a compile-time trait now.
-        dist_func_t<Metric, Dim> dist_func;
+        dist_func_t<Metric, Dim> build_dist;
 
         // ---- Compact the dynamic hierarchical graph ----
         const auto& dyn_hg = _graph->get_hierarchical_graph();
         auto compact_t0 = std::chrono::high_resolution_clock::now();
-        auto compact_hg = hierarchical_graph_compactor_t::compact_graph(dyn_hg, base_vecs, dist_func);
+        auto compact_hg = hierarchical_graph_compactor_t::compact_graph(dyn_hg, base_vecs, build_dist);
         auto compact_t1 = std::chrono::high_resolution_clock::now();
         compact_ms =
             std::chrono::duration_cast<std::chrono::milliseconds>(compact_t1 - compact_t0).count();
         ARTEA_INFO(fmt::format("Hierarchical graph compacted in {} ms", compact_ms));
+        return compact_hg;
+    });
 
+    search_infra_dispatch(dataset_info, ARTEA_METRIC_LAMBDA(void) {
+        dist_func_t<Metric, Dim> search_dist;
         recall_estimator_t<Metric, Dim> re;
 
         auto time_batch = [&](auto&& batch_call)
@@ -384,7 +389,7 @@ TEST_F(HierConvGraphTest, SearchRecallAndThroughput) {
             const uint32_t effective_queue_size = std::max<uint32_t>(queue_size, topk);
 
             hierarchical_graph_router_t<Metric, Dim> router(
-                base_vecs, dist_func,
+                base_vecs, search_dist,
                 /*topk=*/topk,
                 /*candidate_queue_size=*/effective_queue_size);
             router.initialize();
@@ -446,8 +451,8 @@ int main(int argc, char** argv) {
         .default_value(std::string("sift-1m"))
         .help("Dataset name (as listed in datasets.json)");
     program.add_argument("--metric")
-        .default_value(std::string("euclidean_sqr"))
-        .help("Distance metric: 'euclidean_sqr', 'inner_product', or 'cosine'");
+        .default_value(std::string("euclidean"))
+        .help("Task metric: euclidean/l2 or euclidean_sqr/l2_sqr (build=L2, compact search=L2 squared), inner_product, cosine");
 
     // Hierarchy shape
     program.add_argument("--ul-max-nbr-size")

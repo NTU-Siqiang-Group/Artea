@@ -46,7 +46,7 @@ namespace stacked_rgraph {
  * Owns:
  *   - A composed @c dynamic::HierarchicalGraph (held via
  *     @c std::unique_ptr because the graph is non-movable).
- *   - The r-net @c RGraphConfig (beta / L0_radius / max_nbr_size / ...).
+ *   - The r-net @c RGraphConfig (beta / num_skip_levels / l0_min_distance / max_nbr_size / ...).
  *   - An owned copy of every base vector inserted via
  *     @c append_vecs (used by @c IndexFactory to compute distances
  *     without holding the caller's input batch).
@@ -243,7 +243,8 @@ public:
     __attribute__((always_inline)) auto rgraph_config()      const -> const rgraph_config_t&  { return _rgraph_config; }
     __attribute__((always_inline)) auto pruning_config()     const -> const pruning_config_t& { return _pruning_config; }
     __attribute__((always_inline)) auto rnet_beta()          const -> ratio_t      { return _rgraph_config.rnet_beta(); }
-    __attribute__((always_inline)) auto L0_rnet_radius()     const -> distance_t   { return _rgraph_config.L0_rnet_radius(); }
+    __attribute__((always_inline)) auto num_skip_levels()    const -> layer_num_t  { return _rgraph_config.num_skip_levels(); }
+    __attribute__((always_inline)) auto l0_min_distance()    const -> distance_t   { return _rgraph_config.l0_min_distance(); }
     __attribute__((always_inline)) auto max_restrict_level() const -> layer_num_t  { return _max_restrict_level; }
     __attribute__((always_inline)) auto search_nn_qs()       const -> vertex_num_t { return _rgraph_config.search_nn_qs(); }
     __attribute__((always_inline)) auto ul_select_nbrs_qs()  const -> vertex_num_t { return _rgraph_config.ul_select_nbrs_qs(); }
@@ -251,7 +252,8 @@ public:
     static constexpr ratio_t      layer_cap_decay_ratio = rgraph_config_t::layer_cap_decay_ratio;
 
     /**
-     * @brief Covering radius for 0-indexed layer @p h: R_h = L0 * beta^h.
+     * @brief Upper-layer radius: R_h = l0_min_distance * beta^(num_skip_levels + h).
+     *        At L0, returns the characteristic minimum-distance scale.
      *        @p h must be in @c [0, max_restrict_level].
      */
     __attribute__((always_inline))

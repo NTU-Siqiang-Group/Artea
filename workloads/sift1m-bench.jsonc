@@ -172,7 +172,7 @@
     },
     "artea": {
       "rnet_beta":               2.0,
-      "l0_rnet_radius":          37844.0,
+      "num_skip_levels":              0,
       "l0_min_distance":         1869.00,
       "ul_max_nbr_size":         32,
       "bl_max_nbr_size":         64,

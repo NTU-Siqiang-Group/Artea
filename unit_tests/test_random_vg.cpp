@@ -77,7 +77,7 @@ DatasetInfra RandomVGTest::dataset_info{};
 // Test 1: Basic functionality - returns correct number of vertices
 TEST_F(RandomVGTest, ReturnsCorrectSize) {
     uint32_t result_size = std::min(10000u, num_vecs);
-    auto result = infra_dispatch(dataset_info, ARTEA_METRIC_LAMBDA(vertex_subset_t) {
+    auto result = build_infra_dispatch(dataset_info, ARTEA_METRIC_LAMBDA(vertex_subset_t) {
         random_vg_t<Metric, Dim> random_vg;
         return random_vg.generate(*vecs_data, result_size);
     });
@@ -90,7 +90,7 @@ TEST_F(RandomVGTest, ReturnsCorrectSize) {
 // Test 2: Sampling without replacement - all IDs are unique
 TEST_F(RandomVGTest, SamplingWithoutReplacement) {
     uint32_t result_size = std::min(50000u, num_vecs / 2);
-    auto result = infra_dispatch(dataset_info, ARTEA_METRIC_LAMBDA(vertex_subset_t) {
+    auto result = build_infra_dispatch(dataset_info, ARTEA_METRIC_LAMBDA(vertex_subset_t) {
         random_vg_t<Metric, Dim> random_vg;
         return random_vg.generate(*vecs_data, result_size);
     });
@@ -104,7 +104,7 @@ TEST_F(RandomVGTest, SamplingWithoutReplacement) {
 // Test 4: Vector data matches original vectors
 TEST_F(RandomVGTest, VectorDataMatchesOriginal) {
     uint32_t result_size = std::min(15000u, num_vecs / 4);
-    auto result = infra_dispatch(dataset_info, ARTEA_METRIC_LAMBDA(vertex_subset_t) {
+    auto result = build_infra_dispatch(dataset_info, ARTEA_METRIC_LAMBDA(vertex_subset_t) {
         random_vg_t<Metric, Dim> random_vg;
         return random_vg.generate(*vecs_data, result_size);
     });
@@ -127,7 +127,7 @@ TEST_F(RandomVGTest, VectorDataMatchesOriginal) {
 // Test 5: All IDs are within valid range
 TEST_F(RandomVGTest, IDsWithinValidRange) {
     uint32_t result_size = std::min(30000u, num_vecs / 2);
-    auto result = infra_dispatch(dataset_info, ARTEA_METRIC_LAMBDA(vertex_subset_t) {
+    auto result = build_infra_dispatch(dataset_info, ARTEA_METRIC_LAMBDA(vertex_subset_t) {
         random_vg_t<Metric, Dim> random_vg;
         return random_vg.generate(*vecs_data, result_size);
     });
@@ -140,7 +140,7 @@ TEST_F(RandomVGTest, IDsWithinValidRange) {
 
 // Test 6: Edge case - sample size equals total size
 TEST_F(RandomVGTest, SampleSizeEqualsTotal) {
-    auto result = infra_dispatch(dataset_info, ARTEA_METRIC_LAMBDA(vertex_subset_t) {
+    auto result = build_infra_dispatch(dataset_info, ARTEA_METRIC_LAMBDA(vertex_subset_t) {
         random_vg_t<Metric, Dim> random_vg;
         return random_vg.generate(*vecs_data, num_vecs);
     });
@@ -155,7 +155,7 @@ TEST_F(RandomVGTest, SampleSizeEqualsTotal) {
 // Test 7: Edge case - sample size exceeds total size (should clamp)
 TEST_F(RandomVGTest, SampleSizeExceedsTotal) {
     uint32_t oversized_request = num_vecs + 50000;
-    auto result = infra_dispatch(dataset_info, ARTEA_METRIC_LAMBDA(vertex_subset_t) {
+    auto result = build_infra_dispatch(dataset_info, ARTEA_METRIC_LAMBDA(vertex_subset_t) {
         random_vg_t<Metric, Dim> random_vg;
         return random_vg.generate(*vecs_data, oversized_request);
     });
@@ -166,7 +166,7 @@ TEST_F(RandomVGTest, SampleSizeExceedsTotal) {
 
 // Test 8: Edge case - zero sample size
 TEST_F(RandomVGTest, ZeroSampleSize) {
-    auto result = infra_dispatch(dataset_info, ARTEA_METRIC_LAMBDA(vertex_subset_t) {
+    auto result = build_infra_dispatch(dataset_info, ARTEA_METRIC_LAMBDA(vertex_subset_t) {
         random_vg_t<Metric, Dim> random_vg;
         return random_vg.generate(*vecs_data, 0);
     });
@@ -178,7 +178,7 @@ TEST_F(RandomVGTest, ZeroSampleSize) {
 // Test 9: Randomness - multiple runs produce different results
 TEST_F(RandomVGTest, ProducesRandomResults) {
     uint32_t result_size = std::min(10000u, num_vecs / 5);
-    auto results = infra_dispatch(dataset_info,
+    auto results = build_infra_dispatch(dataset_info,
         ARTEA_METRIC_LAMBDA(std::pair<vertex_subset_t, vertex_subset_t>) {
             random_vg_t<Metric, Dim> random_vg1;
             random_vg_t<Metric, Dim> random_vg2;
@@ -203,7 +203,7 @@ TEST_F(RandomVGTest, ProducesRandomResults) {
 // Test 10: Small sample size
 TEST_F(RandomVGTest, SmallSampleSize) {
     uint32_t result_size = 100;
-    auto result = infra_dispatch(dataset_info, ARTEA_METRIC_LAMBDA(vertex_subset_t) {
+    auto result = build_infra_dispatch(dataset_info, ARTEA_METRIC_LAMBDA(vertex_subset_t) {
         random_vg_t<Metric, Dim> random_vg;
         return random_vg.generate(*vecs_data, result_size);
     });
@@ -218,7 +218,7 @@ TEST_F(RandomVGTest, SmallSampleSize) {
 // Test 11: Large sample size (90% of total)
 TEST_F(RandomVGTest, LargeSampleSize) {
     uint32_t result_size = static_cast<uint32_t>(num_vecs * 0.9);
-    auto result = infra_dispatch(dataset_info, ARTEA_METRIC_LAMBDA(vertex_subset_t) {
+    auto result = build_infra_dispatch(dataset_info, ARTEA_METRIC_LAMBDA(vertex_subset_t) {
         random_vg_t<Metric, Dim> random_vg;
         return random_vg.generate(*vecs_data, result_size);
     });
@@ -241,8 +241,8 @@ int main(int argc, char** argv) {
         .help("Name of the dataset to use")
         .default_value(std::string("sift-1m"));
     program.add_argument("--metric")
-        .help("Distance metric: 'euclidean_sqr', 'inner_product', or 'cosine'")
-        .default_value(std::string("euclidean_sqr"));
+        .help("Task metric: euclidean/l2 or euclidean_sqr/l2_sqr (build=L2, compact search=L2 squared), inner_product, cosine")
+        .default_value(std::string("euclidean"));
 
     try {
         program.parse_args(argc, argv);

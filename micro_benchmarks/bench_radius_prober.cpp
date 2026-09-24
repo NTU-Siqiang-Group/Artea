@@ -79,10 +79,10 @@ static void BM_DistanceProber(benchmark::State& state) {
 
     vec_num_t num_distances = g_config.num_dists_sampled;
 
-    infra_dispatch(provider.get_dataset_info(), ARTEA_METRIC_LAMBDA(void) {
+    build_infra_dispatch(provider.get_dataset_info(), ARTEA_METRIC_LAMBDA(void) {
         // Stateless functor: the dimension is a compile-time trait now.
-        dist_func_t<Metric, Dim> dist_func;
-        distance_prober_t<Metric, Dim> prober(dist_func);
+        dist_func_t<Metric, Dim> build_dist;
+        distance_prober_t<Metric, Dim> prober(build_dist);
 
         for (auto _ : state) {
             auto result = prober.probe(base_vecs, g_config.quantile, num_distances);
@@ -111,8 +111,8 @@ int main(int argc, char** argv) {
         .help("Dataset name");
 
     program.add_argument("--metric")
-        .default_value(std::string("euclidean_sqr"))
-        .help("Distance metric: 'euclidean_sqr', 'inner_product', or 'cosine'");
+        .default_value(std::string("euclidean"))
+        .help("Task metric: euclidean/l2 or euclidean_sqr/l2_sqr (build=L2, compact search=L2 squared), inner_product, cosine");
 
     // Algorithm parameters
     program.add_argument("-m", "--num-dists")

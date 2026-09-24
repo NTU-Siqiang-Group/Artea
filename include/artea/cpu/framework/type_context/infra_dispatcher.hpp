@@ -217,6 +217,29 @@ decltype(auto) infra_dispatch(DatasetInfra info, Fn&& fn) {
                             metric_name(info.metric), info.dim));
 }
 
+/** @brief Dispatch a graph-construction task using true Euclidean distance.
+ *         Map at compile time so both Euclidean inputs share one build stack.
+ *         Keep infra_dispatch() for explicit distance-kernel/prober tests. */
+template <typename Fn>
+decltype(auto) build_infra_dispatch(DatasetInfra info, Fn&& fn) {
+    return infra_dispatch(info, [&]<DistanceMetricsT Metric, vec_dim_t Dim>() -> decltype(auto) {
+        constexpr auto BuildMetric = Metric == DistanceMetricsT::EUCLIDEAN_SQR
+            ? DistanceMetricsT::EUCLIDEAN : Metric;
+        return std::forward<Fn>(fn).template operator()<BuildMetric, Dim>();
+    });
+}
+
+/** @brief Dispatch queries on a completed graph using squared Euclidean distance.
+ *         Non-Euclidean metrics retain their original semantics. */
+template <typename Fn>
+decltype(auto) search_infra_dispatch(DatasetInfra info, Fn&& fn) {
+    return infra_dispatch(info, [&]<DistanceMetricsT Metric, vec_dim_t Dim>() -> decltype(auto) {
+        constexpr auto SearchMetric = Metric == DistanceMetricsT::EUCLIDEAN
+            ? DistanceMetricsT::EUCLIDEAN_SQR : Metric;
+        return std::forward<Fn>(fn).template operator()<SearchMetric, Dim>();
+    });
+}
+
 }   // namespace cpu
 }   // namespace artea
 

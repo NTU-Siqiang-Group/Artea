@@ -131,6 +131,17 @@ Most benchmarks share these common parameters:
 - `-i, --iterations`: Number of benchmark iterations
 - `-h, --help`: Display help message
 
+## About Metrics
+
+Graph construction benchmarks (`bench_random_eg`, `bench_propagate_engine`,
+`bench_lb_greedy_vg`, `bench_random_vg`, and `bench_radius_prober`) use
+`build_infra_dispatch`: Euclidean tasks compute true L2 throughout construction,
+including any internal routing. Their default `--metric` is `euclidean`;
+`euclidean_sqr`, `l2`, and `l2_sqr` select the same construction policy.
+Cosine and inner-product tasks retain their original distances.
+`bench_simd_distance` measures the explicitly selected kernel and still supports
+both Euclidean and squared Euclidean independently.
+
 ## Dataset Configuration
 
 Benchmarks expect a `datasets.json` file in the working directory. Example format:

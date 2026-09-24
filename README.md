@@ -32,21 +32,11 @@ competitive build time.
 
 ## Build & Compile
 
-Use a C++20 compiler, CMake 3.24+, and Boost development packages.
-CMake builds oneTBB v2022.3.0 and its allocator from the benchmark's sibling
-`third-party/oneTBB` submodule. A standalone Artea checkout automatically fetches
-the same pinned revision into `build/_deps/`. No system TBB installation is needed;
-executables load the libraries directly from the build directory.
-CMake downloads the official MKL 2025.3.0 packages, verifies their SHA256 hashes,
-and assembles the headers, static libraries, CMake config, and licenses into
-`build/_deps/mkl-2025.3.0/`.
-No system MKL installation, Intel compiler, or oneAPI activation is needed.
-The automatic download supports Linux x86-64 with glibc 2.28+ and is about 220 MB.
-`FETCHCONTENT_FULLY_DISCONNECTED` defaults to `OFF`, allowing missing dependencies
-to be downloaded. If an existing build caches `ON` but an MKL package is missing,
-CMake reports the missing package and resets the option to `OFF`. A populated
-MKL package cache keeps `ON`; explicit `FETCHCONTENT_SOURCE_DIR_*` overrides and
-`ARTEA_MKL_ROOT` are honored without this reset.
+Use a C++20 compiler with OpenMP support, CMake 3.24+, and Boost development
+packages. The default setup supports Linux x86-64 with glibc 2.28+.
+CMake handles oneTBB and MKL automatically; the first build requires internet access.
+
+Run from the repository root:
 
 ```sh
 # Configure + build
@@ -56,77 +46,57 @@ bash ./scripts/install.sh
 ./build/unit_tests/test_artea_graph --help
 ```
 
-Artea uses MKL only for `vslNewStream`, `viRngUniform`, and `vslDeleteStream`.
-Each TBB worker owns a separate MT19937 stream. MKL is therefore fixed to `sequential`,
-preserving batched SIMD generation and concurrent calls from TBB workers without MKL's internal threading.
-Reconfiguring an existing build replaces old threading/linkage settings with `sequential` and `static`.
-No MKL threading runtime is downloaded or linked.
-
-Download metadata is centralized in [`cmake/mkl-packages.cmake`](cmake/mkl-packages.cmake).
-Update its version, package download paths, and SHA256 checksums together when upgrading MKL.
-The assembled prefix has a conventional layout:
-
-```text
-build/_deps/mkl-2025.3.0/
-├── include/
-├── lib/
-│   └── cmake/mkl/
-└── share/doc/mkl/
-```
-
-Files are hard-linked from the extracted packages when possible, with copying as a fallback.
-Offline builds can reuse the populated `_deps/` cache, or set
-`-DARTEA_MKL_ROOT=/path/to/mkl` to a prefix containing headers, static libraries,
-and `lib/cmake/mkl`. The downloaded libraries retain their Intel license; include
-the supplied license and copyright notices when redistributing a linked application.
-
 ## Quick Start
 
-Distance selection uses `euclidean` (alias `l2`), `euclidean_sqr` (alias `l2_sqr`),
-`inner_product`, or `cosine` in workload `metric` fields and `--metric` options.
-`DistanceMetricsT::EUCLIDEAN` returns the Euclidean distance,
-`sqrt(sum_i (a_i - b_i)^2)`. `DistanceMetricsT::EUCLIDEAN_SQR` returns the sum of
-squared coordinate differences without a square root. The default remains
-`euclidean_sqr`; `euclidean` and `l2` now explicitly select the square-rooted
-distance, rather than acting as aliases for the squared distance.
-
-A minimal build-then-search pipeline (mirrors `bench-artea/build_and_run_artea`):
+Set the SIFT-1M dataset paths in [`configs/datasets.json`](configs/datasets.json).
+The following example loads the data, builds and compacts an index, then searches it:
 
 ```cpp
 #include <artea/cpu/framework/artea.hpp>
 #include <artea/cpu/framework/type_context/default_context.hpp>
+#include <artea/cpu/framework/type_context/infra_dispatcher.hpp>
 using namespace artea;
 using namespace artea::cpu;
 
-// 1. Load a dataset (base / query / ground-truth vectors) and a distance fn.
+// 1. Load the dataset.
 vector_dataset_t dataset("configs/datasets.json", "sift-1m");
 const auto& base_vecs = dataset.get_base_vecs();
-dist_func_t dist_func(base_vecs.get_vec_dim());
+const DatasetInfra info{parse_metric("euclidean"), base_vecs.get_vec_dim()};
 
-// 2. Configure the three ARTEA stages.
-artea_graph::rgraph_config_t    rgraph_cfg(/*beta=*/2.0, /*search_nn_qs=*/64);
-artea_graph::propagate_config_t propagate_cfg(/*build_loops=*/15, /*triu_iters=*/4, /*prefill=*/0.4f);
-artea_graph::pruning_config_t   pruning_cfg(/*scale=*/1.10, /*shift=*/1.5);
+// 2. Build and compact the index using Euclidean distance.
+auto compact_hg = build_infra_dispatch(info, ARTEA_METRIC_LAMBDA(compact::hierarchical_graph_t) {
+    dist_func_t<Metric, Dim> build_dist;
+    artea_graph::rgraph_config_t<Metric, Dim> rgraph_cfg(
+        /*rnet_beta=*/2.0, /*num_skip_levels=*/0u,
+        /*l0_min_distance=*/1.0, /*search_nn_qs=*/64);
+    artea_graph::propagate_config_t<Metric, Dim> propagate_cfg(
+        /*build_loops=*/15, /*triu_iters=*/4, /*prefill=*/0.4f);
+    artea_graph::pruning_config_t<Metric, Dim> pruning_cfg(/*scale=*/1.10, /*shift=*/1.5);
 
-// 3. Build the hierarchical graph, then compact it for fast search.
-auto graph = std::make_unique<artea_graph::index_t>(
-    base_vecs.get_num_vecs(), rgraph_cfg, propagate_cfg, pruning_cfg);
-artea_graph::factory_t::add_vertices(
-    *graph, base_vecs.extract_subset(0, base_vecs.get_num_vecs()), dist_func,
-    /*insert_on_L0=*/false, /*shuffle=*/true);
-auto compact_hg = hierarchical_graph_compactor_t::compact_graph(
-    graph->get_hierarchical_graph(), base_vecs, dist_func);
+    auto graph = std::make_unique<artea_graph::index_t<Metric, Dim>>(
+        base_vecs.get_num_vecs(), rgraph_cfg, propagate_cfg, pruning_cfg);
+    artea_graph::factory_t<Metric, Dim>::add_vertices(
+        *graph, base_vecs.extract_subset(0, base_vecs.get_num_vecs()), build_dist,
+        /*insert_on_L0=*/false, /*shuffle=*/true);
+    return hierarchical_graph_compactor_t::compact_graph(
+        graph->get_hierarchical_graph(), base_vecs, build_dist);
+});
 
-// 4. Search: top-k with a runtime candidate-queue budget.
-hierarchical_graph_router_t router(base_vecs, dist_func, /*topk=*/100, /*queue=*/200);
-router.initialize();
-auto results = router.batch_query</*RandomSeeding=*/false, /*UpperBeam=*/false>(
-    dataset.get_query_vecs(), compact_hg);
+// 3. Search using squared Euclidean distance.
+search_infra_dispatch(info, ARTEA_METRIC_LAMBDA(void) {
+    dist_func_t<Metric, Dim> search_dist;
+    hierarchical_graph_router_t<Metric, Dim> router(
+        base_vecs, search_dist, /*topk=*/100, /*queue=*/200);
+    router.initialize();
+    auto results = router.template batch_query</*RandomSeeding=*/false, /*UpperBeam=*/false>(
+        dataset.get_query_vecs(), compact_hg);
+});
 ```
 
-> Build parameters (`α = scale`, `τ = shift`, `β`, neighbor budgets, refinement
-> loops) are tunable per dataset; the `bench-artea` workloads under
-> `workloads/*.jsonc` provide recommended settings.
+For a runnable example with dataset-specific settings, see
+[`unit_tests/test_artea_graph.cpp`](unit_tests/test_artea_graph.cpp) and the
+[`workloads/`](workloads/README.md) guide. Metric and radius conventions are
+documented in the [test guide](unit_tests/README.md#about-metrics).
 
 ## Performance
 

@@ -103,7 +103,7 @@ TEST_F(FlatGraphPersistenceTest, RefiningGraphSnapshotRestore) {
 
     ARTEA_INFO("Building descent graph for persistence test...");
 
-    infra_dispatch(DataProvider::instance().get_dataset_info(), ARTEA_METRIC_LAMBDA(void) {
+    build_infra_dispatch(DataProvider::instance().get_dataset_info(), ARTEA_METRIC_LAMBDA(void) {
         conv_graph::pruning_config_t<Metric, Dim> pruning_config(
             g_config.scale_coeffs, g_config.shifted_coeffs);
         conv_graph::propagate_config_t<Metric, Dim> propagate_config(
@@ -195,7 +195,7 @@ int main(int argc, char** argv) {
     argparse::ArgumentParser program("test_flat_graph_persistence");
     program.add_argument("-c", "--config").default_value(artea::default_dataset_config_path());
     program.add_argument("-d", "--dataset").default_value(std::string("sift-1m"));
-    program.add_argument("--metric").default_value(std::string("euclidean_sqr")).help("Distance metric: 'euclidean_sqr', 'inner_product', or 'cosine'");
+    program.add_argument("--metric").default_value(std::string("euclidean")).help("Task metric: euclidean/l2 or euclidean_sqr/l2_sqr (build=L2, compact search=L2 squared), inner_product, cosine");
     program.add_argument("--temp-dir").default_value(std::string("./test_flat_graph_persistence_temp"));
     program.add_argument("-v", "--verbose").default_value(false).implicit_value(true);
 

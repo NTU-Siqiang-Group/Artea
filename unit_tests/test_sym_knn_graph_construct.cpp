@@ -107,7 +107,7 @@ public:
         // metric/dim-independent, so only the build runs behind <Metric, Dim>.
         dataset_info_ = DatasetInfra{parse_metric(g_config.metric), base_vecs.get_vec_dim()};
 
-        infra_dispatch(dataset_info_, ARTEA_METRIC_LAMBDA(void) {
+        build_infra_dispatch(dataset_info_, ARTEA_METRIC_LAMBDA(void) {
             symmetric_knn_graph::propagate_config_t<Metric, Dim> propagate_config(
                 g_config.num_build_loops,
                 g_config.num_triu_iters,
@@ -185,14 +185,14 @@ TEST_F(SymKnnGraphTest, QueryRecall) {
     ARTEA_INFO(fmt::format("\nRunning Grid Search: candidate queue size {} to {}, step {}",
         g_config.queue_start, g_config.queue_end, g_config.queue_step));
 
-    infra_dispatch(provider.get_dataset_info(), ARTEA_METRIC_LAMBDA(void) {
+    search_infra_dispatch(provider.get_dataset_info(), ARTEA_METRIC_LAMBDA(void) {
         // Stateless functor: the dimension is a compile-time trait now.
-        dist_func_t<Metric, Dim> dist_func;
+        dist_func_t<Metric, Dim> search_dist;
         recall_estimator_t<Metric, Dim> recall_estimator;
 
         for (uint32_t queue_size = g_config.queue_start; queue_size <= g_config.queue_end; queue_size += g_config.queue_step) {
             single_layer_router_t<Metric, Dim> router(
-                base_vecs, dist_func, g_config.topk, queue_size);
+                base_vecs, search_dist, g_config.topk, queue_size);
             router.initialize();
 
             // Warmup runs
@@ -240,7 +240,7 @@ int main(int argc, char** argv) {
     argparse::ArgumentParser program("test_sym_knn_graph_construct");
     program.add_argument("-c", "--config").default_value(artea::default_dataset_config_path());
     program.add_argument("-d", "--dataset").default_value(std::string("sift-1m"));
-    program.add_argument("--metric").default_value(std::string("euclidean_sqr")).help("Distance metric: 'euclidean_sqr', 'inner_product', or 'cosine'");
+    program.add_argument("--metric").default_value(std::string("euclidean")).help("Task metric: euclidean/l2 or euclidean_sqr/l2_sqr (build=L2, compact search=L2 squared), inner_product, cosine");
     program.add_argument("--max-nbr-size").default_value(96u).scan<'u', uint32_t>();
     program.add_argument("--extracted-nbr-size").default_value(32u).scan<'u', uint32_t>();
     program.add_argument("--num-build-loops").default_value(4u).scan<'u', uint32_t>();

@@ -11,6 +11,7 @@
 #pragma once
 
 #include <cmath>
+#include <limits>
 #include <artea/common/logger.hpp>
 #include <artea/cpu/index/conv_graph/configs.hpp>
 
@@ -22,7 +23,7 @@ namespace stacked_rgraph {
  * @brief Configuration for the Stacked R-Net hierarchical index.
  *
  * Encapsulates all construction-time parameters: r-net geometry
- * (beta, L1 radius), beam-search queue sizes (split into an upper-layer
+ * (beta, skipped levels, L0 minimum distance), beam-search queue sizes (split into an upper-layer
  * variant used for L1+ and a bottom-layer variant used for L0),
  * per-vertex neighbor capacity, and per-layer pre-allocation policy.
  *
@@ -42,9 +43,10 @@ struct RGraphConfig {
 
     /**
      * @brief Construct a RGraphConfig.
-     * @param rnet_beta           Radius growth factor: R_h = L0_rnet_radius * rnet_beta^h. Must be > 1.
-     * @param L0_rnet_radius      Covering radius for layer 0 (the bottom layer). Must be > 0.
-     *                            The layer-1 covering radius is derived as @c rnet_beta * @c L0_rnet_radius.
+     * @param rnet_beta           Radius growth factor. Must be finite and > 1.
+     * @param num_skip_levels     Number of geometric levels skipped before L1 (0 means no skips).
+     *                            R_1 = l0_min_distance * rnet_beta^(num_skip_levels + 1).
+     * @param l0_min_distance     Characteristic L0 minimum distance in build-distance units. Must be > 0.
      * @param search_nn_qs        Beam-search queue size for Phase 1 descent. Must be >= 1.
      * @param ul_select_nbrs_qs   Beam-search queue size for Phase 2 candidate gathering at
      *                            upper levels (L1..highest_insert_level). Must be >= 1. Default 100.
@@ -58,7 +60,8 @@ struct RGraphConfig {
      */
     RGraphConfig(
         ratio_t rnet_beta,
-        distance_t L0_rnet_radius,
+        layer_num_t num_skip_levels,
+        distance_t l0_min_distance,
         vertex_num_t search_nn_qs,
         vertex_num_t ul_select_nbrs_qs = 100,
         vertex_num_t bl_select_nbrs_qs = 100,
@@ -66,18 +69,25 @@ struct RGraphConfig {
         vertex_num_t bl_max_nbr_size = 64
     ) :
         _rnet_beta(rnet_beta),
-        _L0_rnet_radius(L0_rnet_radius),
+        _num_skip_levels(num_skip_levels),
+        _l0_min_distance(l0_min_distance),
         _search_nn_qs(search_nn_qs),
         _ul_select_nbrs_qs(ul_select_nbrs_qs),
         _bl_select_nbrs_qs(bl_select_nbrs_qs),
         _ul_max_nbr_size(ul_max_nbr_size),
         _bl_max_nbr_size(bl_max_nbr_size)
     {
-        if (rnet_beta <= ratio_t(1)) {
-            ARTEA_ERROR(fmt::format("rnet_beta ({}) must be > 1", rnet_beta));
+        if (!std::isfinite(rnet_beta) || rnet_beta <= ratio_t(1)) {
+            ARTEA_ERROR(fmt::format("rnet_beta ({}) must be finite and > 1", rnet_beta));
         }
-        if (L0_rnet_radius <= distance_t(0)) {
-            ARTEA_ERROR(fmt::format("L0_rnet_radius ({}) must be > 0", L0_rnet_radius));
+        if (!std::isfinite(l0_min_distance) || l0_min_distance <= distance_t(0)) {
+            ARTEA_ERROR(fmt::format("l0_min_distance ({}) must be finite and > 0", l0_min_distance));
+        }
+        const double l1_radius = static_cast<double>(l0_min_distance) * std::pow(
+            static_cast<double>(rnet_beta), static_cast<double>(num_skip_levels) + 1.0);
+        if (!std::isfinite(l1_radius) || l1_radius > std::numeric_limits<distance_t>::max()) {
+            ARTEA_ERROR(fmt::format("num_skip_levels ({}) produces an unrepresentable L1 radius",
+                                   num_skip_levels));
         }
         if (search_nn_qs < 1) {
             ARTEA_ERROR(fmt::format("search_nn_qs ({}) must be >= 1", search_nn_qs));
@@ -92,7 +102,8 @@ struct RGraphConfig {
 
     // Const getters
     __attribute__((always_inline)) auto rnet_beta()          const -> ratio_t      { return _rnet_beta; }
-    __attribute__((always_inline)) auto L0_rnet_radius()     const -> distance_t   { return _L0_rnet_radius; }
+    __attribute__((always_inline)) auto num_skip_levels()    const -> layer_num_t  { return _num_skip_levels; }
+    __attribute__((always_inline)) auto l0_min_distance()    const -> distance_t   { return _l0_min_distance; }
     __attribute__((always_inline)) auto search_nn_qs()       const -> vertex_num_t { return _search_nn_qs; }
     __attribute__((always_inline)) auto ul_select_nbrs_qs()  const -> vertex_num_t { return _ul_select_nbrs_qs; }
     __attribute__((always_inline)) auto bl_select_nbrs_qs()  const -> vertex_num_t { return _bl_select_nbrs_qs; }
@@ -100,14 +111,16 @@ struct RGraphConfig {
     __attribute__((always_inline)) auto bl_max_nbr_size()    const -> vertex_num_t { return _bl_max_nbr_size; }
 
     /**
-     * @brief Covering radius for 0-indexed layer @p h: R_h = L0 * beta^h.
-     *        Thus R_0 = L0_rnet_radius and R_1 = beta * L0_rnet_radius.
+     * @brief Covering radius for upper layer @p h (h >= 1):
+     *        R_h = l0_min_distance * rnet_beta^(num_skip_levels + h).
+     *        For h == 0, return the L0 distance scale; L0 is not an r-net.
      */
     __attribute__((always_inline))
     auto radius_at(const layer_num_t h) const -> distance_t {
+        if (h == 0) return _l0_min_distance;
         return static_cast<distance_t>(
-            _L0_rnet_radius * std::pow(static_cast<double>(_rnet_beta),
-                                       static_cast<double>(h))
+            static_cast<double>(_l0_min_distance) * std::pow(static_cast<double>(_rnet_beta),
+                static_cast<double>(_num_skip_levels) + static_cast<double>(h))
         );
     }
 
@@ -140,12 +153,14 @@ struct RGraphConfig {
     }
 
 private:
-    /** @brief Radius growth factor: R_h = L0_rnet_radius * rnet_beta^h. Must be > 1. */
+    /** @brief Radius growth factor from L1 upward. Must be > 1. */
     ratio_t      _rnet_beta;
 
-    /** @brief Covering radius for layer 0 (the bottom layer). Must be > 0.
-     *         Layer 1's covering radius is derived as @c _rnet_beta * @c _L0_rnet_radius. */
-    distance_t   _L0_rnet_radius;
+    /** @brief Number of geometric levels skipped before the stored L1. */
+    layer_num_t  _num_skip_levels;
+
+    /** @brief Characteristic L0 minimum distance in build-distance units. Must be > 0. */
+    distance_t   _l0_min_distance;
 
     /** @brief Beam-search queue size for Phase 1 top-down descent. */
     vertex_num_t _search_nn_qs;

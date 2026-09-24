@@ -7,7 +7,7 @@
   "indexes-config": {
     "artea": {
       "rnet_beta":               1.44,
-      "l0_rnet_radius":          7676.0,
+      "num_skip_levels":              0,
       "l0_min_distance":         150.0,
       "ul_max_nbr_size":         40,
       "bl_max_nbr_size":         80,

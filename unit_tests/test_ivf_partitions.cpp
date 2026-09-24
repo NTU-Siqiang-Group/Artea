@@ -138,7 +138,7 @@ TEST_F(IVFPartitionsTest, SmallDatasetCorrectness) {
     // Serial reference
     auto [serial_offsets, serial_vids] = serial_from_partition_ids(part_ids, num_partitions);
 
-    infra_dispatch(dataset_info(), ARTEA_METRIC_LAMBDA(void) {
+    build_infra_dispatch(dataset_info(), ARTEA_METRIC_LAMBDA(void) {
         // Parallel implementation
         ivf_partitions_t<Metric, Dim> ivf_partitions;
         ivf_partitions.from_partition_ids(part_ids, num_partitions);
@@ -174,7 +174,7 @@ TEST_F(IVFPartitionsTest, LargeDatasetCorrectness) {
     // Serial reference
     auto [serial_offsets, serial_vids] = serial_from_partition_ids(part_ids, num_partitions);
 
-    infra_dispatch(dataset_info(), ARTEA_METRIC_LAMBDA(void) {
+    build_infra_dispatch(dataset_info(), ARTEA_METRIC_LAMBDA(void) {
         // Parallel implementation
         ivf_partitions_t<Metric, Dim> ivf_partitions;
         ivf_partitions.from_partition_ids(part_ids, num_partitions);
@@ -207,7 +207,7 @@ TEST_F(IVFPartitionsTest, PerformanceComparison) {
         part_ids[i] = dist(rng);
     }
 
-    auto [serial_duration, parallel_duration] = infra_dispatch(dataset_info(), ARTEA_METRIC_LAMBDA(std::pair<std::chrono::milliseconds, std::chrono::milliseconds>) {
+    auto [serial_duration, parallel_duration] = build_infra_dispatch(dataset_info(), ARTEA_METRIC_LAMBDA(std::pair<std::chrono::milliseconds, std::chrono::milliseconds>) {
         // Measure serial time
         ivf_partitions_t<Metric, Dim> ivf_partitions_serial;
         auto serial_start = std::chrono::high_resolution_clock::now();
@@ -270,7 +270,7 @@ TEST_F(IVFPartitionsTest, SinglePartition) {
 
     auto [serial_offsets, serial_vids] = serial_from_partition_ids(part_ids, num_partitions);
 
-    infra_dispatch(dataset_info(), ARTEA_METRIC_LAMBDA(void) {
+    build_infra_dispatch(dataset_info(), ARTEA_METRIC_LAMBDA(void) {
         ivf_partitions_t<Metric, Dim> ivf_partitions;
         ivf_partitions.from_partition_ids(part_ids, num_partitions);
 
@@ -303,7 +303,7 @@ TEST_F(IVFPartitionsTest, EmptyPartitions) {
 
     auto [serial_offsets, serial_vids] = serial_from_partition_ids(part_ids, num_partitions);
 
-    infra_dispatch(dataset_info(), ARTEA_METRIC_LAMBDA(void) {
+    build_infra_dispatch(dataset_info(), ARTEA_METRIC_LAMBDA(void) {
         ivf_partitions_t<Metric, Dim> ivf_partitions;
         ivf_partitions.from_partition_ids(part_ids, num_partitions);
 
@@ -335,7 +335,7 @@ TEST_F(IVFPartitionsTest, APIFunctionality) {
         part_ids[i] = i % num_partitions;  // Round-robin assignment
     }
 
-    infra_dispatch(dataset_info(), ARTEA_METRIC_LAMBDA(void) {
+    build_infra_dispatch(dataset_info(), ARTEA_METRIC_LAMBDA(void) {
         ivf_partitions_t<Metric, Dim> ivf_partitions;
         ivf_partitions.from_partition_ids(part_ids, num_partitions);
 
@@ -369,8 +369,8 @@ int main(int argc, char** argv) {
         .help("Dataset name (kept for CLI consistency; the synthetic partition "
               "logic loads no vectors).");
     program.add_argument("--metric")
-        .default_value(std::string("euclidean_sqr"))
-        .help("Distance metric: 'euclidean_sqr', 'inner_product', or 'cosine'");
+        .default_value(std::string("euclidean"))
+        .help("Task metric: euclidean/l2 or euclidean_sqr/l2_sqr (build=L2, compact search=L2 squared), inner_product, cosine");
     program.add_argument("--dim")
         .default_value(128u).scan<'u', uint32_t>()
         .help("SIMD-padded dimension used to pick the compile-time <Metric, Dim> "

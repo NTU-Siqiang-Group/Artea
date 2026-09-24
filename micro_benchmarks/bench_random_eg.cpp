@@ -77,15 +77,15 @@ static void BM_RandomEG(benchmark::State& state) {
     const auto& base_vecs = provider.get_base_vecs();
     const vec_num_t num_vertices = provider.get_num_base_vecs();
 
-    infra_dispatch(provider.get_dataset_info(), ARTEA_METRIC_LAMBDA(void) {
+    build_infra_dispatch(provider.get_dataset_info(), ARTEA_METRIC_LAMBDA(void) {
         // Stateless functor: the dimension is a compile-time trait now.
-        dist_func_t<Metric, Dim> dist_func;
+        dist_func_t<Metric, Dim> build_dist;
         // Build the metric-dependent configs from raw scalars.
         conv_graph::pruning_config_t<Metric, Dim> pruning_config(1.0, 0.0);
         conv_graph::propagate_config_t<Metric, Dim> propagate_config(4, 14);
 
         // Create RandomEG instance
-        random_eg_t<Metric, Dim> random_eg(dist_func);
+        random_eg_t<Metric, Dim> random_eg(build_dist);
 
         for (auto _ : state) {
             // Create a new graph_index (included in timing)
@@ -127,8 +127,8 @@ int main(int argc, char** argv) {
         .help("Dataset name");
 
     program.add_argument("--metric")
-        .default_value(std::string("euclidean_sqr"))
-        .help("Distance metric: 'euclidean_sqr', 'inner_product', or 'cosine'");
+        .default_value(std::string("euclidean"))
+        .help("Task metric: euclidean/l2 or euclidean_sqr/l2_sqr (build=L2, compact search=L2 squared), inner_product, cosine");
 
     // Algorithm parameters
     program.add_argument("--max-nbrs")

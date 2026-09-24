@@ -55,8 +55,9 @@ using RGraphConfig = stacked_rgraph::RGraphConfig<IndexTraitsT>;
  *     updaters as the bare shift, so a unit-less @c shifted_coeffs grid
  *     stays comparable across datasets whose L0 distance scales differ
  *     by orders of magnitude (e.g. sift-1m raw vs gist-1m normalized).
- *     Distinct from @c rgraph_config.l0_rnet_radius, which sets the L0
- *     covering radius for r-net construction.
+ *     Use the same value as @c rgraph_config.l0_min_distance(), which
+ *     also sets the L1 covering radius after multiplication by
+ *     @c rnet_beta^(num_skip_levels + 1).
  *
  * @tparam IndexTraitsT The index traits type.
  */
@@ -74,10 +75,8 @@ struct PruningConfig {
      *                                that scales the shift term in
      *                                @c refine_layer. Default 1 keeps the
      *                                shift bare (no scaling). Pass the
-     *                                approximate min L0 pairwise distance
-     *                                (NOT @c l0_rnet_radius — that is
-     *                                geometrically the covering radius and
-     *                                serves a different purpose).
+     *                                approximate min L0 pairwise distance,
+     *                                matching @c RGraphConfig::l0_min_distance().
      */
     PruningConfig(
         ratio_t scale_coeffs,

@@ -47,7 +47,7 @@ uint32_t g_vec_dim = 0;
 static void BM_RandomVG_SmallSample(benchmark::State& state) {
     uint32_t result_size = std::max(100u, g_num_vecs / 100);
 
-    infra_dispatch(g_dataset_info, ARTEA_METRIC_LAMBDA(void) {
+    build_infra_dispatch(g_dataset_info, ARTEA_METRIC_LAMBDA(void) {
         // Stateless generator: the dimension is a compile-time trait now.
         random_vg_t<Metric, Dim> random_vg;
         for (auto _ : state) {
@@ -67,7 +67,7 @@ BENCHMARK(BM_RandomVG_SmallSample)->Unit(benchmark::kMillisecond);
 static void BM_RandomVG_MediumSample(benchmark::State& state) {
     uint32_t result_size = g_num_vecs / 10;
 
-    infra_dispatch(g_dataset_info, ARTEA_METRIC_LAMBDA(void) {
+    build_infra_dispatch(g_dataset_info, ARTEA_METRIC_LAMBDA(void) {
         random_vg_t<Metric, Dim> random_vg;
         for (auto _ : state) {
             auto result = random_vg.generate(*g_vecs_data, result_size);
@@ -86,7 +86,7 @@ BENCHMARK(BM_RandomVG_MediumSample)->Unit(benchmark::kMillisecond);
 static void BM_RandomVG_LargeSample(benchmark::State& state) {
     uint32_t result_size = g_num_vecs / 2;
 
-    infra_dispatch(g_dataset_info, ARTEA_METRIC_LAMBDA(void) {
+    build_infra_dispatch(g_dataset_info, ARTEA_METRIC_LAMBDA(void) {
         random_vg_t<Metric, Dim> random_vg;
         for (auto _ : state) {
             auto result = random_vg.generate(*g_vecs_data, result_size);
@@ -105,7 +105,7 @@ BENCHMARK(BM_RandomVG_LargeSample)->Unit(benchmark::kMillisecond);
 static void BM_RandomVG_VeryLargeSample(benchmark::State& state) {
     uint32_t result_size = static_cast<uint32_t>(g_num_vecs * 0.9);
 
-    infra_dispatch(g_dataset_info, ARTEA_METRIC_LAMBDA(void) {
+    build_infra_dispatch(g_dataset_info, ARTEA_METRIC_LAMBDA(void) {
         random_vg_t<Metric, Dim> random_vg;
         for (auto _ : state) {
             auto result = random_vg.generate(*g_vecs_data, result_size);
@@ -124,7 +124,7 @@ BENCHMARK(BM_RandomVG_VeryLargeSample)->Unit(benchmark::kMillisecond);
 static void BM_RandomVG_VaryingSizes(benchmark::State& state) {
     uint32_t result_size = state.range(0);
 
-    infra_dispatch(g_dataset_info, ARTEA_METRIC_LAMBDA(void) {
+    build_infra_dispatch(g_dataset_info, ARTEA_METRIC_LAMBDA(void) {
         random_vg_t<Metric, Dim> random_vg;
         for (auto _ : state) {
             auto result = random_vg.generate(*g_vecs_data, result_size);
@@ -206,8 +206,8 @@ int main(int argc, char** argv) {
         .help("Name of the dataset to use")
         .default_value(std::string("sift-1m"));
     program.add_argument("--metric")
-        .help("Distance metric: 'euclidean_sqr', 'inner_product', or 'cosine'")
-        .default_value(std::string("euclidean_sqr"));
+        .help("Task metric: euclidean/l2 or euclidean_sqr/l2_sqr (build=L2, compact search=L2 squared), inner_product, cosine")
+        .default_value(std::string("euclidean"));
 
     try {
         program.parse_args(argc, argv);

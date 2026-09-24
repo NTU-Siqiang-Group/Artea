@@ -89,7 +89,7 @@ public:
         // is metric/dim-independent and stays out here.
         const auto dataset_info = DatasetInfra{parse_metric(g_config.metric), base_vecs.get_vec_dim()};
 
-        infra_dispatch(dataset_info, ARTEA_METRIC_LAMBDA(void) {
+        build_infra_dispatch(dataset_info, ARTEA_METRIC_LAMBDA(void) {
             knn_graph::propagate_config_t<Metric, Dim> knn_propagate_config(
                 g_config.knn_num_build_loops,
                 g_config.knn_num_triu_iters,
@@ -153,7 +153,7 @@ int main(int argc, char** argv) {
     argparse::ArgumentParser program("test_knn2symknn");
     program.add_argument("-c", "--config").default_value(artea::default_dataset_config_path());
     program.add_argument("-d", "--dataset").default_value(std::string("sift-1m"));
-    program.add_argument("--metric").default_value(std::string("euclidean_sqr")).help("Distance metric: 'euclidean_sqr', 'inner_product', or 'cosine'");
+    program.add_argument("--metric").default_value(std::string("euclidean")).help("Task metric: euclidean/l2 or euclidean_sqr/l2_sqr (build=L2, compact search=L2 squared), inner_product, cosine");
 
     // KNN graph params
     program.add_argument("--knn-max-nbr-size").default_value(96u).scan<'u', uint32_t>();

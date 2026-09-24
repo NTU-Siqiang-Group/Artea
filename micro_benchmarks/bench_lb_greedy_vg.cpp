@@ -71,7 +71,7 @@ public:
 
         // Resolve BOTH compile-time axes: the metric from the --metric input,
         // the padded dim from the loaded dataset. The dataset stays metric/dim-
-        // independent; the stateless dist_func and the lb_greedy_vg_t are
+        // independent; the stateless build_dist and the lb_greedy_vg_t are
         // rebuilt inside each dispatched <Metric, Dim> body.
         dataset_info_ = DatasetInfra{parse_metric(g_config.metric), dim_};
     }
@@ -96,10 +96,10 @@ static void BM_LBGreedyVG(benchmark::State& state) {
     // the counters below can be reported outside the dispatched <Metric, Dim> body.
     std::size_t final_result_size = 0;
 
-    infra_dispatch(provider.get_dataset_info(), ARTEA_METRIC_LAMBDA(void) {
+    build_infra_dispatch(provider.get_dataset_info(), ARTEA_METRIC_LAMBDA(void) {
         // Stateless functor: the dimension is a compile-time trait now.
-        dist_func_t<Metric, Dim> dist_func;
-        lb_greedy_vg_t<Metric, Dim> generator(dist_func);
+        dist_func_t<Metric, Dim> build_dist;
+        lb_greedy_vg_t<Metric, Dim> generator(build_dist);
 
         for (auto _ : state) {
             auto result = generator.generate(
@@ -151,8 +151,8 @@ int main(int argc, char** argv) {
         .help("Dataset name");
 
     program.add_argument("--metric")
-        .default_value(std::string("euclidean_sqr"))
-        .help("Distance metric: 'euclidean_sqr', 'inner_product', or 'cosine'");
+        .default_value(std::string("euclidean"))
+        .help("Task metric: euclidean/l2 or euclidean_sqr/l2_sqr (build=L2, compact search=L2 squared), inner_product, cosine");
 
     // Algorithm parameters
     program.add_argument("-r", "--min-radius")
@@ -214,7 +214,7 @@ int main(int argc, char** argv) {
 
     // Compute term_thresh (compute_term_thresh is a static method on the now
     // metric-dependent lb_greedy_vg_t, so resolve <Metric, Dim> via dispatch).
-    uint32_t computed_term_thresh = infra_dispatch(
+    uint32_t computed_term_thresh = build_infra_dispatch(
         DataProvider::instance().get_dataset_info(),
         ARTEA_METRIC_LAMBDA(uint32_t) {
             return lb_greedy_vg_t<Metric, Dim>::compute_term_thresh(

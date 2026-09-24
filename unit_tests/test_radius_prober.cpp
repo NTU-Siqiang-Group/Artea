@@ -65,7 +65,7 @@ public:
 
         ARTEA_INFO("Building KNN graph...");
         auto t0 = std::chrono::high_resolution_clock::now();
-        infra_dispatch(dataset_info_, ARTEA_METRIC_LAMBDA(void) {
+        build_infra_dispatch(dataset_info_, ARTEA_METRIC_LAMBDA(void) {
             knn_graph::propagate_config_t<Metric, Dim> propagate_config(5, 12, g_config.prefill_ratio, 1);
             knn_graph_ = std::make_unique<knn_index_t>(std::move(
                 knn_graph::factory_t<Metric, Dim>::construct_graph(
@@ -121,20 +121,20 @@ TEST_F(RadiusProberTest, CompareWithBruteforce) {
     ARTEA_INFO(fmt::format("RadiusProber min NN distance: {:.6f} (probe time: {:.2f} ms)", probe_result.radius, probe_time_ms));
 
     // --- Steps 2 & 3: BruteforceRouter (metric-dependent) + the per-sample
-    // comparison both need the stateless dist_func, so run them behind dispatch.
+    // comparison both need the stateless build_dist, so run them behind dispatch.
     const uint32_t num_samples = std::min(g_config.num_samples, static_cast<uint32_t>(num_vertices));
     double total_relative_error = 0.0;
     uint32_t valid_count = 0;
     uint32_t exact_match_count = 0;
     uint32_t duplicate_vec_count = 0;
-    infra_dispatch(provider.get_dataset_info(), ARTEA_METRIC_LAMBDA(void) {
+    build_infra_dispatch(provider.get_dataset_info(), ARTEA_METRIC_LAMBDA(void) {
         // Stateless functor: the dimension is a compile-time trait now.
-        dist_func_t<Metric, Dim> dist_func;
+        dist_func_t<Metric, Dim> build_dist;
 
         // --- Step 2: Compute exact NN distances via BruteforceRouter ---
         // topk=3: need extra slots because bruteforce includes self (distance=0),
         // and there may also be a duplicate vector (distance=0) occupying another slot.
-        bruteforce_router_t<Metric, Dim> bf_router(base_vecs, dist_func, 3);
+        bruteforce_router_t<Metric, Dim> bf_router(base_vecs, build_dist, 3);
         bf_router.initialize();
 
         // Uniformly sample vertices with stride = num_vertices / num_samples.
@@ -167,7 +167,7 @@ TEST_F(RadiusProberTest, CompareWithBruteforce) {
             // Verify by recomputing distance between the two different vertex IDs.
             if (bf_nn_dist == 0.0f) {
                 vertex_id_t bf_nn_id = results_cache[i];
-                distance_t recomputed = dist_func(base_vecs.get(vid), base_vecs.get(bf_nn_id));
+                distance_t recomputed = build_dist(base_vecs.get(vid), base_vecs.get(bf_nn_id));
                 ARTEA_INFO(fmt::format("  [duplicate] vertex {}: bf_nn_id={}, recomputed_dist={:.6f}",
                     vid, bf_nn_id, recomputed));
                 duplicate_vec_count++;
@@ -257,8 +257,8 @@ int main(int argc, char** argv) {
     argparse::ArgumentParser program("test_radius_prober");
     program.add_argument("-c", "--config").default_value(artea::default_dataset_config_path());
     program.add_argument("-d", "--dataset").default_value(std::string("sift-1m"));
-    program.add_argument("--metric").default_value(std::string("euclidean_sqr"))
-        .help("Distance metric: 'euclidean_sqr', 'inner_product', or 'cosine'");
+    program.add_argument("--metric").default_value(std::string("euclidean"))
+        .help("Task metric: euclidean/l2 or euclidean_sqr/l2_sqr (build=L2, compact search=L2 squared), inner_product, cosine");
     program.add_argument("--max-nbr-size").default_value(96u).scan<'u', uint32_t>();
     program.add_argument("--prefill-ratio").default_value(0.34f).scan<'g', float>();
     program.add_argument("--num-samples").default_value(100u).scan<'u', uint32_t>();

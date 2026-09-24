@@ -73,7 +73,7 @@ struct IndexTraits : virtual public BaseTraitsT {
      *         for a top bucket to survive @c HierarchicalGraphCompactor
      *         trimming. Consumed by @c stacked_rgraph::RGraphConfig and
      *         @c HierarchicalGraphCompactor. */
-    static constexpr typename BaseTraitsT::vertex_num_t min_layer_cap = 512;
+    static constexpr typename BaseTraitsT::vertex_num_t min_layer_cap = 32;
 
     /** @brief Number of complete vertex slots in each dynamic arena block. */
     static constexpr std::size_t slots_per_block = 2048;

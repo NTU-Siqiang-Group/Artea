@@ -55,12 +55,13 @@ struct TestConfig {
 
     // StackedRGraph parameters
     float    rnet_beta;
-    bool     l0_radius_provided;
-    float    l0_rnet_radius;
+    uint32_t    num_skip_levels;
+    bool     l0_min_distance_provided;
+    float    l0_min_distance;
     uint32_t ul_max_nbr_size;
     uint32_t bl_max_nbr_size;
 
-    // L0-radius auto-probe
+    // L0 minimum-distance auto-probe
     uint32_t probe_num_samples;
     float    probe_quantile;
 
@@ -102,41 +103,41 @@ public:
         // Resolve BOTH compile-time axes: metric from the --metric input,
         // padded dim from the loaded dataset. The dataset and the probed L0
         // radius (a plain float) are metric/dim-independent; only the
-        // dist_func / prober run behind <Metric, Dim>.
+        // build_dist / prober run behind <Metric, Dim>.
         _dataset_info = DatasetInfra{parse_metric(g_config.metric), base_vecs.get_vec_dim()};
 
-        if (g_config.l0_radius_provided) {
-            _l0_radius = g_config.l0_rnet_radius;
+        if (g_config.l0_min_distance_provided) {
+            _l0_min_distance = g_config.l0_min_distance;
             ARTEA_INFO(fmt::format(
-                "Using user-provided L0 rnet_radius = {:.6f}", _l0_radius));
+                "Using user-provided l0_min_distance = {:.6f}", _l0_min_distance));
         } else {
-            infra_dispatch(_dataset_info, ARTEA_METRIC_LAMBDA(void) {
+            build_infra_dispatch(_dataset_info, ARTEA_METRIC_LAMBDA(void) {
                 // Stateless functor: the dimension is a compile-time trait now.
-                dist_func_t<Metric, Dim> dist_func;
-                dataset_prober_t<Metric, Dim> prober(base_vecs, dist_func);
+                dist_func_t<Metric, Dim> build_dist;
+                dataset_prober_t<Metric, Dim> prober(base_vecs, build_dist);
                 const std::vector<float> quantiles = { g_config.probe_quantile };
                 ARTEA_INFO(fmt::format(
-                    "Probing L0 rnet_radius ({}th pct, {} samples)...",
+                    "Probing l0_min_distance ({}th pct, {} samples)...",
                     static_cast<int>(g_config.probe_quantile * 100.0f),
                     g_config.probe_num_samples));
                 auto result = prober.probe(quantiles, g_config.probe_num_samples);
-                _l0_radius = static_cast<float>(result.table[0][0]);
+                _l0_min_distance = static_cast<float>(result.table[0][0]);
             });
             ARTEA_INFO(fmt::format(
-                "Auto-probed L0 rnet_radius = {:.6f}", _l0_radius));
+                "Auto-probed l0_min_distance = {:.6f}", _l0_min_distance));
         }
     }
 
     auto get_dataset()      -> vector_dataset_t& { return *_dataset; }
     auto get_dataset_info() const -> DatasetInfra { return _dataset_info; }
-    auto get_l0_radius() const -> float          { return _l0_radius; }
+    auto get_l0_min_distance() const -> float          { return _l0_min_distance; }
 
 private:
     DataProvider() = default;
 
     std::unique_ptr<vector_dataset_t> _dataset;
     DatasetInfra                      _dataset_info{};
-    float                             _l0_radius = 0.0f;
+    float                             _l0_min_distance = 0.0f;
 };
 
 // ============================================================
@@ -152,12 +153,13 @@ protected:
         auto& provider = DataProvider::instance();
         const auto& base_vecs = provider.get_dataset().get_base_vecs();
         // Stateless functor: the dimension is a compile-time trait now.
-        dist_func_t<Metric, Dim> dist_func;
+        dist_func_t<Metric, Dim> build_dist;
 
         const vertex_num_t total_vertices =
             static_cast<vertex_num_t>(base_vecs.get_num_vecs());
         stacked_rgraph::rgraph_config_t<Metric, Dim> rgraph_config(
-            g_config.rnet_beta, provider.get_l0_radius(),
+            g_config.rnet_beta, g_config.num_skip_levels,
+            provider.get_l0_min_distance(),
             static_cast<vertex_num_t>(g_config.search_nn_qs),
             static_cast<vertex_num_t>(g_config.ul_select_nbrs_qs),
             static_cast<vertex_num_t>(g_config.bl_select_nbrs_qs),
@@ -177,7 +179,7 @@ protected:
 
         auto t0 = std::chrono::high_resolution_clock::now();
         stacked_rgraph::factory_t<Metric, Dim>::add_vertices(
-            *graph, std::move(owned_batch), dist_func, insert_on_L0);
+            *graph, std::move(owned_batch), build_dist, insert_on_L0);
         auto t1 = std::chrono::high_resolution_clock::now();
         const int64_t ms =
             std::chrono::duration_cast<std::chrono::milliseconds>(t1 - t0).count();
@@ -254,18 +256,19 @@ protected:
 
     static void SetUpTestSuite() {
         ARTEA_INFO(fmt::format(
-            "Building StackedRGraph: beta={:.3f}, L0_radius={:.6f}, "
+            "Building StackedRGraph: beta={:.3f}, num_skip_levels={}, l0_min_distance={:.6f}, "
             "ul_max_nbr_size={}, bl_max_nbr_size={}, search_nn_qs={}, "
             "ul_select_nbrs_qs={}, bl_select_nbrs_qs={}, "
             "scale_coeffs={:.3f}",
             g_config.rnet_beta,
-            DataProvider::instance().get_l0_radius(),
+            g_config.num_skip_levels,
+            DataProvider::instance().get_l0_min_distance(),
             g_config.ul_max_nbr_size, g_config.bl_max_nbr_size,
             g_config.search_nn_qs,
             g_config.ul_select_nbrs_qs, g_config.bl_select_nbrs_qs,
             g_config.scale_coeffs));
 
-        infra_dispatch(DataProvider::instance().get_dataset_info(), ARTEA_METRIC_LAMBDA(void) {
+        build_infra_dispatch(DataProvider::instance().get_dataset_info(), ARTEA_METRIC_LAMBDA(void) {
                 ARTEA_INFO("--- Building with insert_on_L0=false ---");
                 std::tie(_graph_no_l0, _build_ms_no_l0) =
                     build_graph<Metric, Dim>(/*insert_on_L0=*/false);
@@ -332,16 +335,18 @@ int main(int argc, char** argv) {
         .default_value(std::string("sift-1m"))
         .help("Dataset name (as listed in datasets.json)");
     program.add_argument("--metric")
-        .default_value(std::string("euclidean_sqr"))
-        .help("Distance metric: 'euclidean_sqr', 'inner_product', or 'cosine'");
+        .default_value(std::string("euclidean"))
+        .help("Task metric: euclidean/l2 or euclidean_sqr/l2_sqr (build=L2, compact search=L2 squared), inner_product, cosine");
 
     program.add_argument("--beta")
         .default_value(2.0f).scan<'g', float>()
-        .help("R-net radius growth factor between layers");
-    program.add_argument("--l0-radius")
+        .help("R-net radius growth factor from L1 upward");
+    program.add_argument("--num-skip-levels")
+        .default_value(0u).scan<'u', uint32_t>()
+        .help("Skipped geometric levels: L1 = l0_min_distance * rnet_beta^(num_skip_levels + 1)");
+    program.add_argument("--l0-min-distance")
         .default_value(-1.0f).scan<'g', float>()
-        .help("L0 rnet_radius (covering radius at the bottom layer). "
-              "L1 and higher radii are derived as L0 * beta^h. "
+        .help("Characteristic L0 minimum distance in build-distance units. "
               "If negative, auto-probe via DatasetProber.");
     program.add_argument("--ul-max-nbr-size")
         .default_value(32u).scan<'u', uint32_t>()
@@ -380,6 +385,7 @@ int main(int argc, char** argv) {
     g_config.dataset_name       = program.get<std::string>("--dataset");
     g_config.metric             = program.get<std::string>("--metric");
     g_config.rnet_beta          = program.get<float>("--beta");
+    g_config.num_skip_levels         = program.get<uint32_t>("--num-skip-levels");
     g_config.ul_max_nbr_size    = program.get<uint32_t>("--ul-max-nbr-size");
     g_config.bl_max_nbr_size    = program.get<uint32_t>("--bl-max-nbr-size");
     g_config.probe_num_samples  = program.get<uint32_t>("--probe-num-samples");
@@ -389,18 +395,19 @@ int main(int argc, char** argv) {
     g_config.bl_select_nbrs_qs  = program.get<uint32_t>("--bl-select-nbrs-qs");
     g_config.scale_coeffs       = program.get<float>("--scale-coeffs");
 
-    const float l0_radius_arg = program.get<float>("--l0-radius");
-    g_config.l0_radius_provided = (l0_radius_arg >= 0.0f);
-    g_config.l0_rnet_radius     = l0_radius_arg;
+    const float l0_min_distance_arg = program.get<float>("--l0-min-distance");
+    g_config.l0_min_distance_provided = (l0_min_distance_arg >= 0.0f);
+    g_config.l0_min_distance     = l0_min_distance_arg;
 
     std::cout << "\n=== Test Configuration ===\n";
     std::cout << "Dataset:        " << g_config.dataset_name   << "\n";
     std::cout << "rnet_beta:      " << g_config.rnet_beta      << "\n";
-    if (g_config.l0_radius_provided) {
-        std::cout << "L0 radius:      " << g_config.l0_rnet_radius
+    std::cout << "num_skip_levels:     " << g_config.num_skip_levels << "\n";
+    if (g_config.l0_min_distance_provided) {
+        std::cout << "L0 minimum distance:      " << g_config.l0_min_distance
                   << " (user-provided)\n";
     } else {
-        std::cout << "L0 radius:      auto-probe ("
+        std::cout << "L0 minimum distance:      auto-probe ("
                   << static_cast<int>(g_config.probe_quantile * 100.0f)
                   << "th pct, " << g_config.probe_num_samples
                   << " samples)\n";

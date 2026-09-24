@@ -105,7 +105,7 @@ public:
                 g_config.queue_start, g_config.queue_end, g_config.queue_step));
         }
 
-        infra_dispatch(dataset_info_, ARTEA_METRIC_LAMBDA(void) {
+        build_infra_dispatch(dataset_info_, ARTEA_METRIC_LAMBDA(void) {
             conv_graph::pruning_config_t<Metric, Dim> pruning_config(
                 g_config.scale_coeffs, g_config.shifted_coeffs);
             conv_graph::propagate_config_t<Metric, Dim> propagate_config(
@@ -189,16 +189,16 @@ TEST_F(ConvGraphTest, QueryRecall) {
         g_config.queue_start, g_config.queue_end, g_config.queue_step));
     ARTEA_INFO("");
 
-    infra_dispatch(provider.get_dataset_info(), ARTEA_METRIC_LAMBDA(void) {
+    search_infra_dispatch(provider.get_dataset_info(), ARTEA_METRIC_LAMBDA(void) {
         // Stateless functor: the dimension is a compile-time trait now.
-        dist_func_t<Metric, Dim> dist_func;
+        dist_func_t<Metric, Dim> search_dist;
         recall_estimator_t<Metric, Dim> recall_estimator;
 
         for (uint32_t queue_size = g_config.queue_start; queue_size <= g_config.queue_end; queue_size += g_config.queue_step) {
             // Create single-layer router with current queue size
             single_layer_router_t<Metric, Dim> router(
                 base_vecs,
-                dist_func,
+                search_dist,
                 g_config.topk,
                 queue_size
             );
@@ -254,7 +254,7 @@ int main(int argc, char** argv) {
     argparse::ArgumentParser program("test_conv_graph");
     program.add_argument("-c", "--config").default_value(artea::default_dataset_config_path());
     program.add_argument("-d", "--dataset").default_value(std::string("sift-1m"));
-    program.add_argument("--metric").default_value(std::string("euclidean_sqr")).help("Distance metric: 'euclidean_sqr', 'inner_product', or 'cosine'");
+    program.add_argument("--metric").default_value(std::string("euclidean")).help("Task metric: euclidean/l2 or euclidean_sqr/l2_sqr (build=L2, compact search=L2 squared), inner_product, cosine");
     program.add_argument("--max-nbr-size").default_value(96u).scan<'u', uint32_t>();
     program.add_argument("--extracted-nbr-size").default_value(64u).scan<'u', uint32_t>();
     program.add_argument("--scale-coeffs").default_value(1.1f).scan<'g', float>();

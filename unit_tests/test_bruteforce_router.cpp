@@ -46,7 +46,7 @@ struct TestConfig {
 } g_config;
 
 // Singleton DataProvider to load dataset once. The dataset is metric/dim
-// independent and lives here; the stateless dist_func is rebuilt inside each
+// independent and lives here; the stateless search_dist is rebuilt inside each
 // dispatched <Metric, Dim> body.
 class DataProvider {
 public:
@@ -83,13 +83,13 @@ TEST_F(BruteforceCorrectnessTest, VerifyRecallAccuracy) {
     const auto& query_vecs = dataset.get_query_vecs();
     const auto& gt_vecs = dataset.get_gt_vecs();
 
-    infra_dispatch(provider.get_dataset_info(), ARTEA_METRIC_LAMBDA(void) {
+    search_infra_dispatch(provider.get_dataset_info(), ARTEA_METRIC_LAMBDA(void) {
         // Stateless functor: the dimension is a compile-time trait now.
-        dist_func_t<Metric, Dim> dist_func;
+        dist_func_t<Metric, Dim> search_dist;
 
         // 1. Initialize Artea Bruteforce Router with topk=1
         const uint32_t topk = 1;
-        bruteforce_router_t<Metric, Dim> router(base_vecs, dist_func, topk);
+        bruteforce_router_t<Metric, Dim> router(base_vecs, search_dist, topk);
 
         // 2. Execute Batch Query
         // Returns knn_results_t flat array of num_queries * topk result entries
@@ -116,9 +116,9 @@ TEST(BruteforceRouterTest, BatchTopKQuery) {
     const auto& query_vecs = dataset.get_query_vecs();
     const auto& gt_vecs = dataset.get_gt_vecs();
 
-    infra_dispatch(data.get_dataset_info(), ARTEA_METRIC_LAMBDA(void) {
+    search_infra_dispatch(data.get_dataset_info(), ARTEA_METRIC_LAMBDA(void) {
         // Stateless functor: the dimension is a compile-time trait now.
-        dist_func_t<Metric, Dim> dist_func;
+        dist_func_t<Metric, Dim> search_dist;
 
         // Test with different k values
         std::vector<uint32_t> k_values = {1, 5, 10, 20};
@@ -127,7 +127,7 @@ TEST(BruteforceRouterTest, BatchTopKQuery) {
             ARTEA_INFO(fmt::format("Testing batch top-{} query", k));
 
             // Create router with specific topk value
-            bruteforce_router_t<Metric, Dim> router(base_vecs, dist_func, k);
+            bruteforce_router_t<Metric, Dim> router(base_vecs, search_dist, k);
             router.initialize();
 
             // Determine number of queries to test
@@ -169,7 +169,7 @@ int main(int argc, char** argv) {
 
     program.add_argument("-c", "--config").default_value(artea::default_dataset_config_path());
     program.add_argument("-d", "--dataset").default_value(std::string("sift-1m"));
-    program.add_argument("--metric").default_value(std::string("euclidean_sqr")).help("Distance metric: 'euclidean_sqr', 'inner_product', or 'cosine'");
+    program.add_argument("--metric").default_value(std::string("euclidean")).help("Task metric: euclidean/l2 or euclidean_sqr/l2_sqr (build=L2, compact search=L2 squared), inner_product, cosine");
     program.add_argument("-s", "--samples").default_value(100).scan<'i', int>().help("Number of samples (queries) to test [Ignored for full batch query]");
     program.add_argument("-v", "--verbose").default_value(false).implicit_value(true);
 

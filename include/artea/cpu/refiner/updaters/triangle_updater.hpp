@@ -103,8 +103,8 @@ public:
      *
      * Algorithm:
      * 1. The first (closest) neighbor is always retained.
-     * 2. For each subsequent @c ori_nbr, iterate retained neighbors;
-     *    per retained @c r compute one distance and check both
+     * 2. For each subsequent @c ori_nbr, iterate retained neighbors from
+     *    farthest to closest to the pivot; compute one distance and check both
      *    thresholds: emit a recommendation log on soft conflict,
      *    early-return @c rejected on a pruning conflict.
      * 3. Continue iterating even after @c max_nbr_size is reached so
@@ -175,8 +175,8 @@ private:
      *          - @c recommend_threshold = @c checking_dist
      *          - @c prune_threshold     = @c checking_dist * inv_scale - shift
      *
-     *        Iterates @p retained_nbrs once. At most one recommendation
-     *        target is reported per call — the retained neighbor with
+     *        Iterates @p retained_nbrs in descending pivot-distance order.
+     *        At most one recommendation target is reported per call — the retained neighbor with
      *        the smallest @c dist_to_retained among those crossing
      *        @c recommend_threshold (up to the point the scan stops).
      *        Any retained with @c dist_to_retained < prune_threshold
@@ -213,12 +213,13 @@ private:
         nbr_t recommend_to = nbr_t::make_invalid_nbr();
         bool  will_prune   = false;
 
-        for (vertex_num_t i = 0; i < retained_nbrs.size(); ++i) {
-            if (checking_nbr.is_old() && retained_nbrs[i].is_old()) {
+        // retained_nbrs is sorted by ascending distance to the pivot.
+        for (auto it = retained_nbrs.rbegin(); it != retained_nbrs.rend(); ++it) {
+            const nbr_t& retained_nbr = *it;
+            if (checking_nbr.is_old() && retained_nbr.is_old()) {
                 continue;
             }
 
-            const nbr_t& retained_nbr = retained_nbrs[i];
             const vec_ele_t* retained_vec = this->_vecs_data.get(retained_nbr.get_vid());
             const distance_t dist_to_retained = this->_dist_func(checking_vec, retained_vec);
 

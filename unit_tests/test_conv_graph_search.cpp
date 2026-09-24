@@ -98,7 +98,7 @@ public:
         // independent, so only the build runs behind <Metric, Dim>.
         dataset_info_ = DatasetInfra{parse_metric(g_config.metric), base_vecs.get_vec_dim()};
 
-        infra_dispatch(dataset_info_, ARTEA_METRIC_LAMBDA(void) {
+        build_infra_dispatch(dataset_info_, ARTEA_METRIC_LAMBDA(void) {
             // Build convergent graph
             ARTEA_INFO("Building convergent graph...");
             layer_config_t layer_cfg(16);
@@ -148,12 +148,12 @@ TEST_F(ConvGraphSearchTest, SearchModeBatchQuery) {
     const auto& base_vecs  = p.get_dataset().get_base_vecs();
     const auto& query_vecs = p.get_dataset().get_query_vecs();
 
-    infra_dispatch(p.get_dataset_info(), ARTEA_METRIC_LAMBDA(void) {
+    search_infra_dispatch(p.get_dataset_info(), ARTEA_METRIC_LAMBDA(void) {
         // Stateless functor: the dimension is a compile-time trait now.
-        dist_func_t<Metric, Dim> dist_func;
+        dist_func_t<Metric, Dim> search_dist;
 
         single_layer_router_t<Metric, Dim> router(
-            base_vecs, dist_func,
+            base_vecs, search_dist,
             g_config.topk, g_config.queue_size
         );
         router.initialize();
@@ -195,12 +195,12 @@ TEST_F(ConvGraphSearchTest, SearchModeParallelSingleQuery) {
     const auto& base_vecs  = p.get_dataset().get_base_vecs();
     const auto& query_vecs = p.get_dataset().get_query_vecs();
 
-    infra_dispatch(p.get_dataset_info(), ARTEA_METRIC_LAMBDA(void) {
+    search_infra_dispatch(p.get_dataset_info(), ARTEA_METRIC_LAMBDA(void) {
         // Stateless functor: the dimension is a compile-time trait now.
-        dist_func_t<Metric, Dim> dist_func;
+        dist_func_t<Metric, Dim> search_dist;
 
         single_layer_router_t<Metric, Dim> router(
-            base_vecs, dist_func,
+            base_vecs, search_dist,
             g_config.topk, g_config.queue_size
         );
         router.initialize();
@@ -267,12 +267,12 @@ TEST_F(ConvGraphSearchTest, ConstructModeBatchQuery) {
     const auto& base_vecs  = p.get_dataset().get_base_vecs();
     const auto& query_vecs = p.get_dataset().get_query_vecs();
 
-    infra_dispatch(p.get_dataset_info(), ARTEA_METRIC_LAMBDA(void) {
+    build_infra_dispatch(p.get_dataset_info(), ARTEA_METRIC_LAMBDA(void) {
         // Stateless functor: the dimension is a compile-time trait now.
-        dist_func_t<Metric, Dim> dist_func;
+        dist_func_t<Metric, Dim> build_dist;
 
         single_layer_router_t<Metric, Dim> router(
-            base_vecs, dist_func,
+            base_vecs, build_dist,
             g_config.topk, g_config.queue_size
         );
         router.initialize();
@@ -315,7 +315,7 @@ int main(int argc, char** argv) {
     argparse::ArgumentParser program("test_conv_graph_search");
     program.add_argument("-c", "--config").default_value(artea::default_dataset_config_path());
     program.add_argument("-d", "--dataset").default_value(std::string("sift-1m"));
-    program.add_argument("--metric").default_value(std::string("euclidean_sqr")).help("Distance metric: 'euclidean_sqr', 'inner_product', or 'cosine'");
+    program.add_argument("--metric").default_value(std::string("euclidean")).help("Task metric: euclidean/l2 or euclidean_sqr/l2_sqr (build=L2, compact search=L2 squared), inner_product, cosine");
     program.add_argument("-k", "--topk").default_value(20u).scan<'u', uint32_t>();
     program.add_argument("--candidate-queue-size").default_value(80u).scan<'u', uint32_t>();
     program.add_argument("--extracted-nbr-size").default_value(16u).scan<'u', uint32_t>();

@@ -78,7 +78,7 @@ public:
         // only the KNN build + MIS run behind <Metric, Dim>.
         DatasetInfra dataset_info{parse_metric(g_config.metric), base_vecs.get_vec_dim()};
 
-        infra_dispatch(dataset_info, ARTEA_METRIC_LAMBDA(void) {
+        build_infra_dispatch(dataset_info, ARTEA_METRIC_LAMBDA(void) {
             // Build KNN graph
             layer_config_t layer_config(g_config.max_nbr_size);
             knn_graph::propagate_config_t<Metric, Dim> propagate_config(5, 12, g_config.prefill_ratio, 1,
@@ -299,8 +299,8 @@ int main(int argc, char** argv) {
     argparse::ArgumentParser program("test_graph_mis_vg");
     program.add_argument("-c", "--config").default_value(artea::default_dataset_config_path());
     program.add_argument("-d", "--dataset").default_value(std::string("sift-1m"));
-    program.add_argument("--metric").default_value(std::string("euclidean_sqr"))
-        .help("Distance metric: 'euclidean_sqr', 'inner_product', or 'cosine'");
+    program.add_argument("--metric").default_value(std::string("euclidean"))
+        .help("Task metric: euclidean/l2 or euclidean_sqr/l2_sqr (build=L2, compact search=L2 squared), inner_product, cosine");
     program.add_argument("--max-nbr-size").default_value(96u).scan<'u', uint32_t>();
     program.add_argument("--prefill-ratio").default_value(0.34f).scan<'g', float>();
     program.add_argument("--routing-topk").default_value(64u).scan<'u', uint32_t>()

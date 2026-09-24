@@ -358,13 +358,13 @@ public:
         // L0-only shift policy: apply @c pruning_config.shifted_coeffs()
         // on the bottom layer only; force shift to 0 at every upper
         // layer. Upper layers' inter-vertex distances are already spread
-        // out by the r-net geometry (R_h = R_0 * beta^h), and applying
+        // out by the r-net geometry (R_h = R_1 * beta^(h - 1)), and applying
         // the shift there was empirically over-pruning. Scale coefficient
         // still applies uniformly at every layer; only the shift is gated.
         //
         // The L0 shift is scaled by @c l0_min_distance — a per-dataset
-        // characteristic L0 distance, distinct from @c l0_rnet_radius
-        // (the r-net L0 covering radius). This lets a single unit-less
+        // characteristic L0 distance also used with @c num_skip_levels to
+        // derive the L1 covering radius. This lets a single unit-less
         // @c shifted_coeffs grid stay comparable across datasets whose
         // L0 distance scales differ by orders of magnitude. The scaled
         // value is folded into @c effective_shift here so the updaters
@@ -399,8 +399,9 @@ public:
         // /** ------------------------------------------------------------------------- ***/
 
         for (iter_t routing_loop = 0; routing_loop < propagate_config.num_routing_loops(); ++routing_loop) {
-            propagate_engine.next(routing_updater).next(pruning_updater)
-                            .next(reverse_updater).next(arc_updater);
+            propagate_engine.next(routing_updater).next(pruning_updater);
+            if (routing_loop != propagate_config.num_routing_loops() - 1)
+                propagate_engine.next(reverse_updater).next(arc_updater);
         }
 
         // ---- Step 4: write refined edges back ----

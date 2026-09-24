@@ -69,10 +69,10 @@ public:
         // Initialize flat graph with random edges
         ARTEA_INFO("Initializing descent graph with random edges...");
         graph_ = std::make_unique<refining_graph_t>(base_vecs_, g_config.layer_config);
-        infra_dispatch(dataset_info_, ARTEA_METRIC_LAMBDA(void) {
+        build_infra_dispatch(dataset_info_, ARTEA_METRIC_LAMBDA(void) {
             // Stateless functor: the dimension is a compile-time trait now.
-            dist_func_t<Metric, Dim> dist_func;
-            random_eg_t<Metric, Dim> random_eg(dist_func);
+            dist_func_t<Metric, Dim> build_dist;
+            random_eg_t<Metric, Dim> random_eg(build_dist);
             random_eg.generate(*graph_, static_cast<vec_num_t>(g_config.layer_config.max_nbr_size() * g_config.prefill_ratio));
         });
         ARTEA_INFO("Descent graph initialization complete.");
@@ -120,12 +120,12 @@ static void BM_TriangleUpdater(benchmark::State& state) {
     // Set max_nbr_size on the flat graph
     graph.layer_config().max_nbr_size(g_config.layer_config.max_nbr_size());
 
-    infra_dispatch(provider.get_dataset_info(), ARTEA_METRIC_LAMBDA(void) {
+    build_infra_dispatch(provider.get_dataset_info(), ARTEA_METRIC_LAMBDA(void) {
         // Stateless functor: the dimension is a compile-time trait now.
-        dist_func_t<Metric, Dim> dist_func;
+        dist_func_t<Metric, Dim> build_dist;
 
         // Create PropagateEngine instance
-        propagate_engine_t<Metric, Dim> propagate_engine(dist_func);
+        propagate_engine_t<Metric, Dim> propagate_engine(build_dist);
         propagate_engine.set_graph(graph);
 
         // Create TriangleUpdater using the factory method (engine type is now
@@ -166,12 +166,12 @@ static void BM_TriangleUpdater_NoSS(benchmark::State& state) {
     // Set max_nbr_size on the flat graph
     graph.layer_config().max_nbr_size(g_config.layer_config.max_nbr_size());
 
-    infra_dispatch(provider.get_dataset_info(), ARTEA_METRIC_LAMBDA(void) {
+    build_infra_dispatch(provider.get_dataset_info(), ARTEA_METRIC_LAMBDA(void) {
         // Stateless functor: the dimension is a compile-time trait now.
-        dist_func_t<Metric, Dim> dist_func;
+        dist_func_t<Metric, Dim> build_dist;
 
         // Create PropagateEngine instance without selective scheduling
-        propagate_engine_t<Metric, Dim> propagate_engine(dist_func);
+        propagate_engine_t<Metric, Dim> propagate_engine(build_dist);
         propagate_engine.set_graph(graph);
 
         // Create TriangleUpdater using the factory method
@@ -208,12 +208,12 @@ static void BM_ReverseUpdater(benchmark::State& state) {
     refining_graph_t& graph = provider.get_graph();
     const vec_num_t num_vertices = provider.get_num_base_vecs();
 
-    infra_dispatch(provider.get_dataset_info(), ARTEA_METRIC_LAMBDA(void) {
+    build_infra_dispatch(provider.get_dataset_info(), ARTEA_METRIC_LAMBDA(void) {
         // Stateless functor: the dimension is a compile-time trait now.
-        dist_func_t<Metric, Dim> dist_func;
+        dist_func_t<Metric, Dim> build_dist;
 
         // Create PropagateEngine instance
-        propagate_engine_t<Metric, Dim> propagate_engine(dist_func);
+        propagate_engine_t<Metric, Dim> propagate_engine(build_dist);
         propagate_engine.set_graph(graph);
 
         // Create ReverseUpdater using the factory method
@@ -249,12 +249,12 @@ static void BM_ReverseUpdater_NoSS(benchmark::State& state) {
     refining_graph_t& graph = provider.get_graph();
     const vec_num_t num_vertices = provider.get_num_base_vecs();
 
-    infra_dispatch(provider.get_dataset_info(), ARTEA_METRIC_LAMBDA(void) {
+    build_infra_dispatch(provider.get_dataset_info(), ARTEA_METRIC_LAMBDA(void) {
         // Stateless functor: the dimension is a compile-time trait now.
-        dist_func_t<Metric, Dim> dist_func;
+        dist_func_t<Metric, Dim> build_dist;
 
         // Create PropagateEngine instance without selective scheduling
-        propagate_engine_t<Metric, Dim> propagate_engine(dist_func);
+        propagate_engine_t<Metric, Dim> propagate_engine(build_dist);
         propagate_engine.set_graph(graph);
 
         // Create ReverseUpdater using the factory method
@@ -290,12 +290,12 @@ static void BM_RandomUpdater(benchmark::State& state) {
     refining_graph_t& graph = provider.get_graph();
     const vec_num_t num_vertices = provider.get_num_base_vecs();
 
-    infra_dispatch(provider.get_dataset_info(), ARTEA_METRIC_LAMBDA(void) {
+    build_infra_dispatch(provider.get_dataset_info(), ARTEA_METRIC_LAMBDA(void) {
         // Stateless functor: the dimension is a compile-time trait now.
-        dist_func_t<Metric, Dim> dist_func;
+        dist_func_t<Metric, Dim> build_dist;
 
         // Create PropagateEngine instance
-        propagate_engine_t<Metric, Dim> propagate_engine(dist_func);
+        propagate_engine_t<Metric, Dim> propagate_engine(build_dist);
         propagate_engine.set_graph(graph);
 
         // Create RandomUpdater using the factory method
@@ -332,12 +332,12 @@ static void BM_RandomUpdater_NoSS(benchmark::State& state) {
     refining_graph_t& graph = provider.get_graph();
     const vec_num_t num_vertices = provider.get_num_base_vecs();
 
-    infra_dispatch(provider.get_dataset_info(), ARTEA_METRIC_LAMBDA(void) {
+    build_infra_dispatch(provider.get_dataset_info(), ARTEA_METRIC_LAMBDA(void) {
         // Stateless functor: the dimension is a compile-time trait now.
-        dist_func_t<Metric, Dim> dist_func;
+        dist_func_t<Metric, Dim> build_dist;
 
         // Create PropagateEngine instance without selective scheduling
-        propagate_engine_t<Metric, Dim> propagate_engine(dist_func);
+        propagate_engine_t<Metric, Dim> propagate_engine(build_dist);
         propagate_engine.set_graph(graph);
 
         // Create RandomUpdater using the factory method
@@ -387,8 +387,8 @@ int main(int argc, char** argv) {
         .help("Dataset name");
 
     program.add_argument("--metric")
-        .default_value(std::string("euclidean_sqr"))
-        .help("Distance metric: 'euclidean_sqr', 'inner_product', or 'cosine'");
+        .default_value(std::string("euclidean"))
+        .help("Task metric: euclidean/l2 or euclidean_sqr/l2_sqr (build=L2, compact search=L2 squared), inner_product, cosine");
 
     // Algorithm parameters
     program.add_argument("--max-nbrs")

@@ -559,13 +559,13 @@ TEST_F(HierarchicalGraphTest, IndexFactoryLikeWorkload) {
 
 // ---- 9. Compactor fidelity: dynamic → compact preserves topology ----
 TEST_F(HierarchicalGraphTest, CompactorPreservesTopology) {
-  infra_dispatch(DataProvider::instance().get_dataset_info(), ARTEA_METRIC_LAMBDA(void) {
-    // Compactor now requires vecs_data + dist_func to compute the
+  build_infra_dispatch(DataProvider::instance().get_dataset_info(), ARTEA_METRIC_LAMBDA(void) {
+    // Compactor now requires vecs_data + build_dist to compute the
     // top-bucket centroid and entry point.
     const auto&             base_vecs = DataProvider::instance().vectors();
-    const dist_func_t<Metric, Dim> dist_func;  // stateless: dim is a compile-time trait
+    const dist_func_t<Metric, Dim> build_dist;  // stateless: dim is a compile-time trait
     auto compact_graph = compactor_t::compact_graph(
-        *_graph, base_vecs, dist_func);
+        *_graph, base_vecs, build_dist);
 
     // The compactor also trims top buckets whose apex population is
     // below its @c min_layer_cap threshold: every such vid is demoted
@@ -702,9 +702,9 @@ using TestRefiningGraph = dynamic::RefiningGraph<index_traits_t>;
 // → assert the mutation round-tripped. Covers L0 (identity-mapped) and L1+
 // (sparse-mapped) paths in one pass.
 TEST_F(HierarchicalGraphTest, LayerRefiningGraphRoundTrip) {
-  infra_dispatch(DataProvider::instance().get_dataset_info(), ARTEA_METRIC_LAMBDA(void) {
+  build_infra_dispatch(DataProvider::instance().get_dataset_info(), ARTEA_METRIC_LAMBDA(void) {
     // Construct a sized-down VectorArray matching the fixture's vid space.
-    // Values are not read by this test (fill/writeback never call dist_func),
+    // Values are not read by this test (fill/writeback never call build_dist),
     // so an uninitialized buffer of the right shape is sufficient.
     const auto& full_vecs = DataProvider::instance().vectors();
     vector_array_t vecs(_num_vertices, full_vecs.get_vec_dim());
@@ -792,8 +792,8 @@ int main(int argc, char** argv) {
     program.add_argument("-d", "--dataset")
         .default_value(std::string("sift-1m"));
     program.add_argument("--metric")
-        .default_value(std::string("euclidean_sqr"))
-        .help("Distance metric: 'euclidean_sqr', 'inner_product', or 'cosine'");
+        .default_value(std::string("euclidean"))
+        .help("Task metric: euclidean/l2 or euclidean_sqr/l2_sqr (build=L2, compact search=L2 squared), inner_product, cosine");
     program.add_argument("--num-vertices")
         .default_value(100'000u).scan<'u', uint32_t>()
         .help("Number of vertices to simulate (bounded by dataset size).");

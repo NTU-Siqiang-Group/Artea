@@ -35,7 +35,7 @@ using namespace artea::cpu;
 // TEST_DIM is the SIMD-padded dimension (multiple of 16); the grid uses only
 // the first 2 coordinates and zero-pads the rest, so all pairwise Euclidean
 // distances are identical to the original 2D grid.
-constexpr DistanceMetricsT TEST_METRIC = DistanceMetricsT::EUCLIDEAN_SQR;
+constexpr DistanceMetricsT TEST_METRIC = DistanceMetricsT::EUCLIDEAN;
 constexpr vec_dim_t TEST_DIM = 16;
 
 class PropagateEngineCorrectnessTest : public ::testing::Test {
@@ -230,6 +230,57 @@ TEST_F(PropagateEngineCorrectnessTest, TrianglePruningWithPropagateEngine) {
             << fmt::format("Vertex {} has {} neighbors, exceeding max_nbr_size={}",
                           u, nbrs_arr[u].size(), max_nbr_size);
     }
+}
+
+TEST_F(PropagateEngineCorrectnessTest, TrianglePrunesUsingFarthestRetainedNeighborFirst) {
+    // Pivot 0=(0,0), retained 1=(1,0) and 8=(0,2), candidate 10=(2,2).
+    // Both retained neighbors can prune 10. Scanning from the farthest
+    // to the pivot must recommend 8->10 before the near neighbor is checked.
+    auto& neighbors = graph_index_->get_nbrs_arr()[0];
+    for (const vertex_id_t id : {1u, 8u, 10u}) {
+        neighbors.emplace_back(id, compute_distance(0, id), true);
+    }
+
+    propagate_engine_t<TEST_METRIC, TEST_DIM> engine(*dist_func_);
+    engine.set_graph(graph_index_->get_refining_graph());
+    auto updater = engine.make_updater<triangle_updater_t<TEST_METRIC, TEST_DIM>>(1.0f, 0.0f);
+    engine.propagate(0, updater);
+
+    ASSERT_EQ(neighbors.size(), 2u);
+    EXPECT_EQ(neighbors[0].get_vid(), 1u);
+    EXPECT_EQ(neighbors[1].get_vid(), 8u);
+    EXPECT_TRUE(neighbors[0].is_old());
+    EXPECT_TRUE(neighbors[1].is_old());
+    const auto& logs = engine.get_log_table().get_log_container(8);
+    ASSERT_EQ(logs.size(), 1u);
+    EXPECT_EQ(logs[0].get_vid(), 10u);
+    EXPECT_FLOAT_EQ(logs[0].get_distance(), 2.0f);
+    EXPECT_TRUE(engine.get_log_table().get_log_container(1).empty());
+}
+
+TEST_F(PropagateEngineCorrectnessTest, TriangleSelectsClosestRecommendationWithoutPruning) {
+    // Candidate 11=(3,2): d(11,8)=3, d(11,1)=sqrt(8). With scale=2,
+    // both are recommendation-only conflicts. The scan reaches 8 first,
+    // then replaces it with the closer recommendation target 1.
+    auto& neighbors = graph_index_->get_nbrs_arr()[0];
+    for (const vertex_id_t id : {1u, 8u, 11u}) {
+        neighbors.emplace_back(id, compute_distance(0, id), true);
+    }
+
+    propagate_engine_t<TEST_METRIC, TEST_DIM> engine(*dist_func_);
+    engine.set_graph(graph_index_->get_refining_graph());
+    auto updater = engine.make_updater<triangle_updater_t<TEST_METRIC, TEST_DIM>>(2.0f, 0.0f);
+    engine.propagate(0, updater);
+
+    ASSERT_EQ(neighbors.size(), 3u);
+    EXPECT_EQ(neighbors[0].get_vid(), 1u);
+    EXPECT_EQ(neighbors[1].get_vid(), 8u);
+    EXPECT_EQ(neighbors[2].get_vid(), 11u);
+    const auto& logs = engine.get_log_table().get_log_container(1);
+    ASSERT_EQ(logs.size(), 1u);
+    EXPECT_EQ(logs[0].get_vid(), 11u);
+    EXPECT_FLOAT_EQ(logs[0].get_distance(), std::sqrt(8.0f));
+    EXPECT_TRUE(engine.get_log_table().get_log_container(8).empty());
 }
 
 TEST_F(PropagateEngineCorrectnessTest, IntegratedRandomAndReverseUpdater) {

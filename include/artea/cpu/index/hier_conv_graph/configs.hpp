@@ -55,7 +55,7 @@ using PruningConfig = conv_graph::PruningConfig<IndexTraitsT>;
  * mirroring stacked_rgraph::RGraphConfig's split) plus the
  * @c sample_ratio that drives top-down random pull-out: L_{h+1} is a
  * uniformly random @c sample_ratio sample of L_h. There is no rnet
- * beta / L0_radius here — geometry is irrelevant when layer
+ * beta / num_skip_levels / l0_min_distance here — geometry is irrelevant when layer
  * membership is purely random.
  *
  * @tparam IndexTraitsT The index traits type.

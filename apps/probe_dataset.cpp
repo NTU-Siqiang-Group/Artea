@@ -38,10 +38,10 @@ using namespace artea::cpu;
 
 namespace {
 
-// Match the quantiles used by test_dataset_prober.cpp.
+// Quantiles reported by the dataset probing modes.
 const std::vector<float> quantiles = {
-    0.0001f, 0.001f, 0.01f, 0.05f, 0.1f, 0.25f, 0.5f,
-    0.75f, 0.9f, 0.95f, 0.99f, 0.999f, 0.9999f
+    0.0001f, 0.001f, 0.01f, 0.025f, 0.05f, 0.1f, 0.25f,
+    0.5f, 0.9f, 0.95f, 0.99f, 0.999f, 0.9999f
 };
 
 void print_header(const std::string& label, const std::vector<float>& qs) {

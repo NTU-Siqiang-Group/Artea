@@ -78,8 +78,9 @@ struct TestConfig {
 
     // Stacked r-net backbone
     float    rnet_beta;
-    bool     l0_radius_provided;
-    float    l0_rnet_radius;
+    uint32_t    num_skip_levels;
+    bool     l0_min_distance_provided;
+    float    l0_min_distance;
     uint32_t ul_max_nbr_size;
     uint32_t bl_max_nbr_size;
     uint32_t search_nn_qs;
@@ -87,9 +88,8 @@ struct TestConfig {
     uint32_t bl_select_nbrs_qs;
     float    scale_coeffs;
     float    shifted_coeffs;
-    float    l0_min_distance;
 
-    // L0-radius auto-probe
+    // L0 minimum-distance auto-probe
     uint32_t probe_num_samples;
     float    probe_quantile;
 
@@ -124,12 +124,13 @@ auto dump_config(const char* banner) -> void {
        << "Dataset:                    " << g_config.dataset_name << "\n"
        << "Config path:                " << g_config.config_path << "\n"
        << "--- Stacked r-net backbone ---\n"
-       << "rnet_beta:                  " << g_config.rnet_beta << "\n";
-    if (g_config.l0_radius_provided) {
-        os << "L0 radius:                  " << g_config.l0_rnet_radius
+       << "rnet_beta:                  " << g_config.rnet_beta << "\n"
+       << "num_skip_levels:                 " << g_config.num_skip_levels << "\n";
+    if (g_config.l0_min_distance_provided) {
+        os << "L0 minimum distance:                  " << g_config.l0_min_distance
            << " (user-provided)\n";
     } else {
-        os << "L0 radius:                  auto-probe ("
+        os << "L0 minimum distance:                  auto-probe ("
            << static_cast<int>(g_config.probe_quantile * 100.0f)
            << "th pct, " << g_config.probe_num_samples << " samples)\n";
     }
@@ -143,8 +144,6 @@ auto dump_config(const char* banner) -> void {
        << "shifted_coeffs:             " << g_config.shifted_coeffs
        << " (consumed by refinement pruning only; ul insertion reads "
        << "scale_coeffs only and ignores shift)\n"
-       << "l0_min_distance:            " << g_config.l0_min_distance
-       << " (per-vertex L0 minimum-distance gate; consumed by refinement pruning)\n"
        << "--- Per-layer refinement ---\n"
        << "ul_refining_max_nbr_size:   "
        << static_cast<uint32_t>(g_config.ul_max_nbr_size * 1.5f)
@@ -208,42 +207,42 @@ public:
 
         // Resolve BOTH compile-time axes: metric from the workload's
         // `metric` field, padded dim from the loaded dataset. The dataset is
-        // metric/dim-independent and stays out here; the stateless dist_func
+        // metric/dim-independent and stays out here; the stateless build_dist
         // / metric-dependent prober run inside dispatch.
         _dataset_info = DatasetInfra{parse_metric(g_config.metric), base_vecs.get_vec_dim()};
 
-        if (g_config.l0_radius_provided) {
-            _l0_radius = g_config.l0_rnet_radius;
+        if (g_config.l0_min_distance_provided) {
+            _l0_min_distance = g_config.l0_min_distance;
             ARTEA_INFO(fmt::format(
-                "Using user-provided L0 rnet_radius = {:.6f}", _l0_radius));
+                "Using user-provided l0_min_distance = {:.6f}", _l0_min_distance));
         } else {
-            infra_dispatch(_dataset_info, ARTEA_METRIC_LAMBDA(void) {
+            build_infra_dispatch(_dataset_info, ARTEA_METRIC_LAMBDA(void) {
                 // Stateless functor: the dimension is a compile-time trait now.
-                dist_func_t<Metric, Dim> dist_func;
-                dataset_prober_t<Metric, Dim> prober(base_vecs, dist_func);
+                dist_func_t<Metric, Dim> build_dist;
+                dataset_prober_t<Metric, Dim> prober(base_vecs, build_dist);
                 const std::vector<float> quantiles = { g_config.probe_quantile };
                 ARTEA_INFO(fmt::format(
-                    "Probing L0 rnet_radius ({}th pct, {} samples)...",
+                    "Probing l0_min_distance ({}th pct, {} samples)...",
                     static_cast<int>(g_config.probe_quantile * 100.0f),
                     g_config.probe_num_samples));
                 auto result = prober.probe(quantiles, g_config.probe_num_samples);
-                _l0_radius = static_cast<float>(result.table[0][0]);
+                _l0_min_distance = static_cast<float>(result.table[0][0]);
                 ARTEA_INFO(fmt::format(
-                    "Auto-probed L0 rnet_radius = {:.6f}", _l0_radius));
+                    "Auto-probed l0_min_distance = {:.6f}", _l0_min_distance));
             });
         }
     }
 
     auto get_dataset()      -> vector_dataset_t& { return *_dataset; }
     auto get_dataset_info() const -> DatasetInfra { return _dataset_info; }
-    auto get_l0_radius() const -> float          { return _l0_radius; }
+    auto get_l0_min_distance() const -> float          { return _l0_min_distance; }
 
 private:
     DataProvider() = default;
 
     std::unique_ptr<vector_dataset_t> _dataset;
     DatasetInfra                      _dataset_info{};
-    float                             _l0_radius = 0.0f;
+    float                             _l0_min_distance = 0.0f;
 };
 
 // ============================================================
@@ -259,13 +258,14 @@ protected:
         const vertex_num_t total_vertices =
             static_cast<vertex_num_t>(base_vecs.get_num_vecs());
 
-        infra_dispatch(provider.get_dataset_info(), ARTEA_METRIC_LAMBDA(void) {
+        build_infra_dispatch(provider.get_dataset_info(), ARTEA_METRIC_LAMBDA(void) {
             // Stateless functor: the dimension is a compile-time trait now.
-            dist_func_t<Metric, Dim> dist_func;
+            dist_func_t<Metric, Dim> build_dist;
 
             artea_graph::rgraph_config_t<Metric, Dim> rgraph_config(
                 g_config.rnet_beta,
-                provider.get_l0_radius(),
+                g_config.num_skip_levels,
+                provider.get_l0_min_distance(),
                 static_cast<vertex_num_t>(g_config.search_nn_qs),
                 static_cast<vertex_num_t>(g_config.ul_select_nbrs_qs),
                 static_cast<vertex_num_t>(g_config.bl_select_nbrs_qs),
@@ -290,7 +290,7 @@ protected:
             artea_graph::pruning_config_t<Metric, Dim> pruning_config(
                 static_cast<ratio_t>(g_config.scale_coeffs),
                 static_cast<ratio_t>(g_config.shifted_coeffs),
-                static_cast<ratio_t>(g_config.l0_min_distance));
+                static_cast<ratio_t>(provider.get_l0_min_distance()));
 
             auto graph = std::make_unique<artea_index_t>(
                 total_vertices, rgraph_config,
@@ -303,7 +303,7 @@ protected:
             vector_array_t owned_batch =
                 base_vecs.extract_subset(0, total_vertices);
             artea_graph::factory_t<Metric, Dim>::add_vertices(
-                *graph, std::move(owned_batch), dist_func,
+                *graph, std::move(owned_batch), build_dist,
                 g_config.insert_on_L0,
                 g_config.shuffle_insertion_order);
 
@@ -401,22 +401,27 @@ TEST_F(ArteaGraphTest, SearchRecallAndThroughput) {
     std::vector<Row> rows;
     int64_t compact_ms = 0;
 
-    infra_dispatch(provider.get_dataset_info(), ARTEA_METRIC_LAMBDA(void) {
+    const auto dataset_info = provider.get_dataset_info();
+    auto compact_hg = build_infra_dispatch(dataset_info, ARTEA_METRIC_LAMBDA(compact::hierarchical_graph_t) {
         // Stateless functor: the dimension is a compile-time trait now.
-        dist_func_t<Metric, Dim> dist_func;
+        dist_func_t<Metric, Dim> build_dist;
 
         // ---- Compact the dynamic hierarchical graph (once, shared by
         //      every sweep) ----
         const auto& dyn_hg = _graph->get_hierarchical_graph();
         auto tc0 = std::chrono::high_resolution_clock::now();
         auto compact_hg = hierarchical_graph_compactor_t::compact_graph(
-            dyn_hg, base_vecs, dist_func);
+            dyn_hg, base_vecs, build_dist);
         auto tc1 = std::chrono::high_resolution_clock::now();
         compact_ms =
             std::chrono::duration_cast<std::chrono::milliseconds>(tc1 - tc0).count();
         ARTEA_INFO(fmt::format(
             "Hierarchical graph compacted in {} ms", compact_ms));
+        return compact_hg;
+    });
 
+    search_infra_dispatch(dataset_info, ARTEA_METRIC_LAMBDA(void) {
+        dist_func_t<Metric, Dim> search_dist;
         recall_estimator_t<Metric, Dim> re;
 
         // Runs @p batch_call (a batch query closure) over warmup + test_runs
@@ -464,7 +469,7 @@ TEST_F(ArteaGraphTest, SearchRecallAndThroughput) {
                     std::max<uint32_t>(queue_size, topk);
 
                 hierarchical_graph_router_t<Metric, Dim> s_router(
-                    base_vecs, dist_func,
+                    base_vecs, search_dist,
                     /*topk=*/topk,
                     /*candidate_queue_size=*/effective_queue_size);
                 s_router.initialize();
@@ -546,20 +551,28 @@ int main(int argc, char** argv) {
         std::cerr << "Failed to open workload: " << workload_path << "\n";
         return 1;
     }
-    nlohmann::json wl = nlohmann::json::parse(wf);
+    nlohmann::json workload;
+    try {
+        // Workloads use JSONC and may contain line or block comments.
+        workload = nlohmann::json::parse(wf, nullptr, /*allow_exceptions=*/true, /*ignore_comments=*/true);
+    } catch (const nlohmann::json::parse_error& err) {
+        std::cerr << "Failed to parse workload: " << workload_path << "\n"
+                  << err.what() << "\n";
+        return 1;
+    }
     wf.close();
     std::cout << "Loaded workload: " << workload_path << "\n";
 
-    g_config.config_path  = wl["dataset-config"];
-    g_config.dataset_name = wl["dataset"];
-    g_config.metric       = wl.value("metric", "euclidean_sqr");
-    g_config.warmup_runs  = wl.value("warmup_runs", 1u);
-    g_config.test_runs    = wl.value("test_runs", 3u);
+    g_config.config_path  = workload["dataset-config"];
+    g_config.dataset_name = workload["dataset"];
+    g_config.metric       = workload.value("metric", "euclidean");
+    g_config.warmup_runs  = workload.value("warmup_runs", 1u);
+    g_config.test_runs    = workload.value("test_runs", 3u);
 
     // Resolve the artea base config: object form is the config itself;
     // array form (tuning workloads) contributes its unique untagged base
     // entry — same resolution as bench-artea's parse_index_base_config.
-    const auto& artea_entry = wl["indexes-config"]["artea"];
+    const auto& artea_entry = workload["indexes-config"]["artea"];
     nlohmann::json params;
     if (artea_entry.is_object()) {
         params = artea_entry;
@@ -575,8 +588,19 @@ int main(int argc, char** argv) {
 
     // Build params: same keys and defaults as bench-artea's run_all().
     g_config.rnet_beta          = params.value("rnet_beta", 2.0f);
-    g_config.l0_radius_provided = params.contains("l0_rnet_radius");
-    g_config.l0_rnet_radius     = params.value("l0_rnet_radius", -1.0f);
+    if (params.contains("rnet_beta0")) {
+        std::cerr << "rnet_beta0 has been removed; use integer num_skip_levels instead\n";
+        return 1;
+    }
+    const auto skip_levels = params.value("num_skip_levels", nlohmann::json(0));
+    if (!skip_levels.is_number_integer() || skip_levels.get<double>() < 0 ||
+        skip_levels.get<double>() > std::numeric_limits<uint32_t>::max()) {
+        std::cerr << "num_skip_levels must be a nonnegative 32-bit integer\n";
+        return 1;
+    }
+    g_config.num_skip_levels = skip_levels.get<uint32_t>();
+    g_config.l0_min_distance_provided = params.contains("l0_min_distance");
+    g_config.l0_min_distance     = params.value("l0_min_distance", -1.0f);
     g_config.ul_max_nbr_size    = params.value("ul_max_nbr_size", 32u);
     g_config.bl_max_nbr_size    = params.value("bl_max_nbr_size", 64u);
     g_config.search_nn_qs       = params.value("search_nn_qs", 30u);
@@ -584,7 +608,6 @@ int main(int argc, char** argv) {
     g_config.bl_select_nbrs_qs  = params.value("bl_select_nbrs_qs", 100u);
     g_config.scale_coeffs       = params.value("scale_coeffs", 1.1f);
     g_config.shifted_coeffs     = params.value("shifted_coeffs", 0.0f);
-    g_config.l0_min_distance    = params.value("l0_min_distance", 1.0f);
     g_config.num_build_loops    = params.value("num_build_loops", 5u);
     g_config.num_triu_iters     = params.value("num_triu_iters", 12u);
     g_config.prefill_ratio      = params.value("prefill_ratio", 0.34f);
@@ -595,7 +618,7 @@ int main(int argc, char** argv) {
         params.value("shuffle_insertion_order", false);
     g_config.insert_on_L0       = params.value("insert_on_L0", false);
 
-    // L0-radius auto-probe kicks in when the workload omits l0_rnet_radius.
+    // L0 minimum-distance auto-probe kicks in when the workload omits l0_min_distance.
     g_config.probe_num_samples  = params.value("probe_num_samples", 500u);
     g_config.probe_quantile     = params.value("probe_quantile", 0.9f);
 
@@ -604,8 +627,8 @@ int main(int argc, char** argv) {
     const nlohmann::json* sweeps_json = nullptr;
     if (params.contains("throughput_search")) {
         sweeps_json = &params.at("throughput_search");
-    } else if (wl.contains("throughput_search")) {
-        sweeps_json = &wl.at("throughput_search");
+    } else if (workload.contains("throughput_search")) {
+        sweeps_json = &workload.at("throughput_search");
     }
     if (sweeps_json == nullptr || !sweeps_json->is_array()
         || sweeps_json->empty()) {
