@@ -31,6 +31,7 @@
 #include <tbb/blocked_range.h>
 #include <artea/cpu/containers/vector_array.hpp>
 #include <artea/cpu/utils/random_seq.hpp>
+#include <artea/cpu/utils/random_seq_nr.hpp>
 #include <artea/common/logger.hpp>
 
 namespace artea {
@@ -59,30 +60,31 @@ namespace cpu {
  * of points within radius r scales as N(r) ~ r^d. Real-world data often lies on a
  * lower-dimensional manifold embedded in high-dimensional space, so LID << ambient dimension.
  *
- * ### Levina-Bickel MLE Estimator (unbiased form)
+ * ### Fixed query-based mean RVE-LID (RV, J=2)
  *
- * For each sampled point x with k nearest neighbors at distances r_1 <= r_2 <= ... <= r_k,
- * the per-point unbiased LID estimate is:
+ * Sample exactly 500 distinct query IDs with a fixed seed, and find the exact
+ * 1000 nearest base vectors for each query. Query and base IDs are separate;
+ * no base vector is excluded merely because its ID matches the query ID.
  *
- *     LID(x) = [ 1/(k-1) * sum_{i=1}^{k-1} ln(r_k / r_i) ]^{-1}
+ * Use the 1-based neighbor ranks i=500, j=750, k=1000. With a=r_j-r_i
+ * and b=r_k-r_j, the regularly varying functions estimator is:
  *
- * The k-th term ln(r_k/r_k) = 0 contributes nothing; r_k serves only as the boundary.
- * Dividing by k-1 (the number of informative terms) yields the unbiased MLE.
- * The global LID is the average over all sampled points.
+ *     RVE-LID(q) = [b*ln(k/j) + a*ln(j/i)] / [b*ln(r_k/r_j) + a*ln(r_j/r_i)]
+ *     mean RVE-LID = sum_q RVE-LID(q) / 500
  *
- * ### Intuition: Shell Effect
- *
- * - **High LID**: In high-dimensional space, most neighbors cluster near the boundary r_k
- *   (shell effect). Ratios r_k/r_i ~ 1, log terms ~ 0, sum is small, so LID = 1/small is large.
- * - **Low LID**: In low-dimensional space, neighbors spread uniformly from center to boundary.
- *   Many r_i << r_k, log terms are large, sum is large, so LID = 1/large is small.
+ * This is the algebraically stabilized J=2 RV estimator used by ELKI's
+ * RVEstimator, based on Amsaleg et al., KDD 2015, Sections 4.4 and 5.1:
+ * https://doi.org/10.1145/2783258.2783405
  *
  * ### Implementation Details
  *
- * - Distances r_i that are zero (duplicate vectors) are clamped to a small epsilon to avoid
- *   log(inf). These points contribute large log terms, pulling LID downward, which correctly
- *   reflects that duplicate data reduces effective dimensionality.
- * - The k used for LID estimation is MAX_K (128), the same as the NN table depth.
+ * - Ranks include all 1000 neighbors, including zero distances. The selected
+ *   rank-500 distance must be positive and rank-1000 must be greater than it.
+ * - No epsilon clamp is used, preserving invariance under distance rescaling.
+ * - Counts and random seed are compile-time constants, independent of base probes.
+ * - Insufficient queries/base vectors or undefined per-query estimates are errors;
+ *   queries are never silently dropped from the arithmetic mean.
+ * - The selected metric's distance values are used directly.
  *
  * @tparam ComputerTraitsT The computer traits type providing distance computation types.
  */
@@ -97,22 +99,27 @@ class DatasetProber {
     using query_vecs_t = typename ComputerTraitsT::query_vecs_t;
     using ground_truth_t = typename ComputerTraitsT::ground_truth_t;
     using random_seq_t = typename ComputerTraitsT::random_seq_t;
+    using random_seq_nr_t = typename ComputerTraitsT::random_seq_nr_t;
     using dist_func_t = typename ComputerTraitsT::dist_func_t;
 
     static constexpr uint32_t MAX_K = 128;
-    static constexpr float EPSILON = 1e-6f;
 
 public:
 
+    static constexpr uint32_t FIXED_LID_QUERY_SAMPLES = 500;
+    static constexpr uint32_t FIXED_LID_NEIGHBORS = 1000;
+    static constexpr uint32_t FIXED_LID_SEED = 42;
+    static constexpr uint32_t FIXED_RVE_LOWER_RANK = FIXED_LID_NEIGHBORS / 2;
+    static constexpr uint32_t FIXED_RVE_MIDDLE_RANK = 3 * FIXED_LID_NEIGHBORS / 4;
+
     /**
-     * @brief Probe result containing the k-NN distance quantile table and LID estimate.
+     * @brief Probe result containing the base k-NN distance quantile table.
      */
     struct ProbeResult {
         std::vector<uint32_t> nn_ranks;                         // nn_ranks (1-based): 1..128
         std::vector<float> quantiles;                           // quantile values
         std::vector<std::vector<distance_t>> table;             // table[rank_idx][quantile_idx]
         vec_num_t num_samples;                                  // number of sampled vertices
-        float lid;                                              // estimated Local Intrinsic Dimensionality
     };
 
     /**
@@ -122,8 +129,8 @@ public:
      * full base dataset, this result is derived from the precomputed ground
      * truth: for each query, @c probe_query uses the top-K ground truth IDs
      * directly and recomputes the query-to-GT distances with @c _dist_func.
-     * No LID is reported because the queries are not necessarily drawn from
-     * the base distribution.
+     * LID is computed separately by probe_lid(), using its fixed query sample
+     * and exact base neighbors rather than these ground-truth IDs.
      */
     struct QueryProbeResult {
         std::vector<uint32_t> nn_ranks;                         // nn_ranks (1-based): 1..k
@@ -153,11 +160,93 @@ public:
         : _base_vecs(base_vecs), _dist_func(dist_func) {}
 
     /**
-     * @brief Probe the dataset: compute the full nn_rank x quantile table and LID.
+     * @brief Mean RVE-LID of exactly 500 queries, each using 1000 nearest base neighbors.
+     * @param query_vecs Query dataset (at least 500 vectors, same dimension as base)
+     * @return Arithmetic mean of all 500 per-query RVE-LID estimates
+     */
+    auto probe_lid(const query_vecs_t& query_vecs) -> double {
+        if (query_vecs.get_num_vecs() < FIXED_LID_QUERY_SAMPLES) {
+            ARTEA_ERROR(fmt::format("LID requires at least {} query vectors, got {}",
+                FIXED_LID_QUERY_SAMPLES, query_vecs.get_num_vecs()));
+        }
+        if (_base_vecs.get_num_vecs() < FIXED_LID_NEIGHBORS) {
+            ARTEA_ERROR(fmt::format("LID requires at least {} base vectors, got {}",
+                FIXED_LID_NEIGHBORS, _base_vecs.get_num_vecs()));
+        }
+        if (query_vecs.get_vec_dim() != _base_vecs.get_vec_dim()) {
+            ARTEA_ERROR("LID requires matching base and query dimensions");
+        }
+
+        random_seq_nr_t sampler(FIXED_LID_SEED);
+        const auto query_ids = sampler.generate(FIXED_LID_QUERY_SAMPLES, query_vecs.get_num_vecs());
+        std::vector<double> estimates(FIXED_LID_QUERY_SAMPLES);
+        tbb::parallel_for(
+            tbb::blocked_range<uint32_t>(0, FIXED_LID_QUERY_SAMPLES),
+            [&](const tbb::blocked_range<uint32_t>& range) {
+                for (uint32_t s = range.begin(); s != range.end(); ++s) {
+                    const auto query_id = query_ids[s];
+                    const auto* query = query_vecs.get(query_id);
+                    std::priority_queue<distance_t> neighbors;
+                    for (vec_num_t j = 0; j < _base_vecs.get_num_vecs(); ++j) {
+                        const auto distance = _dist_func(query, _base_vecs.get(j));
+                        if (!std::isfinite(distance) || distance < 0) {
+                            ARTEA_ERROR(fmt::format(
+                                "LID requires finite non-negative distances (query {}, base {})",
+                                query_id, j));
+                        }
+                        if (neighbors.size() < FIXED_LID_NEIGHBORS) {
+                            neighbors.push(distance);
+                        } else if (distance < neighbors.top()) {
+                            neighbors.pop();
+                            neighbors.push(distance);
+                        }
+                    }
+
+                    const double r_k = neighbors.top();
+                    // A max-heap exposes ranks in descending order. Only the
+                    // three RV anchor distances are needed, not a quantile table.
+                    while (neighbors.size() > FIXED_RVE_MIDDLE_RANK) neighbors.pop();
+                    const double r_j = neighbors.top();
+                    while (neighbors.size() > FIXED_RVE_LOWER_RANK) neighbors.pop();
+                    const double r_i = neighbors.top();
+                    if (r_i <= 0.0 || r_k <= r_i) {
+                        ARTEA_ERROR(fmt::format(
+                            "Undefined RVE-LID for query {}: require 0 < r_{} <= r_{} <= r_{} and r_{} < r_{}",
+                            query_id, FIXED_RVE_LOWER_RANK, FIXED_RVE_MIDDLE_RANK, FIXED_LID_NEIGHBORS,
+                            FIXED_RVE_LOWER_RANK, FIXED_LID_NEIGHBORS));
+                    }
+
+                    // Normalize both gaps by the outer radius. Cross-weighting
+                    // avoids division by a gap or second difference, including
+                    // equally spaced anchors and a tie at one adjacent pair.
+                    const double lower_gap = (r_j - r_i) / r_k;
+                    const double upper_gap = (r_k - r_j) / r_k;
+                    const double rank_growth = upper_gap * std::log(
+                        static_cast<double>(FIXED_LID_NEIGHBORS) / FIXED_RVE_MIDDLE_RANK)
+                        + lower_gap * std::log(
+                            static_cast<double>(FIXED_RVE_MIDDLE_RANK) / FIXED_RVE_LOWER_RANK);
+                    const double distance_growth = upper_gap * std::log1p((r_k - r_j) / r_j)
+                        + lower_gap * std::log1p((r_j - r_i) / r_i);
+                    const double estimate = rank_growth / distance_growth;
+                    if (!std::isfinite(estimate) || estimate <= 0.0) {
+                        ARTEA_ERROR(fmt::format("Undefined RVE-LID for query {}: degenerate anchor distances",
+                            query_id));
+                    }
+                    estimates[s] = estimate;
+                }
+            });
+
+        double sum = 0.0;
+        for (const double estimate : estimates) sum += estimate;
+        return sum / FIXED_LID_QUERY_SAMPLES;
+    }
+
+    /**
+     * @brief Probe the dataset: compute the full nn_rank x quantile table.
      *
      * @param quantiles Vector of target quantiles, each in (0, 1)
      * @param num_samples Number of vertices to sample
-     * @return ProbeResult containing the table and LID estimate
+     * @return ProbeResult containing the distance quantile table
      */
     auto probe(
         const std::vector<float>& quantiles,
@@ -199,15 +288,11 @@ public:
             }
         );
 
-        // Compute LID using Levina-Bickel MLE estimator
-        float lid = _compute_lid(knn_table, num_samples);
-
         ProbeResult result;
         result.nn_ranks = std::move(nn_ranks);
         result.quantiles = quantiles;
         result.table = std::move(table);
         result.num_samples = num_samples;
-        result.lid = lid;
         return result;
     }
 
@@ -368,65 +453,6 @@ public:
 private:
     const vector_array_t& _base_vecs;
     const dist_func_t& _dist_func;
-
-    /**
-     * @brief Compute LID via unbiased Levina-Bickel MLE averaged over all sampled points.
-     *
-     * For each sample i with k-NN distances r_1..r_k (row i of knn_table):
-     *   LID_i = [ 1/(k-1) * sum_{j=1}^{k-1} ln(r_k / r_j) ]^{-1}
-     *
-     * The k-th term is excluded (ln(r_k/r_k) = 0); dividing by k-1 gives the unbiased MLE.
-     * Global LID = mean(LID_i) over all valid samples.
-     *
-     * @param knn_table Flat row-major table (num_samples x MAX_K), each row sorted ascending
-     * @param num_samples Number of sampled vertices
-     * @return Estimated global LID
-     */
-    auto _compute_lid(
-        const std::vector<distance_t>& knn_table,
-        vec_num_t num_samples
-    ) -> float {
-
-        std::vector<double> lid_values(num_samples, 0.0);
-
-        tbb::parallel_for(
-            tbb::blocked_range<vec_num_t>(0, num_samples),
-            [&](const tbb::blocked_range<vec_num_t>& r) {
-                for (vec_num_t i = r.begin(); i != r.end(); ++i) {
-                    const distance_t* row = knn_table.data() + static_cast<size_t>(i) * MAX_K;
-                    distance_t r_k = row[MAX_K - 1];
-
-                    // Skip degenerate cases where the k-th neighbor distance is zero
-                    if (r_k <= EPSILON) {
-                        lid_values[i] = 0.0;
-                        continue;
-                    }
-
-                    // Sum over first k-1 terms only (the k-th term is always 0)
-                    double log_sum = 0.0;
-                    for (uint32_t j = 0; j < MAX_K - 1; ++j) {
-                        distance_t r_j = std::max(row[j], static_cast<distance_t>(EPSILON));
-                        log_sum += std::log(static_cast<double>(r_k) / static_cast<double>(r_j));
-                    }
-
-                    double avg_log = log_sum / static_cast<double>(MAX_K - 1);
-                    lid_values[i] = (avg_log > 1e-10) ? (1.0 / avg_log) : 0.0;
-                }
-            }
-        );
-
-        // Average over valid samples (LID > 0)
-        double sum = 0.0;
-        uint32_t valid_count = 0;
-        for (vec_num_t i = 0; i < num_samples; ++i) {
-            if (lid_values[i] > 0.0) {
-                sum += lid_values[i];
-                valid_count++;
-            }
-        }
-
-        return (valid_count > 0) ? static_cast<float>(sum / valid_count) : 0.0f;
-    }
 
     /**
      * @brief Sample vertices and compute their top-128 NN distances against the full dataset.

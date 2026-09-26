@@ -7,6 +7,7 @@
 
 #pragma once
 
+#include <algorithm>
 #include <fstream>
 #include <filesystem>
 #include <type_traits>
@@ -37,9 +38,13 @@ class VectorDataset {
 
 public:
 
+    // Partial modes leave the omitted arrays empty and do not require their paths.
+    enum class LoadMode { All, BaseOnly, BaseAndQuery };
+
     VectorDataset() = default;
-    VectorDataset(const std::string& config_path, const std::string& dataset_name) {
-        from_config(config_path, dataset_name);
+    VectorDataset(const std::string& config_path, const std::string& dataset_name,
+                  LoadMode load_mode = LoadMode::All) {
+        from_config(config_path, dataset_name, load_mode);
     }
 
     ~VectorDataset() = default;
@@ -53,9 +58,10 @@ public:
     VectorDataset(VectorDataset&&) noexcept = default;
     VectorDataset& operator=(VectorDataset&&) noexcept = default;
 
-    void from_config(const std::string& config_path, const std::string& dataset_name) {
+    void from_config(const std::string& config_path, const std::string& dataset_name,
+                     LoadMode load_mode = LoadMode::All) {
         _load_config(config_path);
-        _load_datasets(dataset_name);
+        _load_datasets(dataset_name, load_mode);
     }
 
     // --- Accessors ---
@@ -177,26 +183,46 @@ private:
         ARTEA_SUCCESS(fmt::format("Successfully loaded dataset config from {}", config_path));
     }
 
-    auto _load_datasets(const std::string& dataset_name) -> void {
+    auto _load_datasets(const std::string& dataset_name, LoadMode load_mode) -> void {
         auto dataset_config = _config["datasets"][dataset_name];
 
         std::filesystem::path root_dir =
             artea::expand_home(_config["root_dir"].get<std::string>());
         std::filesystem::path dataset_dir = root_dir / dataset_config["dataset_dir"];
         std::filesystem::path base_vecs_path = dataset_dir / dataset_config["base_path"];
-        std::filesystem::path query_vecs_path = dataset_dir / dataset_config["query_path"];
-        std::filesystem::path gt_vecs_path = dataset_dir / dataset_config["gt_path"];
 
         ARTEA_INFO(fmt::format("Loading dataset {} from {} ...", dataset_name, dataset_dir.string()));
 
         _base_vecs = base_vecs_t(base_vecs_path.string());
+        if (load_mode == LoadMode::BaseOnly) {
+            _query_vecs = query_vecs_t{};
+            _gt_vecs = ground_truth_t{};
+            _pad_to_simd_alignment(_base_vecs);
+            ARTEA_SUCCESS(fmt::format("Successfully loaded {} base vectors ({} dims).",
+                _base_vecs.get_num_vecs(), _base_vecs.get_vec_dim()));
+            return;
+        }
+
+        std::filesystem::path query_vecs_path = dataset_dir / dataset_config["query_path"];
         _query_vecs = query_vecs_t(query_vecs_path.string());
+        if (load_mode == LoadMode::BaseAndQuery) {
+            if (_base_vecs.get_vec_dim() != _query_vecs.get_vec_dim()) {
+                ARTEA_ERROR("Base and query dimensions must match");
+            }
+            _gt_vecs = ground_truth_t{};
+            _pad_to_simd_alignment(_base_vecs);
+            _pad_to_simd_alignment(_query_vecs);
+            ARTEA_SUCCESS(fmt::format("Successfully loaded {} base vectors and {} query vectors ({} dims).",
+                _base_vecs.get_num_vecs(), _query_vecs.get_num_vecs(), _base_vecs.get_vec_dim()));
+            return;
+        }
+
+        std::filesystem::path gt_vecs_path = dataset_dir / dataset_config["gt_path"];
         _gt_vecs = ground_truth_t(gt_vecs_path.string());
 
-        // Pad base/query vectors to a multiple of SIMD_LANES floats. Tail
-        // lanes are zero-initialized by VectorArray's constructor, which is
-        // safe for L2/dot/cosine (zero contributions). Lets SIMDDistance
-        // drop its masked-tail path.
+        // Pad base/query vectors to a multiple of SIMD_LANES floats, explicitly
+        // zeroing tail lanes for L2/dot/cosine (zero contributions). Lets
+        // SIMDDistance drop its masked-tail path.
         _pad_to_simd_alignment(_base_vecs);
         _pad_to_simd_alignment(_query_vecs);
 
@@ -232,6 +258,8 @@ private:
                     const auto* src = vecs.get(i);
                     auto* dst = padded.get(i);
                     std::copy(src, src + orig_dim, dst);
+                    // AlignedAllocator skips initialization of trivial elements.
+                    std::fill(dst + orig_dim, dst + padded_dim, 0);
                 }
             });
         vecs = std::move(padded);

@@ -106,12 +106,12 @@ int main(int argc, char** argv) {
     program.add_argument("-n", "--num-samples")
         .default_value(1000u)
         .scan<'u', uint32_t>()
-        .help("Number of base vertices sampled for nearest/farthest probes (query uses all queries)");
+        .help("Base sample count for nearest/farthest probes only; LID uses fixed 500 queries and 1000 neighbors");
     program.add_argument("--mode")
         .default_value(std::string("all"))
         .nargs(1)
-        .choices("all", "nearest", "query", "farthest", "aspect-ratio")
-        .help("Statistics: all, nearest, query, farthest, or aspect-ratio (all reuses probe results)");
+        .choices("all", "lid", "nearest", "query", "farthest", "aspect-ratio")
+        .help("Statistics: all, lid, nearest, query, farthest, or aspect-ratio (lid computes only LID)");
 
     try {
         program.parse_args(argc, argv);
@@ -126,22 +126,38 @@ int main(int argc, char** argv) {
         const auto metric = parse_metric(program.get<std::string>("--metric"));
         const auto num_samples = program.get<uint32_t>("--num-samples");
         const auto mode = program.get<std::string>("--mode");
+        if (mode == "lid" && program.is_used("--num-samples")) {
+            throw std::invalid_argument(
+                "--mode lid uses FIXED 500 queries and 1000 neighbors; --num-samples is not allowed");
+        }
         if (num_samples == 0) {
             throw std::invalid_argument("--num-samples must be at least 1");
         }
 
-        vector_dataset_t dataset(config_path, dataset_name);
+        const auto load_mode = mode == "lid"
+            ? vector_dataset_t::LoadMode::BaseAndQuery : vector_dataset_t::LoadMode::All;
+        vector_dataset_t dataset(config_path, dataset_name, load_mode);
         const auto& base_vecs = dataset.get_base_vecs();
         ARTEA_INFO(fmt::format(
-            "Dataset: {}, metric: {}, dimension: {}, base vectors: {}, mode: {}, samples: {}",
+            "Dataset: {}, metric: {}, dimension: {}, base vectors: {}, query vectors: {}, mode: {}",
             dataset_name, metric_name(metric), dataset.get_vec_dim(),
-            dataset.get_num_base_vecs(), mode, num_samples));
+            dataset.get_num_base_vecs(), dataset.get_num_query_vecs(), mode));
 
         const auto start = std::chrono::steady_clock::now();
         infra_dispatch(DatasetInfra{metric, base_vecs.get_vec_dim()}, ARTEA_METRIC_LAMBDA(void) {
             dist_func_t<Metric, Dim> dist_func;
             using prober_t = dataset_prober_t<Metric, Dim>;
             prober_t prober(base_vecs, dist_func);
+
+            if (mode == "lid" || mode == "all" || mode == "nearest" || mode == "aspect-ratio") {
+                const auto lid = prober.probe_lid(dataset.get_query_vecs());
+                ARTEA_INFO(fmt::format(
+                    "Mean RVE-LID (FIXED: query_samples={}, k={}, seed={}, metric={}): {:.6f}",
+                    prober_t::FIXED_LID_QUERY_SAMPLES, prober_t::FIXED_LID_NEIGHBORS,
+                    prober_t::FIXED_LID_SEED, metric_name(metric), lid));
+                if (mode == "lid") return;
+            }
+
             std::optional<typename prober_t::ProbeResult> nearest;
             std::optional<typename prober_t::FarthestProbeResult> farthest;
 
@@ -149,8 +165,6 @@ int main(int argc, char** argv) {
                 ARTEA_INFO(fmt::format("Probing {} sampled vertices x 128 nearest-neighbor ranks...",
                     num_samples));
                 nearest = prober.probe(quantiles, num_samples);
-                ARTEA_INFO(fmt::format("Estimated LID (Levina-Bickel, k=128, metric={}): {:.6f}",
-                    metric_name(metric), nearest->lid));
                 if (mode != "aspect-ratio") {
                     ARTEA_INFO("Base nearest-neighbor distance quantiles:");
                     print_nn_table(*nearest);

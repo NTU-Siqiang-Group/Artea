@@ -71,7 +71,7 @@ private:
 class DatasetProberTest : public ::testing::Test {};
 
 /**
- * @brief Probe full table: nn_rank 1..128 x all quantiles, plus LID estimate.
+ * @brief Probe full table: nn_rank 1..128 x all quantiles, plus fixed query RVE-LID.
  *        Print in chunks of at most 10 nn_rank columns.
  */
 TEST_F(DatasetProberTest, Probe) {
@@ -95,11 +95,12 @@ TEST_F(DatasetProberTest, Probe) {
 
         auto t0 = std::chrono::high_resolution_clock::now();
         auto result = prober.probe(quantiles, num_samples);
+        const auto lid = prober.probe_lid(dataset.get_query_vecs());
         auto t1 = std::chrono::high_resolution_clock::now();
         double elapsed_s = std::chrono::duration_cast<std::chrono::microseconds>(t1 - t0).count() / 1e6;
 
         ARTEA_INFO(fmt::format("Probing completed in {:.2f} s ({} samples x 128 ranks)", elapsed_s, num_samples));
-        ARTEA_INFO(fmt::format("Estimated LID (Levina-Bickel, k=128): {:.4f}", result.lid));
+        ARTEA_INFO(fmt::format("Mean RVE-LID (FIXED: query_samples=500, k=1000): {:.4f}", lid));
 
         // Print table: one row per nn_rank, one column per quantile.
         const uint32_t total_ranks = static_cast<uint32_t>(result.nn_ranks.size());
@@ -121,7 +122,7 @@ TEST_F(DatasetProberTest, Probe) {
         }
 
         // Verify LID is positive and reasonable
-        EXPECT_GT(result.lid, 0.0f) << "LID should be positive";
+        EXPECT_GT(lid, 0.0) << "LID should be positive";
 
         // Verify: for each quantile, radii should be non-decreasing across nn_ranks
         for (size_t qi = 0; qi < result.quantiles.size(); ++qi) {
