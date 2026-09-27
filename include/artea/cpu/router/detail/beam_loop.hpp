@@ -23,6 +23,9 @@
 
 #pragma once
 
+#include <array>
+#include <cstddef>
+#include <ranges>
 #include <utility>
 
 #include <artea/cpu/router/data_structures/candidate_queue_concept.hpp>
@@ -32,6 +35,44 @@
 namespace artea {
 namespace cpu {
 namespace detail {
+
+/**
+ * @brief Process contiguous neighbor IDs in batches, prefetching each vector's first cache line.
+ * Newly discovered neighbors are marked while collecting a batch; callbacks retain traversal order.
+ * Noncontiguous adapters, including dynamic graphs, retain scalar processing and visited-mark timing.
+ * @tparam PrefetchBatchSize Maximum number of unvisited neighbors collected before running callbacks.
+ * @tparam EnablePrefetch Whether to issue read-prefetch hints; false provides a batching-only comparison.
+ */
+template <std::size_t PrefetchBatchSize = 8, bool EnablePrefetch = true,
+          typename NeighborListT, typename VectorArrayT, typename VisitedTableT, typename ProcessNeighborT>
+__attribute__((always_inline))
+inline auto process_prefetched_neighbors(NeighborListT&& level_nbrs, const VectorArrayT& vecs_data,
+                                        VisitedTableT& visited, ProcessNeighborT&& process_neighbor) -> void {
+    static_assert(PrefetchBatchSize > 0);
+    using vertex_id_t = std::ranges::range_value_t<NeighborListT>;
+
+    if constexpr (!std::ranges::contiguous_range<NeighborListT>) {
+        for (const vertex_id_t nbr_vid : level_nbrs) {
+            if (!visited.test_and_set(nbr_vid)) process_neighbor(nbr_vid);
+        }
+    } else {
+        std::array<vertex_id_t, PrefetchBatchSize> pending_nbrs;
+        auto next_nbr = std::ranges::begin(level_nbrs);
+        const auto nbrs_end = std::ranges::end(level_nbrs);
+        while (next_nbr != nbrs_end) {
+            std::size_t pending_count = 0;
+            while (next_nbr != nbrs_end && pending_count < pending_nbrs.size()) {
+                const vertex_id_t nbr_vid = *next_nbr++;
+                if (visited.test_and_set(nbr_vid)) continue;
+                pending_nbrs[pending_count++] = nbr_vid;
+                if constexpr (EnablePrefetch) __builtin_prefetch(vecs_data.get(nbr_vid), 0, 1);
+            }
+            for (std::size_t nbr_index = 0; nbr_index < pending_count; ++nbr_index) {
+                process_neighbor(pending_nbrs[nbr_index]);
+            }
+        }
+    }
+}
 
 /**
  * @brief Beam-search inner loop body. Caller is responsible for:
@@ -69,11 +110,11 @@ inline auto beam_loop_body(
         if (current.is_invalid()) break;
 
         const vertex_id_t cur_vid = current.get_vid();
-        for (const vertex_id_t nbr_vid : nbrs_range.of(cur_vid)) {
-            if (visited.test_and_set(nbr_vid)) continue;
+        process_prefetched_neighbors(nbrs_range.of(cur_vid), vecs_data, visited,
+                                    [&](const vertex_id_t nbr_vid) {
             const distance_t dist = dist_func(query_vec, vecs_data.get(nbr_vid));
             candidate_queue.try_push(nbr_vid, dist);
-        }
+        });
     }
 }
 
@@ -105,14 +146,14 @@ inline auto greedy_loop_body(
     while (true) {
         vertex_id_t next_vid  = best_vid;
         distance_t  next_dist = best_dist;
-        for (const vertex_id_t nbr_vid : nbrs_range.of(best_vid)) {
-            if (visited.test_and_set(nbr_vid)) continue;
+        process_prefetched_neighbors(nbrs_range.of(best_vid), vecs_data, visited,
+                                    [&](const vertex_id_t nbr_vid) {
             const distance_t nbr_dist = dist_func(query_vec, vecs_data.get(nbr_vid));
             if (nbr_dist < next_dist) {
                 next_dist = nbr_dist;
                 next_vid  = nbr_vid;
             }
-        }
+        });
         if (next_vid == best_vid) break;   // local optimum
         best_vid  = next_vid;
         best_dist = next_dist;

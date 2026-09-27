@@ -32,7 +32,9 @@ zero-neighbor arrays, unassigned records, allocation overflow, malformed/truncat
 injected centroid-distance exception. Run with ASan/UBSan to verify memory access and cleanup as well.
 
 `test_compact_csr_query` compares greedy and upper-beam top-10 results against independent exact sorting,
-including tied distances. It checks IDs and distances before/after restore and between single and batch queries.
+including tied distances. It checks IDs and distances across dynamic/compact graphs, restore, and batch queries.
+Prefetch cases cover batch sizes 4/8/16, traversal order, duplicates, previsited neighbors, empty lists,
+partial batches, sentinel termination, and scalar visited-mark timing for noncontiguous adapters.
 Round-trip test artifacts stay under the ignored `temp/validation/compact-csr/` directory.
 
 Set `ARTEA_COMPACTION_LEGACY_DIR` to the retained step-01 sample directory to restore all eight pre-CSR version-1
