@@ -525,6 +525,13 @@ public:
         return _arenas[h]->slot_capacity();
     }
 
+    /** @brief Slot reservation high-water mark of arena @p h, including
+     *         unused thread-local reservations. Inspect after insertion stops;
+     *         this is not the number of vertices in the apex bucket. */
+    auto get_num_claimed_slots_in_arena(const layer_id_t h) const -> std::size_t {
+        return _arenas[h]->num_claimed_slots();
+    }
+
     /** @brief Sum arena data and block-table storage after growth has stopped.
      *         Excludes vertex metadata, TLS caches and allocator bookkeeping. */
     auto arena_memory_usage() const -> typename level_group_arena_t::MemoryUsage {

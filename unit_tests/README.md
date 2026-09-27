@@ -1,5 +1,54 @@
 # Test Documentation
 
+## Compaction Capacity Baseline (Step 01)
+
+`test_hierarchical_graph_compactor` uses synthetic vectors and ordered neighbor
+lists, with no dataset download. It covers empty and L0-only graphs, retained
+layers (including the exact apex threshold and an empty intermediate group),
+consecutive top-layer trimming, demotion order, sentinel tails, and a unique
+centroid entry point. It also checks that the source remains usable after
+compaction. The reusable input lives in `compaction_baseline_fixture.hpp`.
+
+The segmented fixture uses the production 2,048-slot blocks and 8-slot TLS
+reservations. A worker consumes five reserved slots; the main thread then
+crosses a block boundary. These two allocation contexts make holes deterministic
+and are a correctness fixture, not a performance thread setting. The source
+L1 apex bucket contains 2,056 vertices, its reservation high-water mark is 2,064,
+and its allocated capacity is 4,096. Two L2 vertices are demoted to L1.
+The current compactor copies the existing offsets and appends demoted vertices
+after capacity. The test records this behavior; it does **not** fix it.
+
+```sh
+cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
+cmake --build build --target test_hierarchical_graph_compactor -j
+OMP_NUM_THREADS="$(nproc)" numactl --interleave=all ./build/unit_tests/test_hierarchical_graph_compactor
+```
+
+To retain pre-repair version-1 snapshots and JSON reports of coordinates,
+source/final buckets, ordered neighbors, capacities, reservation high-water
+marks, vertex layers, offsets, and entry points, set
+`ARTEA_COMPACTION_BASELINE_DIR` to a fresh directory under
+`temp/validation/compact-capacity/<experiment>/<run>/` for the test process.
+Without this variable the artifact-capture test is skipped. Save the source Git
+revision, launch command, CPU affinity, NUMA policy, thread setting, test logs,
+and snapshot checksums alongside these artifacts before changing the compactor.
+Reports record source neighbor rows; final rows are those prefixes at retained
+levels, checked independently by the topology assertions.
+
+The future dense-layout requirement is deliberately disabled in normal runs.
+Run it separately to reproduce the expected failure on the old compactor:
+
+```sh
+OMP_NUM_THREADS="$(nproc)" numactl --interleave=all ./build/unit_tests/test_hierarchical_graph_compactor \
+  --gtest_also_run_disabled_tests \
+  --gtest_filter=CompactionBaseline.DISABLED_DenseSlotsFollowFinalBucketOrder
+```
+
+This command must fail before the step-02 repair. Do not count it as a passing
+test. Step 02 should enable the dense test and replace the transitional assertions
+in `SegmentedSourceRetainsCapacityAndReservationHoles`; logical topology assertions
+remain valid regardless of physical offsets.
+
 - To test `BruteforceRouter`, run:
 
 ```bash
