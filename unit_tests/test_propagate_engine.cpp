@@ -110,7 +110,7 @@ protected:
             for (size_t i = 0; i < nbrs.size(); ++i) {
                 vertex_id_t v = nbrs[i].get_vid();
                 distance_t d_uv = nbrs[i].get_distance();
-                distance_t threshold = (d_uv / scale_coeffs) - shifted_coeffs;
+                distance_t threshold = (d_uv - (scale_coeffs + 1) * shifted_coeffs) / scale_coeffs;
 
                 // Check all other vertices
                 for (vertex_id_t w = 0; w < num_vertices_; ++w) {
@@ -281,6 +281,40 @@ TEST_F(PropagateEngineCorrectnessTest, TriangleSelectsClosestRecommendationWitho
     EXPECT_EQ(logs[0].get_vid(), 11u);
     EXPECT_FLOAT_EQ(logs[0].get_distance(), std::sqrt(8.0f));
     EXPECT_TRUE(engine.get_log_table().get_log_container(8).empty());
+}
+
+TEST_F(PropagateEngineCorrectnessTest, TriangleUsesAlphaDependentShiftAndKeepsRecommendations) {
+    // Pivot 0=(0,0), retained 2=(2,0), candidate 3=(3,0).
+    // The candidate-to-retained distance is 1. With alpha=2 and shift=0.4,
+    // the paper's conflicting radius is 0.9: retain candidate 3. The old
+    // formula gives 1.1 and incorrectly prunes it. Recommendation 2->3
+    // must still be emitted using the independent, unshifted radius 3.
+    struct Case { float alpha; float shift; bool retain_candidate; };
+    for (const auto c : {Case{2.0f, 0.0f, false}, Case{2.0f, 0.2f, false},
+                         Case{2.0f, 0.4f, true}, Case{2.0f, 1.0f / 3.0f, true},
+                         Case{1.0f, 1.25f, true}, Case{1.0f, 1.5f, true},
+                         Case{1.0f, 2.0f, true}}) {
+        SCOPED_TRACE(::testing::Message() << "alpha=" << c.alpha << ", shift=" << c.shift);
+        auto& neighbors = graph_index_->get_nbrs_arr()[0];
+        neighbors.clear();
+        for (const vertex_id_t id : {2u, 3u}) {
+            neighbors.emplace_back(id, compute_distance(0, id), true);
+        }
+
+        propagate_engine_t<TEST_METRIC, TEST_DIM> engine(*dist_func_);
+        engine.set_graph(graph_index_->get_refining_graph());
+        auto updater = engine.make_updater<triangle_updater_t<TEST_METRIC, TEST_DIM>>(
+            c.alpha, c.shift);
+        engine.propagate(0, updater);
+
+        EXPECT_TRUE(has_edge(neighbors, 2u));
+        EXPECT_EQ(has_edge(neighbors, 3u), c.retain_candidate);
+        EXPECT_EQ(neighbors.size(), c.retain_candidate ? 2u : 1u);
+        const auto& logs = engine.get_log_table().get_log_container(2);
+        ASSERT_EQ(logs.size(), 1u);
+        EXPECT_EQ(logs[0].get_vid(), 3u);
+        EXPECT_FLOAT_EQ(logs[0].get_distance(), 1.0f);
+    }
 }
 
 TEST_F(PropagateEngineCorrectnessTest, IntegratedRandomAndReverseUpdater) {

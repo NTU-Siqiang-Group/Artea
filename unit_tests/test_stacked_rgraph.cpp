@@ -55,7 +55,8 @@ struct TestConfig {
 
     // StackedRGraph parameters
     float    rnet_beta;
-    uint32_t    num_skip_levels;
+    float    shifted_coeffs;
+    uint32_t num_skipped_levels;
     bool     l0_min_distance_provided;
     float    l0_min_distance;
     uint32_t ul_max_nbr_size;
@@ -158,13 +159,24 @@ protected:
         const vertex_num_t total_vertices =
             static_cast<vertex_num_t>(base_vecs.get_num_vecs());
         stacked_rgraph::rgraph_config_t<Metric, Dim> rgraph_config(
-            g_config.rnet_beta, g_config.num_skip_levels,
+            g_config.rnet_beta, g_config.num_skipped_levels, g_config.shifted_coeffs,
             provider.get_l0_min_distance(),
             static_cast<vertex_num_t>(g_config.search_nn_qs),
             static_cast<vertex_num_t>(g_config.ul_select_nbrs_qs),
             static_cast<vertex_num_t>(g_config.bl_select_nbrs_qs),
             g_config.ul_max_nbr_size,
             g_config.bl_max_nbr_size);
+        ARTEA_INFO(fmt::format(
+            "Building StackedRGraph: beta={:.3f}, num_skipped_levels={}, R0 = {:.6f}, R1 = {:.6f}, "
+            "ul_max_nbr_size={}, bl_max_nbr_size={}, search_nn_qs={}, "
+            "ul_select_nbrs_qs={}, bl_select_nbrs_qs={}, "
+            "scale_coeffs={:.3f}",
+            rgraph_config.rnet_beta(), rgraph_config.num_skipped_levels(),
+            rgraph_config.radius_at(0), rgraph_config.radius_at(1),
+            g_config.ul_max_nbr_size, g_config.bl_max_nbr_size,
+            g_config.search_nn_qs,
+            g_config.ul_select_nbrs_qs, g_config.bl_select_nbrs_qs,
+            g_config.scale_coeffs));
         // stacked_rgraph::pruning_config_t is an alias of conv_graph's
         // PruningConfig; the stacked_rgraph backbone only reads
         // scale_coeffs from it, so shifted_coeffs is pinned to 0 here.
@@ -255,19 +267,6 @@ protected:
     }
 
     static void SetUpTestSuite() {
-        ARTEA_INFO(fmt::format(
-            "Building StackedRGraph: beta={:.3f}, num_skip_levels={}, l0_min_distance={:.6f}, "
-            "ul_max_nbr_size={}, bl_max_nbr_size={}, search_nn_qs={}, "
-            "ul_select_nbrs_qs={}, bl_select_nbrs_qs={}, "
-            "scale_coeffs={:.3f}",
-            g_config.rnet_beta,
-            g_config.num_skip_levels,
-            DataProvider::instance().get_l0_min_distance(),
-            g_config.ul_max_nbr_size, g_config.bl_max_nbr_size,
-            g_config.search_nn_qs,
-            g_config.ul_select_nbrs_qs, g_config.bl_select_nbrs_qs,
-            g_config.scale_coeffs));
-
         build_infra_dispatch(DataProvider::instance().get_dataset_info(), ARTEA_METRIC_LAMBDA(void) {
                 ARTEA_INFO("--- Building with insert_on_L0=false ---");
                 std::tie(_graph_no_l0, _build_ms_no_l0) =
@@ -338,12 +337,12 @@ int main(int argc, char** argv) {
         .default_value(std::string("euclidean"))
         .help("Task metric: euclidean/l2 or euclidean_sqr/l2_sqr (build=L2, compact search=L2 squared), inner_product, cosine");
 
-    program.add_argument("--beta")
-        .default_value(2.0f).scan<'g', float>()
-        .help("R-net radius growth factor from L1 upward");
-    program.add_argument("--num-skip-levels")
-        .default_value(0u).scan<'u', uint32_t>()
-        .help("Skipped geometric levels: L1 = l0_min_distance * rnet_beta^(num_skip_levels + 1)");
+    program.add_argument("--shifted-coeffs").default_value(0.0f).scan<'g', float>()
+        .help("Nonnegative tau; does not affect r-net radii");
+    program.add_argument("--beta").default_value(2.0f).scan<'g', float>()
+        .help("R-net radius growth factor, finite and > 1");
+    program.add_argument("--num-skipped-levels").default_value(0u).scan<'u', uint32_t>()
+        .help("Skipped geometric levels: R1 = l0_min_distance * beta^(num_skipped_levels + 1)");
     program.add_argument("--l0-min-distance")
         .default_value(-1.0f).scan<'g', float>()
         .help("Characteristic L0 minimum distance in build-distance units. "
@@ -372,7 +371,7 @@ int main(int argc, char** argv) {
     program.add_argument("--scale-coeffs")
         .default_value(1.1f).scan<'g', float>()
         .help("RNG scale coefficient applied at upper layers (default 1.1). "
-              "shifted_coeffs is forced to 0 at the stacked_rgraph config.");
+              "shifted_coeffs sets tau in the radius config; insertion pruning ignores the shift.");
 
     try {
         program.parse_args(argc, argv);
@@ -385,7 +384,8 @@ int main(int argc, char** argv) {
     g_config.dataset_name       = program.get<std::string>("--dataset");
     g_config.metric             = program.get<std::string>("--metric");
     g_config.rnet_beta          = program.get<float>("--beta");
-    g_config.num_skip_levels         = program.get<uint32_t>("--num-skip-levels");
+    g_config.shifted_coeffs     = program.get<float>("--shifted-coeffs");
+    g_config.num_skipped_levels = program.get<uint32_t>("--num-skipped-levels");
     g_config.ul_max_nbr_size    = program.get<uint32_t>("--ul-max-nbr-size");
     g_config.bl_max_nbr_size    = program.get<uint32_t>("--bl-max-nbr-size");
     g_config.probe_num_samples  = program.get<uint32_t>("--probe-num-samples");
@@ -402,7 +402,7 @@ int main(int argc, char** argv) {
     std::cout << "\n=== Test Configuration ===\n";
     std::cout << "Dataset:        " << g_config.dataset_name   << "\n";
     std::cout << "rnet_beta:      " << g_config.rnet_beta      << "\n";
-    std::cout << "num_skip_levels:     " << g_config.num_skip_levels << "\n";
+    std::cout << "num_skipped_levels: " << g_config.num_skipped_levels << "\n";
     if (g_config.l0_min_distance_provided) {
         std::cout << "L0 minimum distance:      " << g_config.l0_min_distance
                   << " (user-provided)\n";

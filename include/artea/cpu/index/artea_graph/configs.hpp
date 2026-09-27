@@ -16,7 +16,8 @@
  * @FilePath: /Artea/include/artea/cpu/index/artea_graph/configs.hpp
  * @Author: Chandler (Weitang Ye) <weitang.ye@ntu.edu.sg>
  * @Description: Configs for artea_graph. Reuses conv_graph's PropagateConfig
- *               and stacked_rgraph's RGraphConfig. PruningConfig is standalone:
+ *               and stacked_rgraph's RGraphConfig.
+ *               PruningConfig is standalone:
  *               on top of the usual scale/shift it carries an
  *               aspect-ratio-constrained (ARC) pruning policy consumed
  *               as a final sweep in refine_layer.
@@ -57,7 +58,7 @@ using RGraphConfig = stacked_rgraph::RGraphConfig<IndexTraitsT>;
  *     by orders of magnitude (e.g. sift-1m raw vs gist-1m normalized).
  *     Use the same value as @c rgraph_config.l0_min_distance(), which
  *     also sets the L1 covering radius after multiplication by
- *     @c rnet_beta^(num_skip_levels + 1).
+ *     @c rnet_beta()^(num_skipped_levels() + 1).
  *
  * @tparam IndexTraitsT The index traits type.
  */
@@ -66,7 +67,7 @@ struct PruningConfig {
     using ratio_t = typename IndexTraitsT::ratio_t;
 
     /**
-     * @param scale_coeffs            RNG scale coefficient (>= 1).
+     * @param scale_coeffs            RNG scale coefficient.
      *                                Applied uniformly at every layer.
      * @param shifted_coeffs          RNG shift coefficient (>= 0).
      *                                Applied only at L0 during refinement;

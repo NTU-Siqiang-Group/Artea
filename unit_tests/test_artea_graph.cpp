@@ -78,7 +78,7 @@ struct TestConfig {
 
     // Stacked r-net backbone
     float    rnet_beta;
-    uint32_t    num_skip_levels;
+    uint32_t num_skipped_levels;
     bool     l0_min_distance_provided;
     float    l0_min_distance;
     uint32_t ul_max_nbr_size;
@@ -124,8 +124,8 @@ auto dump_config(const char* banner) -> void {
        << "Dataset:                    " << g_config.dataset_name << "\n"
        << "Config path:                " << g_config.config_path << "\n"
        << "--- Stacked r-net backbone ---\n"
-       << "rnet_beta:                  " << g_config.rnet_beta << "\n"
-       << "num_skip_levels:                 " << g_config.num_skip_levels << "\n";
+       << "rnet_beta:                      " << g_config.rnet_beta << "\n"
+       << "num_skipped_levels:         " << g_config.num_skipped_levels << "\n";
     if (g_config.l0_min_distance_provided) {
         os << "L0 minimum distance:                  " << g_config.l0_min_distance
            << " (user-provided)\n";
@@ -264,7 +264,7 @@ protected:
 
             artea_graph::rgraph_config_t<Metric, Dim> rgraph_config(
                 g_config.rnet_beta,
-                g_config.num_skip_levels,
+                g_config.num_skipped_levels, g_config.shifted_coeffs,
                 provider.get_l0_min_distance(),
                 static_cast<vertex_num_t>(g_config.search_nn_qs),
                 static_cast<vertex_num_t>(g_config.ul_select_nbrs_qs),
@@ -587,18 +587,8 @@ int main(int argc, char** argv) {
     }
 
     // Build params: same keys and defaults as bench-artea's run_all().
-    g_config.rnet_beta          = params.value("rnet_beta", 2.0f);
-    if (params.contains("rnet_beta0")) {
-        std::cerr << "rnet_beta0 has been removed; use integer num_skip_levels instead\n";
-        return 1;
-    }
-    const auto skip_levels = params.value("num_skip_levels", nlohmann::json(0));
-    if (!skip_levels.is_number_integer() || skip_levels.get<double>() < 0 ||
-        skip_levels.get<double>() > std::numeric_limits<uint32_t>::max()) {
-        std::cerr << "num_skip_levels must be a nonnegative 32-bit integer\n";
-        return 1;
-    }
-    g_config.num_skip_levels = skip_levels.get<uint32_t>();
+    g_config.rnet_beta              = params.value("rnet_beta", 2.0f);
+    g_config.num_skipped_levels = params.value("num_skipped_levels", 0u);
     g_config.l0_min_distance_provided = params.contains("l0_min_distance");
     g_config.l0_min_distance     = params.value("l0_min_distance", -1.0f);
     g_config.ul_max_nbr_size    = params.value("ul_max_nbr_size", 32u);

@@ -19,8 +19,8 @@
  *               Uses two decoupled thresholds derived from the same
  *               distance: @c recommend_threshold = @c ori_dist
  *               (plain RNG) controls reverse-edge log emission, and
- *               @c prune_threshold = @c ori_dist * inv_scale - shift
- *               (scaled_shifted, same as @c PruningUpdater) controls
+ *               @c prune_threshold = @c ori_dist * inv_scale - (1 + inv_scale) * shift
+ *               (ARC-Pruning conflicting radius) controls
  *               whether @c ori_nbr is dropped from the pivot's
  *               neighbor list. Defaults (@c scale_coeffs=1,
  *               @c shifted_coeffs=0) collapse both thresholds to
@@ -87,8 +87,8 @@ public:
      *   - @c recommend_threshold = @c ori_dist (plain RNG). Any already-
      *     retained neighbor closer than this receives a reverse-edge
      *     log entry naming @c ori_nbr as a candidate.
-     *   - @c prune_threshold    = @c ori_dist * inv_scale - shift
-     *     (scaled_shifted). A retained neighbor closer than this
+     *   - @c prune_threshold = @c ori_dist * inv_scale - (1 + inv_scale) * shift
+     *     (ARC-Pruning). A retained neighbor closer than this
      *     rejects @c ori_nbr from the pivot's list.
      * Under defaults (@c scale=1, @c shift=0) both thresholds collapse
      * to @c ori_dist, recovering the plain-RNG log-on-reject behavior.
@@ -161,9 +161,9 @@ private:
     /** @brief Inverse of scale coefficient for RNG Triangle Inequality. */
     const ratio_t _inv_scale_coeffs;
 
-    /** @brief Shifted coefficient for RNG Triangle Inequality.
-     *         Subtracted as a bare term from the scaled distance in the
-     *         prune-threshold formula. */
+    /** @brief Distance offset tau * rho for ARC-Pruning.
+     *         Multiplied by (1 + inv_scale) before subtraction from the
+     *         scaled distance: (ori_dist - (scale + 1) * shift) / scale. */
     const ratio_t _shifted_coeffs;
 
     /**
@@ -173,7 +173,7 @@ private:
      *        Two decoupled thresholds derived from
      *        @c checking_nbr.get_distance() :
      *          - @c recommend_threshold = @c checking_dist
-     *          - @c prune_threshold     = @c checking_dist * inv_scale - shift
+     *          - @c prune_threshold = @c checking_dist * inv_scale - (1 + inv_scale) * shift
      *
      *        Iterates @p retained_nbrs in descending pivot-distance order.
      *        At most one recommendation target is reported per call — the retained neighbor with
@@ -204,7 +204,8 @@ private:
     ) -> std::pair<nbr_t, bool> {
         const vec_ele_t* checking_vec = this->_vecs_data.get(checking_nbr.get_vid());
         const distance_t recommend_threshold = checking_nbr.get_distance();
-        const distance_t prune_threshold     = checking_nbr.get_distance() * _inv_scale_coeffs - _shifted_coeffs;
+        const distance_t prune_threshold = checking_nbr.get_distance() * _inv_scale_coeffs
+            - (ratio_t(1) + _inv_scale_coeffs) * _shifted_coeffs;
 
         // recommend_to starts invalid (distance = max_distance), so the
         // "closer-than-current" test below picks up the first soft

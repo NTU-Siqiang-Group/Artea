@@ -44,17 +44,21 @@ OMP_NUM_THREADS="$(nproc)" numactl --interleave=all ./build/unit_tests/test_stag
 
 ## R-net Geometry
 
-Graph construction uses `R1 = l0_min_distance * rnet_beta^(num_skip_levels + 1)`,
-followed by `Rh = l0_min_distance * rnet_beta^(num_skip_levels + h)` for `h >= 1`.
-`num_skip_levels` is a nonnegative integer defaulting to `0` in workload and
-CLI runners. `l0_min_distance` is expressed in build-distance
-units and also scales ARTEA's L0 refinement shift. `radius_at(0)` returns this
-base distance scale; L0 itself is not an r-net.
+Graph construction sets its radius geometry using `rnet_beta > 1`
+(default `2.0`) and `num_skipped_levels >= 0` (integer, default `0`):
+`R0 = l0_min_distance`, and
+`Rh = R0 * rnet_beta^(num_skipped_levels + h)` for `h >= 1`.
+`tau = shifted_coeffs >= 0` (default `0`) controls ARTEA's L0 refinement shift
+and does not affect these radii.
+The L0 distance scale stays unchanged; `scale_coeffs` does not affect radii. ARTEA and stacked r-nets share `stacked_rgraph::RGraphConfig`.
+All distances use build-distance units; the same L0 scale controls ARTEA's
+refinement shift.
 
 `test_artea_graph` reads these values from the workload's `indexes-config.artea`
 entry. CLI tests `test_stacked_rgraph` and `test_hierarchical_graph_persistence`
-accept `--num-skip-levels`, `--l0-min-distance`, and `--beta`. Their distance probe
-can supply `l0_min_distance` when a negative value is given.
-`test_stage_distance` also checks the radius progression and verifies that
-L1 membership changes with `num_skip_levels` and `rnet_beta`, including the
-zero-skip case, non-integer growth factors, and L1-radius overflow rejection.
+accept `--beta`, `--num-skipped-levels`, `--shifted-coeffs`, `--scale-coeffs`,
+and `--l0-min-distance`.
+Their distance probe can supply `l0_min_distance` when a negative value is given.
+`test_stage_distance` checks skipped levels, fractional beta, geometric radius
+growth, tau scaling, invalid parameters, L1-radius overflow, actual L1 membership, and the
+shared ARTEA/stacked-rnet configuration type.

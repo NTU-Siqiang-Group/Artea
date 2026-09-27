@@ -67,7 +67,7 @@ const DatasetInfra info{parse_metric("euclidean"), base_vecs.get_vec_dim()};
 auto compact_hg = build_infra_dispatch(info, ARTEA_METRIC_LAMBDA(compact::hierarchical_graph_t) {
     dist_func_t<Metric, Dim> build_dist;
     artea_graph::rgraph_config_t<Metric, Dim> rgraph_cfg(
-        /*rnet_beta=*/2.0, /*num_skip_levels=*/0u,
+        /*beta=*/2.0, /*num_skipped_levels=*/0, /*tau=*/1.5,
         /*l0_min_distance=*/1.0, /*search_nn_qs=*/64);
     artea_graph::propagate_config_t<Metric, Dim> propagate_cfg(
         /*build_loops=*/15, /*triu_iters=*/4, /*prefill=*/0.4f);

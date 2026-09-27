@@ -16,43 +16,79 @@
 #include <array>
 #include <cmath>
 #include <optional>
+#include <limits>
+#include <type_traits>
 
 #include <gtest/gtest.h>
 #include <artea/cpu/framework/type_context/infra_dispatcher.hpp>
 
 using namespace artea::cpu;
 
+static_assert(std::is_same_v<
+    artea_graph::rgraph_config_t<DistanceMetricsT::EUCLIDEAN, 96>,
+    stacked_rgraph::rgraph_config_t<DistanceMetricsT::EUCLIDEAN, 96>>,
+    "ARTEA and stacked r-nets must share the same configuration type");
+
 TEST(RGraphRadius, SkipLevelsSetL1AndPreserveGeometricGrowth) {
     using config_t = artea_graph::rgraph_config_t<DistanceMetricsT::EUCLIDEAN, 96>;
-    const config_t config(/*beta=*/2.0f, /*num_skip_levels=*/0u, /*min_distance=*/0.5f, 16);
-    EXPECT_EQ(config.num_skip_levels(), 0u);
+    const config_t config(/*beta=*/2.0f, /*num_skipped_levels=*/0u, 0.0f, /*min_distance=*/0.5f, 16);
+    EXPECT_EQ(config.num_skipped_levels(), 0u);
     EXPECT_FLOAT_EQ(config.radius_at(0), 0.5f);
     EXPECT_FLOAT_EQ(config.radius_at(1), 1.0f);
     EXPECT_FLOAT_EQ(config.radius_at(2), 2.0f);
     EXPECT_FLOAT_EQ(config.radius_at(3), 4.0f);
     EXPECT_FLOAT_EQ(config.radius_at(4), 8.0f);
 
-    const config_t larger_beta(4.0f, 0u, 0.5f, 16);
+    const config_t larger_beta(4.0f, 0u, 0.0f, 0.5f, 16);
     EXPECT_FLOAT_EQ(larger_beta.radius_at(1), 2.0f);
     EXPECT_FLOAT_EQ(larger_beta.radius_at(2), 8.0f);
     EXPECT_FLOAT_EQ(larger_beta.radius_at(3), 32.0f);
 
-    const config_t skipped(2.0f, 2u, 0.5f, 16);
-    EXPECT_EQ(skipped.num_skip_levels(), 2u);
+    const config_t skipped(2.0f, 2u, 0.0f, 0.5f, 16);
+    EXPECT_EQ(skipped.num_skipped_levels(), 2u);
     EXPECT_FLOAT_EQ(skipped.radius_at(0), config.radius_at(0));
     EXPECT_FLOAT_EQ(skipped.radius_at(1), 4.0f);
     for (layer_num_t h = 1; h <= 4; ++h) {
         EXPECT_FLOAT_EQ(skipped.radius_at(h), config.radius_at(h + 2));
     }
 
-    const config_t fractional_beta(1.5f, 3u, 2.0f, 16);
+    const config_t fractional_beta(1.5f, 3u, 0.0f, 2.0f, 16);
     EXPECT_FLOAT_EQ(fractional_beta.radius_at(1), 10.125f);
     EXPECT_FLOAT_EQ(fractional_beta.radius_at(2), 15.1875f);
 
-    EXPECT_THROW(config_t(1.0f, 0u, 0.5f, 16), std::runtime_error);
-    EXPECT_THROW(config_t(2.0f, 0u, 0.0f, 16), std::runtime_error);
-    EXPECT_THROW(config_t(2.0f, std::numeric_limits<layer_num_t>::max(), 0.5f, 16), std::runtime_error);
-    EXPECT_THROW(config_t(std::numeric_limits<float>::quiet_NaN(), 0u, 0.5f, 16), std::runtime_error);
+    for (const float beta : {0.0f, 0.9f, 1.0f,
+                             std::numeric_limits<float>::infinity()}) {
+        EXPECT_THROW(config_t(beta, 0u, 0.0f, 0.5f, 16), std::runtime_error);
+    }
+    EXPECT_THROW(config_t(2.0f, 0u, 0.0f, 0.5f, 0), std::runtime_error);
+    EXPECT_THROW(config_t(2.0f, 0u, 0.0f, 0.5f, 16, 0), std::runtime_error);
+    EXPECT_THROW(config_t(2.0f, 0u, 0.0f, 0.5f, 16, 16, 0), std::runtime_error);
+    EXPECT_THROW(config_t(2.0f, 0u, 0.0f, 0.0f, 16), std::runtime_error);
+    EXPECT_THROW(config_t(2.0f, std::numeric_limits<layer_num_t>::max(), 0.0f, 0.5f, 16), std::runtime_error);
+    EXPECT_THROW(config_t(std::numeric_limits<float>::quiet_NaN(), 0u, 0.0f, 0.5f, 16), std::runtime_error);
+}
+
+TEST(RGraphRadius, TauDoesNotAffectRadii) {
+    using config_t = artea_graph::rgraph_config_t<DistanceMetricsT::EUCLIDEAN, 96>;
+    const config_t original(2.0f, 1u, 0.0f, 0.5f, 16);
+    for (const float tau : {0.0f, 0.5f, 1.0f, 2.0f, std::numeric_limits<float>::max()}) {
+        const config_t config(2.0f, 1u, tau, 0.5f, 16);
+        EXPECT_FLOAT_EQ(config.tau(), tau);
+        EXPECT_FLOAT_EQ(config.radius_at(0), 0.5f);
+        for (layer_num_t h = 1; h < 6; ++h) {
+            const float expected = 0.5f * std::pow(2.0f, h + 1);
+            EXPECT_FLOAT_EQ(config.radius_at(h), expected);
+            EXPECT_FLOAT_EQ(config.radius_at(h), original.radius_at(h));
+            EXPECT_FLOAT_EQ(config.radius_at(h + 1) / config.radius_at(h), 2.0f);
+        }
+    }
+    const config_t fractional(1.5f, 3u, 0.5f, 2.0f, 16);
+    EXPECT_FLOAT_EQ(fractional.radius_at(1), 10.125f);
+    EXPECT_FLOAT_EQ(fractional.radius_at(2), 15.1875f);
+    for (const float invalid : {-1.0f, std::numeric_limits<float>::quiet_NaN(),
+                               std::numeric_limits<float>::infinity()}) {
+        EXPECT_THROW(config_t(2.0f, 0u, invalid, 0.5f, 16), std::runtime_error);
+    }
 }
 
 TEST(RGraphRadius, L1MembershipChangesWithSkippedLevelsAndBeta) {
@@ -62,26 +98,29 @@ TEST(RGraphRadius, L1MembershipChangesWithSkippedLevelsAndBeta) {
     const stacked_rgraph::pruning_config_t<metric, dim> pruning_config(1.0f, 0.0f);
     // With R1=4, points 0 and 5 enter L1 and cover point 9. With R1=8,
     // point 0 covers point 5, while point 9 must enter L1.
-    struct Case { float beta; layer_num_t skips; layer_id_t second; layer_id_t third; };
-    for (const auto c : {Case{2.0f, 0u, 1, 0}, Case{2.0f, 1u, 0, 1}, Case{4.0f, 0u, 0, 1}}) {
-            SCOPED_TRACE(::testing::Message() << "beta=" << c.beta << ", skips=" << c.skips);
-            const stacked_rgraph::rgraph_config_t<metric, dim> config(
-                c.beta, c.skips, 2.0f, 16);
-            stacked_rgraph::index_t<metric, dim> graph(3, config, pruning_config);
-            EXPECT_EQ(graph.num_skip_levels(), c.skips);
-            // Separate batches make the insertion order deterministic even
-            // when construction uses parallel workers.
-            for (const float x : {0.0f, 5.0f, 9.0f}) {
-                vector_array_t point(1, dim);
-                std::fill_n(point.get(0), dim, 0.0f);
-                point.get(0)[0] = x;
-                stacked_rgraph::factory_t<metric, dim>::add_vertices(
-                    graph, std::move(point), build_dist, /*insert_on_L0=*/false);
-            }
-            const auto& hierarchy = graph.get_hierarchical_graph();
-            EXPECT_EQ(hierarchy.get_highest_level_id(0), 1);
-            EXPECT_EQ(hierarchy.get_highest_level_id(1), c.second);
-            EXPECT_EQ(hierarchy.get_highest_level_id(2), c.third);
+    struct Case { float beta; layer_num_t skips; float tau; layer_id_t second; layer_id_t third; };
+    for (const auto c : {Case{2.0f, 0u, 0.0f, 1, 0}, Case{2.0f, 1u, 0.0f, 0, 1},
+                         Case{4.0f, 0u, 0.0f, 0, 1}, Case{2.0f, 0u, 1.0f, 1, 0}}) {
+        SCOPED_TRACE(::testing::Message() << "beta=" << c.beta << ", skips=" << c.skips << ", tau=" << c.tau);
+        const stacked_rgraph::rgraph_config_t<metric, dim> config(
+            c.beta, c.skips, c.tau, 2.0f, 16);
+        stacked_rgraph::index_t<metric, dim> graph(3, config, pruning_config);
+        EXPECT_EQ(graph.num_skipped_levels(), c.skips);
+        EXPECT_FLOAT_EQ(graph.tau(), c.tau);
+        EXPECT_FLOAT_EQ(graph.radius_at(1), config.radius_at(1));
+        // Separate batches make the insertion order deterministic even
+        // when construction uses parallel workers.
+        for (const float x : {0.0f, 5.0f, 9.0f}) {
+            vector_array_t point(1, dim);
+            std::fill_n(point.get(0), dim, 0.0f);
+            point.get(0)[0] = x;
+            stacked_rgraph::factory_t<metric, dim>::add_vertices(
+                graph, std::move(point), build_dist, /*insert_on_L0=*/false);
+        }
+        const auto& hierarchy = graph.get_hierarchical_graph();
+        EXPECT_EQ(hierarchy.get_highest_level_id(0), 1);
+        EXPECT_EQ(hierarchy.get_highest_level_id(1), c.second);
+        EXPECT_EQ(hierarchy.get_highest_level_id(2), c.third);
     }
 }
 
@@ -147,9 +186,9 @@ TEST(StageDistance, EuclideanBuildCompactsAndSearchesWithSquaredDistances) {
         ASSERT_EQ(Dim, dim);
         dist_func_t<Metric, Dim> build_dist;
         artea_graph::rgraph_config_t<Metric, Dim> rgraph_config(
-            2.0f, 2u, 1.0f, 16, 16, 16, 8, 16);
+            2.0f, 0, 0.0f, 1.0f, 16, 16, 16, 8, 16);
         artea_graph::propagate_config_t<Metric, Dim> propagate_config(1, 1, 0.6f);
-        artea_graph::pruning_config_t<Metric, Dim> pruning_config(1.0f, 0.0f);
+        artea_graph::pruning_config_t<Metric, Dim> pruning_config(1.1f, 0.0f);
         artea_graph::index_t<Metric, Dim> graph(
             count, rgraph_config, propagate_config, pruning_config);
         artea_graph::factory_t<Metric, Dim>::add_vertices(
