@@ -733,7 +733,7 @@ TEST(LevelGroupArenaTest, GraphAllocatesNeighborStorageOnlyForAssignedGroups) {
     EXPECT_EQ(usage.block_table_bytes, usage.block_table_capacity * sizeof(cache_aligned_container_t<nbr_t>));
     for (vertex_num_t level = 0; level <= 12; ++level) {
         const auto blocks = level == 0 ? 2u : (level == 3 ? 1u : 0u);
-        EXPECT_EQ(graph.get_arena_capacity_in_arena(level), blocks * block_slots_count);
+        EXPECT_EQ(graph.get_slot_capacity_in_level(level), blocks * block_slots_count);
     }
 }
 
@@ -747,16 +747,16 @@ TEST(LevelGroupArenaTest, SegmentedGraphCompactsWithoutChangingLayerNeighbors) {
     index_traits_t::vector_array_t vectors(vertices, 1);
     for (vertex_num_t vid = 0; vid < vertices; ++vid) {
         // Both retained level groups cross a block boundary. The sparse L2
-        // group is demoted by compact, exercising its capacity-based offsets.
+        // group is demoted by compact, exercising its CSR offsets.
         const vertex_num_t highest = vid == vertices - 1 ? 2 : vid % 2;
         graph.assign_layer(vid, highest);
         vectors.get(vid)[0] = static_cast<float>(vid);
         for (vertex_num_t level = 0; level <= highest; ++level) {
-            auto neighbors = graph.fetch_layer_nbrs(vid, level);
+            auto neighbors = graph.fetch_level_nbrs(vid, level);
             ASSERT_EQ(neighbors.size(), level == 0 ? 5u : 3u);
             for (const auto& neighbor : neighbors) ASSERT_TRUE(neighbor.is_invalid());
             neighbors[0] = nbr_t((vid + level + 1) % vertices, 1.0f);
-            const auto const_neighbors = std::as_const(graph).fetch_layer_nbrs(vid, level);
+            const auto const_neighbors = std::as_const(graph).fetch_level_nbrs(vid, level);
             ASSERT_EQ(const_neighbors.data(), neighbors.data());
         }
     }
@@ -772,12 +772,9 @@ TEST(LevelGroupArenaTest, SegmentedGraphCompactsWithoutChangingLayerNeighbors) {
         const auto highest = std::min<vertex_num_t>(graph.get_highest_level_id(vid), 1);
         EXPECT_EQ(compact.get_highest_level_id(vid), highest);
         for (vertex_num_t level = 0; level <= highest; ++level) {
-            const auto neighbors = compact.fetch_layer_nbrs(vid, level);
-            ASSERT_EQ(neighbors.size(), level == 0 ? 5u : 3u);
+            const auto neighbors = compact.fetch_level_nbrs(vid, level);
+            ASSERT_EQ(neighbors.size(), 1u);
             EXPECT_EQ(neighbors[0], (vid + level + 1) % vertices);
-            for (std::size_t entry = 1; entry < neighbors.size(); ++entry) {
-                EXPECT_EQ(neighbors[entry], index_traits_t::invalid_vertex_id);
-            }
         }
     }
 }

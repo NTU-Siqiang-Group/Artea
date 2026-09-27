@@ -17,12 +17,10 @@
  * @Author: Chandler (Weitang Ye) <weitang.ye@ntu.edu.sg>
  * @Description: NeighborRange adapter binding a compact::HierarchicalGraph
  *               + layer_id. The graph already yields vertex_id_t directly,
- *               so the adapter just sentinel-stops on invalid_vertex_id.
+ *               so the adapter returns its exact CSR span.
  */
 
 #pragma once
-
-#include <ranges>
 
 namespace artea {
 namespace cpu {
@@ -34,9 +32,6 @@ public:
     using vertex_id_t = typename HierarchicalGraphT::vertex_id_t;
     using layer_id_t  = typename HierarchicalGraphT::layer_id_t;
 
-    static constexpr vertex_id_t invalid_vertex_id =
-        HierarchicalGraphT::invalid_vertex_id;
-
     __attribute__((always_inline))
     CompactLayerRange(const HierarchicalGraphT& hier_graph,
                       const layer_id_t          level_id) :
@@ -44,10 +39,7 @@ public:
 
     __attribute__((always_inline))
     auto of(const vertex_id_t vid) const {
-        return _hier_graph.fetch_layer_nbrs(vid, _level_id)
-             | std::views::take_while([](const vertex_id_t v) {
-                   return v != invalid_vertex_id;
-               });
+        return _hier_graph.fetch_level_nbrs(vid, _level_id);
     }
 
 private:

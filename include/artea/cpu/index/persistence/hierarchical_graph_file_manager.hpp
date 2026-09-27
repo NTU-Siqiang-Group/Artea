@@ -19,16 +19,8 @@
  *
  *               Single-file binary (.graph) format. All integer fields
  *               are little-endian uint32. Only valid neighbors are
- *               persisted; trailing sentinel cells in the in-memory
- *               arena are reconstructed at restore time by the
- *               compact::HierarchicalGraph constructor's
- *               std::fill(arena, invalid_vertex_id) pass.
- *
- *               Authoritative reference for the per-vertex in-arena
- *               layout used by snapshot's per-level loop and by
- *               restore's offset arithmetic:
- *                 compact_structure/hierarchical_graph.hpp ::
- *                 HierarchicalGraph::fetch_layer_nbrs.
+ *               persisted. Restore rebuilds grouped CSR offsets and the global
+ *               neighbor array without changing the version-1 wire format.
  *
  *               Wire format (no padding):
  *                 [Header — 7 × uint32 = 28 bytes]
@@ -50,6 +42,7 @@
 
 #pragma once
 
+#include <algorithm>
 #include <cstdint>
 #include <cstring>
 #include <filesystem>
@@ -123,7 +116,6 @@ public:
         ofs.write(reinterpret_cast<const char*>(&bl_max_nbr_size),    sizeof(uint32_t));
         ofs.write(reinterpret_cast<const char*>(&entry_point_vid),    sizeof(uint32_t));
 
-        constexpr vertex_id_t invalid_vertex_id_sentinel = compact_hg_t::invalid_vertex_id;
         constexpr layer_id_t  unassigned_highest_level_sentinel = compact_hg_t::invalid_level_id;
 
         for (vertex_id_t vid = 0; vid < num_vertices; ++vid) {
@@ -131,14 +123,10 @@ public:
             ofs.write(reinterpret_cast<const char*>(&highest_level_id), sizeof(uint32_t));
             if (highest_level_id == unassigned_highest_level_sentinel) continue;
 
-            // Walk levels [highest_level_id .. 0] matching in-arena layout.
+            // Walk levels [highest_level_id .. 0], preserving the version-1 record order.
             for (layer_id_t level_id = highest_level_id; ; --level_id) {
-                auto level_nbrs = compact_hg.fetch_layer_nbrs(vid, level_id);
-                uint32_t valid_nbr_count = 0;
-                for (vertex_id_t nbr_vid : level_nbrs) {
-                    if (nbr_vid == invalid_vertex_id_sentinel) break;
-                    ++valid_nbr_count;
-                }
+                auto level_nbrs = compact_hg.fetch_level_nbrs(vid, level_id);
+                const uint32_t valid_nbr_count = static_cast<uint32_t>(level_nbrs.size());
                 ofs.write(reinterpret_cast<const char*>(&valid_nbr_count),
                           sizeof(uint32_t));
                 if (valid_nbr_count > 0) {
@@ -201,17 +189,22 @@ public:
                 "version {} in {}", version, bin_path));
         }
 
+        if (top_level_id == compact_hg_t::invalid_level_id ||
+            (entry_point_vid != compact_hg_t::invalid_vertex_id && entry_point_vid >= num_vertices)) {
+            ARTEA_ERROR(fmt::format("HierarchicalGraphFileManager::restore: invalid header in {}", bin_path));
+        }
+
         const std::size_t num_groups =
             static_cast<std::size_t>(top_level_id) + 1;
 
-        // Empty graph: zero-capacity arenas, entry point sentinel.
+        // Empty graph: one end offset per empty group, no neighbor IDs.
         if (num_vertices == 0) {
-            std::vector<std::size_t> empty_arena_caps(num_groups, 0);
+            std::vector<std::size_t> empty_group_counts(num_groups, 0);
             compact_hg_t compact_hg(top_level_id,
                                     ul_max_nbr_size,
                                     bl_max_nbr_size,
                                     num_vertices,
-                                    std::move(empty_arena_caps));
+                                    std::move(empty_group_counts));
             compact_hg.set_entry_point_vid(entry_point_vid);
             return compact_hg;
         }
@@ -222,7 +215,7 @@ public:
         // Single-pass read into staging buffers.
         std::vector<layer_id_t> highest_level_table(num_vertices);
         std::vector<std::vector<std::vector<vertex_id_t>>>
-            per_vid_layer_nbrs(num_vertices);
+            per_vid_level_nbrs(num_vertices);
         std::vector<vertex_num_t> highest_level_histogram(num_groups, 0);
 
         for (vertex_id_t vid = 0; vid < num_vertices; ++vid) {
@@ -245,7 +238,7 @@ public:
             }
 
             highest_level_histogram[highest_level_id] += 1;
-            per_vid_layer_nbrs[vid].resize(
+            per_vid_level_nbrs[vid].resize(
                 static_cast<std::size_t>(highest_level_id) + 1);
 
             for (layer_id_t level_id = highest_level_id; ; --level_id) {
@@ -267,11 +260,11 @@ public:
                         vid, level_id, valid_nbr_count,
                         level_capacity, bin_path));
                 }
-                per_vid_layer_nbrs[vid][level_id].resize(valid_nbr_count);
+                per_vid_level_nbrs[vid][level_id].resize(valid_nbr_count);
                 if (valid_nbr_count > 0) {
                     ifs.read(
                         reinterpret_cast<char*>(
-                            per_vid_layer_nbrs[vid][level_id].data()),
+                            per_vid_level_nbrs[vid][level_id].data()),
                         static_cast<std::streamsize>(
                             valid_nbr_count * sizeof(vertex_id_t)));
                     if (!ifs.good()) {
@@ -281,94 +274,48 @@ public:
                             vid, level_id, bin_path));
                     }
                 }
+                for (const vertex_id_t neighbor_vid : per_vid_level_nbrs[vid][level_id]) {
+                    if (neighbor_vid >= num_vertices) {
+                        ARTEA_ERROR(fmt::format(
+                            "HierarchicalGraphFileManager::restore: invalid neighbor {} in {}",
+                            neighbor_vid, bin_path));
+                    }
+                }
                 if (level_id == 0) break;
             }
         }
 
-        // Derive per-arena capacity from the histogram. Mirrors the
-        // compactor's own derivation:
-        //   slot_size(group_id) = (group_id == 0)
-        //                            ? bl_max_nbr_size
-        //                            : group_id * ul_max_nbr_size
-        //                              + bl_max_nbr_size
-        //   arena_cap[group_id] = histogram[group_id]
-        //                         * slot_size(group_id)
-        std::vector<std::size_t> arena_vid_capacity_per_group(num_groups, 0);
-        for (std::size_t group_id = 0; group_id < num_groups; ++group_id) {
-            const std::size_t slot_size = (group_id == 0)
-                ? static_cast<std::size_t>(bl_max_nbr_size)
-                : (group_id * static_cast<std::size_t>(ul_max_nbr_size)
-                   + static_cast<std::size_t>(bl_max_nbr_size));
-            arena_vid_capacity_per_group[group_id] =
-                static_cast<std::size_t>(highest_level_histogram[group_id])
-                * slot_size;
-        }
-
-        compact_hg_t compact_hg(top_level_id,
-                                ul_max_nbr_size,
-                                bl_max_nbr_size,
-                                num_vertices,
-                                std::move(arena_vid_capacity_per_group));
-
-        // Populate vids_by_highest_level by scanning highest_level_table
-        // in vid order. The slot index inside arena[group_id] is the
-        // position in this list.
-        auto& vids_by_highest_level = compact_hg.get_vids_by_highest_level_mut();
-        for (std::size_t group_id = 0; group_id < num_groups; ++group_id) {
-            vids_by_highest_level[group_id].reserve(
-                highest_level_histogram[group_id]);
+        const std::vector<std::size_t> vertex_counts_per_group(highest_level_histogram.begin(),
+                                                               highest_level_histogram.end());
+        compact_hg_t compact_hg(top_level_id, ul_max_nbr_size, bl_max_nbr_size,
+                               num_vertices, vertex_counts_per_group);
+        auto& buckets = compact_hg.get_vids_by_highest_level_mut();
+        auto& vertex_info_table = compact_hg.get_vertex_info_table_mut();
+        for (std::size_t highest_level = 0; highest_level < num_groups; ++highest_level) {
+            buckets[highest_level].reserve(vertex_counts_per_group[highest_level]);
         }
         for (vertex_id_t vid = 0; vid < num_vertices; ++vid) {
-            const layer_id_t highest_level_id = highest_level_table[vid];
-            if (highest_level_id == unassigned_highest_level_sentinel) continue;
-            vids_by_highest_level[highest_level_id].push_back(vid);
+            const layer_id_t highest_level = highest_level_table[vid];
+            if (highest_level == unassigned_highest_level_sentinel) continue;
+            auto& bucket = buckets[highest_level];
+            const std::size_t local_vid = bucket.size();
+            vertex_info_table[vid] = {highest_level, static_cast<vertex_id_t>(local_vid)};
+            bucket.push_back(vid);
+            auto row_counts = compact_hg.get_nbr_offsets_mut(highest_level);
+            for (layer_id_t level_id = 0; level_id <= highest_level; ++level_id) {
+                const std::size_t row_index = local_vid * (static_cast<std::size_t>(highest_level) + 1) +
+                                              (highest_level - level_id);
+                row_counts[row_index] = per_vid_level_nbrs[vid][level_id].size();
+            }
         }
-
-        // Write valid prefixes into arenas; trailing cells stay
-        // invalid_vertex_id from the constructor's std::fill.
-        auto& vertex_info_table = compact_hg.get_vertex_info_table_mut();
-        for (std::size_t group_id = 0; group_id < num_groups; ++group_id) {
-            const std::size_t slot_size = (group_id == 0)
-                ? static_cast<std::size_t>(bl_max_nbr_size)
-                : (group_id * static_cast<std::size_t>(ul_max_nbr_size)
-                   + static_cast<std::size_t>(bl_max_nbr_size));
-            vertex_id_t* arena_base =
-                compact_hg.arena_base(static_cast<layer_id_t>(group_id));
-
-            for (std::size_t slot_idx = 0;
-                 slot_idx < vids_by_highest_level[group_id].size();
-                 ++slot_idx)
-            {
-                const vertex_id_t vid =
-                    vids_by_highest_level[group_id][slot_idx];
-                const std::size_t slot_offset = slot_idx * slot_size;
-
-                vertex_info_table[vid].highest_level_id =
-                    static_cast<layer_id_t>(group_id);
-                vertex_info_table[vid].slot_offset = slot_offset;
-
-                // Per-level write: for level_id in [0..group_id], the
-                // in-slot offset is (group_id - level_id) *
-                // ul_max_nbr_size; for group_id == 0 the single L0
-                // segment sits at offset 0.
-                for (layer_id_t level_id = static_cast<layer_id_t>(group_id);
-                     ;
-                     --level_id)
-                {
-                    const auto& level_payload =
-                        per_vid_layer_nbrs[vid][level_id];
-                    if (!level_payload.empty()) {
-                        const std::size_t in_slot_offset = (group_id == 0)
-                            ? std::size_t{0}
-                            : (static_cast<std::size_t>(group_id) - level_id)
-                              * static_cast<std::size_t>(ul_max_nbr_size);
-                        std::memcpy(
-                            arena_base + slot_offset + in_slot_offset,
-                            level_payload.data(),
-                            level_payload.size() * sizeof(vertex_id_t));
-                    }
-                    if (level_id == 0) break;
-                }
+        compact_hg.allocate_neighbors_from_row_counts();
+        for (vertex_id_t vid = 0; vid < num_vertices; ++vid) {
+            const layer_id_t highest_level = highest_level_table[vid];
+            if (highest_level == unassigned_highest_level_sentinel) continue;
+            for (layer_id_t level_id = 0; level_id <= highest_level; ++level_id) {
+                const auto& payload = per_vid_level_nbrs[vid][level_id];
+                auto destination = compact_hg.fetch_level_nbrs_mut(vid, level_id);
+                std::copy(payload.begin(), payload.end(), destination.begin());
             }
         }
 

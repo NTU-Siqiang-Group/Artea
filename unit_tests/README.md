@@ -1,53 +1,45 @@
 # Test Documentation
 
-## Compaction Capacity Baseline (Step 01)
+## Grouped CSR Compaction
 
-`test_hierarchical_graph_compactor` uses synthetic vectors and ordered neighbor
-lists, with no dataset download. It covers empty and L0-only graphs, retained
-layers (including the exact apex threshold and an empty intermediate group),
-consecutive top-layer trimming, demotion order, sentinel tails, and a unique
-centroid entry point. It also checks that the source remains usable after
-compaction. The reusable input lives in `compaction_baseline_fixture.hpp`.
+`test_hierarchical_graph_compactor` uses synthetic vectors and ordered neighbor lists without dataset downloads.
+It covers empty and L0-only graphs, retained layers, the apex threshold, empty intermediate groups, consecutive
+trimming, demotion order, and a unique centroid entry point. The reusable input is `compaction_baseline_fixture.hpp`.
 
-The segmented fixture uses the production 2,048-slot blocks and 8-slot TLS
-reservations. A worker consumes five reserved slots; the main thread then
-crosses a block boundary. These two allocation contexts make holes deterministic
-and are a correctness fixture, not a performance thread setting. The source
-L1 apex bucket contains 2,056 vertices, its reservation high-water mark is 2,064,
-and its allocated capacity is 4,096. Two L2 vertices are demoted to L1.
-The current compactor copies the existing offsets and appends demoted vertices
-after capacity. The test records this behavior; it does **not** fix it.
+Vertices are grouped by their final highest level `h`. `VertexInfo` contains two 32-bit fields:
+`highest_level` and `local_vid`. Group `h` stores `N_h * (h + 1) + 1` global 64-bit offsets. A vertex's rows are
+ordered `h, h-1, ..., 0`, with row index `local_vid * (h + 1) + (h - level_id)`. The global neighbor array contains
+only valid 32-bit vertex IDs. Empty rows share consecutive offsets; compact spans contain no sentinel tails.
+`allocated_storage_bytes()` reports vector allocation capacities, excluding the graph object and allocator overhead.
+
+The segmented fixture uses production 2,048-slot blocks and 8-slot TLS reservations. A worker consumes five
+reserved slots; the main thread then crosses a block boundary. These allocation contexts create deterministic
+holes and are a correctness fixture, not a performance thread setting. The source L1 apex bucket has 2,056
+vertices, a reservation high-water mark of 2,064 and capacity 4,096. Two L2 vertices are demoted. CSR assigns the
+final 2,058 L1 vertices consecutive local IDs and stores only their valid neighbors. Source offsets and capacity
+never determine compact storage.
 
 ```sh
 cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
-cmake --build build --target test_hierarchical_graph_compactor -j
+cmake --build build --target test_hierarchical_graph_compactor test_compact_csr_query -j
 OMP_NUM_THREADS="$(nproc)" numactl --interleave=all ./build/unit_tests/test_hierarchical_graph_compactor
+OMP_NUM_THREADS="$(nproc)" numactl --interleave=all ./build/unit_tests/test_compact_csr_query
 ```
 
-To retain pre-repair version-1 snapshots and JSON reports of coordinates,
-source/final buckets, ordered neighbors, capacities, reservation high-water
-marks, vertex layers, offsets, and entry points, set
-`ARTEA_COMPACTION_BASELINE_DIR` to a fresh directory under
-`temp/validation/compact-capacity/<experiment>/<run>/` for the test process.
-Without this variable the artifact-capture test is skipped. Save the source Git
-revision, launch command, CPU affinity, NUMA policy, thread setting, test logs,
-and snapshot checksums alongside these artifacts before changing the compactor.
-Reports record source neighbor rows; final rows are those prefixes at retained
-levels, checked independently by the topology assertions.
+Every synthetic case checks exact CSR row counts, monotonic offsets, disjoint row spans, group membership,
+neighbor order, unchanged source topology, and version-1 snapshot round trips. Additional tests exercise
+zero-neighbor arrays, unassigned records, allocation overflow, malformed/truncated files, and cleanup after an
+injected centroid-distance exception. Run with ASan/UBSan to verify memory access and cleanup as well.
 
-The future dense-layout requirement is deliberately disabled in normal runs.
-Run it separately to reproduce the expected failure on the old compactor:
+`test_compact_csr_query` compares greedy and upper-beam top-10 results against independent exact sorting,
+including tied distances. It checks IDs and distances before/after restore and between single and batch queries.
+Round-trip test artifacts stay under the ignored `temp/validation/compact-csr/` directory.
 
-```sh
-OMP_NUM_THREADS="$(nproc)" numactl --interleave=all ./build/unit_tests/test_hierarchical_graph_compactor \
-  --gtest_also_run_disabled_tests \
-  --gtest_filter=CompactionBaseline.DISABLED_DenseSlotsFollowFinalBucketOrder
-```
-
-This command must fail before the step-02 repair. Do not count it as a passing
-test. Step 02 should enable the dense test and replace the transitional assertions
-in `SegmentedSourceRetainsCapacityAndReservationHoles`; logical topology assertions
-remain valid regardless of physical offsets.
+Set `ARTEA_COMPACTION_LEGACY_DIR` to the retained step-01 sample directory to restore all eight pre-CSR version-1
+files and check their topology and byte-identical reserialization. Set `ARTEA_COMPACTION_BASELINE_DIR` to a fresh
+validation directory to capture current snapshots and JSON layout reports. Both artifact tests otherwise skip.
+Keep historical samples intact, and record source revision, launch command, CPU affinity, NUMA policy, thread
+setting and checksums with each experiment. Snapshot version 1 and its ordered logical records are unchanged.
 
 - To test `BruteforceRouter`, run:
 

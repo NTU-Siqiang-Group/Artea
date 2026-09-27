@@ -150,9 +150,9 @@ struct RGraphConfig {
     }
 
     /**
-     * @brief Compute the max restrict level for a dataset of @p total_vertices.
+     * @brief Compute the maximum allowed level ID for a dataset of @p total_vertices.
      */
-    static auto compute_max_restrict_level(const vertex_num_t total_vertices) -> layer_num_t
+    static auto compute_max_allowed_level_id(const vertex_num_t total_vertices) -> layer_num_t
     {
         if (total_vertices == 0) return 1;
         const double ratio = static_cast<double>(total_vertices) / 1000.0;

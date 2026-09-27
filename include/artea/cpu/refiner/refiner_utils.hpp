@@ -95,7 +95,7 @@ public:
                         storage_vid, level_id));
                     return;
                 }
-                const auto src = hier_graph.fetch_layer_nbrs(storage_vid, level_id);
+                const auto src = hier_graph.fetch_level_nbrs(storage_vid, level_id);
                 auto& dst = refining_graph.fetch_nbrs(storage_vid);
                 dst.clear();
                 for (vertex_num_t i = 0; i < copy_capacity && i < src.size(); ++i) {

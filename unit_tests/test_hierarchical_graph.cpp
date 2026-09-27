@@ -19,7 +19,7 @@
  *               that stacked_rgraph::IndexFactory relies on:
  *                 - add_vertices reserving contiguous vids,
  *                 - assign_layer claiming per-arena slots (parallel-safe),
- *                 - fetch_layer_nbrs slot layout and sentinel init,
+ *                 - fetch_level_nbrs slot layout and sentinel init,
  *                 - with_locked_nbrs serializing concurrent edge writes,
  *                 - bucket accessors (get_vids_with_highest_level,
  *                   top_occupied_level_id),
@@ -64,7 +64,7 @@ struct TestConfig {
     uint32_t    num_vertices;          // scale for the fixture graph
     uint32_t    ul_max_nbr_size;
     uint32_t    bl_max_nbr_size;
-    uint32_t    max_restrict_level;
+    uint32_t    max_allowed_level_id;
     uint32_t    seed;
 } g_config;
 
@@ -160,10 +160,10 @@ protected:
             DataProvider::instance().dataset_size());
         _ul_max_nbr   = g_config.ul_max_nbr_size;
         _bl_max_nbr   = g_config.bl_max_nbr_size;
-        _max_h        = static_cast<layer_id_t>(g_config.max_restrict_level);
+        _max_h        = static_cast<layer_id_t>(g_config.max_allowed_level_id);
 
         _graph = std::make_unique<hg_t>(
-            /*max_restrict_level=*/_max_h,
+            /*max_allowed_level_id=*/_max_h,
             /*ul_max_nbr_size=*/_ul_max_nbr,
             /*bl_max_nbr_size=*/_bl_max_nbr,
             /*total_vertices=*/_num_vertices);
@@ -211,7 +211,7 @@ layer_id_t               HierarchicalGraphTest::_max_h        = 0;
 
 // ---- 1. Construction metadata: immutable graph-level properties ----
 TEST_F(HierarchicalGraphTest, ConstructionMetadata) {
-    EXPECT_EQ(_graph->max_restrict_level(), _max_h);
+    EXPECT_EQ(_graph->max_allowed_level_id(), _max_h);
     EXPECT_EQ(_graph->ul_max_nbr_size(), _ul_max_nbr);
     EXPECT_EQ(_graph->bl_max_nbr_size(), _bl_max_nbr);
     EXPECT_EQ(_graph->max_nbr_size(0), _bl_max_nbr);
@@ -225,7 +225,7 @@ TEST_F(HierarchicalGraphTest, ConstructionMetadata) {
 // ---- 2. add_vertices on a fresh graph returns contiguous ids and
 //         leaves rows unassigned until assign_layer runs. ----
 TEST(HierarchicalGraphStandalone, AddVerticesBasics) {
-    hg_t fresh(/*max_restrict_level=*/2,
+    hg_t fresh(/*max_allowed_level_id=*/2,
                /*ul_max_nbr_size=*/16, /*bl_max_nbr_size=*/32,
                /*total_vertices=*/1024);
     EXPECT_EQ(fresh.get_num_vertices(), 0u);
@@ -270,7 +270,7 @@ TEST_F(HierarchicalGraphTest, ParallelAssignLayerSlotUniqueness) {
                 << " inside arena h=" << h;
         }
         // And all offsets fit inside the pre-sized arena.
-        const auto cap = _graph->get_arena_capacity_in_arena(h);
+        const auto cap = _graph->get_slot_capacity_in_level(h);
         for (const vertex_id_t vid : bucket) {
             const auto off = _graph->get_slot_offset(vid);
             // slot_offset is in nbr_t units; convert to slot units.
@@ -302,7 +302,7 @@ TEST_F(HierarchicalGraphTest, ParallelAssignLayerSlotUniqueness) {
     EXPECT_EQ(_graph->top_occupied_level_id(), expected_top);
 }
 
-// ---- 4. fetch_layer_nbrs layout + sentinel init ----
+// ---- 4. fetch_level_nbrs layout + sentinel init ----
 TEST_F(HierarchicalGraphTest, SlotLayoutAndSentinelInit) {
     // Every assigned vid's slot must be fully sentinel-initialized
     // across every level in [0, highest_level_id]. Also: the per-level
@@ -314,7 +314,7 @@ TEST_F(HierarchicalGraphTest, SlotLayoutAndSentinelInit) {
         for (std::size_t k = 0; k < sample_n; ++k) {
             const vertex_id_t vid = bucket[k];
             for (layer_id_t l = 0; l <= h; ++l) {
-                const auto nbrs = _graph->fetch_layer_nbrs(vid, l);
+                const auto nbrs = _graph->fetch_level_nbrs(vid, l);
                 const std::size_t expected_len = (l == 0)
                     ? static_cast<std::size_t>(_bl_max_nbr)
                     : static_cast<std::size_t>(_ul_max_nbr);
@@ -336,7 +336,7 @@ TEST_F(HierarchicalGraphTest, SlotLayoutAndSentinelInit) {
 TEST_F(HierarchicalGraphTest, PerLevelSlotsAreDisjoint) {
     // Pick a subset of vids that exist at multiple levels
     // (highest_level_id >= 1) and write distinct sentinels at each
-    // level via fetch_layer_nbrs, then check cross-level isolation.
+    // level via fetch_level_nbrs, then check cross-level isolation.
     std::vector<vertex_id_t> candidates;
     for (layer_id_t h = 1; h <= _max_h; ++h) {
         const auto& bucket = _graph->get_vids_with_highest_level(h);
@@ -352,7 +352,7 @@ TEST_F(HierarchicalGraphTest, PerLevelSlotsAreDisjoint) {
     for (const vertex_id_t vid : candidates) {
         const layer_id_t H = _graph->get_highest_level_id(vid);
         for (layer_id_t l = 0; l <= H; ++l) {
-            auto span = _graph->fetch_layer_nbrs(vid, l);
+            auto span = _graph->fetch_level_nbrs(vid, l);
             const vertex_id_t probe_vid =
                 static_cast<vertex_id_t>((vid * 31u + l + 1u) & 0x7FFFFFFFu);
             span[0] = nbr_t::make_new_nbr(probe_vid, /*dist=*/1.0f);
@@ -364,7 +364,7 @@ TEST_F(HierarchicalGraphTest, PerLevelSlotsAreDisjoint) {
     for (const vertex_id_t vid : candidates) {
         const layer_id_t H = _graph->get_highest_level_id(vid);
         for (layer_id_t l = 0; l <= H; ++l) {
-            const auto span = _graph->fetch_layer_nbrs(vid, l);
+            const auto span = _graph->fetch_level_nbrs(vid, l);
             const vertex_id_t expected =
                 static_cast<vertex_id_t>((vid * 31u + l + 1u) & 0x7FFFFFFFu);
             ASSERT_FALSE(span[0].is_invalid());
@@ -379,7 +379,7 @@ TEST_F(HierarchicalGraphTest, PerLevelSlotsAreDisjoint) {
     for (const vertex_id_t vid : candidates) {
         const layer_id_t H = _graph->get_highest_level_id(vid);
         for (layer_id_t l = 0; l <= H; ++l) {
-            auto span = _graph->fetch_layer_nbrs(vid, l);
+            auto span = _graph->fetch_level_nbrs(vid, l);
             span[0] = nbr_t::make_invalid_nbr();
         }
     }
@@ -432,7 +432,7 @@ TEST_F(HierarchicalGraphTest, WithLockedNbrsIsThreadSafe) {
 
     // All appended entries have distinct payload vids (no write got
     // torn or overwrote a sibling because of a missing lock).
-    const auto span = _graph->fetch_layer_nbrs(target_vid, 0);
+    const auto span = _graph->fetch_level_nbrs(target_vid, 0);
     std::unordered_set<vertex_id_t> seen;
     seen.reserve(appended);
     for (std::size_t i = 0; i < appended; ++i) {
@@ -466,7 +466,7 @@ TEST_F(HierarchicalGraphTest, BucketsMatchAssignments) {
 //        locked-append + locked-overflow-prune into the same slot.
 //        Asserts: the visible prefix is always sentinel-terminated,
 //        no slot ever contains a sentinel followed by a valid entry,
-//        and num_valid_nbrs is consistent with fetch_layer_nbrs.
+//        and num_valid_nbrs is consistent with fetch_level_nbrs.
 TEST_F(HierarchicalGraphTest, IndexFactoryLikeWorkload) {
     // Only hammer level 1 — that's the level IndexFactory writes most
     // heavily via the L1-select-drives-L0-and-L1 fast path.
@@ -543,7 +543,7 @@ TEST_F(HierarchicalGraphTest, IndexFactoryLikeWorkload) {
     // equals num_valid_nbrs, followed either by end-of-span or by an
     // invalid sentinel — no "invalid then valid" zig-zag.
     for (const vertex_id_t vid : eligible) {
-        const auto span = _graph->fetch_layer_nbrs(vid, level);
+        const auto span = _graph->fetch_level_nbrs(vid, level);
         const vertex_num_t cnt = _graph->num_valid_nbrs(vid, level);
         ASSERT_LE(cnt, slot_cap);
         for (vertex_num_t i = 0; i < cnt; ++i) {
@@ -665,13 +665,13 @@ TEST_F(HierarchicalGraphTest, CompactorPreservesTopology) {
             const layer_id_t compact_h =
                 (src_h > expected_new_top) ? expected_new_top : src_h;
             for (layer_id_t l = 0; l <= compact_h; ++l) {
-                const auto dyn_span = _graph->fetch_layer_nbrs(vid, l);
-                const auto cmp_span = compact_graph.fetch_layer_nbrs(vid, l);
-                ASSERT_EQ(dyn_span.size(), cmp_span.size());
+                const auto dyn_span = _graph->fetch_level_nbrs(vid, l);
+                const auto cmp_span = compact_graph.fetch_level_nbrs(vid, l);
                 const vertex_num_t dyn_cnt =
                     _graph->num_valid_nbrs(vid, l);
                 const vertex_num_t cmp_cnt =
                     compact_graph.num_valid_nbrs(vid, l);
+                ASSERT_EQ(cmp_span.size(), dyn_cnt);
                 EXPECT_EQ(dyn_cnt, cmp_cnt)
                     << "valid-count mismatch vid=" << vid << " l=" << l;
                 for (vertex_num_t i = 0; i < dyn_cnt; ++i) {
@@ -766,7 +766,7 @@ TEST_F(HierarchicalGraphTest, LayerRefiningGraphRoundTrip) {
             *_graph, *refining_graph, h);
 
         // Re-read the slot directly from hier_graph.
-        const auto written = _graph->fetch_layer_nbrs(pivot_global, h);
+        const auto written = _graph->fetch_level_nbrs(pivot_global, h);
         ASSERT_GE(written.size(), 1u);
         EXPECT_FALSE(written[0].is_invalid());
         EXPECT_EQ(written[0].get_vid(), other_global);
@@ -822,7 +822,7 @@ int main(int argc, char** argv) {
     g_config.num_vertices         = program.get<uint32_t>("--num-vertices");
     g_config.ul_max_nbr_size      = program.get<uint32_t>("--ul-max-nbr-size");
     g_config.bl_max_nbr_size      = program.get<uint32_t>("--bl-max-nbr-size");
-    g_config.max_restrict_level = program.get<uint32_t>("--max-highest-level-id");
+    g_config.max_allowed_level_id = program.get<uint32_t>("--max-highest-level-id");
     g_config.seed                 = program.get<uint32_t>("--seed");
 
     std::cout << "\n=== Test Configuration ===\n"
@@ -830,7 +830,7 @@ int main(int argc, char** argv) {
               << "num_vertices:         " << g_config.num_vertices << "\n"
               << "ul_max_nbr_size:      " << g_config.ul_max_nbr_size << "\n"
               << "bl_max_nbr_size:      " << g_config.bl_max_nbr_size << "\n"
-              << "max_restrict_level: " << g_config.max_restrict_level << "\n"
+              << "max_allowed_level_id: " << g_config.max_allowed_level_id << "\n"
               << "seed:                 " << g_config.seed << "\n"
               << "==========================\n\n";
 

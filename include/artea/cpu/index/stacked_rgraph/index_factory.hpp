@@ -268,13 +268,13 @@ private:
         const vertex_num_t ul_select_nbrs_qs = index.ul_select_nbrs_qs();
         const vertex_num_t bl_select_nbrs_qs = index.bl_select_nbrs_qs();
         const ratio_t      scale_coeffs      = index.pruning_config().scale_coeffs();
-        const layer_num_t  max_restrict_level = index.max_restrict_level();
+        const layer_num_t  max_allowed_level_id = index.max_allowed_level_id();
         const layer_id_t   top_level_id = index.top_occupied_level_id();
 
         // ==============================================================
         //   Step A — Descent: top_level_id → level 1 (not including level 0)
         // ==============================================================
-        const std::size_t num_cached_queues = static_cast<std::size_t>(max_restrict_level) + 1;
+        const std::size_t num_cached_queues = static_cast<std::size_t>(max_allowed_level_id) + 1;
         std::vector<distance_t> min_dist_per_level(num_cached_queues, max_distance);
         std::vector<std::optional<std_candidate_queue_t>> descent_queue_per_level(num_cached_queues);
         for (auto& slot : descent_queue_per_level) { slot.emplace(search_nn_qs); }
@@ -337,10 +337,10 @@ private:
             highest_insert_level_id = 1;
         } else {
             // Default: grow hierarchy by ONE level (capped at
-            // max_restrict_level).
+            // max_allowed_level_id).
             highest_insert_level_id = std::min<layer_id_t>(
                 static_cast<layer_id_t>(top_level_id) + 1,
-                static_cast<layer_id_t>(max_restrict_level));
+                static_cast<layer_id_t>(max_allowed_level_id));
             // Override: smallest h where q is absorbed at L_h means
             // q joins only L_0..L_{h-1}.
             for (layer_id_t h = 1; h <= top_level_id; ++h) {
@@ -362,7 +362,7 @@ private:
         // For cur_level_id in [start_level_id, highest_insert_level_id],
         // run per-level select + forward + reverse.
         auto run_select_at_level = [&](const layer_id_t target_level_id) -> std::vector<nbr_t> {
-            // descent_queue_per_level is pre-sized to max_restrict_level+1
+            // descent_queue_per_level is pre-sized to max_allowed_level_id+1
             // with empty queues in every slot (see Step A). Uncached
             // levels therefore present an empty queue here, which makes
             // beam_search a no-op and yields an empty pruned_results

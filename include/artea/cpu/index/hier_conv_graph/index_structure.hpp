@@ -93,10 +93,10 @@ public:
      * After @c h sampling rounds the expected layer size is
      * @c total_vertices * sample_ratio^h. The factory stops once that
      * size would drop below @c min_layer_cap, so we size
-     * @c max_restrict_level one above that threshold — generous
+     * @c max_allowed_level_id one above that threshold — generous
      * enough to absorb sampling noise without over-allocating arenas.
      */
-    static auto compute_max_restrict_level(
+    static auto compute_max_allowed_level_id(
         const vertex_num_t total_vertices, const ratio_t sample_ratio
     ) -> layer_num_t {
         if (total_vertices == 0 || sample_ratio <= ratio_t(0) || sample_ratio >= ratio_t(1)) {
@@ -114,16 +114,16 @@ public:
         // +1 of slack so a vertex that happens to land in the very top
         // bucket still has somewhere to go if min_layer_cap drops
         // slightly between runs.
-        const layer_num_t max_restrict_level =
+        const layer_num_t max_allowed_level_id =
             static_cast<layer_num_t>(std::ceil(levels_until_min_cap)) + 1;
-        return std::max<layer_num_t>(max_restrict_level, layer_num_t(1));
+        return std::max<layer_num_t>(max_allowed_level_id, layer_num_t(1));
     }
 
     /**
      * @brief Construct an empty hier_conv_graph index.
      *
      * @param total_vertices    Expected eventual base-set size. Drives
-     *                          max_restrict_level and the per-arena
+     *                          max_allowed_level_id and the per-arena
      *                          slot capacity inside HierarchicalGraph.
      * @param hierarchy_config  ul / bl capacities + sample_ratio.
      * @param propagate_config  conv_graph propagate config consumed by refine_layer.
@@ -135,10 +135,10 @@ public:
         const propagate_config_t propagate_config,
         const pruning_config_t   pruning_config
     ) :
-        _max_restrict_level(
-            compute_max_restrict_level(total_vertices, hierarchy_config.sample_ratio())),
+        _max_allowed_level_id(
+            compute_max_allowed_level_id(total_vertices, hierarchy_config.sample_ratio())),
         _hierarchical_graph(std::make_unique<hierarchical_graph_t>(
-            _max_restrict_level,
+            _max_allowed_level_id,
             hierarchy_config.ul_max_nbr_size(),
             hierarchy_config.bl_max_nbr_size(),
             total_vertices)),
@@ -180,13 +180,13 @@ public:
     }
 
     __attribute__((always_inline))
-    auto fetch_layer_nbrs(const vertex_id_t vid, const layer_id_t l) -> std::span<nbr_t> {
-        return _hierarchical_graph->fetch_layer_nbrs(vid, l);
+    auto fetch_level_nbrs(const vertex_id_t vid, const layer_id_t l) -> std::span<nbr_t> {
+        return _hierarchical_graph->fetch_level_nbrs(vid, l);
     }
 
     __attribute__((always_inline))
-    auto fetch_layer_nbrs(const vertex_id_t vid, const layer_id_t l) const -> std::span<const nbr_t> {
-        return _hierarchical_graph->fetch_layer_nbrs(vid, l);
+    auto fetch_level_nbrs(const vertex_id_t vid, const layer_id_t l) const -> std::span<const nbr_t> {
+        return _hierarchical_graph->fetch_level_nbrs(vid, l);
     }
 
     template <typename FnT>
@@ -233,7 +233,7 @@ public:
     auto max_nbr_size(const layer_id_t l) const -> vertex_num_t { return _hierarchical_graph->max_nbr_size(l); }
 
     __attribute__((always_inline))
-    auto max_restrict_level() const -> layer_num_t { return _max_restrict_level; }
+    auto max_allowed_level_id() const -> layer_num_t { return _max_allowed_level_id; }
 
     // ================================================================
     //   Refinement-time configs
@@ -298,7 +298,7 @@ public:
 private:
     /// @brief Inclusive upper bound on highest_level_id. Stored as a
     ///        field because the HierarchicalGraph ctor needs it.
-    layer_num_t _max_restrict_level;
+    layer_num_t _max_allowed_level_id;
 
     /// @brief Composed HierarchicalGraph (unique_ptr: non-movable).
     std::unique_ptr<hierarchical_graph_t> _hierarchical_graph;

@@ -291,8 +291,8 @@ static auto expect_compact_graphs_equal(
         const layer_id_t H = original.get_highest_level_id(vid);
         if (H == unassigned_h) continue;
         for (layer_id_t l = 0; l <= H; ++l) {
-            const auto orig_span = original.fetch_layer_nbrs(vid, l);
-            const auto rest_span = restored.fetch_layer_nbrs(vid, l);
+            const auto orig_span = original.fetch_level_nbrs(vid, l);
+            const auto rest_span = restored.fetch_level_nbrs(vid, l);
             ASSERT_EQ(orig_span.size(), rest_span.size())
                 << "span size differs at vid=" << vid
                 << " l=" << static_cast<int>(l);

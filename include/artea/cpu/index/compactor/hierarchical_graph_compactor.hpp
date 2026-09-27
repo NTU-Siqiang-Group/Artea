@@ -30,6 +30,7 @@
 #pragma once
 
 #include <cstddef>
+#include <stdexcept>
 #include <limits>
 #include <utility>
 #include <vector>
@@ -40,6 +41,7 @@
 #include <tbb/parallel_reduce.h>
 
 #include <artea/common/logger.hpp>
+#include <artea/cpu/containers/allocator.hpp>
 
 namespace artea {
 namespace cpu {
@@ -55,16 +57,17 @@ namespace cpu {
  *      bucket has at least @p min_layer_cap vids becomes the compact
  *      graph's new top. Every vid whose original apex exceeded that
  *      new top is *demoted*: its @c highest_level_id in the compact
- *      graph is reset to the new top, a fresh slot is bump-allocated
- *      in @c arena[new_top], and its neighbor entries for levels
+ *      graph is reset to the new top, its CSR rows are densely numbered
+ *      in the final group, and its neighbor entries for levels
  *      @c [0, new_top] are re-materialized there. Level slots above
  *      the new top are dropped.
  *
  *   2. **Parallel per-vid work.** Both @c VertexInfo writes and the
  *      per-level neighbor transcription are embarrassingly parallel
- *      and driven by @c tbb::parallel_for. Demoted-vid slot offsets
- *      are assigned deterministically from their index in the
- *      demoted-vid list, so no atomics are needed on the hot path.
+ *      and driven by @c tbb::parallel_for. Local IDs are
+ *      assigned deterministically from the final bucket position.
+ *      CSR stores only valid neighbors of actual vertices; source
+ *      capacity and source offsets do not determine the target layout.
  *
  *   3. **Centroid-based entry point.** The top-bucket centroid is
  *      computed via @c tbb::parallel_reduce; the vid closest to that
@@ -150,185 +153,91 @@ public:
         }
 
         // =============================================================
-        //   Step 2: Flatten the demoted-vid list.
+        //   Step 2: Build final per-apex buckets before sizing storage.
         // =============================================================
-        //
-        // Every vid whose original apex is strictly greater than
-        // new_top is demoted to new_top. Their compact slots are
-        // appended after the source's existing arena[new_top] layout,
-        // and their VertexInfo is rewritten to point there.
-        std::vector<vertex_id_t> demoted_vids;
-        for (layer_id_t h = static_cast<layer_id_t>(new_top + 1);
-             h <= src_top; ++h)
-        {
-            const auto& src_upper_bucket =
-                src.get_vids_with_highest_level(h);
-            demoted_vids.insert(demoted_vids.end(),
-                                src_upper_bucket.begin(),
-                                src_upper_bucket.end());
-        }
-        const std::size_t demoted_count = demoted_vids.size();
-
-        // =============================================================
-        //   Step 3: Size + allocate the compact arenas.
-        // =============================================================
-        //
-        // Arenas 0..new_top-1 keep the source's capacity verbatim.
-        // arena[new_top] grows by demoted_count slots to hold the
-        // demoted vids' re-materialized neighbor rows.
-        std::vector<std::size_t> arena_vid_capacity(
-            static_cast<std::size_t>(new_top) + 1);
-        for (layer_id_t h = 0; h <= new_top; ++h) {
-            // Upper levels 1..h each use ul_max_nbr_size; L0 uses bl.
-            const std::size_t slot_nbrs_count =
-                static_cast<std::size_t>(h) *
-                    static_cast<std::size_t>(ul_max_nbr_size)
-                + static_cast<std::size_t>(bl_max_nbr_size);
-            std::size_t slot_capacity =
-                static_cast<std::size_t>(src.get_arena_capacity_in_arena(h));
-            if (h == new_top) slot_capacity += demoted_count;
-            arena_vid_capacity[h] = slot_capacity * slot_nbrs_count;
-        }
-
-        compact_graph_t result(
-            new_top, ul_max_nbr_size, bl_max_nbr_size,
-            num_vertices, std::move(arena_vid_capacity));
-
-        // =============================================================
-        //   Step 4: Populate VertexInfo (parallel).
-        // =============================================================
-        //
-        // Two disjoint parallel passes:
-        //   (a) Non-demoted vids (H_src <= new_top): copy
-        //       (H_src, src slot_offset) verbatim.
-        //   (b) Demoted vids (H_src > new_top): rewrite to
-        //       (new_top, demoted_base_offset + i * top_slot_nbrs_count)
-        //       where i is the vid's index in demoted_vids. No
-        //       atomics needed — offsets are a pure function of i.
-        auto& compact_vit = result.get_vertex_info_table_mut();
-
-        const std::size_t top_slot_nbrs_count =
-            static_cast<std::size_t>(new_top) *
-                static_cast<std::size_t>(ul_max_nbr_size)
-            + static_cast<std::size_t>(bl_max_nbr_size);
-        const std::size_t demoted_base_offset =
-            static_cast<std::size_t>(
-                src.get_arena_capacity_in_arena(new_top)) *
-            top_slot_nbrs_count;
-
+        // Lower groups preserve source order. The new top contains its
+        // original bucket, then demoted buckets in ascending source-layer
+        // order. Each assigned vid therefore belongs to one final group.
+        const std::size_t num_groups = static_cast<std::size_t>(new_top) + 1;
+        std::vector<std::vector<vertex_id_t>> final_buckets(num_groups);
         tbb::parallel_for(
-            tbb::blocked_range<vertex_num_t>(0, num_vertices),
-            [&](const tbb::blocked_range<vertex_num_t>& r) {
-                for (vertex_id_t vid = r.begin(); vid != r.end(); ++vid) {
-                    const layer_id_t H_src = src.get_highest_level_id(vid);
-                    if (H_src <= new_top) {
-                        compact_vit[vid].highest_level_id = H_src;
-                        compact_vit[vid].slot_offset      =
-                            src.get_slot_offset(vid);
-                    }
-                    // Demoted vids are filled in the next loop below.
-                }
-            });
-
-        tbb::parallel_for(
-            tbb::blocked_range<std::size_t>(0, demoted_count),
+            tbb::blocked_range<std::size_t>(0, num_groups),
             [&](const tbb::blocked_range<std::size_t>& r) {
-                for (std::size_t i = r.begin(); i != r.end(); ++i) {
-                    const vertex_id_t vid = demoted_vids[i];
-                    compact_vit[vid].highest_level_id = new_top;
-                    compact_vit[vid].slot_offset      =
-                        demoted_base_offset + i * top_slot_nbrs_count;
+                for (std::size_t group = r.begin(); group != r.end(); ++group) {
+                    auto& bucket = final_buckets[group];
+                    const layer_id_t h = static_cast<layer_id_t>(group);
+                    const auto& src_bucket = src.get_vids_with_highest_level(h);
+                    bucket.assign(src_bucket.begin(), src_bucket.end());
+                    if (h == new_top) {
+                        for (layer_id_t upper = static_cast<layer_id_t>(new_top + 1);
+                             upper <= src_top; ++upper) {
+                            const auto& demoted = src.get_vids_with_highest_level(upper);
+                            bucket.insert(bucket.end(), demoted.begin(), demoted.end());
+                        }
+                    }
                 }
             });
 
-        // =============================================================
-        //   Step 5: Rebuild per-apex buckets.
-        // =============================================================
-        //
-        // Buckets h < new_top are bulk-copied from the source
-        // (parallel per bucket). bucket[new_top] is the source's own
-        // top bucket plus every demoted vid (whose apex has just been
-        // rewritten to new_top in Step 4).
+        // Allocate CSR rows from final bucket sizes, never from source reservations or capacities.
+        std::vector<std::size_t> vertex_counts_per_group(num_groups);
+        for (std::size_t highest_level = 0; highest_level < num_groups; ++highest_level) {
+            vertex_counts_per_group[highest_level] = final_buckets[highest_level].size();
+        }
+        compact_graph_t result(new_top, ul_max_nbr_size, bl_max_nbr_size,
+                               num_vertices, vertex_counts_per_group);
         auto& compact_buckets = result.get_vids_by_highest_level_mut();
+        compact_buckets = std::move(final_buckets);
+        auto& vertex_info_table = result.get_vertex_info_table_mut();
 
-        if (new_top > 0) {
-            tbb::parallel_for(
-                tbb::blocked_range<layer_id_t>(0, new_top),
-                [&](const tbb::blocked_range<layer_id_t>& r) {
-                    for (layer_id_t h = r.begin(); h != r.end(); ++h) {
-                        const auto& src_bucket =
-                            src.get_vids_with_highest_level(h);
-                        compact_buckets[h].reserve(src_bucket.size());
-                        for (const vertex_id_t vid : src_bucket) {
-                            compact_buckets[h].push_back(vid);
+        // Each bucket position identifies h+1 consecutive rows, ordered h down to zero.
+        tbb::parallel_for(tbb::blocked_range<std::size_t>(0, num_groups),
+            [&](const tbb::blocked_range<std::size_t>& groups) {
+                for (std::size_t highest_level = groups.begin(); highest_level != groups.end();
+                     ++highest_level) {
+                    const auto& bucket = compact_buckets[highest_level];
+                    auto row_counts = result.get_nbr_offsets_mut(static_cast<layer_id_t>(highest_level));
+                    tbb::parallel_for(tbb::blocked_range<std::size_t>(0, bucket.size()),
+                        [&](const tbb::blocked_range<std::size_t>& vertices) {
+                            for (std::size_t local_vid = vertices.begin(); local_vid != vertices.end();
+                                 ++local_vid) {
+                                const vertex_id_t vid = bucket[local_vid];
+                                vertex_info_table[vid] = {static_cast<layer_id_t>(highest_level),
+                                                          static_cast<vertex_id_t>(local_vid)};
+                                for (layer_id_t level_id = 0; level_id <= highest_level; ++level_id) {
+                                    std::size_t valid_count = 0;
+                                    for (const auto& neighbor : src.fetch_level_nbrs(vid, level_id)) {
+                                        if (neighbor.is_invalid()) break;
+                                        ++valid_count;
+                                    }
+                                    const std::size_t row_index = local_vid * (highest_level + 1) +
+                                                                  (highest_level - level_id);
+                                    row_counts[row_index] = valid_count;
+                                }
+                            }
+                        });
+                }
+            });
+        result.allocate_neighbors_from_row_counts();
+
+        // All destination spans are disjoint. Preserve valid neighbor order and drop trimmed levels.
+        tbb::parallel_for(tbb::blocked_range<vertex_num_t>(0, num_vertices),
+            [&](const tbb::blocked_range<vertex_num_t>& vertices) {
+                for (vertex_id_t vid = vertices.begin(); vid != vertices.end(); ++vid) {
+                    const layer_id_t highest_level = vertex_info_table[vid].highest_level;
+                    if (highest_level == compact_graph_t::invalid_level_id) continue;
+                    for (layer_id_t level_id = 0; level_id <= highest_level; ++level_id) {
+                        const auto source_neighbors = src.fetch_level_nbrs(vid, level_id);
+                        auto target_neighbors = result.fetch_level_nbrs_mut(vid, level_id);
+                        for (std::size_t neighbor_index = 0; neighbor_index < target_neighbors.size();
+                             ++neighbor_index) {
+                            target_neighbors[neighbor_index] = source_neighbors[neighbor_index].get_vid();
                         }
-                    }
-                });
-        }
-
-        {
-            const auto& src_top_bucket =
-                src.get_vids_with_highest_level(new_top);
-            compact_buckets[new_top].reserve(
-                src_top_bucket.size() + demoted_count);
-            for (const vertex_id_t vid : src_top_bucket) {
-                compact_buckets[new_top].push_back(vid);
-            }
-            for (const vertex_id_t vid : demoted_vids) {
-                compact_buckets[new_top].push_back(vid);
-            }
-        }
-
-        // =============================================================
-        //   Step 6: Transcribe per-level neighbors (parallel per vid).
-        // =============================================================
-        //
-        // Every compact VertexInfo is now final. For each vid:
-        //
-        //   for cur_level in [0, H_new]:
-        //     copy src.fetch_layer_nbrs(vid, cur_level) → compact slot
-        //
-        // Non-demoted vids: H_new == H_src, same layout on both sides,
-        // essentially a memcpy per level row.
-        // Demoted vids: H_new == new_top, so the compact slot is
-        // shorter; we re-materialize only levels 0..new_top and drop
-        // the upper level rows.
-        tbb::parallel_for(
-            tbb::blocked_range<vertex_num_t>(0, num_vertices),
-            [&](const tbb::blocked_range<vertex_num_t>& r) {
-                for (vertex_id_t vid = r.begin(); vid != r.end(); ++vid) {
-                    const auto& vinfo = compact_vit[vid];
-                    const layer_id_t H_new = vinfo.highest_level_id;
-                    if (H_new == compact_graph_t::invalid_level_id) {
-                        continue;
-                    }
-                    vertex_id_t* slot_base =
-                        result.arena_base(H_new) + vinfo.slot_offset;
-
-                    for (layer_id_t cur_level = 0;
-                         cur_level <= H_new;
-                         ++cur_level)
-                    {
-                        const auto src_nbrs =
-                            src.fetch_layer_nbrs(vid, cur_level);
-                        const std::size_t level_offset =
-                            static_cast<std::size_t>(H_new - cur_level) *
-                            static_cast<std::size_t>(ul_max_nbr_size);
-                        vertex_id_t* dst = slot_base + level_offset;
-
-                        std::size_t out = 0;
-                        for (const auto& nbr : src_nbrs) {
-                            if (nbr.is_invalid()) break;
-                            dst[out++] = nbr.get_vid();
-                        }
-                        // Trailing sentinels were pre-filled by the
-                        // compact graph's constructor.
                     }
                 }
             });
 
         // =============================================================
-        //   Step 7: Centroid-based entry point.
+        //   Step 6: Centroid-based entry point.
         // =============================================================
         //
         // entry_point = argmin over bucket[new_top] of
@@ -379,16 +288,16 @@ private:
                 }
             });
 
-        std::vector<double> centroid_d(vec_dim, 0.0);
+        std::vector<double> coordinate_sums(vec_dim, 0.0);
         for (const auto& local : local_sums) {
             for (std::size_t d = 0; d < vec_dim; ++d) {
-                centroid_d[d] += local[d];
+                coordinate_sums[d] += local[d];
             }
         }
         const double inv_N = 1.0 / static_cast<double>(N);
         std::vector<vec_ele_t> centroid(vec_dim);
         for (std::size_t d = 0; d < vec_dim; ++d) {
-            centroid[d] = static_cast<vec_ele_t>(centroid_d[d] * inv_N);
+            centroid[d] = static_cast<vec_ele_t>(coordinate_sums[d] * inv_N);
         }
 
         // ---- Parallel argmin over the top bucket ----

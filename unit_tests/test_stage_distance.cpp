@@ -204,7 +204,7 @@ TEST(StageDistance, EuclideanBuildCompactsAndSearchesWithSquaredDistances) {
             const auto highest_level = dynamic_graph.get_highest_level_id(i);
             ASSERT_NE(highest_level, dynamic::hierarchical_graph_t::invalid_level_id);
             for (layer_id_t level = 0; level <= highest_level; ++level) {
-                for (const auto& neighbor : dynamic_graph.fetch_layer_nbrs(i, level)) {
+                for (const auto& neighbor : dynamic_graph.fetch_level_nbrs(i, level)) {
                     if (neighbor.is_invalid()) break;
                     const auto j = neighbor.get_vid();
                     const double dx = static_cast<double>(base.get(i)[0]) - base.get(j)[0];

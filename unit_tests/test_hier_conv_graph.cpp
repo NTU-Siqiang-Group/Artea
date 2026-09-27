@@ -211,11 +211,11 @@ protected:
 
             const layer_id_t top_level_id = graph->top_occupied_level_id();
             ARTEA_INFO(fmt::format(
-                "hier_conv_graph built in {} ms: top_occupied_level={}, max_restrict_level={}",
+                "hier_conv_graph built in {} ms: top_occupied_level={}, max_allowed_level_id={}",
                 _build_ms,
                 (top_level_id == dynamic::hierarchical_graph_t::invalid_level_id)
                     ? -1 : static_cast<int>(top_level_id),
-                graph->max_restrict_level()));
+                graph->max_allowed_level_id()));
 
             // Compactor trim preview — same rule as test_artea_graph: the
             // first bucket (walking top-down) with >= min_layer_cap vids
@@ -269,7 +269,7 @@ TEST_F(HierConvGraphTest, BuildSanity) {
     // running total when walking from the apex down. The factory
     // prints the same breakdown, but we recompute it here so we can
     // assert on the shape.
-    const layer_id_t max_level = graph.max_restrict_level();
+    const layer_id_t max_level = graph.max_allowed_level_id();
     std::vector<vertex_num_t> vids_at_or_above(max_level + 1, 0);
     {
         vertex_num_t running = 0;

@@ -138,7 +138,7 @@ struct Fixture {
                 }
                 const std::size_t capacity = h == 0 ? bottom_neighbors : upper_neighbors;
                 const std::size_t count = std::min<std::size_t>((vid + h) % (capacity + 1), candidates.size());
-                auto row = source.fetch_layer_nbrs(vid, h);
+                auto row = source.fetch_level_nbrs(vid, h);
                 for (std::size_t j = 0; j < count; ++j) {
                     const vid_t other = candidates[(vid + h + j) % candidates.size()];
                     neighbors[vid][h].push_back(other);
@@ -166,10 +166,10 @@ inline auto slot_size(level_t h) -> std::size_t {
     return bottom_neighbors + std::size_t(h) * upper_neighbors;
 }
 
-// Read via the public neighbor view; do not require a new layout accessor.
-inline auto compact_offset(compact_graph_t& graph, vid_t vid) -> std::size_t {
-    const level_t h = graph.get_highest_level_id(vid);
-    return graph.fetch_layer_nbrs(vid, h).data() - graph.arena_base(h);
+// Global CSR start offset of a vertex's highest-level neighbor list.
+inline auto compact_offset(const compact_graph_t& graph, vid_t vid) -> std::size_t {
+    const auto& info = graph.get_vertex_info(vid);
+    return graph.get_nbr_offsets(info.highest_level)[std::size_t(info.local_vid) * (info.highest_level + 1)];
 }
 
 }  // namespace compaction_baseline

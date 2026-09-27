@@ -207,12 +207,12 @@ protected:
             DataProvider::instance().get_dataset().get_base_vecs();
         const layer_id_t top_level_id = graph.top_occupied_level_id();
         ARTEA_INFO(fmt::format(
-            "[{}] built in {} ms: top_occupied_level={}, max_restrict_level={}",
+            "[{}] built in {} ms: top_occupied_level={}, max_allowed_level_id={}",
             label, build_ms,
             (top_level_id == dynamic::hierarchical_graph_t
                 ::invalid_level_id)
                 ? -1 : static_cast<int>(top_level_id),
-            graph.max_restrict_level()));
+            graph.max_allowed_level_id()));
         // Preview what HierarchicalGraphCompactor would trim, using the
         // same rule it applies in compact_graph(): walk from the top
         // down and take the first bucket with >= min_layer_cap vids as
@@ -241,7 +241,7 @@ protected:
         // A vertex with highest_level_id=h' participates in every level
         // 0..h', so the count *assigned to* level h is the cumulative
         // sum of bucket sizes from h to the top. Compute top-down.
-        const layer_id_t max_level = graph.max_restrict_level();
+        const layer_id_t max_level = graph.max_allowed_level_id();
         std::vector<vertex_num_t> num_at_level(max_level + 1, 0);
         {
             vertex_num_t running = 0;
@@ -309,8 +309,8 @@ TEST_F(StackedRGraphTest, BuildTime) {
     ARTEA_INFO("=== Build summary ===");
     ARTEA_INFO(fmt::format("  dataset           : {}", g_config.dataset_name));
     ARTEA_INFO(fmt::format("  num_vertices      : {}", _graph_no_l0->get_hierarchical_graph().get_num_vertices()));
-    ARTEA_INFO(fmt::format("  max_restrict_level: {}",
-        static_cast<int>(_graph_no_l0->get_hierarchical_graph().max_restrict_level())));
+    ARTEA_INFO(fmt::format("  max_allowed_level_id: {}",
+        static_cast<int>(_graph_no_l0->get_hierarchical_graph().max_allowed_level_id())));
     ARTEA_INFO(fmt::format("  insert_on_L0=false: {} ms", _build_ms_no_l0));
     ARTEA_INFO(fmt::format("  insert_on_L0=true : {} ms", _build_ms_with_l0));
     ARTEA_INFO(fmt::format("  L0 overhead       : {} ms ({:.1f}%)",

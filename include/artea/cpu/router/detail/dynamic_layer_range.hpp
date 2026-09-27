@@ -42,7 +42,7 @@ public:
 
     __attribute__((always_inline))
     auto of(const vertex_id_t vid) const {
-        return _hier_graph.fetch_layer_nbrs(vid, _level_id)
+        return _hier_graph.fetch_level_nbrs(vid, _level_id)
              | std::views::take_while([](const nbr_t& nbr) { return !nbr.is_invalid(); })
              | std::views::transform([](const nbr_t& nbr) { return nbr.get_vid(); });
     }

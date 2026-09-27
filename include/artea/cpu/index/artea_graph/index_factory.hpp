@@ -193,7 +193,7 @@ public:
         // count(h) = total - sum(bucket(0..h-1).size()). Walk bottom-up
         // and decrement `running` by each bucket as we print, no
         // intermediate buffer needed.
-        const layer_id_t max_level = index.max_restrict_level();
+        const layer_id_t max_level = index.max_allowed_level_id();
         const vertex_num_t total_vertices = index.get_num_vertices();
         ARTEA_INFO("[artea_graph] per-layer vertex counts:");
         vertex_num_t running = total_vertices;

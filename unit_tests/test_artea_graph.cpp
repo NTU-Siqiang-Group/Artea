@@ -314,12 +314,12 @@ protected:
             const layer_id_t top_level_id = graph->top_occupied_level_id();
             ARTEA_INFO(fmt::format(
                 "artea_graph built in {} ms: top_occupied_level={}, "
-                "max_restrict_level={}",
+                "max_allowed_level_id={}",
                 _build_ms,
                 (top_level_id == dynamic::hierarchical_graph_t
                     ::invalid_level_id)
                     ? -1 : static_cast<int>(top_level_id),
-                graph->max_restrict_level()));
+                graph->max_allowed_level_id()));
 
             // Preview what HierarchicalGraphCompactor would trim, using the
             // same rule it applies in compact_graph(): walk from the top

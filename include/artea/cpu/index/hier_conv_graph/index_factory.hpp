@@ -151,7 +151,7 @@ public:
 
         // Per-layer vertex count breakdown (same accounting trick as
         // artea_graph: count(h) = total - sum(bucket(0..h-1).size())).
-        const layer_id_t max_level = index.max_restrict_level();
+        const layer_id_t max_level = index.max_allowed_level_id();
         const vertex_num_t total_vertices = index.get_num_vertices();
         ARTEA_INFO("[hier_conv_graph] per-layer vertex counts:");
         vertex_num_t running = total_vertices;
@@ -314,7 +314,7 @@ private:
      *        for h = 1, 2, ... sample @c floor(pool_size * sample_ratio)
      *        vids from the L_{h-1} pool and bump them to L_h. Stop
      *        when the next sample would dip below @c min_layer_cap or
-     *        the index's @c max_restrict_level cap. After level
+     *        the index's @c max_allowed_level_id cap. After level
      *        assignment, call @c assign_layer once per new vid.
      */
     static auto _assign_random_levels(
@@ -324,7 +324,7 @@ private:
         if (batch_size == 0) return;
 
         const ratio_t      sample_ratio       = index.hierarchy_config().sample_ratio();
-        const layer_num_t  max_restrict_level = index.max_restrict_level();
+        const layer_num_t  max_allowed_level_id = index.max_allowed_level_id();
         constexpr vertex_num_t min_layer_cap  = GraphFactoryTraitsT::min_layer_cap;
 
         // Each newly-inserted vid's eventual highest_level_id. Default
@@ -346,7 +346,7 @@ private:
         // seeding) still uses random_device — see compare_hier_vs_L0
         // notes for the trade-off.
         random_seq_nr_t random_sampler(/*seed=*/20260529);
-        for (layer_id_t target_layer = layer_id_t{1}; target_layer <= max_restrict_level; ++target_layer) {
+        for (layer_id_t target_layer = layer_id_t{1}; target_layer <= max_allowed_level_id; ++target_layer) {
             const vertex_num_t current_pool_size = static_cast<vertex_num_t>(current_layer_pool.size());
             const vertex_num_t next_layer_size   = static_cast<vertex_num_t>(
                 std::floor(static_cast<double>(current_pool_size) * static_cast<double>(sample_ratio)));

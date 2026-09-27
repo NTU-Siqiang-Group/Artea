@@ -19,7 +19,7 @@
  *               Composes a dynamic::HierarchicalGraph with the r-net
  *               configuration and the owned base-vector storage.
  *               Forwards the hierarchical-graph API (add_vertices /
- *               assign_layer / fetch_layer_nbrs / with_locked_nbrs /
+ *               assign_layer / fetch_level_nbrs / with_locked_nbrs /
  *               per-level bucket and slot queries) so IndexFactory can
  *               operate exclusively against this class.
  */
@@ -92,7 +92,7 @@ public:
      *
      * @param total_vertices  Expected eventual size of the base dataset.
      *                        Used to derive the hierarchy's hard layer
-     *                        cap via @c rgraph_config_t::compute_max_restrict_level.
+     *                        cap via @c rgraph_config_t::compute_max_allowed_level_id.
      * @param rgraph_config   R-graph configuration (r-net geometry,
      *                        queue sizes, neighbor capacity).
      * @param pruning_config  Insert-time RNG pruning policy applied to
@@ -108,18 +108,18 @@ public:
         const pruning_config_t  pruning_config = pruning_config_t(
             ratio_t(1.1), ratio_t(0))
     ) :
-        _max_restrict_level(
-            rgraph_config_t::compute_max_restrict_level(total_vertices)),
+        _max_allowed_level_id(
+            rgraph_config_t::compute_max_allowed_level_id(total_vertices)),
         _hierarchical_graph(std::make_unique<hierarchical_graph_t>(
-            // max_restrict_level == paper's max_restrict_level.
-            // Valid highest_level_id values: [0, max_restrict_level].
+            // max_allowed_level_id corresponds to the paper's max_restrict_level.
+            // Valid highest_level_id values: [0, max_allowed_level_id].
             //   - 0                 = vertex participates only at the
             //                         base (level 0).
-            //   - 1..max_restrict   = also participates in upper r-net
-            //                         levels 1..max_restrict.
+            //   - 1..max_allowed_level_id = also participates in upper r-net
+            //                              levels 1..max_allowed_level_id.
             // Upper layers use ul_max_nbr_size; L0 uses bl_max_nbr_size —
             // fully independent, no hardcoded ratio.
-            _max_restrict_level,
+            _max_allowed_level_id,
             rgraph_config.ul_max_nbr_size(),
             rgraph_config.bl_max_nbr_size(),
             total_vertices)),
@@ -162,17 +162,17 @@ public:
     }
 
     __attribute__((always_inline))
-    auto fetch_layer_nbrs(const vertex_id_t vid, const layer_id_t l)
+    auto fetch_level_nbrs(const vertex_id_t vid, const layer_id_t l)
         -> std::span<nbr_t>
     {
-        return _hierarchical_graph->fetch_layer_nbrs(vid, l);
+        return _hierarchical_graph->fetch_level_nbrs(vid, l);
     }
 
     __attribute__((always_inline))
-    auto fetch_layer_nbrs(const vertex_id_t vid, const layer_id_t l) const
+    auto fetch_level_nbrs(const vertex_id_t vid, const layer_id_t l) const
         -> std::span<const nbr_t>
     {
-        return _hierarchical_graph->fetch_layer_nbrs(vid, l);
+        return _hierarchical_graph->fetch_level_nbrs(vid, l);
     }
 
     template <typename FnT>
@@ -246,7 +246,8 @@ public:
     __attribute__((always_inline)) auto num_skipped_levels() const -> layer_num_t  { return _rgraph_config.num_skipped_levels(); }
     __attribute__((always_inline)) auto tau()                const -> ratio_t      { return _rgraph_config.tau(); }
     __attribute__((always_inline)) auto l0_min_distance()    const -> distance_t   { return _rgraph_config.l0_min_distance(); }
-    __attribute__((always_inline)) auto max_restrict_level() const -> layer_num_t  { return _max_restrict_level; }
+    __attribute__((always_inline))
+    auto max_allowed_level_id() const -> layer_num_t { return _max_allowed_level_id; }
     __attribute__((always_inline)) auto search_nn_qs()       const -> vertex_num_t { return _rgraph_config.search_nn_qs(); }
     __attribute__((always_inline)) auto ul_select_nbrs_qs()  const -> vertex_num_t { return _rgraph_config.ul_select_nbrs_qs(); }
     __attribute__((always_inline)) auto bl_select_nbrs_qs()  const -> vertex_num_t { return _rgraph_config.bl_select_nbrs_qs(); }
@@ -255,7 +256,7 @@ public:
     /**
      * @brief Upper-layer radius: R_h = l0_min_distance * rnet_beta^(num_skipped_levels + h).
      *        At L0, returns the characteristic minimum-distance scale.
-     *        @p h must be in @c [0, max_restrict_level].
+     *        @p h must be in @c [0, max_allowed_level_id].
      */
     __attribute__((always_inline))
     auto radius_at(const layer_id_t h) const -> distance_t {
@@ -286,7 +287,7 @@ public:
      *        call the index has surrendered the per-vertex neighbor
      *        arrays that dominate its resident set (≈ 12 GB on a 10M ×
      *        bl_max=96 build); subsequent @c get_hierarchical_graph /
-     *        @c fetch_layer_nbrs / @c add_vertices calls dereference a
+     *        @c fetch_level_nbrs / @c add_vertices calls dereference a
      *        null pointer and are undefined — release() is meant to be
      *        called only after the dynamic graph has been compacted to
      *        @c compact::hierarchical_graph_t (the form search reads
@@ -300,10 +301,10 @@ public:
     }
 
 private:
-    /// @brief Hard cap on the number of upper layers (paper 1-indexed).
+    /// @brief Inclusive upper bound on the allowed highest_level_id.
     ///        Stored as a field because we need it before the
     ///        hierarchical_graph constructor runs.
-    layer_num_t _max_restrict_level;
+    layer_num_t _max_allowed_level_id;
 
     /// @brief Composed HierarchicalGraph (unique_ptr: non-movable).
     std::unique_ptr<hierarchical_graph_t> _hierarchical_graph;
