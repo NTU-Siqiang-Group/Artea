@@ -114,17 +114,30 @@ public:
         this_index_t& index, vector_array_t&& batch_vecs, const dist_func_t& dist_func
     ) -> BuildTime {
         const auto wallclock_start = std::chrono::high_resolution_clock::now();
-        const auto elapsed_ms_since = [](const auto& start) -> double {
-            const auto now = std::chrono::high_resolution_clock::now();
-            return std::chrono::duration<double, std::milli>(now - start).count();
-        };
-
-        const vertex_num_t batch_size = static_cast<vertex_num_t>(batch_vecs.get_num_vecs());
-        if (batch_size == 0) {
-            return BuildTime{ 0.0, 0.0, elapsed_ms_since(wallclock_start) };
-        }
-
+        const auto batch_size = static_cast<vertex_num_t>(batch_vecs.get_num_vecs());
         index.append_vecs(std::move(batch_vecs));
+        return _insert_vertices(index, batch_size, dist_func, wallclock_start);
+    }
+
+    /** @brief Build from the existing base vectors without copying or appending them. */
+    static auto build_from_vectors(this_index_t& index, const dist_func_t& dist_func) -> BuildTime {
+        const auto wallclock_start = std::chrono::high_resolution_clock::now();
+        if (index.get_num_vertices() != 0) {
+            throw std::logic_error("build_from_vectors requires an empty graph");
+        }
+        return _insert_vertices(index, index.get_base_vecs().get_num_vecs(), dist_func, wallclock_start);
+    }
+
+private:
+    static auto _insert_vertices(
+        this_index_t& index, vertex_num_t batch_size, const dist_func_t& dist_func,
+        std::chrono::high_resolution_clock::time_point wallclock_start) -> BuildTime {
+        const auto elapsed_ms_since = [](const auto& start) -> double {
+            return std::chrono::duration<double, std::milli>(
+                std::chrono::high_resolution_clock::now() - start).count();
+        };
+        if (batch_size == 0) return {0.0, 0.0, elapsed_ms_since(wallclock_start)};
+
         const vertex_id_t new_vid_start = index.add_vertices(batch_size);
         const vertex_id_t new_vid_end   = static_cast<vertex_id_t>(new_vid_start + batch_size);
 
@@ -169,6 +182,7 @@ public:
         return BuildTime{ level_assignment_ms, refinement_ms, total_time_ms };
     }
 
+public:
     /**
      * @brief Refine layer @p level_id by running the conv_graph-style
      *        prune + reverse + truncate pipeline on it.
@@ -215,7 +229,7 @@ public:
         (void)new_vid_end;
 
         auto& hier_graph              = index.get_hierarchical_graph();
-        auto& vecs_storage            = index.get_vecs_storage();
+        const auto& vecs_storage      = index.get_base_vecs();
         auto& layer_config            = index.refining_layer_config(level_id);
         const auto& pruning_config    = index.pruning_config();
         const auto& propagate_config  = index.propagate_config();

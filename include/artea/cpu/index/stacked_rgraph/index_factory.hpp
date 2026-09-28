@@ -43,6 +43,7 @@
 
 #include <algorithm>
 #include <chrono>
+#include <stdexcept>
 #include <cmath>
 #include <cstdint>
 #include <limits>
@@ -164,11 +165,34 @@ public:
         const bool         insert_on_L0 = true,
         const bool         shuffle_insertion_order = false
     ) -> BuildTime {
-        const auto t_start = std::chrono::high_resolution_clock::now();
+        const auto build_start = std::chrono::high_resolution_clock::now();
+        const auto batch_size = static_cast<vertex_num_t>(batch_vecs.get_num_vecs());
+        index.append_vecs(std::move(batch_vecs));
+        return _insert_vertices(
+            index, batch_size, dist_func, insert_on_L0, shuffle_insertion_order, build_start);
+    }
+
+    /** @brief Construct an empty graph from vectors already held or borrowed by the index.
+     *  Does not append, copy, reorder, or take ownership of the vector array. */
+    static auto build_from_vectors(this_index_t& index, const dist_func_t& dist_func,
+        bool insert_on_L0 = true, bool shuffle_insertion_order = false) -> BuildTime {
+        const auto build_start = std::chrono::high_resolution_clock::now();
+        if (index.get_num_vertices() != 0) {
+            throw std::logic_error("build_from_vectors requires an empty graph");
+        }
+        const vertex_num_t vertex_count = index.get_base_vecs().get_num_vecs();
+        return _insert_vertices(index, vertex_count, dist_func, insert_on_L0,
+                                shuffle_insertion_order, build_start);
+    }
+
+private:
+    /** @brief Shared insertion path for an appended batch or a preloaded static dataset. */
+    static auto _insert_vertices(this_index_t& index, vertex_num_t batch_size, const dist_func_t& dist_func,
+                                 bool insert_on_L0, bool shuffle_insertion_order,
+                                 std::chrono::high_resolution_clock::time_point build_start) -> BuildTime {
         const auto elapsed_ms = [&]() -> double {
-            const auto t_now = std::chrono::high_resolution_clock::now();
             return std::chrono::duration<double, std::milli>(
-                t_now - t_start).count();
+                std::chrono::high_resolution_clock::now() - build_start).count();
         };
 
         // bl_select_nbrs_qs only drives the L0 select phase in Step D.
@@ -181,10 +205,8 @@ public:
                 index.bl_select_nbrs_qs()));
         }
 
-        const vertex_num_t batch_size = static_cast<vertex_num_t>(batch_vecs.get_num_vecs());
         if (batch_size == 0) return BuildTime{ elapsed_ms() };
 
-        index.append_vecs(std::move(batch_vecs));
         const vertex_id_t first_new_vid = index.add_vertices(batch_size);
 
         // Permutation of the new-vid range. Walked in its natural order
@@ -198,16 +220,13 @@ public:
             std::shuffle(insert_order.begin(), insert_order.end(), rng);
         }
 
-        // Construct the pruning updater AFTER append_vecs so the storage
-        // reference it captures already points at populated data (belt-
-        // and-suspenders; vecs_storage_t is stable either way). The
-        // scaled RNG rule with scale_coeffs from index.pruning_config()
-        // is applied uniformly at every level (L0 included).
+        // Both entry points provide populated vectors before constructing the updater and router.
+        // The scaled RNG rule from index.pruning_config() applies at every level, including L0.
         hierarchical_pruning_updater_t pruning_updater(
             dist_func,
-            index.get_vecs_storage());
+            index.get_base_vecs());
 
-        const auto& vecs_storage = index.get_vecs_storage();
+        const auto& vecs_storage = index.get_base_vecs();
         const vertex_num_t total_vecs = static_cast<vertex_num_t>(vecs_storage.get_num_vecs());
 
         // Atom-level router: the per-level queue lives on the caller's
@@ -263,7 +282,7 @@ private:
         visited_table_t&    visited,
         const bool          insert_on_L0
     ) -> void {
-        const vec_ele_t* new_vec        = index.get_vecs_storage().get(new_vid);
+        const vec_ele_t* new_vec        = index.get_base_vecs().get(new_vid);
         const vertex_num_t search_nn_qs      = index.search_nn_qs();
         const vertex_num_t ul_select_nbrs_qs = index.ul_select_nbrs_qs();
         const vertex_num_t bl_select_nbrs_qs = index.bl_select_nbrs_qs();
@@ -281,7 +300,8 @@ private:
 
         if (top_level_id != invalid_level_id && top_level_id >= 1) {
             std_candidate_queue_t cur_queue(search_nn_qs);
-            candidate_sample_utils_t::sample_single_entry(index.get_vecs_storage(), dist_func, index, new_vec, cur_queue);
+            candidate_sample_utils_t::sample_single_entry(
+                index.get_base_vecs(), dist_func, index, new_vec, cur_queue);
 
             for (layer_id_t cur_level_id = top_level_id; cur_level_id >= 1; --cur_level_id) {
                 router.beam_search(

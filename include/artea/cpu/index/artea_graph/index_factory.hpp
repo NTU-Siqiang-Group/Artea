@@ -145,32 +145,32 @@ public:
         const bool         insert_on_L0 = true,
         const bool         shuffle_insertion_order = false
     ) -> BuildTime {
-        // Capture the vid window owned by this batch. refine_layer uses
-        // it to scope the L0 random top-up pass to exactly the new
-        // vertices — earlier batches' L0 rows stay untouched, and rows
-        // that already have enough neighbors (from r-net insertion when
-        // insert_on_L0 == true) are skipped via the threshold gate.
-        const vertex_id_t new_vid_start =
-            static_cast<vertex_id_t>(index.get_num_vertices());
-
-        // Step 1: coarse stacked_rgraph insertion. L0 edge construction
-        // is governed by @p insert_on_L0. Either way, refine_layer's
-        // random top-up pass will fill L0 rows that still sit below
-        // the prefill threshold — no extra orchestration needed here.
-        // The base factory already measures wall-clock and returns it
-        // via BuildTime; reuse that instead of re-instrumenting here.
+        const auto new_vid_start = static_cast<vertex_id_t>(index.get_num_vertices());
         const auto rnet_build_time = base_t::add_vertices(
-            index,
-            std::move(batch_vecs),
-            dist_func,
-            /*insert_on_L0=*/insert_on_L0,
-            shuffle_insertion_order
-        );
+            index, std::move(batch_vecs), dist_func, insert_on_L0, shuffle_insertion_order);
+        return _refine_inserted_vertices(index, dist_func, new_vid_start, rnet_build_time, insert_on_L0);
+    }
+
+    /** @brief Build and refine a graph using the index's existing vectors, without appending a batch. */
+    static auto build_from_vectors(this_index_t& index, const dist_func_t& dist_func,
+        bool insert_on_L0 = true, bool shuffle_insertion_order = false) -> BuildTime {
+        const auto rnet_build_time = base_t::build_from_vectors(
+            index, dist_func, insert_on_L0, shuffle_insertion_order);
+        return _refine_inserted_vertices(index, dist_func, 0, rnet_build_time, insert_on_L0);
+    }
+
+private:
+    /** @brief Apply the same refinement pipeline to incremental and static construction. */
+    static auto _refine_inserted_vertices(this_index_t& index, const dist_func_t& dist_func,
+                                         vertex_id_t new_vid_start,
+                                         const typename base_t::BuildTime& rnet_build_time,
+                                         bool insert_on_L0) -> BuildTime {
         const double upper_layer_time_ms = rnet_build_time.total_time_ms;
         ARTEA_INFO(fmt::format("[artea_graph] r-net insertion done (insert_on_L0={}) in {:.2f} ms",
             insert_on_L0, upper_layer_time_ms));
 
         const vertex_id_t new_vid_end = static_cast<vertex_id_t>(index.get_num_vertices());
+        if (new_vid_start == new_vid_end) return {upper_layer_time_ms, 0.0, upper_layer_time_ms};
 
         // Step 2 + 3: refine every occupied layer (including L0) and
         // write back. top_occupied_level_id is 0 for the degenerate
@@ -215,6 +215,7 @@ public:
         };
     }
 
+public:
     /**
      * @brief Refine layer @p level_id of @p index by running a
      *        conv_graph-style prune + reverse + truncate pipeline over
@@ -267,7 +268,7 @@ public:
         const vertex_id_t  new_vid_end
     ) -> void {
         auto& hier_graph                = index.get_hierarchical_graph();
-        auto& vecs_storage              = index.get_vecs_storage();
+        const auto& vecs_storage        = index.get_base_vecs();
         // Per-level RefiningGraph layer_config: bl for L0, ul for L1+.
         // Derived in the IndexStructure ctor as rgraph max_nbr_size × 1.5.
         auto& layer_config              = index.refining_layer_config(level_id);

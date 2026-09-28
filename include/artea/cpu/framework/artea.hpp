@@ -42,6 +42,7 @@
 #include <artea/cpu/containers/vertex_subset.hpp>
 #include <artea/cpu/containers/four_ary_heap.hpp>
 
+#include <artea/cpu/index/dataset_index.hpp>
 #include <artea/cpu/index/layer_config.hpp>
 #include <artea/cpu/index/neighbor.hpp>
 #include <artea/cpu/index/dynamic_structure/refining_graph.hpp>

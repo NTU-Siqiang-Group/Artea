@@ -61,6 +61,34 @@ public:
         double total_time_ms = 0.0;
     };
 
+    // A returned borrowing index cannot safely refer to a temporary vector array.
+    static auto construct_graph(vector_array_t&&, layer_config_t, propagate_config_t)
+        -> ConstructResult = delete;
+    static auto construct_graph(const vector_array_t&&, layer_config_t, propagate_config_t)
+        -> ConstructResult = delete;
+
+    /** @brief Build in place using the index's existing vectors and graph configuration. */
+    static auto build_from_vectors(this_index_t& graph_index, const dist_func_t& distance) -> double {
+        graph_index.get_refining_graph();
+        const auto start = std::chrono::high_resolution_clock::now();
+        if (graph_index.get_num_vertices() != 0) {
+            _build_loop(graph_index, distance, graph_index.propagate_config());
+        }
+        return std::chrono::duration<double, std::milli>(
+            std::chrono::high_resolution_clock::now() - start).count();
+    }
+
+    /** @brief Construct an owning index without copying the dataset's base vectors. */
+    static auto construct_graph(std::unique_ptr<vector_dataset_t> dataset, const layer_config_t layer_config,
+        const propagate_config_t propagate_config) -> ConstructResult {
+        const auto start = std::chrono::high_resolution_clock::now();
+        this_index_t graph_index(std::move(dataset), layer_config, propagate_config);
+        const dist_func_t distance;
+        build_from_vectors(graph_index, distance);
+        return {std::move(graph_index), std::chrono::duration<double, std::milli>(
+            std::chrono::high_resolution_clock::now() - start).count()};
+    }
+
     /** @brief Construct a symmetric KNN graph from vector array. */
     static auto construct_graph(
         const vector_array_t& base_vecs,
@@ -70,7 +98,7 @@ public:
         const auto t_start = std::chrono::high_resolution_clock::now();
         this_index_t graph_index(base_vecs, layer_config, propagate_config);
         dist_func_t dist_func;  // stateless: dim is a compile-time trait
-        _build_loop(graph_index, dist_func, propagate_config);
+        build_from_vectors(graph_index, dist_func);
         const auto t_end = std::chrono::high_resolution_clock::now();
         return ConstructResult{
             std::move(graph_index),
@@ -92,6 +120,7 @@ public:
         typename knn_graph::index_t&& knn_graph_index
     ) -> ConstructResult {
         const auto t_start = std::chrono::high_resolution_clock::now();
+        knn_graph_index.get_refining_graph();
         this_index_t graph_index(std::move(knn_graph_index));
 
         const vertex_num_t num_vertices = graph_index.get_num_vertices();

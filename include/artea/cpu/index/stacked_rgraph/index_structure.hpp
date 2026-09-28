@@ -17,7 +17,7 @@
  * @Author: Chandler (Weitang Ye) <weitang.ye@ntu.edu.sg>
  * @Description: Data structure of the dynamic Stacked R-Net index.
  *               Composes a dynamic::HierarchicalGraph with the r-net
- *               configuration and the owned base-vector storage.
+ *               configuration and the common dataset-owning base.
  *               Forwards the hierarchical-graph API (add_vertices /
  *               assign_layer / fetch_level_nbrs / with_locked_nbrs /
  *               per-level bucket and slot queries) so IndexFactory can
@@ -28,13 +28,17 @@
 
 #include <cstdint>
 #include <memory>
+#include <optional>
 #include <span>
+#include <stdexcept>
 #include <utility>
 #include <vector>
 
 #include <tbb/concurrent_vector.h>
 
 #include <artea/common/logger.hpp>
+#include <artea/cpu/index/dataset_index.hpp>
+#include <artea/cpu/index/compactor/hierarchical_graph_compactor.hpp>
 
 namespace artea {
 namespace cpu {
@@ -47,9 +51,7 @@ namespace stacked_rgraph {
  *   - A composed @c dynamic::HierarchicalGraph (held via
  *     @c std::unique_ptr because the graph is non-movable).
  *   - The r-net @c RGraphConfig (rnet_beta / num_skipped_levels / tau / l0_min_distance / max_nbr_size / ...).
- *   - An owned copy of every base vector inserted via
- *     @c append_vecs (used by @c IndexFactory to compute distances
- *     without holding the caller's input batch).
+ *   - Dataset ownership or an explicit borrowed vector view inherited from @c DatasetIndex.
  *
  * Copy / move are both deleted — clients keep an instance inside a
  * @c std::unique_ptr.
@@ -57,9 +59,13 @@ namespace stacked_rgraph {
  * @tparam IndexTraitsT The index traits type.
  */
 template <typename IndexTraitsT>
-class IndexStructure {
+class IndexStructure : public DatasetIndex<IndexTraitsT> {
+    using data_base_t = DatasetIndex<IndexTraitsT>;
 
 public:
+    using vector_dataset_t = typename IndexTraitsT::vector_dataset_t;
+    using compact_graph_t = typename IndexTraitsT::compact::hierarchical_graph_t;
+
     // Public so the dynamic_layer_range adapter (and any other code that
     // treats IndexStructure as a hierarchical-graph forwarder) can read
     // these typedefs without being a friend.
@@ -124,14 +130,68 @@ public:
             rgraph_config.bl_max_nbr_size(),
             total_vertices)),
         _rgraph_config(rgraph_config),
-        _pruning_config(pruning_config),
-        _vecs_storage()
+        _pruning_config(pruning_config)
     {}
+
+    /** @brief Own a loaded dataset; call prepare_build() before constructing the graph. */
+    explicit IndexStructure(std::unique_ptr<vector_dataset_t> dataset)
+        : data_base_t(std::move(dataset)) {}
+
+    IndexStructure(std::unique_ptr<vector_dataset_t> dataset, const rgraph_config_t& rgraph_config,
+                   pruning_config_t pruning_config = pruning_config_t(ratio_t(1.1), ratio_t(0)))
+        : data_base_t(std::move(dataset)) {
+        prepare_build(rgraph_config, pruning_config);
+    }
 
     IndexStructure(const IndexStructure&)            = delete;
     IndexStructure& operator=(const IndexStructure&) = delete;
     IndexStructure(IndexStructure&&)                 = delete;
     IndexStructure& operator=(IndexStructure&&)      = delete;
+
+    /** @brief Build against immutable vectors owned by the caller, without copying them.
+     *  The vector array must outlive this index and remain unchanged. Appending is disabled. */
+    IndexStructure(const vector_array_t& vectors, const rgraph_config_t& rgraph_config,
+                   const pruning_config_t pruning_config = pruning_config_t(ratio_t(1.1), ratio_t(0)))
+        : data_base_t(vectors) {
+        prepare_build(rgraph_config, pruning_config);
+    }
+
+    IndexStructure(vector_array_t&&, const rgraph_config_t&,
+                   pruning_config_t = pruning_config_t(ratio_t(1.1), ratio_t(0))) = delete;
+    IndexStructure(const vector_array_t&&, const rgraph_config_t&,
+                   pruning_config_t = pruning_config_t(ratio_t(1.1), ratio_t(0))) = delete;
+
+    /** @brief Rebuild graph state over the same vectors; invalidates previous graph references.
+     *  Call after queries stop. Dataset references survive both rebuilding and allocation failure. */
+    auto prepare_build(const rgraph_config_t& rgraph_config,
+                       pruning_config_t pruning_config = pruning_config_t(ratio_t(1.1), ratio_t(0)))
+        -> IndexStructure& {
+        _compact_graph.reset();
+        _hierarchical_graph.reset();
+        const auto count = static_cast<vertex_num_t>(this->get_base_vecs().get_num_vecs());
+        _max_allowed_level_id = rgraph_config_t::compute_max_allowed_level_id(count);
+        auto graph = std::make_unique<hierarchical_graph_t>(
+            _max_allowed_level_id, rgraph_config.ul_max_nbr_size(), rgraph_config.bl_max_nbr_size(), count);
+        _rgraph_config = rgraph_config;
+        _pruning_config = pruning_config;
+        _hierarchical_graph = std::move(graph);
+        return *this;
+    }
+
+    /** @brief Retain the compact graph and dataset, releasing the building graph only after success. */
+    template <typename DistFuncT>
+    auto compact(const DistFuncT& distance) -> void {
+        using compactor_t = typename IndexTraitsT::hierarchical_graph_compactor_t;
+        auto graph = compactor_t::compact_graph(get_hierarchical_graph(), this->get_base_vecs(), distance);
+        _compact_graph.emplace(std::move(graph));
+        _hierarchical_graph.reset();
+    }
+
+    /** @brief Search graph, valid until the next rebuild or index destruction. */
+    auto get_compact_graph() const -> const compact_graph_t& {
+        if (!_compact_graph) throw std::logic_error("No compact graph; call compact first");
+        return *_compact_graph;
+    }
 
     // =================================================================
     //   Composed-graph accessor
@@ -139,11 +199,13 @@ public:
 
     __attribute__((always_inline))
     auto get_hierarchical_graph() -> hierarchical_graph_t& {
+        if (!_hierarchical_graph) throw std::logic_error("No building graph; call prepare_build first");
         return *_hierarchical_graph;
     }
 
     __attribute__((always_inline))
     auto get_hierarchical_graph() const -> const hierarchical_graph_t& {
+        if (!_hierarchical_graph) throw std::logic_error("No building graph; call prepare_build first");
         return *_hierarchical_graph;
     }
 
@@ -153,26 +215,26 @@ public:
 
     __attribute__((always_inline))
     auto add_vertices(const vertex_num_t n) -> vertex_id_t {
-        return _hierarchical_graph->add_vertices(n);
+        return get_hierarchical_graph().add_vertices(n);
     }
 
     __attribute__((always_inline))
     auto assign_layer(const vertex_id_t vid, const layer_id_t h) -> void {
-        _hierarchical_graph->assign_layer(vid, h);
+        get_hierarchical_graph().assign_layer(vid, h);
     }
 
     __attribute__((always_inline))
     auto fetch_level_nbrs(const vertex_id_t vid, const layer_id_t l)
         -> std::span<nbr_t>
     {
-        return _hierarchical_graph->fetch_level_nbrs(vid, l);
+        return get_hierarchical_graph().fetch_level_nbrs(vid, l);
     }
 
     __attribute__((always_inline))
     auto fetch_level_nbrs(const vertex_id_t vid, const layer_id_t l) const
         -> std::span<const nbr_t>
     {
-        return _hierarchical_graph->fetch_level_nbrs(vid, l);
+        return get_hierarchical_graph().fetch_level_nbrs(vid, l);
     }
 
     template <typename FnT>
@@ -180,7 +242,7 @@ public:
     auto with_locked_nbrs(const vertex_id_t vid, const layer_id_t l, FnT&& fn)
         -> void
     {
-        _hierarchical_graph->with_locked_nbrs(
+        get_hierarchical_graph().with_locked_nbrs(
             vid, l, std::forward<FnT>(fn));
     }
 
@@ -188,69 +250,96 @@ public:
     auto num_valid_nbrs(const vertex_id_t vid, const layer_id_t l) const
         -> vertex_num_t
     {
-        return _hierarchical_graph->num_valid_nbrs(vid, l);
+        return get_hierarchical_graph().num_valid_nbrs(vid, l);
     }
 
     __attribute__((always_inline))
     auto get_highest_level_id(const vertex_id_t vid) const -> layer_id_t {
-        return _hierarchical_graph->get_highest_level_id(vid);
+        return get_hierarchical_graph().get_highest_level_id(vid);
     }
 
     __attribute__((always_inline))
     auto get_vids_with_highest_level(const layer_id_t h) const
         -> const tbb::concurrent_vector<vertex_id_t>&
     {
-        return _hierarchical_graph->get_vids_with_highest_level(h);
+        return get_hierarchical_graph().get_vids_with_highest_level(h);
     }
 
     __attribute__((always_inline))
     auto get_top_level_vids() const {
-        return _hierarchical_graph->get_top_level_vids();
+        return get_hierarchical_graph().get_top_level_vids();
     }
 
     __attribute__((always_inline))
     auto top_occupied_level_id() const -> layer_id_t {
-        return _hierarchical_graph->top_occupied_level_id();
+        return get_hierarchical_graph().top_occupied_level_id();
     }
 
     __attribute__((always_inline))
     auto get_num_vertices() const -> vertex_num_t {
-        return _hierarchical_graph->get_num_vertices();
+        return get_hierarchical_graph().get_num_vertices();
     }
 
     /** @brief Per-vertex neighbor capacity at every upper layer. */
     __attribute__((always_inline))
     auto ul_max_nbr_size() const -> vertex_num_t {
-        return _hierarchical_graph->ul_max_nbr_size();
+        return get_hierarchical_graph().ul_max_nbr_size();
     }
 
     /** @brief Per-vertex neighbor capacity at the bottom layer (L0). */
     __attribute__((always_inline))
     auto bl_max_nbr_size() const -> vertex_num_t {
-        return _hierarchical_graph->bl_max_nbr_size();
+        return get_hierarchical_graph().bl_max_nbr_size();
     }
 
     /** @brief Per-vertex capacity at @p l (bl for L0, ul elsewhere). */
     __attribute__((always_inline))
     auto max_nbr_size(const layer_id_t l) const -> vertex_num_t {
-        return _hierarchical_graph->max_nbr_size(l);
+        return get_hierarchical_graph().max_nbr_size(l);
     }
 
     // =================================================================
     //   Config accessors
     // =================================================================
 
-    __attribute__((always_inline)) auto rgraph_config()      const -> const rgraph_config_t&  { return _rgraph_config; }
-    __attribute__((always_inline)) auto pruning_config()     const -> const pruning_config_t& { return _pruning_config; }
-    __attribute__((always_inline)) auto rnet_beta()          const -> ratio_t      { return _rgraph_config.rnet_beta(); }
-    __attribute__((always_inline)) auto num_skipped_levels() const -> layer_num_t  { return _rgraph_config.num_skipped_levels(); }
-    __attribute__((always_inline)) auto tau()                const -> ratio_t      { return _rgraph_config.tau(); }
-    __attribute__((always_inline)) auto l0_min_distance()    const -> distance_t   { return _rgraph_config.l0_min_distance(); }
+    __attribute__((always_inline))
+    auto rgraph_config() const -> const rgraph_config_t& {
+        return _rgraph_config.value();
+    }
+    __attribute__((always_inline))
+    auto pruning_config() const -> const pruning_config_t& {
+        return _pruning_config.value();
+    }
+    __attribute__((always_inline))
+    auto rnet_beta() const -> ratio_t {
+        return _rgraph_config.value().rnet_beta();
+    }
+    __attribute__((always_inline))
+    auto num_skipped_levels() const -> layer_num_t {
+        return _rgraph_config.value().num_skipped_levels();
+    }
+    __attribute__((always_inline))
+    auto tau() const -> ratio_t {
+        return _rgraph_config.value().tau();
+    }
+    __attribute__((always_inline))
+    auto l0_min_distance() const -> distance_t {
+        return _rgraph_config.value().l0_min_distance();
+    }
     __attribute__((always_inline))
     auto max_allowed_level_id() const -> layer_num_t { return _max_allowed_level_id; }
-    __attribute__((always_inline)) auto search_nn_qs()       const -> vertex_num_t { return _rgraph_config.search_nn_qs(); }
-    __attribute__((always_inline)) auto ul_select_nbrs_qs()  const -> vertex_num_t { return _rgraph_config.ul_select_nbrs_qs(); }
-    __attribute__((always_inline)) auto bl_select_nbrs_qs()  const -> vertex_num_t { return _rgraph_config.bl_select_nbrs_qs(); }
+    __attribute__((always_inline))
+    auto search_nn_qs() const -> vertex_num_t {
+        return _rgraph_config.value().search_nn_qs();
+    }
+    __attribute__((always_inline))
+    auto ul_select_nbrs_qs() const -> vertex_num_t {
+        return _rgraph_config.value().ul_select_nbrs_qs();
+    }
+    __attribute__((always_inline))
+    auto bl_select_nbrs_qs() const -> vertex_num_t {
+        return _rgraph_config.value().bl_select_nbrs_qs();
+    }
     static constexpr ratio_t      layer_cap_decay_ratio = rgraph_config_t::layer_cap_decay_ratio;
 
     /**
@@ -260,63 +349,37 @@ public:
      */
     __attribute__((always_inline))
     auto radius_at(const layer_id_t h) const -> distance_t {
-        return _rgraph_config.radius_at(h);
+        return _rgraph_config.value().radius_at(h);
     }
 
-    // =================================================================
-    //   Owned vector storage
-    // =================================================================
-
-    __attribute__((always_inline)) auto get_vecs_storage()       -> vecs_storage_t&       { return _vecs_storage; }
-    __attribute__((always_inline)) auto get_vecs_storage() const -> const vecs_storage_t& { return _vecs_storage; }
-
-    /**
-     * @brief Append a batch of vectors to the owned vector storage.
-     *
-     * Delegates to @c VectorArray::append_batch: if the owned storage
-     * is currently empty, @p batch_vecs is moved in wholesale; otherwise
-     * its contents are copied to the tail in parallel.
-     */
-    __attribute__((always_inline))
+    /** @brief Append a batch in incremental mode while the building graph is available. */
     auto append_vecs(vector_array_t&& batch_vecs) -> void {
-        _vecs_storage.append_batch(std::move(batch_vecs));
+        if (get_num_vertices() != this->get_base_vecs().get_num_vecs()) {
+            throw std::logic_error("Build existing vectors before appending another batch");
+        }
+        this->append_base_vecs(std::move(batch_vecs));
     }
 
-    /**
-     * @brief Free the composed @c dynamic::HierarchicalGraph. After this
-     *        call the index has surrendered the per-vertex neighbor
-     *        arrays that dominate its resident set (≈ 12 GB on a 10M ×
-     *        bl_max=96 build); subsequent @c get_hierarchical_graph /
-     *        @c fetch_level_nbrs / @c add_vertices calls dereference a
-     *        null pointer and are undefined — release() is meant to be
-     *        called only after the dynamic graph has been compacted to
-     *        @c compact::hierarchical_graph_t (the form search reads
-     *        from) and no further dynamic-side queries are needed.
-     *        Configs and @c _vecs_storage are deliberately retained so
-     *        outstanding references stay valid.
-     */
-    __attribute__((always_inline))
-    auto release() -> void {
-        _hierarchical_graph.reset();
-    }
+    /** @brief Release the building graph while preserving the dataset and any compact graph. */
+    auto release() -> void { _hierarchical_graph.reset(); }
 
 private:
     /// @brief Inclusive upper bound on the allowed highest_level_id.
     ///        Stored as a field because we need it before the
     ///        hierarchical_graph constructor runs.
-    layer_num_t _max_allowed_level_id;
+    layer_num_t _max_allowed_level_id = 0;
 
     /// @brief Composed HierarchicalGraph (unique_ptr: non-movable).
     std::unique_ptr<hierarchical_graph_t> _hierarchical_graph;
 
     /// @brief R-graph configuration.
-    rgraph_config_t _rgraph_config;
+    std::optional<rgraph_config_t> _rgraph_config;
 
     /// @brief Insert-time upper-layer pruning configuration.
-    pruning_config_t _pruning_config;
+    std::optional<pruning_config_t> _pruning_config;
 
-    /// @brief Owned vector storage. Grown in-place by append_vecs.
-    vecs_storage_t _vecs_storage;
+    /** @brief Query graph produced by successful compaction; independent of the building graph. */
+    std::optional<compact_graph_t> _compact_graph;
 
 };  // class IndexStructure
 

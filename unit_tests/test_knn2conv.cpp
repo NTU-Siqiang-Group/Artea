@@ -132,7 +132,7 @@ public:
 
             conv_graph::index_t<Metric, Dim> conv_graph = std::move(
                 conv_graph::factory_t<Metric, Dim>::construct_graph(
-                    std::move(knn_index.get_refining_graph()),
+                    std::move(knn_index),
                     conv_pruning_config
                 ).graph
             );

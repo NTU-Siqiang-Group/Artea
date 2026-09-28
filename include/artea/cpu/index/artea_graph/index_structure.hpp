@@ -41,6 +41,7 @@ class IndexStructure : public stacked_rgraph::IndexStructure<IndexTraitsT> {
 
     using base_t              = stacked_rgraph::IndexStructure<IndexTraitsT>;
     using vertex_num_t        = typename IndexTraitsT::vertex_num_t;
+    using vector_array_t      = typename IndexTraitsT::vector_array_t;
     using layer_config_t      = typename IndexTraitsT::layer_config_t;
     using rgraph_config_t     = typename IndexTraitsT::artea_graph::rgraph_config_t;
     using propagate_config_t  = typename IndexTraitsT::artea_graph::propagate_config_t;
@@ -56,6 +57,8 @@ class IndexStructure : public stacked_rgraph::IndexStructure<IndexTraitsT> {
     }
 
 public:
+    using vector_dataset_t = typename IndexTraitsT::vector_dataset_t;
+
     /**
      * @brief Construct an empty artea_graph index.
      *
@@ -93,10 +96,43 @@ public:
         _pruning_config(pruning_config)
     {}
 
+    /** @brief Own a dataset across construction, compaction, queries, and graph rebuilds. */
+    explicit IndexStructure(std::unique_ptr<vector_dataset_t> dataset) : base_t(std::move(dataset)) {}
+
+    IndexStructure(std::unique_ptr<vector_dataset_t> dataset, const rgraph_config_t& rgraph_config,
+                   propagate_config_t propagate_config, pruning_config_t pruning_config)
+        : base_t(std::move(dataset)) {
+        prepare_build(rgraph_config, propagate_config, pruning_config);
+    }
+
+    /** @brief Replace graph and refinement configuration without replacing the owned dataset. */
+    auto prepare_build(const rgraph_config_t& rgraph_config, propagate_config_t propagate_config,
+                       pruning_config_t pruning_config) -> IndexStructure& {
+        base_t::prepare_build(rgraph_config, pruning_config.to_rng_only());
+        _ul_refining_layer_config.emplace(_refining_max_nbr_size(rgraph_config.ul_max_nbr_size()));
+        _bl_refining_layer_config.emplace(_refining_max_nbr_size(rgraph_config.bl_max_nbr_size()));
+        _propagate_config = propagate_config;
+        _pruning_config = pruning_config;
+        return *this;
+    }
+
     IndexStructure(const IndexStructure&)            = delete;
     IndexStructure& operator=(const IndexStructure&) = delete;
     IndexStructure(IndexStructure&&)                 = delete;
     IndexStructure& operator=(IndexStructure&&)      = delete;
+
+    /** @brief Construct a graph over immutable vectors held by a longer-lived owner.
+     *  No vector allocation or copy is performed. The source must outlive this building index. */
+    IndexStructure(const vector_array_t& vectors, const rgraph_config_t& rgraph_config,
+                   const propagate_config_t propagate_config, const pruning_config_t pruning_config)
+        : base_t(vectors, rgraph_config, pruning_config.to_rng_only()),
+          _ul_refining_layer_config(_refining_max_nbr_size(rgraph_config.ul_max_nbr_size())),
+          _bl_refining_layer_config(_refining_max_nbr_size(rgraph_config.bl_max_nbr_size())),
+          _propagate_config(propagate_config), _pruning_config(pruning_config) {}
+
+    IndexStructure(vector_array_t&&, const rgraph_config_t&, propagate_config_t, pruning_config_t) = delete;
+    IndexStructure(const vector_array_t&&, const rgraph_config_t&,
+                   propagate_config_t, pruning_config_t) = delete;
 
     // =================================================================
     //   Config accessors (refinement-time configs)
@@ -105,23 +141,23 @@ public:
     /** @brief Layer config for refining upper layers (level_id > 0). */
     __attribute__((always_inline))
     auto ul_refining_layer_config() const -> const layer_config_t& {
-        return _ul_refining_layer_config;
+        return _ul_refining_layer_config.value();
     }
 
     __attribute__((always_inline))
     auto ul_refining_layer_config() -> layer_config_t& {
-        return _ul_refining_layer_config;
+        return _ul_refining_layer_config.value();
     }
 
     /** @brief Layer config for refining the bottom layer (L0). */
     __attribute__((always_inline))
     auto bl_refining_layer_config() const -> const layer_config_t& {
-        return _bl_refining_layer_config;
+        return _bl_refining_layer_config.value();
     }
 
     __attribute__((always_inline))
     auto bl_refining_layer_config() -> layer_config_t& {
-        return _bl_refining_layer_config;
+        return _bl_refining_layer_config.value();
     }
 
     /** @brief Refining layer config for @p level_id (bl for L0, ul elsewhere). */
@@ -129,13 +165,13 @@ public:
     auto refining_layer_config(const typename IndexTraitsT::layer_id_t level_id)
         -> layer_config_t&
     {
-        return (level_id == 0) ? _bl_refining_layer_config
-                               : _ul_refining_layer_config;
+        return (level_id == 0) ? _bl_refining_layer_config.value()
+                               : _ul_refining_layer_config.value();
     }
 
     __attribute__((always_inline))
     auto propagate_config() const -> const propagate_config_t& {
-        return _propagate_config;
+        return _propagate_config.value();
     }
 
     /** @brief Override the base's scale/shift-only accessor: return the
@@ -146,25 +182,25 @@ public:
      *         for the stacked-rgraph insertion path. */
     __attribute__((always_inline))
     auto pruning_config() const -> const pruning_config_t& {
-        return _pruning_config;
+        return _pruning_config.value();
     }
 
 private:
     /** @brief Layer config used to size the RefiningGraph built for
      *         upper layers (level_id > 0) inside @c refine_layer. */
-    layer_config_t     _ul_refining_layer_config;
+    std::optional<layer_config_t> _ul_refining_layer_config;
 
     /** @brief Layer config used to size the RefiningGraph built for
      *         the bottom layer (L0) inside @c refine_layer. */
-    layer_config_t     _bl_refining_layer_config;
+    std::optional<layer_config_t> _bl_refining_layer_config;
 
     /** @brief Conv-graph propagate config for per-layer refinement. */
-    propagate_config_t _propagate_config;
+    std::optional<propagate_config_t> _propagate_config;
 
     /** @brief Full artea_graph PruningConfig (scale/shift + ARC).
      *         Consumed by @c refine_layer. The base owns a separate
      *         scale/shift-only copy for the insertion path. */
-    pruning_config_t   _pruning_config;
+    std::optional<pruning_config_t> _pruning_config;
 
 };  // class IndexStructure
 

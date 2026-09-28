@@ -30,12 +30,15 @@
 #include <cmath>
 #include <cstdint>
 #include <memory>
+#include <optional>
 #include <span>
 #include <utility>
 
 #include <tbb/concurrent_vector.h>
 
 #include <artea/common/logger.hpp>
+#include <artea/cpu/index/dataset_index.hpp>
+#include <artea/cpu/index/compactor/hierarchical_graph_compactor.hpp>
 #include <artea/cpu/index/hier_conv_graph/configs.hpp>
 
 namespace artea {
@@ -47,7 +50,7 @@ namespace hier_conv_graph {
  *   - A composed dynamic::HierarchicalGraph (unique_ptr — non-movable).
  *   - The HierarchyConfig (ul / bl capacities + sample_ratio).
  *   - The conv_graph propagate / pruning configs used by per-layer refinement.
- *   - An owned copy of every base vector inserted via append_vecs.
+ *   - A dataset owned by the common base, or an explicit borrowed vector view.
  *   - Two derived LayerConfig instances (1.5x max_nbr_size, mirroring
  *     artea_graph::IndexStructure).
  *
@@ -55,9 +58,12 @@ namespace hier_conv_graph {
  * std::unique_ptr.
  */
 template <typename IndexTraitsT>
-class IndexStructure {
+class IndexStructure : public DatasetIndex<IndexTraitsT> {
+    using data_base_t = DatasetIndex<IndexTraitsT>;
 
 public:
+    using vector_dataset_t = typename IndexTraitsT::vector_dataset_t;
+    using compact_graph_t = typename IndexTraitsT::compact::hierarchical_graph_t;
     using vertex_num_t         = typename IndexTraitsT::vertex_num_t;
     using vertex_id_t          = typename IndexTraitsT::vertex_id_t;
     using layer_num_t          = typename IndexTraitsT::layer_num_t;
@@ -148,9 +154,63 @@ public:
         _ul_refining_layer_config(
             refining_max_nbr_size_for(hierarchy_config.ul_max_nbr_size())),
         _bl_refining_layer_config(
-            refining_max_nbr_size_for(hierarchy_config.bl_max_nbr_size())),
-        _vecs_storage()
+            refining_max_nbr_size_for(hierarchy_config.bl_max_nbr_size()))
     {}
+
+    /** @brief Own a loaded dataset; prepare_build() initializes its graph and algorithm configs. */
+    explicit IndexStructure(std::unique_ptr<vector_dataset_t> dataset)
+        : data_base_t(std::move(dataset)) {}
+
+    IndexStructure(std::unique_ptr<vector_dataset_t> dataset, hierarchy_config_t hierarchy_config,
+                   propagate_config_t propagate_config, pruning_config_t pruning_config)
+        : data_base_t(std::move(dataset)) {
+        prepare_build(hierarchy_config, propagate_config, pruning_config);
+    }
+
+    /** @brief Borrow vectors that remain alive and immutable throughout the index lifetime. */
+    IndexStructure(const vector_array_t& vectors, hierarchy_config_t hierarchy_config,
+                   propagate_config_t propagate_config, pruning_config_t pruning_config)
+        : data_base_t(vectors) {
+        prepare_build(hierarchy_config, propagate_config, pruning_config);
+    }
+
+    IndexStructure(vector_array_t&&, hierarchy_config_t, propagate_config_t, pruning_config_t) = delete;
+    IndexStructure(const vector_array_t&&, hierarchy_config_t, propagate_config_t, pruning_config_t) = delete;
+
+    /** @brief Replace graph state and configs while retaining vectors, queries, and ground truth.
+     *  Invalidates graph references; call only after queries finish. Dataset survives allocation failure. */
+    auto prepare_build(hierarchy_config_t hierarchy_config, propagate_config_t propagate_config,
+                       pruning_config_t pruning_config) -> IndexStructure& {
+        _compact_graph.reset();
+        _hierarchical_graph.reset();
+        const auto count = static_cast<vertex_num_t>(this->get_base_vecs().get_num_vecs());
+        _max_allowed_level_id = compute_max_allowed_level_id(count, hierarchy_config.sample_ratio());
+        auto graph = std::make_unique<hierarchical_graph_t>(
+            _max_allowed_level_id, hierarchy_config.ul_max_nbr_size(),
+            hierarchy_config.bl_max_nbr_size(), count);
+        _hierarchy_config = hierarchy_config;
+        _propagate_config = propagate_config;
+        _pruning_config = pruning_config;
+        _ul_refining_layer_config.emplace(refining_max_nbr_size_for(hierarchy_config.ul_max_nbr_size()));
+        _bl_refining_layer_config.emplace(refining_max_nbr_size_for(hierarchy_config.bl_max_nbr_size()));
+        _hierarchical_graph = std::move(graph);
+        return *this;
+    }
+
+    /** @brief Retain the search graph and dataset; a compaction failure preserves the building graph. */
+    template <typename DistFuncT>
+    auto compact(const DistFuncT& distance) -> void {
+        using compactor_t = typename IndexTraitsT::hierarchical_graph_compactor_t;
+        auto graph = compactor_t::compact_graph(get_hierarchical_graph(), this->get_base_vecs(), distance);
+        _compact_graph.emplace(std::move(graph));
+        _hierarchical_graph.reset();
+    }
+
+    /** @brief Search graph available after successful compaction and until the next rebuild. */
+    auto get_compact_graph() const -> const compact_graph_t& {
+        if (!_compact_graph) throw std::logic_error("No compact graph; call compact first");
+        return *_compact_graph;
+    }
 
     IndexStructure(const IndexStructure&)            = delete;
     IndexStructure& operator=(const IndexStructure&) = delete;
@@ -162,75 +222,87 @@ public:
     // ================================================================
 
     __attribute__((always_inline))
-    auto get_hierarchical_graph() -> hierarchical_graph_t& { return *_hierarchical_graph; }
+    auto get_hierarchical_graph() -> hierarchical_graph_t& {
+        if (!_hierarchical_graph) throw std::logic_error("No building graph; call prepare_build first");
+        return *_hierarchical_graph;
+    }
 
     __attribute__((always_inline))
-    auto get_hierarchical_graph() const -> const hierarchical_graph_t& { return *_hierarchical_graph; }
+    auto get_hierarchical_graph() const -> const hierarchical_graph_t& {
+        if (!_hierarchical_graph) throw std::logic_error("No building graph; call prepare_build first");
+        return *_hierarchical_graph;
+    }
 
     // ================================================================
     //   Hierarchical-graph API forwarders
     // ================================================================
 
     __attribute__((always_inline))
-    auto add_vertices(const vertex_num_t n) -> vertex_id_t { return _hierarchical_graph->add_vertices(n); }
+    auto add_vertices(const vertex_num_t n) -> vertex_id_t {
+        return get_hierarchical_graph().add_vertices(n);
+    }
 
     __attribute__((always_inline))
     auto assign_layer(const vertex_id_t vid, const layer_id_t h) -> void {
-        _hierarchical_graph->assign_layer(vid, h);
+        get_hierarchical_graph().assign_layer(vid, h);
     }
 
     __attribute__((always_inline))
     auto fetch_level_nbrs(const vertex_id_t vid, const layer_id_t l) -> std::span<nbr_t> {
-        return _hierarchical_graph->fetch_level_nbrs(vid, l);
+        return get_hierarchical_graph().fetch_level_nbrs(vid, l);
     }
 
     __attribute__((always_inline))
     auto fetch_level_nbrs(const vertex_id_t vid, const layer_id_t l) const -> std::span<const nbr_t> {
-        return _hierarchical_graph->fetch_level_nbrs(vid, l);
+        return get_hierarchical_graph().fetch_level_nbrs(vid, l);
     }
 
     template <typename FnT>
     __attribute__((always_inline))
     auto with_locked_nbrs(const vertex_id_t vid, const layer_id_t l, FnT&& fn) -> void {
-        _hierarchical_graph->with_locked_nbrs(vid, l, std::forward<FnT>(fn));
+        get_hierarchical_graph().with_locked_nbrs(vid, l, std::forward<FnT>(fn));
     }
 
     __attribute__((always_inline))
     auto num_valid_nbrs(const vertex_id_t vid, const layer_id_t l) const -> vertex_num_t {
-        return _hierarchical_graph->num_valid_nbrs(vid, l);
+        return get_hierarchical_graph().num_valid_nbrs(vid, l);
     }
 
     __attribute__((always_inline))
     auto get_highest_level_id(const vertex_id_t vid) const -> layer_id_t {
-        return _hierarchical_graph->get_highest_level_id(vid);
+        return get_hierarchical_graph().get_highest_level_id(vid);
     }
 
     __attribute__((always_inline))
     auto get_vids_with_highest_level(const layer_id_t h) const
         -> const tbb::concurrent_vector<vertex_id_t>&
     {
-        return _hierarchical_graph->get_vids_with_highest_level(h);
+        return get_hierarchical_graph().get_vids_with_highest_level(h);
     }
 
     __attribute__((always_inline))
     auto get_top_level_vids() const {
-        return _hierarchical_graph->get_top_level_vids();
+        return get_hierarchical_graph().get_top_level_vids();
     }
 
     __attribute__((always_inline))
-    auto top_occupied_level_id() const -> layer_id_t { return _hierarchical_graph->top_occupied_level_id(); }
+    auto top_occupied_level_id() const -> layer_id_t {
+        return get_hierarchical_graph().top_occupied_level_id();
+    }
 
     __attribute__((always_inline))
-    auto get_num_vertices() const -> vertex_num_t { return _hierarchical_graph->get_num_vertices(); }
+    auto get_num_vertices() const -> vertex_num_t { return get_hierarchical_graph().get_num_vertices(); }
 
     __attribute__((always_inline))
-    auto ul_max_nbr_size() const -> vertex_num_t { return _hierarchical_graph->ul_max_nbr_size(); }
+    auto ul_max_nbr_size() const -> vertex_num_t { return get_hierarchical_graph().ul_max_nbr_size(); }
 
     __attribute__((always_inline))
-    auto bl_max_nbr_size() const -> vertex_num_t { return _hierarchical_graph->bl_max_nbr_size(); }
+    auto bl_max_nbr_size() const -> vertex_num_t { return get_hierarchical_graph().bl_max_nbr_size(); }
 
     __attribute__((always_inline))
-    auto max_nbr_size(const layer_id_t l) const -> vertex_num_t { return _hierarchical_graph->max_nbr_size(l); }
+    auto max_nbr_size(const layer_id_t l) const -> vertex_num_t {
+        return get_hierarchical_graph().max_nbr_size(l);
+    }
 
     __attribute__((always_inline))
     auto max_allowed_level_id() const -> layer_num_t { return _max_allowed_level_id; }
@@ -240,86 +312,78 @@ public:
     // ================================================================
 
     __attribute__((always_inline))
-    auto hierarchy_config() const -> const hierarchy_config_t& { return _hierarchy_config; }
+    auto hierarchy_config() const -> const hierarchy_config_t& { return _hierarchy_config.value(); }
 
     __attribute__((always_inline))
-    auto propagate_config() const -> const propagate_config_t& { return _propagate_config; }
+    auto propagate_config() const -> const propagate_config_t& { return _propagate_config.value(); }
 
     __attribute__((always_inline))
-    auto pruning_config() const -> const pruning_config_t& { return _pruning_config; }
+    auto pruning_config() const -> const pruning_config_t& { return _pruning_config.value(); }
 
     /** @brief Layer config for refining upper layers (level_id > 0). */
     __attribute__((always_inline))
-    auto ul_refining_layer_config() const -> const layer_config_t& { return _ul_refining_layer_config; }
+    auto ul_refining_layer_config() const -> const layer_config_t& {
+        return _ul_refining_layer_config.value();
+    }
 
     __attribute__((always_inline))
-    auto ul_refining_layer_config() -> layer_config_t& { return _ul_refining_layer_config; }
+    auto ul_refining_layer_config() -> layer_config_t& { return _ul_refining_layer_config.value(); }
 
     /** @brief Layer config for refining the bottom layer (L0). */
     __attribute__((always_inline))
-    auto bl_refining_layer_config() const -> const layer_config_t& { return _bl_refining_layer_config; }
+    auto bl_refining_layer_config() const -> const layer_config_t& {
+        return _bl_refining_layer_config.value();
+    }
 
     __attribute__((always_inline))
-    auto bl_refining_layer_config() -> layer_config_t& { return _bl_refining_layer_config; }
+    auto bl_refining_layer_config() -> layer_config_t& { return _bl_refining_layer_config.value(); }
 
     /** @brief Refining layer config for @p level_id (bl for L0, ul elsewhere). */
     __attribute__((always_inline))
     auto refining_layer_config(const layer_id_t level_id) -> layer_config_t& {
-        return (level_id == 0) ? _bl_refining_layer_config : _ul_refining_layer_config;
+        return (level_id == 0) ? _bl_refining_layer_config.value() : _ul_refining_layer_config.value();
     }
 
     // ================================================================
     //   Owned vector storage
     // ================================================================
 
-    __attribute__((always_inline))
-    auto get_vecs_storage() -> vecs_storage_t& { return _vecs_storage; }
-
-    __attribute__((always_inline))
-    auto get_vecs_storage() const -> const vecs_storage_t& { return _vecs_storage; }
-
-    /**
-     * @brief Append a batch of vectors to the owned vector storage.
-     *        Delegates to VectorArray::append_batch.
-     */
-    __attribute__((always_inline))
+    /** @brief Append vectors only while an incremental building graph exists. */
     auto append_vecs(vector_array_t&& batch_vecs) -> void {
-        _vecs_storage.append_batch(std::move(batch_vecs));
+        if (get_num_vertices() != this->get_base_vecs().get_num_vecs()) {
+            throw std::logic_error("Build existing vectors before appending another batch");
+        }
+        this->append_base_vecs(std::move(batch_vecs));
     }
 
-    /**
-     * @brief Free the composed dynamic::HierarchicalGraph. After this
-     *        call subsequent graph-side calls dereference a null
-     *        pointer. Configs and _vecs_storage are retained.
-     */
-    __attribute__((always_inline))
+    /** @brief Release the building graph while retaining data and any compact graph. */
     auto release() -> void { _hierarchical_graph.reset(); }
 
 private:
     /// @brief Inclusive upper bound on highest_level_id. Stored as a
     ///        field because the HierarchicalGraph ctor needs it.
-    layer_num_t _max_allowed_level_id;
+    layer_num_t _max_allowed_level_id = 0;
 
     /// @brief Composed HierarchicalGraph (unique_ptr: non-movable).
     std::unique_ptr<hierarchical_graph_t> _hierarchical_graph;
 
     /// @brief ul / bl capacities + sample_ratio.
-    hierarchy_config_t _hierarchy_config;
+    std::optional<hierarchy_config_t> _hierarchy_config;
 
     /// @brief conv_graph propagate config (per-layer refinement).
-    propagate_config_t _propagate_config;
+    std::optional<propagate_config_t> _propagate_config;
 
     /// @brief conv_graph pruning config (per-layer refinement).
-    pruning_config_t _pruning_config;
+    std::optional<pruning_config_t> _pruning_config;
 
     /// @brief RefiningGraph sizing config for level_id > 0.
-    layer_config_t _ul_refining_layer_config;
+    std::optional<layer_config_t> _ul_refining_layer_config;
 
     /// @brief RefiningGraph sizing config for level_id == 0.
-    layer_config_t _bl_refining_layer_config;
+    std::optional<layer_config_t> _bl_refining_layer_config;
 
-    /// @brief Owned vector storage. Grown in-place by append_vecs.
-    vecs_storage_t _vecs_storage;
+    /** @brief Compact search graph whose lifetime remains within the data-owning index. */
+    std::optional<compact_graph_t> _compact_graph;
 
 };  // class IndexStructure
 

@@ -77,6 +77,35 @@ public:
         double total_time_ms = 0.0;
     };
 
+    // A returned borrowing index cannot safely refer to a temporary vector array.
+    static auto construct_graph(vector_array_t&&, layer_config_t, pruning_config_t, propagate_config_t)
+        -> ConstructResult = delete;
+    static auto construct_graph(const vector_array_t&&, layer_config_t, pruning_config_t, propagate_config_t)
+        -> ConstructResult = delete;
+
+    /** @brief Build in place using the index's existing vectors and graph configuration. */
+    static auto build_from_vectors(this_index_t& graph_index, const dist_func_t& distance) -> double {
+        graph_index.get_refining_graph();
+        const auto start = std::chrono::high_resolution_clock::now();
+        if (graph_index.get_num_vertices() != 0) {
+            _build_loop(graph_index, distance, graph_index.pruning_config(), graph_index.propagate_config());
+        }
+        return std::chrono::duration<double, std::milli>(
+            std::chrono::high_resolution_clock::now() - start).count();
+    }
+
+    /** @brief Construct an owning index without copying the dataset's base vectors. */
+    static auto construct_graph(std::unique_ptr<vector_dataset_t> dataset, const layer_config_t layer_config,
+                                const pruning_config_t pruning_config,
+                                const propagate_config_t propagate_config) -> ConstructResult {
+        const auto start = std::chrono::high_resolution_clock::now();
+        this_index_t graph_index(std::move(dataset), layer_config, pruning_config, propagate_config);
+        const dist_func_t distance;
+        build_from_vectors(graph_index, distance);
+        return {std::move(graph_index), std::chrono::duration<double, std::milli>(
+            std::chrono::high_resolution_clock::now() - start).count()};
+    }
+
     /** @brief construct a new convergent graph from vector array */
     static auto construct_graph(
         const vector_array_t& base_vecs,
@@ -87,12 +116,22 @@ public:
         const auto t_start = std::chrono::high_resolution_clock::now();
         this_index_t graph_index(base_vecs, layer_config, pruning_config, propagate_config);
         dist_func_t dist_func;  // stateless: dim is a compile-time trait
-        _build_loop(graph_index, dist_func, pruning_config, propagate_config);
+        build_from_vectors(graph_index, dist_func);
         const auto t_end = std::chrono::high_resolution_clock::now();
         return ConstructResult{
             std::move(graph_index),
             std::chrono::duration<double, std::milli>(t_end - t_start).count()
         };
+    }
+
+    /** @brief Convert a KNN index, keeping the source vectors alive inside the returned index. */
+    static auto construct_graph(typename GraphFactoryTraitsT::knn_graph::index_t&& source,
+                                const pruning_config_t pruning_config) -> ConstructResult {
+        const auto start = std::chrono::high_resolution_clock::now();
+        this_index_t graph_index(std::move(source), pruning_config);
+        _refine_existing_graph(graph_index, pruning_config);
+        return {std::move(graph_index), std::chrono::duration<double, std::milli>(
+            std::chrono::high_resolution_clock::now() - start).count()};
     }
 
     /**
@@ -103,7 +142,8 @@ public:
      *
      * @warning This function moves from the input RefiningGraph. After the
      *          call, the input is left in a valid but unspecified state —
-     *          the caller must not use it further.
+     *          the caller must not use it further. This overload only borrows the source vectors;
+     *          they must outlive the returned index. Use the whole-index overload to transfer ownership.
      *
      * @param src_graph        The RefiningGraph whose edges will be consumed
      *                         (moved). Typically obtained via
@@ -124,19 +164,7 @@ public:
         this_index_t graph_index(vecs_data, layer_config, pruning_config, propagate_config);
         graph_index.get_nbrs_arr() = std::move(src_graph.get_nbrs_arr());
 
-        const vertex_num_t num_vertices = graph_index.get_num_vertices();
-        dist_func_t dist_func;  // stateless: dim is a compile-time trait
-
-        propagate_engine_t propagate_engine(dist_func);
-        propagate_engine.set_graph(graph_index.get_refining_graph());
-
-        auto pruning_updater = propagate_engine.template make_updater<pruning_updater_t>(
-            pruning_config.scale_coeffs(), pruning_config.shifted_coeffs());
-        auto reverse_updater  = propagate_engine.template make_updater<reverse_updater_t>();
-        auto truncate_updater = propagate_engine.template make_updater<truncate_updater_t>();
-
-        propagate_engine.next(pruning_updater)
-                        .next(reverse_updater).next(truncate_updater);
+        _refine_existing_graph(graph_index, pruning_config);
 
         const auto t_end = std::chrono::high_resolution_clock::now();
         return ConstructResult{
@@ -184,6 +212,25 @@ public:
     }
 
 private:
+    static auto _refine_existing_graph(this_index_t& graph_index,
+                                       const pruning_config_t pruning_config) -> void {
+        if (graph_index.get_num_vertices() == 0) return;
+        const vertex_num_t num_vertices = graph_index.get_num_vertices();
+        dist_func_t dist_func;  // stateless: dim is a compile-time trait
+
+        propagate_engine_t propagate_engine(dist_func);
+        propagate_engine.set_graph(graph_index.get_refining_graph());
+
+        auto pruning_updater = propagate_engine.template make_updater<pruning_updater_t>(
+            pruning_config.scale_coeffs(), pruning_config.shifted_coeffs());
+        auto reverse_updater  = propagate_engine.template make_updater<reverse_updater_t>();
+        auto truncate_updater = propagate_engine.template make_updater<truncate_updater_t>();
+
+        propagate_engine.next(pruning_updater)
+                        .next(reverse_updater).next(truncate_updater);
+
+    }
+
 
     /**
      * @brief Core build loop shared by all construct_graph overloads.

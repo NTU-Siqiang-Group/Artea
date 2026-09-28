@@ -12,10 +12,14 @@
 #pragma once
 
 #include <memory>
+#include <optional>
 #include <utility>
 #include <vector>
 
 #include <nlohmann/json.hpp>
+
+#include <artea/cpu/index/dataset_index.hpp>
+#include <artea/cpu/index/compactor/refining_graph_compactor.hpp>
 
 namespace artea {
 namespace cpu {
@@ -44,7 +48,9 @@ namespace conv_graph {
  * @tparam IndexTraitsT The index traits type.
  */
 template <typename IndexTraitsT>
-class IndexStructure {
+class IndexStructure : public DatasetIndex<IndexTraitsT> {
+    using data_base_t = DatasetIndex<IndexTraitsT>;
+    using knn_index_t = typename IndexTraitsT::knn_graph::index_t;
 
     using refining_graph_t    = typename IndexTraitsT::dynamic::refining_graph_t;
     using vertex_num_t       = typename IndexTraitsT::vertex_num_t;
@@ -56,6 +62,9 @@ class IndexStructure {
     using pruning_config_t   = typename IndexTraitsT::conv_graph::pruning_config_t;
 
 public:
+    using vector_dataset_t = typename IndexTraitsT::vector_dataset_t;
+    using compact_graph_t = typename IndexTraitsT::compact::refining_graph_t;
+
     /**
      * @brief Construct a new convergent graph index.
      * @param vecs_data        Reference to the vector data for this layer.
@@ -68,10 +77,60 @@ public:
         const layer_config_t layer_config,
         const pruning_config_t pruning_config,
         const propagate_config_t propagate_config
-    ) : _refining_graph(std::make_unique<refining_graph_t>(vecs_data, layer_config)),
+    ) : data_base_t(vecs_data), _refining_graph(std::make_unique<refining_graph_t>(vecs_data, layer_config)),
         _pruning_config(pruning_config),
         _propagate_config(propagate_config)
     {}
+
+    /** @brief Own one dataset across builds and queries; prepare_build() creates the graph. */
+    explicit IndexStructure(std::unique_ptr<vector_dataset_t> dataset)
+        : data_base_t(std::move(dataset)) {}
+
+    IndexStructure(std::unique_ptr<vector_dataset_t> dataset, const layer_config_t layer_config,
+                   const pruning_config_t pruning_config, const propagate_config_t propagate_config)
+        : data_base_t(std::move(dataset)) {
+        prepare_build(layer_config, pruning_config, propagate_config);
+    }
+
+    IndexStructure(vector_array_t&&, layer_config_t, pruning_config_t, propagate_config_t) = delete;
+    IndexStructure(const vector_array_t&&, layer_config_t, pruning_config_t, propagate_config_t) = delete;
+
+    /** @brief Replace graph state and configs; preserve dataset addresses even if allocation fails.
+     *  Invalidates graph references. Call only after queries on the previous graph have finished. */
+    auto prepare_build(const layer_config_t layer_config, const pruning_config_t pruning_config,
+                       const propagate_config_t propagate_config) -> IndexStructure& {
+        _compact_graph.reset();
+        _refining_graph.reset();
+        auto graph = std::make_unique<refining_graph_t>(this->get_base_vecs(), layer_config);
+        _pruning_config = pruning_config;
+        _propagate_config = propagate_config;
+        _refining_graph = std::move(graph);
+        return *this;
+    }
+
+    /** @brief Compact successfully before releasing construction state; retain all vector data. */
+    auto compact(vertex_num_t extracted_nbr_size) -> void {
+        using compactor_t = typename IndexTraitsT::refining_graph_compactor_t;
+        auto graph = compactor_t::compact_graph(get_refining_graph(), extracted_nbr_size);
+        auto compact_graph = std::make_unique<compact_graph_t>(std::move(graph));
+        _compact_graph = std::move(compact_graph);
+        _refining_graph.reset();
+    }
+
+    /** @brief Search graph available after compaction and until the next rebuild. */
+    auto get_compact_graph() const -> const compact_graph_t& {
+        if (!_compact_graph) throw std::logic_error("No compact graph; call compact first");
+        return *_compact_graph;
+    }
+
+    /** @brief Release construction state while retaining dataset and any compact graph. */
+    auto release() -> void { _refining_graph.reset(); }
+
+    /** @brief Convert a KNN index by transferring its dataset and entire building graph together. */
+    IndexStructure(knn_index_t&& source, const pruning_config_t pruning_config)
+        : data_base_t(_require_building_index(source)),
+          _refining_graph(std::move(source._refining_graph)),
+          _pruning_config(pruning_config), _propagate_config(propagate_config_t(0, 0)) {}
 
     IndexStructure(const IndexStructure&) = delete;
     IndexStructure& operator=(const IndexStructure&) = delete;
@@ -80,7 +139,19 @@ public:
     // @c RefiningGraph's internal fields (including the @c _vecs_data
     // reference, which the legacy move-assign had to leave stale).
     IndexStructure(IndexStructure&&) noexcept = default;
-    IndexStructure& operator=(IndexStructure&&) noexcept = default;
+    /** @brief Destroy old vector references before replacing their owner. */
+    auto operator=(IndexStructure&& other) noexcept -> IndexStructure& {
+        if (this != &other) {
+            _compact_graph.reset();
+            _refining_graph.reset();
+            data_base_t::operator=(std::move(other));
+            _refining_graph = std::move(other._refining_graph);
+            _compact_graph = std::move(other._compact_graph);
+            _pruning_config = std::move(other._pruning_config);
+            _propagate_config = std::move(other._propagate_config);
+        }
+        return *this;
+    }
 
     // --- Composed graph accessor ---
 
@@ -93,10 +164,16 @@ public:
      * holds the graph — i.e. until the next move-assign or destruction.
      */
     __attribute__((always_inline))
-    auto get_refining_graph() -> refining_graph_t& { return *_refining_graph; }
+    auto get_refining_graph() -> refining_graph_t& {
+        if (!_refining_graph) throw std::logic_error("No building graph; call prepare_build first");
+        return *_refining_graph;
+    }
 
     __attribute__((always_inline))
-    auto get_refining_graph() const -> const refining_graph_t& { return *_refining_graph; }
+    auto get_refining_graph() const -> const refining_graph_t& {
+        if (!_refining_graph) throw std::logic_error("No building graph; call prepare_build first");
+        return *_refining_graph;
+    }
 
     // --- RefiningGraph public API forwarders ---
     //
@@ -106,87 +183,87 @@ public:
 
     __attribute__((always_inline))
     auto get_num_vertices() const -> vertex_num_t {
-        return _refining_graph->get_num_vertices();
+        return get_refining_graph().get_num_vertices();
     }
 
     __attribute__((always_inline))
     auto layer_config() const -> const layer_config_t& {
-        return _refining_graph->layer_config();
+        return get_refining_graph().layer_config();
     }
 
     __attribute__((always_inline))
     auto layer_config() -> layer_config_t& {
-        return _refining_graph->layer_config();
+        return get_refining_graph().layer_config();
     }
 
     __attribute__((always_inline))
     auto get_nbrs_arr() -> std::vector<nbr_arr_t>& {
-        return _refining_graph->get_nbrs_arr();
+        return get_refining_graph().get_nbrs_arr();
     }
 
     __attribute__((always_inline))
     auto get_nbrs_arr() const -> const std::vector<nbr_arr_t>& {
-        return _refining_graph->get_nbrs_arr();
+        return get_refining_graph().get_nbrs_arr();
     }
 
     __attribute__((always_inline))
     auto fetch_nbrs(const vertex_id_t src) const -> const nbr_arr_t& {
-        return _refining_graph->fetch_nbrs(src);
+        return get_refining_graph().fetch_nbrs(src);
     }
 
     __attribute__((always_inline))
     auto fetch_nbrs(const vertex_id_t src) -> nbr_arr_t& {
-        return _refining_graph->fetch_nbrs(src);
+        return get_refining_graph().fetch_nbrs(src);
     }
 
     __attribute__((always_inline))
     auto get_vecs_data() const -> const vector_array_t& {
-        return _refining_graph->get_vecs_data();
+        return this->get_base_vecs();
     }
 
     __attribute__((always_inline))
     auto is_identity_mapped() const -> bool {
-        return _refining_graph->is_identity_mapped();
+        return get_refining_graph().is_identity_mapped();
     }
 
     __attribute__((always_inline))
     auto get_storage_vid(const vertex_num_t local_idx) const -> vertex_id_t {
-        return _refining_graph->get_storage_vid(local_idx);
+        return get_refining_graph().get_storage_vid(local_idx);
     }
 
     auto get_base_metadata() const -> nlohmann::json {
-        return _refining_graph->get_base_metadata();
+        return get_refining_graph().get_base_metadata();
     }
 
     // --- Config accessors ---
 
     __attribute__((always_inline))
-    auto pruning_config() const -> const pruning_config_t& { return _pruning_config; }
+    auto pruning_config() const -> const pruning_config_t& { return _pruning_config.value(); }
 
     __attribute__((always_inline))
-    auto pruning_config() -> pruning_config_t& { return _pruning_config; }
+    auto pruning_config() -> pruning_config_t& { return _pruning_config.value(); }
 
     __attribute__((always_inline))
-    auto propagate_config() const -> const propagate_config_t& { return _propagate_config; }
+    auto propagate_config() const -> const propagate_config_t& { return _propagate_config.value(); }
 
     __attribute__((always_inline))
-    auto propagate_config() -> propagate_config_t& { return _propagate_config; }
+    auto propagate_config() -> propagate_config_t& { return _propagate_config.value(); }
 
     // --- Metadata hooks ---
 
     auto get_metadata() const -> nlohmann::json {
         nlohmann::json meta;
         meta["pruning_config"] = {
-            {"scale_coeffs", _pruning_config.scale_coeffs()},
-            {"shifted_coeffs", _pruning_config.shifted_coeffs()}
+            {"scale_coeffs", _pruning_config.value().scale_coeffs()},
+            {"shifted_coeffs", _pruning_config.value().shifted_coeffs()}
         };
         meta["propagate_config"] = {
-            {"num_build_loops", _propagate_config.num_build_loops()},
-            {"num_triu_iters", _propagate_config.num_triu_iters()},
-            {"prefill_ratio", _propagate_config.prefill_ratio()},
-            {"num_routing_loops", _propagate_config.num_routing_loops()},
-            {"routing_topk", _propagate_config.routing_topk()},
-            {"routing_queue_size", _propagate_config.routing_queue_size()}
+            {"num_build_loops", _propagate_config.value().num_build_loops()},
+            {"num_triu_iters", _propagate_config.value().num_triu_iters()},
+            {"prefill_ratio", _propagate_config.value().prefill_ratio()},
+            {"num_routing_loops", _propagate_config.value().num_routing_loops()},
+            {"routing_topk", _propagate_config.value().routing_topk()},
+            {"routing_queue_size", _propagate_config.value().routing_queue_size()}
         };
         return meta;
     }
@@ -212,6 +289,11 @@ public:
     }
 
 private:
+    static auto _require_building_index(knn_index_t& source) -> knn_index_t&& {
+        source.get_refining_graph();
+        return std::move(source);
+    }
+
     /**
      * @brief Composed @c RefiningGraph — owns the graph topology and
      *        layer config. Held through @c unique_ptr so @c IndexStructure
@@ -221,11 +303,14 @@ private:
      */
     std::unique_ptr<refining_graph_t> _refining_graph;
 
+    /** @brief Search topology also borrowing that vector array; destroyed before the base. */
+    std::unique_ptr<compact_graph_t> _compact_graph;
+
     /** @brief Pruning configuration. */
-    pruning_config_t _pruning_config;
+    std::optional<pruning_config_t> _pruning_config;
 
     /** @brief Propagation configuration. */
-    propagate_config_t _propagate_config;
+    std::optional<propagate_config_t> _propagate_config;
 
 };  // class IndexStructure
 
