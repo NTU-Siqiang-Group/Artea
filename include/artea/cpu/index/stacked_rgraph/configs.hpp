@@ -46,7 +46,7 @@ struct RGraphConfig {
      * @brief Construct a RGraphConfig.
      * @param rnet_beta           Radius growth factor. Must be finite and > 1.
      * @param tau_k              Nonnegative radius coefficient, independent of the pruning shift tau.
-     *                           R_1 = l0_min_distance * (1 + tau_k) * rnet_beta.
+     *                           R_1 = l0_min_distance * (1 + tau_k).
      * @param tau                Shift coefficient from shifted_coeffs, finite and >= 0.
      *                           Retained for compatibility; does not affect r-net radii.
      * @param l0_min_distance     Characteristic L0 minimum distance in build-distance units. Must be > 0.
@@ -95,7 +95,7 @@ struct RGraphConfig {
             ARTEA_ERROR(fmt::format("l0_min_distance ({}) must be finite and > 0", l0_min_distance));
         }
         const double l1_radius = static_cast<double>(l0_min_distance)
-            * (1.0 + static_cast<double>(tau_k)) * static_cast<double>(rnet_beta);
+            * (1.0 + static_cast<double>(tau_k));
         if (!std::isfinite(l1_radius) || l1_radius > std::numeric_limits<distance_t>::max()) {
             ARTEA_ERROR(fmt::format("tau_k ({}) produces an unrepresentable L1 radius", tau_k));
         }
@@ -123,7 +123,7 @@ struct RGraphConfig {
 
     /**
      * @brief Covering radius for upper layer @p h (h >= 1):
-     *        R_h = l0_min_distance * (1 + tau_k) * rnet_beta^h.
+     *        R_h = l0_min_distance * (1 + tau_k) * rnet_beta^(h - 1).
      *        For h == 0, return the L0 distance scale; L0 is not an r-net.
      */
     __attribute__((always_inline))
@@ -132,7 +132,7 @@ struct RGraphConfig {
         return static_cast<distance_t>(
             static_cast<double>(_l0_min_distance)
                 * (1.0 + static_cast<double>(_tau_k))
-                * std::pow(static_cast<double>(_rnet_beta), static_cast<double>(h))
+                * std::pow(static_cast<double>(_rnet_beta), static_cast<double>(h - 1))
         );
     }
 

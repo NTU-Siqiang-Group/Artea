@@ -94,9 +94,9 @@ search_infra_dispatch(info, ARTEA_METRIC_LAMBDA(void) {
 ```
 
 The radius coefficient `tau_k` is independent of `tau = shifted_coeffs`. With
-`R0 = l0_min_distance`, upper layers use `Rh = R0 * (1 + tau_k) * rnet_beta^h` for `h >= 1`.
+`R0 = l0_min_distance`, upper layers use `Rh = R0 * (1 + tau_k) * rnet_beta^(h - 1)` for `h >= 1`.
 Workloads use `tau_k` (finite, nonnegative, default `0.0`); CLI tools use `--tau-k`.
-To preserve radii from an old configuration, set `tau_k = rnet_beta^num_skipped_levels - 1`.
+To preserve radii from an old configuration, set `tau_k = rnet_beta^(num_skipped_levels + 1) - 1`.
 The old `num_skipped_levels` workload field and `--num-skipped-levels` option are no longer supported.
 
 For a runnable example with dataset-specific settings, see

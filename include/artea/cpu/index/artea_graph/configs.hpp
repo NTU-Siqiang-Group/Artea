@@ -58,7 +58,7 @@ using RGraphConfig = stacked_rgraph::RGraphConfig<IndexTraitsT>;
  *     by orders of magnitude (e.g. sift-1m raw vs gist-1m normalized).
  *     Use the same value as @c rgraph_config.l0_min_distance(), which
  *     also sets the L1 covering radius after multiplication by
- *     @c (1 + rgraph_config.tau_k()) * rgraph_config.rnet_beta().
+ *     @c (1 + rgraph_config.tau_k()).
  *
  * @tparam IndexTraitsT The index traits type.
  */

@@ -34,26 +34,32 @@ TEST(RGraphRadius, TauKSetsL1AndPreservesGeometricGrowth) {
     const config_t base(/*beta=*/2.0f, /*tau_k=*/0.0f, /*tau=*/0.0f, /*min_distance=*/0.5f, 16);
     EXPECT_FLOAT_EQ(base.tau_k(), 0.0f);
     EXPECT_FLOAT_EQ(base.radius_at(0), 0.5f);
-    EXPECT_FLOAT_EQ(base.radius_at(1), 1.0f);
-    EXPECT_FLOAT_EQ(base.radius_at(2), 2.0f);
-    EXPECT_FLOAT_EQ(base.radius_at(3), 4.0f);
+    EXPECT_FLOAT_EQ(base.radius_at(1), 0.5f);
+    EXPECT_FLOAT_EQ(base.radius_at(2), 1.0f);
+    EXPECT_FLOAT_EQ(base.radius_at(3), 2.0f);
 
     const config_t expanded(2.0f, 3.0f, 0.0f, 0.5f, 16);
     EXPECT_FLOAT_EQ(expanded.tau_k(), 3.0f);
     EXPECT_FLOAT_EQ(expanded.radius_at(0), base.radius_at(0));
-    EXPECT_FLOAT_EQ(expanded.radius_at(1), 4.0f);
-    EXPECT_FLOAT_EQ(expanded.radius_at(2), 8.0f);
-    EXPECT_FLOAT_EQ(expanded.radius_at(3), 16.0f);
+    EXPECT_FLOAT_EQ(expanded.radius_at(1), 2.0f);
+    EXPECT_FLOAT_EQ(expanded.radius_at(2), 4.0f);
+    EXPECT_FLOAT_EQ(expanded.radius_at(3), 8.0f);
 
     const config_t fractional(1.5f, 0.5f, 0.0f, 2.0f, 16);
     EXPECT_FLOAT_EQ(fractional.tau_k(), 0.5f);
     EXPECT_FLOAT_EQ(fractional.radius_at(0), 2.0f);
-    EXPECT_FLOAT_EQ(fractional.radius_at(1), 4.5f);
-    EXPECT_FLOAT_EQ(fractional.radius_at(2), 6.75f);
-    EXPECT_FLOAT_EQ(fractional.radius_at(3), 10.125f);
+    EXPECT_FLOAT_EQ(fractional.radius_at(1), 3.0f);
+    EXPECT_FLOAT_EQ(fractional.radius_at(2), 4.5f);
+    EXPECT_FLOAT_EQ(fractional.radius_at(3), 6.75f);
     for (layer_num_t level = 1; level < 6; ++level) {
         EXPECT_FLOAT_EQ(fractional.radius_at(level + 1) / fractional.radius_at(level), 1.5f);
     }
+
+    const config_t larger_beta(4.0f, 0.5f, 0.0f, 2.0f, 16);
+    EXPECT_FLOAT_EQ(larger_beta.radius_at(0), fractional.radius_at(0));
+    EXPECT_FLOAT_EQ(larger_beta.radius_at(1), fractional.radius_at(1));
+    EXPECT_FLOAT_EQ(larger_beta.radius_at(2), 12.0f);
+    EXPECT_FLOAT_EQ(larger_beta.radius_at(3), 48.0f);
 }
 
 TEST(RGraphRadius, RejectsInvalidParametersAndL1Overflow) {
@@ -74,9 +80,13 @@ TEST(RGraphRadius, RejectsInvalidParametersAndL1Overflow) {
     EXPECT_THROW(config_t(2.0f, 0.0f, 0.0f, 0.5f, 16, 0), std::runtime_error);
     EXPECT_THROW(config_t(2.0f, 0.0f, 0.0f, 0.5f, 16, 16, 0), std::runtime_error);
     const float largest = std::numeric_limits<float>::max();
-    EXPECT_THROW(config_t(2.0f, largest, 0.0f, 1.0f, 16), std::runtime_error);
-    EXPECT_THROW(config_t(largest, 1.0f, 0.0f, 1.0f, 16), std::runtime_error);
+    EXPECT_THROW(config_t(2.0f, largest, 0.0f, 2.0f, 16), std::runtime_error);
     EXPECT_THROW(config_t(2.0f, 1.0f, 0.0f, largest, 16), std::runtime_error);
+    // Beta scales only L2 and above; it cannot make the L1 radius overflow.
+    const config_t largest_beta(largest, 1.0f, 0.0f, 1.0f, 16);
+    EXPECT_FLOAT_EQ(largest_beta.radius_at(1), 2.0f);
+    const config_t boundary(2.0f, 0.0f, 0.0f, largest, 16);
+    EXPECT_FLOAT_EQ(boundary.radius_at(1), largest);
     // Compute in double so a large coefficient with a small distance scale remains valid.
     const config_t representable(2.0f, largest, 0.0f, 1e-20f, 16);
     EXPECT_TRUE(std::isfinite(representable.radius_at(1)));
@@ -96,7 +106,7 @@ TEST(RGraphRadius, PruningShiftDoesNotAffectRadii) {
     }
 }
 
-TEST(RGraphRadius, L1MembershipChangesWithTauKAndBeta) {
+TEST(RGraphRadius, L1MembershipDependsOnTauKNotBetaOrPruningShift) {
     constexpr auto metric = DistanceMetricsT::EUCLIDEAN;
     constexpr vec_dim_t dim = 96;
     dist_func_t<metric, dim> build_dist;
@@ -104,12 +114,12 @@ TEST(RGraphRadius, L1MembershipChangesWithTauKAndBeta) {
     // R1=4 admits point 5 to L1 and covers point 9; R1=6 or 8 covers point 5 and admits point 9.
     struct Case { float beta; float tau_k; float shift; layer_id_t second; layer_id_t third; };
     for (const auto settings : {Case{2.0f, 0.0f, 0.0f, 1, 0}, Case{2.0f, 1.0f, 0.0f, 0, 1},
-                               Case{4.0f, 0.0f, 0.0f, 0, 1}, Case{2.0f, 0.0f, 1.0f, 1, 0},
+                               Case{4.0f, 0.0f, 0.0f, 1, 0}, Case{2.0f, 0.0f, 1.0f, 1, 0},
                                Case{2.0f, 0.5f, 0.0f, 0, 1}}) {
         SCOPED_TRACE(::testing::Message() << "beta=" << settings.beta << ", tau_k=" << settings.tau_k
                                          << ", shift=" << settings.shift);
         const stacked_rgraph::rgraph_config_t<metric, dim> config(
-            settings.beta, settings.tau_k, settings.shift, 2.0f, 16);
+            settings.beta, settings.tau_k, settings.shift, 4.0f, 16);
         stacked_rgraph::index_t<metric, dim> graph(3, config, pruning_config);
         EXPECT_FLOAT_EQ(graph.tau_k(), settings.tau_k);
         EXPECT_FLOAT_EQ(graph.tau(), settings.shift);

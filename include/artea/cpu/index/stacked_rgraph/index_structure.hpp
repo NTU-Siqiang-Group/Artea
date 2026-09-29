@@ -343,7 +343,7 @@ public:
     static constexpr ratio_t      layer_cap_decay_ratio = rgraph_config_t::layer_cap_decay_ratio;
 
     /**
-     * @brief Upper-layer radius: R_h = l0_min_distance * (1 + tau_k) * rnet_beta^h.
+     * @brief Upper-layer radius: R_h = l0_min_distance * (1 + tau_k) * rnet_beta^(h - 1).
      *        At L0, returns the characteristic minimum-distance scale.
      *        @p h must be in @c [0, max_allowed_level_id].
      */

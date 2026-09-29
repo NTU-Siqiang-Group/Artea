@@ -90,7 +90,7 @@ OMP_NUM_THREADS="$(nproc)" numactl --interleave=all ./build/unit_tests/test_stag
 Graph construction sets its radius geometry using `rnet_beta > 1`
 (default `2.0`) and `tau_k >= 0` (floating point, default `0.0`):
 `R0 = l0_min_distance`, and
-`Rh = R0 * (1 + tau_k) * rnet_beta^h` for `h >= 1`.
+`Rh = R0 * (1 + tau_k) * rnet_beta^(h - 1)` for `h >= 1`.
 `tau = shifted_coeffs >= 0` (default `0`) controls ARTEA's L0 refinement shift
 and does not affect these radii.
 The L0 distance scale stays unchanged; `scale_coeffs` does not affect radii. ARTEA and stacked r-nets share `stacked_rgraph::RGraphConfig`.

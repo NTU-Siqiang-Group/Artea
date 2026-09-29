@@ -392,7 +392,7 @@ int main(int argc, char** argv) {
     program.add_argument("--beta").default_value(2.0f).scan<'g', float>()
         .help("R-net radius growth factor, finite and > 1");
     program.add_argument("--tau-k").default_value(0.0f).scan<'g', float>()
-        .help("Nonnegative tau_k: R1 = l0_min_distance * (1 + tau_k) * beta");
+        .help("Nonnegative tau_k: R1 = l0_min_distance * (1 + tau_k)");
     program.add_argument("--l0-min-distance")
         .default_value(25000.0f).scan<'g', float>()
         .help("If negative, auto-probe via DatasetProber.");
