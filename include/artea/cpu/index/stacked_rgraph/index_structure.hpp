@@ -363,6 +363,18 @@ public:
     /** @brief Release the building graph while preserving the dataset and any compact graph. */
     auto release() -> void { _hierarchical_graph.reset(); }
 
+protected:
+    /** @brief Publish a completed building graph with its actual layer bound.
+     *  Derived bulk builders may need more layers than the insertion heuristic.
+     *  The caller must supply a non-null graph using this index's configuration.
+     *  Invalidates graph references while preserving vectors and configurations. */
+    auto replace_building_graph(std::unique_ptr<hierarchical_graph_t> graph) -> void {
+        if (!graph) throw std::invalid_argument("Building graph must not be null");
+        _max_allowed_level_id = graph->max_allowed_level_id();
+        _compact_graph.reset();
+        _hierarchical_graph = std::move(graph);
+    }
+
 private:
     /// @brief Inclusive upper bound on the allowed highest_level_id.
     ///        Stored as a field because we need it before the

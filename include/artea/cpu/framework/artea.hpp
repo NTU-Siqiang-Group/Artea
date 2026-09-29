@@ -71,6 +71,10 @@
 #include <artea/cpu/index/stacked_rgraph/configs.hpp>
 #include <artea/cpu/index/stacked_rgraph/index_structure.hpp>
 #include <artea/cpu/index/stacked_rgraph/index_factory.hpp>
+#include <artea/cpu/index/exact_artea/configs.hpp>
+#include <artea/cpu/index/exact_artea/index_structure.hpp>
+#include <artea/cpu/index/exact_artea/rnets_factory.hpp>
+#include <artea/cpu/index/exact_artea/index_factory.hpp>
 #include <artea/cpu/index/hier_conv_graph/configs.hpp>
 #include <artea/cpu/index/hier_conv_graph/index_structure.hpp>
 #include <artea/cpu/index/hier_conv_graph/index_factory.hpp>

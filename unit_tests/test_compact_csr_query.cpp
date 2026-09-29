@@ -17,7 +17,6 @@ constexpr vertex_num_t vertex_count = 80;
 constexpr vertex_num_t topk = 10;
 
 // Fully connected rows allow an independent exact top-10 reference, including tied distances.
-template <bool UpperBeam>
 void check_queries() {
     vector_array_t vectors(vertex_count, dimension);
     dynamic::hierarchical_graph_t source(2, vertex_count, vertex_count, vertex_count);
@@ -39,7 +38,7 @@ void check_queries() {
     ASSERT_EQ(graph.top_occupied_level_id(), 1u);
     const auto directory = std::filesystem::path("temp/validation/compact-csr/query-tests");
     std::filesystem::create_directories(directory);
-    const auto snapshot = directory / (UpperBeam ? "beam.graph" : "greedy.graph");
+    const auto snapshot = directory / "greedy.graph";
     hierarchical_graph_file_manager_t::snapshot(graph, snapshot.string());
     auto restored = hierarchical_graph_file_manager_t::restore(snapshot.string());
     hierarchical_graph_router_t<metric, dimension> router(vectors, distance, topk, vertex_count);
@@ -57,9 +56,9 @@ void check_queries() {
             const float right_distance = distance(query, vectors.get(right));
             return left_distance < right_distance || (left_distance == right_distance && left < right);
         });
-        const auto original_results = router.template query<false, UpperBeam>(query, graph);
-        const auto restored_results = router.template query<false, UpperBeam>(query, restored);
-        const auto dynamic_results = router.template query<false, UpperBeam>(query, source);
+        const auto original_results = router.template query<false>(query, graph);
+        const auto restored_results = router.template query<false>(query, restored);
+        const auto dynamic_results = router.template query<false>(query, source);
         ASSERT_EQ(original_results.size(), topk);
         ASSERT_EQ(restored_results.size(), topk);
         ASSERT_EQ(dynamic_results.size(), topk);
@@ -73,10 +72,10 @@ void check_queries() {
             EXPECT_FLOAT_EQ(dynamic_results[rank].get_distance(), original_results[rank].get_distance());
         }
     }
-    const auto batch_results = router.template batch_query<false, UpperBeam>(queries, restored);
+    const auto batch_results = router.template batch_query<false>(queries, restored);
     ASSERT_EQ(batch_results.size(), query_coordinates.size() * topk);
     for (std::size_t query_index = 0; query_index < query_coordinates.size(); ++query_index) {
-        const auto single_results = router.template query<false, UpperBeam>(queries.get(query_index), graph);
+        const auto single_results = router.template query<false>(queries.get(query_index), graph);
         for (std::size_t rank = 0; rank < topk; ++rank) {
             EXPECT_EQ(batch_results[query_index * topk + rank].get_vid(), single_results[rank].get_vid());
             EXPECT_FLOAT_EQ(batch_results[query_index * topk + rank].get_distance(),
@@ -85,8 +84,7 @@ void check_queries() {
     }
 }
 
-TEST(CompactCsrQuery, GreedyTop10MatchesExactReferenceAndRestoredBatch) { check_queries<false>(); }
-TEST(CompactCsrQuery, UpperBeamTop10MatchesExactReferenceAndRestoredBatch) { check_queries<true>(); }
+TEST(CompactCsrQuery, GreedyTop10MatchesExactReferenceAndRestoredBatch) { check_queries(); }
 
 template <std::size_t BatchSize>
 void check_neighbor_batches() {

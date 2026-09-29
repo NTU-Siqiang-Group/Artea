@@ -31,7 +31,7 @@ neighbor order, unchanged source topology, and version-1 snapshot round trips. A
 zero-neighbor arrays, unassigned records, allocation overflow, malformed/truncated files, and cleanup after an
 injected centroid-distance exception. Run with ASan/UBSan to verify memory access and cleanup as well.
 
-`test_compact_csr_query` compares greedy and upper-beam top-10 results against independent exact sorting,
+`test_compact_csr_query` compares greedy-upper / L0-beam top-10 results against independent exact sorting,
 including tied distances. It checks IDs and distances across dynamic/compact graphs, restore, and batch queries.
 Prefetch cases cover batch sizes 4/8/16, traversal order, duplicates, previsited neighbors, empty lists,
 partial batches, sentinel termination, and scalar visited-mark timing for noncontiguous adapters.

@@ -113,21 +113,23 @@ public:
     //   Atom layer (caller owns queue + visited lifecycle).
     // ================================================================
 
-    /** @brief Greedy walk over @p nbrs_range starting from @p seed_vid;
-     *         marks the seed in @p visited and returns the local optimum. */
-    template <NeighborRange NeighborRangeT>
+    /** @brief Greedy walk from @p seed_vid; marks it visited and returns the
+     *  local optimum or a point within early_stop_threshold when enabled.
+     *  The threshold must be expressed in the distance functor's units. */
+    template <bool enable_early_stop = false, NeighborRange NeighborRangeT>
     __attribute__((always_inline))
     auto greedy_search(
         const vec_ele_t*       query_vec,
         const NeighborRangeT&  nbrs_range,
         vertex_id_t            seed_vid,
         distance_t             seed_dist,
-        visited_table_t&       visited
+        visited_table_t&       visited,
+        const distance_t       early_stop_threshold = {}
     ) const -> std::pair<vertex_id_t, distance_t> {
         visited.set(seed_vid);
-        return detail::greedy_loop_body<RouterTraitsT>(
+        return detail::greedy_loop_body<RouterTraitsT, NeighborRangeT, enable_early_stop>(
             query_vec, nbrs_range, seed_vid, seed_dist,
-            visited, this->_dist_func, this->_vecs_data);
+            visited, this->_dist_func, this->_vecs_data, early_stop_threshold);
     }
 
     /**

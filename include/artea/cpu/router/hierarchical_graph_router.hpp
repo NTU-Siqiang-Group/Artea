@@ -27,8 +27,12 @@
 #pragma once
 
 #include <algorithm>
+#include <cmath>
 #include <cstddef>
 #include <cstdint>
+#include <limits>
+#include <span>
+#include <stdexcept>
 #include <tuple>
 #include <utility>
 #include <vector>
@@ -140,7 +144,8 @@ public:
     // ================================================================
 
     /**
-     * @brief Top-down hierarchical search.
+     * @brief Top-down hierarchical search: greedy on levels top..1, then
+     *        beam search at L0 for the top-K result.
      *
      * @tparam RandomSeeding
      *   - @c false (default): seed from the graph's precomputed
@@ -150,15 +155,47 @@ public:
      *   - @c true: always seed via @c sample_single_entry from the apex
      *     bucket.
      *
-     * @tparam UpperLevelBeamSearch
-     *   - @c false (default): HNSW-style cheap @c greedy_search on
-     *     levels @c top..1 with a single cursor, then @c beam_search at
-     *     L0 for the actual top-K result.
-     *   - @c true: shared-queue @c beam_search at every level from
-     *     @c top..0.
+     * @tparam enable_early_stop Stop an upper-layer walk once its closest
+     *   candidate is within RGraphConfig::early_stop_threshold. Defaults to
+     *   false; all threshold computation and checks are compiled out then.
+     *   When true, pass an index carrying configs or use the explicit-config
+     *   overload for bare dynamic/compact graphs.
      */
-    template <bool RandomSeeding = false, bool UpperLevelBeamSearch = false, typename HierarchicalGraphT>
+    template <bool RandomSeeding = false, bool enable_early_stop = false, typename HierarchicalGraphT>
     auto query(const vec_ele_t* query_vec, const HierarchicalGraphT& hier_graph) const -> knn_results_t {
+        if constexpr (enable_early_stop) {
+            static_assert(requires { hier_graph.rgraph_config(); hier_graph.pruning_config(); },
+                          "Early stopping on a bare graph requires explicit rgraph and pruning configs");
+            return query<RandomSeeding, true>(
+                query_vec, hier_graph, hier_graph.rgraph_config(), hier_graph.pruning_config());
+        } else {
+            return _query<RandomSeeding, false>(query_vec, hier_graph, {});
+        }
+    }
+
+    /** @brief Query a bare graph with explicit configurations for early stopping.
+     *  Configured index objects can instead use the two-argument overload.
+     *  With enable_early_stop=false the configs are not accessed.
+     *  L2 radii are squared for EUCLIDEAN_SQR queries; other metrics use the
+     *  config's distance units directly. The L0 search never uses this threshold. */
+    template <bool RandomSeeding = false, bool enable_early_stop = false, typename HierarchicalGraphT,
+              typename RGraphConfigT, typename PruningConfigT>
+    auto query(const vec_ele_t* query_vec, const HierarchicalGraphT& hier_graph,
+               const RGraphConfigT& rgraph_config, const PruningConfigT& pruning_config) const
+        -> knn_results_t {
+        if constexpr (enable_early_stop) {
+            const auto thresholds = _early_stop_thresholds(hier_graph, rgraph_config, pruning_config);
+            return _query<RandomSeeding, true>(query_vec, hier_graph, thresholds);
+        } else {
+            return _query<RandomSeeding, false>(query_vec, hier_graph, {});
+        }
+    }
+
+private:
+    template <bool RandomSeeding, bool enable_early_stop,
+              typename HierarchicalGraphT>
+    auto _query(const vec_ele_t* query_vec, const HierarchicalGraphT& hier_graph,
+                std::span<const distance_t> thresholds) const -> knn_results_t {
         const layer_id_t top_level_id = hier_graph.top_occupied_level_id();
         if (top_level_id == HierarchicalGraphT::invalid_level_id) {
             return knn_results_t{};
@@ -180,56 +217,37 @@ public:
         }
 
         // ---- Search phase ----
-        if constexpr (UpperLevelBeamSearch) {
-            std_candidate_queue_t candidate_queue(static_cast<std::size_t>(_candidate_queue_size));
-            candidate_queue.try_push(entry_vid, entry_dist);
-
-            for (layer_id_t cur_level_id = top_level_id; ; --cur_level_id) {
-                _single_layer_router.beam_search(
-                    query_vec,
-                    detail::make_layer_range(hier_graph, cur_level_id),
-                    candidate_queue, visited);
-                if (cur_level_id == 0) break;
-                // Reset visited between layers — each level walks a
-                // different neighborhood graph; cheap with VersionTagTable.
-                visited.clear();
-            }
-
-            const std::size_t k = std::min<std::size_t>(
-                static_cast<std::size_t>(this->_topk),
-                candidate_queue.get_result_size());
-            if (k == 0) return knn_results_t{};
-            return candidate_queue.extract_results(k);
-        } else {
-            vertex_id_t cursor_vid  = entry_vid;
-            distance_t  cursor_dist = entry_dist;
-            // Clear after every greedy level (L1 included) so the L0
-            // beam below always starts with a clean visited. The L0
-            // clear is mandatory: greedy tracks a single best cursor,
-            // while L0 beam targets top-K; some L1-rejected vids could
-            // legitimately enter L0 top-K. O(1) per clear with
-            // VersionTagTable.
-            for (layer_id_t cur_level_id = top_level_id; cur_level_id >= 1; --cur_level_id) {
-                std::tie(cursor_vid, cursor_dist) = _single_layer_router.greedy_search(
-                    query_vec,
-                    detail::make_layer_range(hier_graph, cur_level_id),
-                    cursor_vid, cursor_dist, visited);
-                visited.clear();
-            }
-
-            std_candidate_queue_t candidate_queue(static_cast<std::size_t>(_candidate_queue_size));
-            candidate_queue.try_push(cursor_vid, cursor_dist);
-            _single_layer_router.beam_search(
-                query_vec,
-                detail::make_layer_range(hier_graph, layer_id_t{0}),
-                candidate_queue, visited);
-
-            const std::size_t k = std::min<std::size_t>(static_cast<std::size_t>(this->_topk), candidate_queue.get_result_size());
-            if (k == 0) return knn_results_t{};
-            return candidate_queue.extract_results(k);
+        vertex_id_t cursor_vid  = entry_vid;
+        distance_t  cursor_dist = entry_dist;
+        // Clear after every greedy level (L1 included) so the L0
+        // beam below always starts with a clean visited. The L0
+        // clear is mandatory: greedy tracks a single best cursor,
+        // while L0 beam targets top-K; some L1-rejected vids could
+        // legitimately enter L0 top-K. O(1) per clear with
+        // VersionTagTable.
+        for (layer_id_t cur_level_id = top_level_id; cur_level_id >= 1; --cur_level_id) {
+            distance_t threshold{};
+            if constexpr (enable_early_stop) threshold = thresholds[cur_level_id];
+            std::tie(cursor_vid, cursor_dist) =
+                _single_layer_router.template greedy_search<enable_early_stop>(
+                    query_vec, detail::make_layer_range(hier_graph, cur_level_id),
+                    cursor_vid, cursor_dist, visited, threshold);
+            visited.clear();
         }
+
+        std_candidate_queue_t candidate_queue(static_cast<std::size_t>(_candidate_queue_size));
+        candidate_queue.try_push(cursor_vid, cursor_dist);
+        _single_layer_router.beam_search(
+            query_vec,
+            detail::make_layer_range(hier_graph, layer_id_t{0}),
+            candidate_queue, visited);
+
+        const std::size_t k = std::min<std::size_t>(static_cast<std::size_t>(this->_topk), candidate_queue.get_result_size());
+        if (k == 0) return knn_results_t{};
+        return candidate_queue.extract_results(k);
     }
 
+public:
     /**
      * @brief L0-only baseline: skip the hierarchy entirely and run a
      *        single beam search on the base layer. Compact-only —
@@ -272,12 +290,39 @@ public:
      *        own visited table from the pool. The template switches are
      *        forwarded to @c query verbatim.
      */
-    template <bool RandomSeeding = false, bool UpperLevelBeamSearch = false,
+    template <bool RandomSeeding = false, bool enable_early_stop = false, typename HierarchicalGraphT>
+    auto batch_query(const query_vecs_t& query_vecs, const HierarchicalGraphT& hier_graph) const
+        -> knn_results_t {
+        if constexpr (enable_early_stop) {
+            static_assert(requires { hier_graph.rgraph_config(); hier_graph.pruning_config(); },
+                          "Early stopping on a bare graph requires explicit rgraph and pruning configs");
+            return batch_query<RandomSeeding, true>(
+                query_vecs, hier_graph, hier_graph.rgraph_config(), hier_graph.pruning_config());
+        } else {
+            return _batch_query<RandomSeeding, false>(query_vecs, hier_graph, {});
+        }
+    }
+
+    /** @brief Batch query with explicit configs; thresholds are computed once
+     *  per batch and shared read-only by the query workers. */
+    template <bool RandomSeeding = false, bool enable_early_stop = false, typename HierarchicalGraphT,
+              typename RGraphConfigT, typename PruningConfigT>
+    auto batch_query(const query_vecs_t& query_vecs, const HierarchicalGraphT& hier_graph,
+                     const RGraphConfigT& rgraph_config, const PruningConfigT& pruning_config) const
+        -> knn_results_t {
+        if constexpr (enable_early_stop) {
+            const auto thresholds = _early_stop_thresholds(hier_graph, rgraph_config, pruning_config);
+            return _batch_query<RandomSeeding, true>(query_vecs, hier_graph, thresholds);
+        } else {
+            return _batch_query<RandomSeeding, false>(query_vecs, hier_graph, {});
+        }
+    }
+
+private:
+    template <bool RandomSeeding, bool enable_early_stop,
               typename HierarchicalGraphT>
-    auto batch_query(
-        const query_vecs_t&       query_vecs,
-        const HierarchicalGraphT& hier_graph
-    ) const -> knn_results_t {
+    auto _batch_query(const query_vecs_t& query_vecs, const HierarchicalGraphT& hier_graph,
+                      std::span<const distance_t> thresholds) const -> knn_results_t {
         const vertex_num_t num_queries = query_vecs.get_num_vecs();
         const uint32_t     k           = this->_topk;
 
@@ -293,7 +338,7 @@ public:
             [&](const tbb::blocked_range<vertex_num_t>& r) {
                 for (vertex_num_t i = r.begin(); i != r.end(); ++i) {
                     const vec_ele_t* q_vec = query_vecs.get(i);
-                    auto topk_results = this->template query<RandomSeeding, UpperLevelBeamSearch>(q_vec, hier_graph);
+                    auto topk_results = this->template _query<RandomSeeding, enable_early_stop>(q_vec, hier_graph, thresholds);
                     std::copy(topk_results.begin(), topk_results.end(), results.begin() + i * k);
                     // Slots [n, k) keep the invalid sentinel from allocation.
                 }
@@ -303,6 +348,7 @@ public:
         return results;
     }
 
+public:
     /** @brief Parallel batch form of @c query_l0_only. Compact-only. */
     template <bool RandomSeeding = false, typename HierarchicalGraphT>
     auto batch_query_l0_only(
@@ -339,6 +385,28 @@ public:
     }
 
 private:
+    template <typename HierarchicalGraphT, typename RGraphConfigT, typename PruningConfigT>
+    auto _early_stop_thresholds(const HierarchicalGraphT& graph, const RGraphConfigT& rgraph_config,
+                                const PruningConfigT& pruning_config) const -> std::vector<distance_t> {
+        const auto top = graph.top_occupied_level_id();
+        if (top == HierarchicalGraphT::invalid_level_id || top == 0) return {};
+        std::vector<distance_t> thresholds(static_cast<std::size_t>(top) + 1);
+        for (layer_id_t h = 1; h <= top; ++h) {
+            double threshold = rgraph_config.early_stop_threshold(h, pruning_config);
+            if constexpr (RouterTraitsT::distance_metrics ==
+                          RouterTraitsT::distance_metrics_t::EUCLIDEAN_SQR) {
+                threshold *= threshold;
+            }
+            if (!std::isfinite(threshold) || threshold <= 0 ||
+                threshold > std::numeric_limits<distance_t>::max() ||
+                static_cast<distance_t>(threshold) == distance_t(0)) {
+                throw std::overflow_error("Early-stop threshold is not representable in query distance units");
+            }
+            thresholds[h] = static_cast<distance_t>(threshold);
+        }
+        return thresholds;
+    }
+
     /** @brief Trigger thread-local MKL stream creation for the random
      *         sequence generator on every TBB worker, so the first real
      *         query doesn't pay the init cost. */

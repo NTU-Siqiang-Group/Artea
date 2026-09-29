@@ -477,7 +477,7 @@ TEST_F(ArteaGraphTest, SearchRecallAndThroughput) {
                 // --- Hierarchical router: compact hier_graph, greedy-upper + beam-L0
                 //     (RandomSeeding=false uses compact_hg.entry_point_vid()) ---
                 auto [s_avg_us, s_recall, s_last] = time_batch([&]() {
-                    return s_router.template batch_query</*RandomSeeding=*/false, /*UpperLevelBeamSearch=*/false>(
+                    return s_router.template batch_query</*RandomSeeding=*/false>(
                         query_vecs, compact_hg);
                 }, topk);
                 ASSERT_EQ(s_last.size(), static_cast<std::size_t>(num_queries) * topk);

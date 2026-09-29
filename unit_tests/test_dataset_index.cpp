@@ -104,11 +104,11 @@ TEST(DatasetIndex, OwnershipSurvivesCompactionAndRebuildsWithoutCopying) {
         hierarchical_graph_router_t<DistanceMetricsT::EUCLIDEAN_SQR, dimension> router(
             owner.get_dataset().get_base_vecs(), search_distance, 5, 96);
         router.initialize();
-        const auto batch = router.template batch_query<false, false>(
+        const auto batch = router.template batch_query<false>(
             owner.get_dataset().get_query_vecs(), owner.get_compact_graph());
         ASSERT_EQ(batch.size(), 20);
         for (vertex_id_t query_id = 0; query_id < 4; ++query_id) {
-            const auto single = router.template query<false, false>(
+            const auto single = router.template query<false>(
                 query_address + query_id * dimension, expected);
             ASSERT_EQ(single.size(), 5);
             for (std::size_t rank = 0; rank < single.size(); ++rank) {

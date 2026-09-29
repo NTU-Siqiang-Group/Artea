@@ -88,7 +88,7 @@ search_infra_dispatch(info, ARTEA_METRIC_LAMBDA(void) {
     hierarchical_graph_router_t<Metric, Dim> router(
         base_vecs, search_dist, /*topk=*/100, /*queue=*/200);
     router.initialize();
-    auto results = router.template batch_query</*RandomSeeding=*/false, /*UpperBeam=*/false>(
+    auto results = router.template batch_query</*RandomSeeding=*/false>(
         dataset.get_query_vecs(), compact_hg);
 });
 ```

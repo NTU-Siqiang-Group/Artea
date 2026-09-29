@@ -124,9 +124,9 @@ inline auto beam_loop_body(
  *        share the table.
  *
  * Single cursor; replaces best when a strictly closer neighbor appears.
- * Terminates at local optimum.
+ * Terminates at local optimum, or at the distance threshold when enabled.
  */
-template <typename RouterTraitsT, NeighborRange NeighborRangeT>
+template <typename RouterTraitsT, NeighborRange NeighborRangeT, bool enable_early_stop = false>
     requires VisitedTable<typename RouterTraitsT::visited_table_t>
 __attribute__((always_inline))
 inline auto greedy_loop_body(
@@ -136,7 +136,8 @@ inline auto greedy_loop_body(
     typename RouterTraitsT::distance_t                 seed_dist,
     typename RouterTraitsT::visited_table_t&           visited,
     const typename RouterTraitsT::dist_func_t&         dist_func,
-    const typename RouterTraitsT::vector_array_t&      vecs_data
+    const typename RouterTraitsT::vector_array_t&      vecs_data,
+    const typename RouterTraitsT::distance_t           early_stop_threshold = {}
 ) -> std::pair<typename RouterTraitsT::vertex_id_t, typename RouterTraitsT::distance_t> {
     using vertex_id_t = typename RouterTraitsT::vertex_id_t;
     using distance_t  = typename RouterTraitsT::distance_t;
@@ -144,6 +145,9 @@ inline auto greedy_loop_body(
     vertex_id_t best_vid  = seed_vid;
     distance_t  best_dist = seed_dist;
     while (true) {
+        if constexpr (enable_early_stop) {
+            if (best_dist <= early_stop_threshold) break;
+        }
         vertex_id_t next_vid  = best_vid;
         distance_t  next_dist = best_dist;
         process_prefetched_neighbors(nbrs_range.of(best_vid), vecs_data, visited,

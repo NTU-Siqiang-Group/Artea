@@ -15,11 +15,12 @@
 /*
  * @FilePath: /Artea/include/artea/cpu/refiner/updaters/truncate_updater.hpp
  * @Author: Chandler (Weitang Ye) <weitang.ye@ntu.edu.sg>
- * @Description: Truncate updater: trims each vertex's neighbor array to a specified size.
+ * @Description: Truncate updater: trims each vertex's neighbor array by size and distance.
  */
 
 #pragma once
 
+#include <algorithm>
 #include <cstddef>
 
 namespace artea {
@@ -31,6 +32,7 @@ class TruncateUpdater :
 
     using vertex_id_t      = typename RefinerTraitsT::vertex_id_t;
     using vertex_num_t     = typename RefinerTraitsT::vertex_num_t;
+    using distance_t       = typename RefinerTraitsT::distance_t;
     using nbr_arr_t        = typename RefinerTraitsT::nbr_arr_t;
     using log_table_t      = typename RefinerTraitsT::log_table_t;
     using dist_func_t      = typename RefinerTraitsT::dist_func_t;
@@ -41,30 +43,40 @@ class TruncateUpdater :
 public:
     static constexpr const char* updater_name = "truncate_updater";
 
+    /** @brief Truncate to the current layer's max_nbr_size and an optional distance.
+     *  @param truncate_distance Maximum retained distance (inclusive); max_distance
+     *         disables distance truncation. */
     TruncateUpdater(
         const dist_func_t&        dist_func,
         const vector_array_t&     vecs_data,
         log_table_t&              log_table,
         const refining_graph_t&   refining_graph,
-        vertex_num_t              truncate_size = 0
+        distance_t                truncate_distance = RefinerTraitsT::max_distance
     ) : base_class_t(dist_func, vecs_data, log_table, refining_graph),
-        _truncate_size(truncate_size) {}
+        _truncate_distance(truncate_distance) {}
 
     __attribute__((always_inline))
     auto update_impl(
         const vertex_id_t /* layer_vid */,
         nbr_arr_t& origin_nbrs
     ) -> void {
-        const vertex_num_t max_sz = (_truncate_size > 0)
-            ? _truncate_size
-            : this->_refining_graph.layer_config().max_nbr_size();
+        const vertex_num_t max_sz = this->_refining_graph.layer_config().max_nbr_size();
         if (origin_nbrs.size() > max_sz) {
             origin_nbrs.resize(max_sz);
+        }
+        if (_truncate_distance != RefinerTraitsT::max_distance) {
+            // Neighbor arrays are sorted by ascending distance.
+            const auto end = std::upper_bound(
+                origin_nbrs.begin(), origin_nbrs.end(), _truncate_distance,
+                [](const distance_t distance, const auto& nbr) {
+                    return distance < nbr.get_distance();
+                });
+            origin_nbrs.resize(static_cast<size_t>(end - origin_nbrs.begin()));
         }
     }
 
 private:
-    vertex_num_t _truncate_size;
+    distance_t _truncate_distance;
 
 };  // class TruncateUpdater
 

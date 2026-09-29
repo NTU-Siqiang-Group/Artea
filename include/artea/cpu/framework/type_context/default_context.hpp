@@ -220,6 +220,14 @@ namespace artea_graph {
     template <DistanceMetricsT Metric, vec_dim_t Dim> using factory_t = typename graph_factory_traits_t<Metric, Dim>::artea_graph::factory_t;
 }   // namespace artea_graph
 
+namespace exact_artea {
+    template <DistanceMetricsT Metric, vec_dim_t Dim> using rgraph_config_t = typename graph_factory_traits_t<Metric, Dim>::exact_artea::rgraph_config_t;
+    template <DistanceMetricsT Metric, vec_dim_t Dim> using pruning_config_t = typename graph_factory_traits_t<Metric, Dim>::exact_artea::pruning_config_t;
+    template <DistanceMetricsT Metric, vec_dim_t Dim> using index_t = typename graph_factory_traits_t<Metric, Dim>::exact_artea::index_t;
+    template <DistanceMetricsT Metric, vec_dim_t Dim> using factory_t = typename graph_factory_traits_t<Metric, Dim>::exact_artea::factory_t;
+    template <DistanceMetricsT Metric, vec_dim_t Dim> using rnets_factory_t = typename graph_factory_traits_t<Metric, Dim>::exact_artea::rnets_factory_t;
+}   // namespace exact_artea
+
 namespace hier_conv_graph {
     template <DistanceMetricsT Metric, vec_dim_t Dim> using hierarchy_config_t = typename graph_factory_traits_t<Metric, Dim>::hier_conv_graph::hierarchy_config_t;
     template <DistanceMetricsT Metric, vec_dim_t Dim> using propagate_config_t = typename graph_factory_traits_t<Metric, Dim>::hier_conv_graph::propagate_config_t;

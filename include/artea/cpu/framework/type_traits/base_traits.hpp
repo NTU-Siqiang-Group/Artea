@@ -81,6 +81,11 @@ namespace artea_graph {
     template <typename IndexTraitsT> struct PruningConfig;
 }
 
+namespace exact_artea {
+    template <typename IndexTraitsT> using RGraphConfig = artea_graph::RGraphConfig<IndexTraitsT>;
+    template <typename IndexTraitsT> using PruningConfig = artea_graph::PruningConfig<IndexTraitsT>;
+}
+
 namespace hier_conv_graph {
     // Layer membership is set by random pull-out (factory-side), not
     // r-net geometry — so only a slim hierarchy-shape config plus the

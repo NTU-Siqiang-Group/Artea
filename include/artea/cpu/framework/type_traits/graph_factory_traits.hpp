@@ -39,6 +39,10 @@ namespace stacked_rgraph {
 namespace artea_graph {
     template <typename GraphFactoryTraitsT> class IndexFactory;
 }
+namespace exact_artea {
+    template <typename GraphFactoryTraitsT> class IndexFactory;
+    template <typename GraphFactoryTraitsT> class RNetsFactory;
+}
 namespace hier_conv_graph {
     template <typename GraphFactoryTraitsT> class IndexFactory;
 }
@@ -80,6 +84,13 @@ struct GraphFactoryTraits :
     struct artea_graph : RefinerTraitsT::artea_graph {
         artea_graph() = delete;
         using factory_t = cpu::artea_graph::IndexFactory<graph_factory_traits_t>;
+    };
+
+    /** @brief Namespace-scoped factory types for exact_artea, extending IndexTraits::exact_artea. */
+    struct exact_artea : RefinerTraitsT::exact_artea {
+        exact_artea() = delete;
+        using factory_t = cpu::exact_artea::IndexFactory<graph_factory_traits_t>;
+        using rnets_factory_t = cpu::exact_artea::RNetsFactory<graph_factory_traits_t>;
     };
 
     /** @brief Namespace-scoped factory types for hier_conv_graph, extending IndexTraits::hier_conv_graph. */

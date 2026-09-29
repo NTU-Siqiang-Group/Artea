@@ -13,6 +13,7 @@
 #include <algorithm>
 #include <cmath>
 #include <limits>
+#include <stdexcept>
 #include <artea/common/logger.hpp>
 #include <artea/cpu/index/conv_graph/configs.hpp>
 
@@ -137,6 +138,89 @@ struct RGraphConfig {
     }
 
     /**
+     * @brief Return the dimensionless ARC threshold Delta_h for layer h.
+     *
+     * gamma = (alpha + 1) / (alpha - 1) + theta
+     * psi_h = (tau * rho + sum_{i=0}^{h} R_i) / R_h
+     * Delta_h = (gamma + 1) * psi_h + gamma * R_{h+1} / R_h
+     *
+     * alpha, tau and rho come from the pruning config's scale_coeffs,
+     * shifted_coeffs and l0_min_distance, respectively. R_i comes from
+     * radius_at(i), including its distinct L0/L1 rule.
+     * The routing slack theta is fixed locally at 1.0.
+     * The corresponding distance cutoff is Delta_h * R_h.
+     *
+     * @param h Zero-based layer ID.
+     * @param pruning_config Pruning policy providing scale_coeffs(),
+     *        shifted_coeffs() and l0_min_distance(). Values are read at call
+     *        time, preserving the policy's shift and distance scale even
+     *        when they differ from this r-net configuration.
+     * @throws std::invalid_argument If alpha <= 1 or the scalar parameters
+     *         are non-finite or outside their mathematical domains.
+     * @throws std::out_of_range If h + 1 cannot be represented.
+     * @throws std::overflow_error If a radius or the result is not representable.
+     */
+    template <typename PruningConfigT>
+    auto aspect_ratio_constraint(
+        const layer_num_t h,
+        const PruningConfigT& pruning_config
+    ) const -> ratio_t {
+        const auto bounds = _routing_bounds(h, pruning_config);
+        const double next_radius = radius_at(h + 1);
+        if (!std::isfinite(next_radius) || next_radius <= 0.0) {
+            throw std::overflow_error("ARC requires finite positive layer radii");
+        }
+
+        const double psi = bounds.distance_bound / bounds.radius;
+        const double arc = (bounds.gamma + 1.0) * psi
+            + bounds.gamma * (next_radius / bounds.radius);
+        if (!std::isfinite(arc) || arc > std::numeric_limits<ratio_t>::max()) {
+            throw std::overflow_error("ARC threshold is not representable");
+        }
+        return static_cast<ratio_t>(arc);
+    }
+
+    /**
+     * @brief Absolute distance threshold for early descent from an upper layer.
+     *
+     * Section 4 of main.pdf stops routing at level h >= 1 once
+     * delta(v, q) <= gamma * psi_h * R_h, then descends to level h - 1.
+     * Using the same radius-sum definition as aspect_ratio_constraint:
+     *
+     * T_h = gamma * (tau * rho + sum_{i=0}^{h} R_i)
+     * gamma = (alpha + 1) / (alpha - 1) + theta, with local theta = 1.0.
+     *
+     * This is a distance in the units of radius_at(), not a dimensionless
+     * ratio. Radii follow this configuration's L0/L1 rule. alpha, tau and
+     * rho come from the supplied pruning config, just as for ARC.
+     * The method only computes the threshold; routers must apply it explicitly.
+     * The bottom layer must continue its final search and has no such threshold.
+     *
+     * @param h Upper-layer ID (h >= 1, excluding the invalid max-ID sentinel).
+     * @param pruning_config Policy providing scale_coeffs(), shifted_coeffs()
+     *        and l0_min_distance().
+     * @throws std::out_of_range If h is zero or the invalid max-ID sentinel.
+     * @throws std::invalid_argument If alpha <= 1, tau < 0, rho <= 0 or any
+     *         of these values is non-finite.
+     * @throws std::overflow_error If a required radius or threshold is unrepresentable.
+     */
+    template <typename PruningConfigT>
+    auto early_stop_threshold(
+        const layer_num_t h,
+        const PruningConfigT& pruning_config
+    ) const -> distance_t {
+        if (h == 0) {
+            throw std::out_of_range("Early stopping applies only to upper layers (h >= 1)");
+        }
+        const auto bounds = _routing_bounds(h, pruning_config);
+        const double threshold = bounds.gamma * bounds.distance_bound;
+        if (!std::isfinite(threshold) || threshold > std::numeric_limits<distance_t>::max()) {
+            throw std::overflow_error("Early-stop threshold is not representable");
+        }
+        return static_cast<distance_t>(threshold);
+    }
+
+    /**
      * @brief Initial CSR capacity for the given 0-indexed layer id.
      *        capacity = base_capacity * decay_ratio^layer_id, floored at
      *        @c IndexTraitsT::min_layer_cap.
@@ -165,6 +249,41 @@ struct RGraphConfig {
     }
 
 private:
+    struct RoutingBounds {
+        double gamma;
+        double radius;
+        double distance_bound; // psi_h * R_h
+    };
+
+    /** @brief Common factors for ARC pruning and upper-layer early stopping. */
+    template <typename PruningConfigT>
+    auto _routing_bounds(const layer_num_t h, const PruningConfigT& pruning_config) const
+        -> RoutingBounds {
+        constexpr double theta = 1.0;
+        const double alpha = pruning_config.scale_coeffs();
+        const double tau = pruning_config.shifted_coeffs();
+        const double rho = pruning_config.l0_min_distance();
+        if (!std::isfinite(alpha) || alpha <= 1.0 ||
+            !std::isfinite(tau) || tau < 0.0 ||
+            !std::isfinite(rho) || rho <= 0.0) {
+            throw std::invalid_argument(
+                "Routing thresholds require finite alpha > 1, tau >= 0 and rho > 0");
+        }
+        if (h == std::numeric_limits<layer_num_t>::max()) {
+            throw std::out_of_range("Routing thresholds require a valid layer ID");
+        }
+        const double radius = radius_at(h);
+        if (!std::isfinite(radius) || radius <= 0.0) {
+            throw std::overflow_error("Routing thresholds require finite positive layer radii");
+        }
+        double radius_sum = radius;
+        for (layer_num_t i = 0; i < h; ++i) {
+            radius_sum += static_cast<double>(radius_at(i));
+        }
+        const double gamma = (alpha + 1.0) / (alpha - 1.0) + theta;
+        return {gamma, radius, tau * rho + radius_sum};
+    }
+
     /** @brief Radius growth factor from L1 upward. Must be > 1. */
     ratio_t      _rnet_beta;
 

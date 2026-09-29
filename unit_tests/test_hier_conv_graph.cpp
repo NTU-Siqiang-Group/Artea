@@ -397,7 +397,7 @@ TEST_F(HierConvGraphTest, SearchRecallAndThroughput) {
             // Hierarchical router: compact hier_graph, greedy-upper + beam-L0
             // (RandomSeeding=false uses compact_hg.entry_point_vid()).
             auto [avg_us, recall, last_results] = time_batch([&]() {
-                return router.template batch_query</*RandomSeeding=*/false, /*UpperLevelBeamSearch=*/false>(
+                return router.template batch_query</*RandomSeeding=*/false>(
                     query_vecs, compact_hg);
             });
             ASSERT_EQ(last_results.size(), static_cast<std::size_t>(num_queries) * topk);

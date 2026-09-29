@@ -253,8 +253,8 @@ TEST(StageDistance, EuclideanBuildCompactsAndSearchesWithSquaredDistances) {
             std::array<float, dim> query{};
             query[0] = base.get(anchor)[0] + 0.75f;
             query[1] = base.get(anchor)[1] + 0.2f;
-            const auto l2 = l2_router.template query<false, false>(query.data(), *compact_graph);
-            const auto squared = squared_router.template query<false, false>(query.data(), *compact_graph);
+            const auto l2 = l2_router.template query<false>(query.data(), *compact_graph);
+            const auto squared = squared_router.template query<false>(query.data(), *compact_graph);
             ASSERT_EQ(l2.size(), topk);
             ASSERT_EQ(squared.size(), topk);
             for (size_t k = 0; k < topk; ++k) {
