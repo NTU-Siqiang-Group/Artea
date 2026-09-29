@@ -165,6 +165,8 @@ int main(int argc, char** argv) {
                 ARTEA_INFO(fmt::format("Probing {} sampled vertices x 128 nearest-neighbor ranks...",
                     num_samples));
                 nearest = prober.probe(quantiles, num_samples);
+                ARTEA_INFO(fmt::format("Minimum NN distance among {} sampled vertices (metric={}): {:.6f}",
+                    nearest->num_samples, metric_name(metric), nearest->min_nearest));
                 if (mode != "aspect-ratio") {
                     ARTEA_INFO("Base nearest-neighbor distance quantiles:");
                     print_nn_table(*nearest);

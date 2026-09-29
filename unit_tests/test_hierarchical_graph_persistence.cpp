@@ -69,7 +69,7 @@ struct TestConfig {
     // tractable on a typical workstation).
     float    rnet_beta;
     float    shifted_coeffs;
-    uint32_t num_skipped_levels;
+    float    tau_k;
     bool     l0_min_distance_provided;
     float    l0_min_distance;
     uint32_t ul_max_nbr_size;
@@ -179,7 +179,7 @@ protected:
             dist_func_t<Metric, Dim> build_dist;
 
             stacked_rgraph::rgraph_config_t<Metric, Dim> rgraph_config(
-                g_config.rnet_beta, g_config.num_skipped_levels, g_config.shifted_coeffs,
+                g_config.rnet_beta, g_config.tau_k, g_config.shifted_coeffs,
                 provider.get_l0_min_distance(),
                 static_cast<vertex_num_t>(g_config.search_nn_qs),
                 static_cast<vertex_num_t>(g_config.ul_select_nbrs_qs),
@@ -391,8 +391,8 @@ int main(int argc, char** argv) {
         .help("Nonnegative tau; does not affect r-net radii");
     program.add_argument("--beta").default_value(2.0f).scan<'g', float>()
         .help("R-net radius growth factor, finite and > 1");
-    program.add_argument("--num-skipped-levels").default_value(0u).scan<'u', uint32_t>()
-        .help("Skipped geometric levels: R1 = l0_min_distance * beta^(num_skipped_levels + 1)");
+    program.add_argument("--tau-k").default_value(0.0f).scan<'g', float>()
+        .help("Nonnegative tau_k: R1 = l0_min_distance * (1 + tau_k) * beta");
     program.add_argument("--l0-min-distance")
         .default_value(25000.0f).scan<'g', float>()
         .help("If negative, auto-probe via DatasetProber.");
@@ -431,7 +431,7 @@ int main(int argc, char** argv) {
     g_config.snapshot_path      = program.get<std::string>("--snapshot-path");
     g_config.rnet_beta          = program.get<float>("--beta");
     g_config.shifted_coeffs     = program.get<float>("--shifted-coeffs");
-    g_config.num_skipped_levels = program.get<uint32_t>("--num-skipped-levels");
+    g_config.tau_k              = program.get<float>("--tau-k");
     g_config.ul_max_nbr_size    = program.get<uint32_t>("--ul-max-nbr-size");
     g_config.bl_max_nbr_size    = program.get<uint32_t>("--bl-max-nbr-size");
     g_config.probe_num_samples  = program.get<uint32_t>("--probe-num-samples");

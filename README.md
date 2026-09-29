@@ -67,7 +67,7 @@ const DatasetInfra info{parse_metric("euclidean"), base_vecs.get_vec_dim()};
 auto compact_hg = build_infra_dispatch(info, ARTEA_METRIC_LAMBDA(compact::hierarchical_graph_t) {
     dist_func_t<Metric, Dim> build_dist;
     artea_graph::rgraph_config_t<Metric, Dim> rgraph_cfg(
-        /*beta=*/2.0, /*num_skipped_levels=*/0, /*tau=*/1.5,
+        /*beta=*/2.0, /*tau_k=*/0.0, /*tau=*/1.5,
         /*l0_min_distance=*/1.0, /*search_nn_qs=*/64);
     artea_graph::propagate_config_t<Metric, Dim> propagate_cfg(
         /*build_loops=*/15, /*triu_iters=*/4, /*prefill=*/0.4f);
@@ -92,6 +92,12 @@ search_infra_dispatch(info, ARTEA_METRIC_LAMBDA(void) {
         dataset.get_query_vecs(), compact_hg);
 });
 ```
+
+The radius coefficient `tau_k` is independent of `tau = shifted_coeffs`. With
+`R0 = l0_min_distance`, upper layers use `Rh = R0 * (1 + tau_k) * rnet_beta^h` for `h >= 1`.
+Workloads use `tau_k` (finite, nonnegative, default `0.0`); CLI tools use `--tau-k`.
+To preserve radii from an old configuration, set `tau_k = rnet_beta^num_skipped_levels - 1`.
+The old `num_skipped_levels` workload field and `--num-skipped-levels` option are no longer supported.
 
 For a runnable example with dataset-specific settings, see
 [`unit_tests/test_artea_graph.cpp`](unit_tests/test_artea_graph.cpp) and the

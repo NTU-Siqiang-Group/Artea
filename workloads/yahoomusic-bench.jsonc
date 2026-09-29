@@ -188,7 +188,7 @@
     },
     "artea": {
       "rnet_beta":               2.0,
-      "num_skipped_levels":      0,
+      "tau_k":                  0.0,
       "l0_min_distance":         0.04,
       "ul_max_nbr_size":         40,
       "bl_max_nbr_size":         80,

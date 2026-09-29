@@ -50,7 +50,7 @@ namespace stacked_rgraph {
  * Owns:
  *   - A composed @c dynamic::HierarchicalGraph (held via
  *     @c std::unique_ptr because the graph is non-movable).
- *   - The r-net @c RGraphConfig (rnet_beta / num_skipped_levels / tau / l0_min_distance / max_nbr_size / ...).
+ *   - The r-net @c RGraphConfig (rnet_beta / tau_k / tau / l0_min_distance / max_nbr_size / ...).
  *   - Dataset ownership or an explicit borrowed vector view inherited from @c DatasetIndex.
  *
  * Copy / move are both deleted — clients keep an instance inside a
@@ -315,8 +315,8 @@ public:
         return _rgraph_config.value().rnet_beta();
     }
     __attribute__((always_inline))
-    auto num_skipped_levels() const -> layer_num_t {
-        return _rgraph_config.value().num_skipped_levels();
+    auto tau_k() const -> ratio_t {
+        return _rgraph_config.value().tau_k();
     }
     __attribute__((always_inline))
     auto tau() const -> ratio_t {
@@ -343,7 +343,7 @@ public:
     static constexpr ratio_t      layer_cap_decay_ratio = rgraph_config_t::layer_cap_decay_ratio;
 
     /**
-     * @brief Upper-layer radius: R_h = l0_min_distance * rnet_beta^(num_skipped_levels + h).
+     * @brief Upper-layer radius: R_h = l0_min_distance * (1 + tau_k) * rnet_beta^h.
      *        At L0, returns the characteristic minimum-distance scale.
      *        @p h must be in @c [0, max_allowed_level_id].
      */

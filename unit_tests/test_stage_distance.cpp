@@ -29,98 +29,103 @@ static_assert(std::is_same_v<
     stacked_rgraph::rgraph_config_t<DistanceMetricsT::EUCLIDEAN, 96>>,
     "ARTEA and stacked r-nets must share the same configuration type");
 
-TEST(RGraphRadius, SkipLevelsSetL1AndPreserveGeometricGrowth) {
+TEST(RGraphRadius, TauKSetsL1AndPreservesGeometricGrowth) {
     using config_t = artea_graph::rgraph_config_t<DistanceMetricsT::EUCLIDEAN, 96>;
-    const config_t config(/*beta=*/2.0f, /*num_skipped_levels=*/0u, 0.0f, /*min_distance=*/0.5f, 16);
-    EXPECT_EQ(config.num_skipped_levels(), 0u);
-    EXPECT_FLOAT_EQ(config.radius_at(0), 0.5f);
-    EXPECT_FLOAT_EQ(config.radius_at(1), 1.0f);
-    EXPECT_FLOAT_EQ(config.radius_at(2), 2.0f);
-    EXPECT_FLOAT_EQ(config.radius_at(3), 4.0f);
-    EXPECT_FLOAT_EQ(config.radius_at(4), 8.0f);
+    const config_t base(/*beta=*/2.0f, /*tau_k=*/0.0f, /*tau=*/0.0f, /*min_distance=*/0.5f, 16);
+    EXPECT_FLOAT_EQ(base.tau_k(), 0.0f);
+    EXPECT_FLOAT_EQ(base.radius_at(0), 0.5f);
+    EXPECT_FLOAT_EQ(base.radius_at(1), 1.0f);
+    EXPECT_FLOAT_EQ(base.radius_at(2), 2.0f);
+    EXPECT_FLOAT_EQ(base.radius_at(3), 4.0f);
 
-    const config_t larger_beta(4.0f, 0u, 0.0f, 0.5f, 16);
-    EXPECT_FLOAT_EQ(larger_beta.radius_at(1), 2.0f);
-    EXPECT_FLOAT_EQ(larger_beta.radius_at(2), 8.0f);
-    EXPECT_FLOAT_EQ(larger_beta.radius_at(3), 32.0f);
+    const config_t expanded(2.0f, 3.0f, 0.0f, 0.5f, 16);
+    EXPECT_FLOAT_EQ(expanded.tau_k(), 3.0f);
+    EXPECT_FLOAT_EQ(expanded.radius_at(0), base.radius_at(0));
+    EXPECT_FLOAT_EQ(expanded.radius_at(1), 4.0f);
+    EXPECT_FLOAT_EQ(expanded.radius_at(2), 8.0f);
+    EXPECT_FLOAT_EQ(expanded.radius_at(3), 16.0f);
 
-    const config_t skipped(2.0f, 2u, 0.0f, 0.5f, 16);
-    EXPECT_EQ(skipped.num_skipped_levels(), 2u);
-    EXPECT_FLOAT_EQ(skipped.radius_at(0), config.radius_at(0));
-    EXPECT_FLOAT_EQ(skipped.radius_at(1), 4.0f);
-    for (layer_num_t h = 1; h <= 4; ++h) {
-        EXPECT_FLOAT_EQ(skipped.radius_at(h), config.radius_at(h + 2));
+    const config_t fractional(1.5f, 0.5f, 0.0f, 2.0f, 16);
+    EXPECT_FLOAT_EQ(fractional.tau_k(), 0.5f);
+    EXPECT_FLOAT_EQ(fractional.radius_at(0), 2.0f);
+    EXPECT_FLOAT_EQ(fractional.radius_at(1), 4.5f);
+    EXPECT_FLOAT_EQ(fractional.radius_at(2), 6.75f);
+    EXPECT_FLOAT_EQ(fractional.radius_at(3), 10.125f);
+    for (layer_num_t level = 1; level < 6; ++level) {
+        EXPECT_FLOAT_EQ(fractional.radius_at(level + 1) / fractional.radius_at(level), 1.5f);
     }
-
-    const config_t fractional_beta(1.5f, 3u, 0.0f, 2.0f, 16);
-    EXPECT_FLOAT_EQ(fractional_beta.radius_at(1), 10.125f);
-    EXPECT_FLOAT_EQ(fractional_beta.radius_at(2), 15.1875f);
-
-    for (const float beta : {0.0f, 0.9f, 1.0f,
-                             std::numeric_limits<float>::infinity()}) {
-        EXPECT_THROW(config_t(beta, 0u, 0.0f, 0.5f, 16), std::runtime_error);
-    }
-    EXPECT_THROW(config_t(2.0f, 0u, 0.0f, 0.5f, 0), std::runtime_error);
-    EXPECT_THROW(config_t(2.0f, 0u, 0.0f, 0.5f, 16, 0), std::runtime_error);
-    EXPECT_THROW(config_t(2.0f, 0u, 0.0f, 0.5f, 16, 16, 0), std::runtime_error);
-    EXPECT_THROW(config_t(2.0f, 0u, 0.0f, 0.0f, 16), std::runtime_error);
-    EXPECT_THROW(config_t(2.0f, std::numeric_limits<layer_num_t>::max(), 0.0f, 0.5f, 16), std::runtime_error);
-    EXPECT_THROW(config_t(std::numeric_limits<float>::quiet_NaN(), 0u, 0.0f, 0.5f, 16), std::runtime_error);
 }
 
-TEST(RGraphRadius, TauDoesNotAffectRadii) {
+TEST(RGraphRadius, RejectsInvalidParametersAndL1Overflow) {
     using config_t = artea_graph::rgraph_config_t<DistanceMetricsT::EUCLIDEAN, 96>;
-    const config_t original(2.0f, 1u, 0.0f, 0.5f, 16);
-    for (const float tau : {0.0f, 0.5f, 1.0f, 2.0f, std::numeric_limits<float>::max()}) {
-        const config_t config(2.0f, 1u, tau, 0.5f, 16);
-        EXPECT_FLOAT_EQ(config.tau(), tau);
-        EXPECT_FLOAT_EQ(config.radius_at(0), 0.5f);
-        for (layer_num_t h = 1; h < 6; ++h) {
-            const float expected = 0.5f * std::pow(2.0f, h + 1);
-            EXPECT_FLOAT_EQ(config.radius_at(h), expected);
-            EXPECT_FLOAT_EQ(config.radius_at(h), original.radius_at(h));
-            EXPECT_FLOAT_EQ(config.radius_at(h + 1) / config.radius_at(h), 2.0f);
+    const float infinity = std::numeric_limits<float>::infinity();
+    const float nan = std::numeric_limits<float>::quiet_NaN();
+    for (const float beta : {0.0f, 0.9f, 1.0f, infinity, nan}) {
+        EXPECT_THROW(config_t(beta, 0.0f, 0.0f, 0.5f, 16), std::runtime_error);
+    }
+    for (const float invalid : {-1.0f, infinity, nan}) {
+        EXPECT_THROW(config_t(2.0f, invalid, 0.0f, 0.5f, 16), std::runtime_error);
+        EXPECT_THROW(config_t(2.0f, 0.0f, invalid, 0.5f, 16), std::runtime_error);
+    }
+    for (const float invalid : {0.0f, -1.0f, infinity, nan}) {
+        EXPECT_THROW(config_t(2.0f, 0.0f, 0.0f, invalid, 16), std::runtime_error);
+    }
+    EXPECT_THROW(config_t(2.0f, 0.0f, 0.0f, 0.5f, 0), std::runtime_error);
+    EXPECT_THROW(config_t(2.0f, 0.0f, 0.0f, 0.5f, 16, 0), std::runtime_error);
+    EXPECT_THROW(config_t(2.0f, 0.0f, 0.0f, 0.5f, 16, 16, 0), std::runtime_error);
+    const float largest = std::numeric_limits<float>::max();
+    EXPECT_THROW(config_t(2.0f, largest, 0.0f, 1.0f, 16), std::runtime_error);
+    EXPECT_THROW(config_t(largest, 1.0f, 0.0f, 1.0f, 16), std::runtime_error);
+    EXPECT_THROW(config_t(2.0f, 1.0f, 0.0f, largest, 16), std::runtime_error);
+    // Compute in double so a large coefficient with a small distance scale remains valid.
+    const config_t representable(2.0f, largest, 0.0f, 1e-20f, 16);
+    EXPECT_TRUE(std::isfinite(representable.radius_at(1)));
+    EXPECT_GT(representable.radius_at(1), 0.0f);
+}
+
+TEST(RGraphRadius, PruningShiftDoesNotAffectRadii) {
+    using config_t = artea_graph::rgraph_config_t<DistanceMetricsT::EUCLIDEAN, 96>;
+    const config_t original(2.0f, 0.5f, 0.0f, 0.5f, 16);
+    for (const float shift : {0.0f, 0.5f, 1.0f, 2.0f, std::numeric_limits<float>::max()}) {
+        const config_t config(2.0f, 0.5f, shift, 0.5f, 16);
+        EXPECT_FLOAT_EQ(config.tau_k(), 0.5f);
+        EXPECT_FLOAT_EQ(config.tau(), shift);
+        for (layer_num_t level = 0; level < 6; ++level) {
+            EXPECT_FLOAT_EQ(config.radius_at(level), original.radius_at(level));
         }
     }
-    const config_t fractional(1.5f, 3u, 0.5f, 2.0f, 16);
-    EXPECT_FLOAT_EQ(fractional.radius_at(1), 10.125f);
-    EXPECT_FLOAT_EQ(fractional.radius_at(2), 15.1875f);
-    for (const float invalid : {-1.0f, std::numeric_limits<float>::quiet_NaN(),
-                               std::numeric_limits<float>::infinity()}) {
-        EXPECT_THROW(config_t(2.0f, 0u, invalid, 0.5f, 16), std::runtime_error);
-    }
 }
 
-TEST(RGraphRadius, L1MembershipChangesWithSkippedLevelsAndBeta) {
+TEST(RGraphRadius, L1MembershipChangesWithTauKAndBeta) {
     constexpr auto metric = DistanceMetricsT::EUCLIDEAN;
     constexpr vec_dim_t dim = 96;
     dist_func_t<metric, dim> build_dist;
     const stacked_rgraph::pruning_config_t<metric, dim> pruning_config(1.0f, 0.0f);
-    // With R1=4, points 0 and 5 enter L1 and cover point 9. With R1=8,
-    // point 0 covers point 5, while point 9 must enter L1.
-    struct Case { float beta; layer_num_t skips; float tau; layer_id_t second; layer_id_t third; };
-    for (const auto c : {Case{2.0f, 0u, 0.0f, 1, 0}, Case{2.0f, 1u, 0.0f, 0, 1},
-                         Case{4.0f, 0u, 0.0f, 0, 1}, Case{2.0f, 0u, 1.0f, 1, 0}}) {
-        SCOPED_TRACE(::testing::Message() << "beta=" << c.beta << ", skips=" << c.skips << ", tau=" << c.tau);
+    // R1=4 admits point 5 to L1 and covers point 9; R1=6 or 8 covers point 5 and admits point 9.
+    struct Case { float beta; float tau_k; float shift; layer_id_t second; layer_id_t third; };
+    for (const auto settings : {Case{2.0f, 0.0f, 0.0f, 1, 0}, Case{2.0f, 1.0f, 0.0f, 0, 1},
+                               Case{4.0f, 0.0f, 0.0f, 0, 1}, Case{2.0f, 0.0f, 1.0f, 1, 0},
+                               Case{2.0f, 0.5f, 0.0f, 0, 1}}) {
+        SCOPED_TRACE(::testing::Message() << "beta=" << settings.beta << ", tau_k=" << settings.tau_k
+                                         << ", shift=" << settings.shift);
         const stacked_rgraph::rgraph_config_t<metric, dim> config(
-            c.beta, c.skips, c.tau, 2.0f, 16);
+            settings.beta, settings.tau_k, settings.shift, 2.0f, 16);
         stacked_rgraph::index_t<metric, dim> graph(3, config, pruning_config);
-        EXPECT_EQ(graph.num_skipped_levels(), c.skips);
-        EXPECT_FLOAT_EQ(graph.tau(), c.tau);
+        EXPECT_FLOAT_EQ(graph.tau_k(), settings.tau_k);
+        EXPECT_FLOAT_EQ(graph.tau(), settings.shift);
         EXPECT_FLOAT_EQ(graph.radius_at(1), config.radius_at(1));
-        // Separate batches make the insertion order deterministic even
-        // when construction uses parallel workers.
-        for (const float x : {0.0f, 5.0f, 9.0f}) {
+        // Separate batches make insertion order deterministic with parallel workers.
+        for (const float coordinate : {0.0f, 5.0f, 9.0f}) {
             vector_array_t point(1, dim);
             std::fill_n(point.get(0), dim, 0.0f);
-            point.get(0)[0] = x;
+            point.get(0)[0] = coordinate;
             stacked_rgraph::factory_t<metric, dim>::add_vertices(
                 graph, std::move(point), build_dist, /*insert_on_L0=*/false);
         }
         const auto& hierarchy = graph.get_hierarchical_graph();
         EXPECT_EQ(hierarchy.get_highest_level_id(0), 1);
-        EXPECT_EQ(hierarchy.get_highest_level_id(1), c.second);
-        EXPECT_EQ(hierarchy.get_highest_level_id(2), c.third);
+        EXPECT_EQ(hierarchy.get_highest_level_id(1), settings.second);
+        EXPECT_EQ(hierarchy.get_highest_level_id(2), settings.third);
     }
 }
 

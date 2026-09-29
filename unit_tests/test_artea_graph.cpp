@@ -78,7 +78,7 @@ struct TestConfig {
 
     // Stacked r-net backbone
     float    rnet_beta;
-    uint32_t num_skipped_levels;
+    float    tau_k;
     bool     l0_min_distance_provided;
     float    l0_min_distance;
     uint32_t ul_max_nbr_size;
@@ -125,7 +125,7 @@ auto dump_config(const char* banner) -> void {
        << "Config path:                " << g_config.config_path << "\n"
        << "--- Stacked r-net backbone ---\n"
        << "rnet_beta:                      " << g_config.rnet_beta << "\n"
-       << "num_skipped_levels:         " << g_config.num_skipped_levels << "\n";
+       << "tau_k:                     " << g_config.tau_k << "\n";
     if (g_config.l0_min_distance_provided) {
         os << "L0 minimum distance:                  " << g_config.l0_min_distance
            << " (user-provided)\n";
@@ -264,7 +264,7 @@ protected:
 
             artea_graph::rgraph_config_t<Metric, Dim> rgraph_config(
                 g_config.rnet_beta,
-                g_config.num_skipped_levels, g_config.shifted_coeffs,
+                g_config.tau_k, g_config.shifted_coeffs,
                 provider.get_l0_min_distance(),
                 static_cast<vertex_num_t>(g_config.search_nn_qs),
                 static_cast<vertex_num_t>(g_config.ul_select_nbrs_qs),
@@ -586,9 +586,14 @@ int main(int argc, char** argv) {
         return 1;
     }
 
+    if (params.contains("num_skipped_levels")) {
+        std::cerr << "num_skipped_levels is no longer supported; use tau_k\n";
+        return 1;
+    }
+
     // Build params: same keys and defaults as bench-artea's run_all().
     g_config.rnet_beta              = params.value("rnet_beta", 2.0f);
-    g_config.num_skipped_levels = params.value("num_skipped_levels", 0u);
+    g_config.tau_k              = params.value("tau_k", 0.0f);
     g_config.l0_min_distance_provided = params.contains("l0_min_distance");
     g_config.l0_min_distance     = params.value("l0_min_distance", -1.0f);
     g_config.ul_max_nbr_size    = params.value("ul_max_nbr_size", 32u);

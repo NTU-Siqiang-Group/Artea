@@ -113,13 +113,15 @@ public:
     static constexpr uint32_t FIXED_RVE_MIDDLE_RANK = 3 * FIXED_LID_NEIGHBORS / 4;
 
     /**
-     * @brief Probe result containing the base k-NN distance quantile table.
+     * @brief Probe result containing the base k-NN distance quantile table and minimum sampled NN distance.
      */
     struct ProbeResult {
         std::vector<uint32_t> nn_ranks;                         // nn_ranks (1-based): 1..128
         std::vector<float> quantiles;                           // quantile values
         std::vector<std::vector<distance_t>> table;             // table[rank_idx][quantile_idx]
         vec_num_t num_samples;                                  // number of sampled vertices
+        /** @brief Minimum non-self 1-NN distance across samples, searched against the full base set. */
+        distance_t min_nearest;
     };
 
     /**
@@ -246,7 +248,7 @@ public:
      *
      * @param quantiles Vector of target quantiles, each in (0, 1)
      * @param num_samples Number of vertices to sample
-     * @return ProbeResult containing the distance quantile table
+     * @return ProbeResult containing the distance quantile table and minimum sampled 1-NN distance
      */
     auto probe(
         const std::vector<float>& quantiles,
@@ -264,6 +266,7 @@ public:
 
         // Build quantile table: for each nn_rank, sort the column and extract quantiles
         std::vector<std::vector<distance_t>> table(MAX_K);
+        distance_t min_nearest = std::numeric_limits<distance_t>::max();
 
         tbb::parallel_for(
             tbb::blocked_range<uint32_t>(0, MAX_K),
@@ -275,6 +278,7 @@ public:
                     }
 
                     std::sort(std::execution::par, column.begin(), column.end());
+                    if (col == 0) min_nearest = column.front();
 
                     table[col].reserve(quantiles.size());
                     for (float q : quantiles) {
@@ -293,6 +297,7 @@ public:
         result.quantiles = quantiles;
         result.table = std::move(table);
         result.num_samples = num_samples;
+        result.min_nearest = min_nearest;
         return result;
     }
 

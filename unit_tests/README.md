@@ -88,9 +88,9 @@ OMP_NUM_THREADS="$(nproc)" numactl --interleave=all ./build/unit_tests/test_stag
 ## R-net Geometry
 
 Graph construction sets its radius geometry using `rnet_beta > 1`
-(default `2.0`) and `num_skipped_levels >= 0` (integer, default `0`):
+(default `2.0`) and `tau_k >= 0` (floating point, default `0.0`):
 `R0 = l0_min_distance`, and
-`Rh = R0 * rnet_beta^(num_skipped_levels + h)` for `h >= 1`.
+`Rh = R0 * (1 + tau_k) * rnet_beta^h` for `h >= 1`.
 `tau = shifted_coeffs >= 0` (default `0`) controls ARTEA's L0 refinement shift
 and does not affect these radii.
 The L0 distance scale stays unchanged; `scale_coeffs` does not affect radii. ARTEA and stacked r-nets share `stacked_rgraph::RGraphConfig`.
@@ -99,9 +99,9 @@ refinement shift.
 
 `test_artea_graph` reads these values from the workload's `indexes-config.artea`
 entry. CLI tests `test_stacked_rgraph` and `test_hierarchical_graph_persistence`
-accept `--beta`, `--num-skipped-levels`, `--shifted-coeffs`, `--scale-coeffs`,
+accept `--beta`, `--tau-k`, `--shifted-coeffs`, `--scale-coeffs`,
 and `--l0-min-distance`.
 Their distance probe can supply `l0_min_distance` when a negative value is given.
-`test_stage_distance` checks skipped levels, fractional beta, geometric radius
-growth, tau scaling, invalid parameters, L1-radius overflow, actual L1 membership, and the
+`test_stage_distance` checks fractional tau_k and beta, geometric radius
+growth, independence from the pruning shift, invalid parameters, L1-radius overflow, actual L1 membership, and the
 shared ARTEA/stacked-rnet configuration type.
