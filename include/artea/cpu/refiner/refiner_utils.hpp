@@ -52,6 +52,7 @@ class RefinerUtils {
     using vertex_id_t  = typename RefinerTraitsT::vertex_id_t;
     using layer_id_t   = typename RefinerTraitsT::layer_id_t;
     using nbr_t        = typename RefinerTraitsT::nbr_t;
+    using strict_nbr_comp_t = typename RefinerTraitsT::strict_nbr_comp_t;
     using propagate_engine_t = typename RefinerTraitsT::propagate_engine_t;
 
 public:
@@ -62,6 +63,9 @@ public:
      * The caller must already have constructed @p refining_graph with
      * the matching mapping (dense ctor for L0; sparse ctor with the
      * maps from @c hier_graph.collect_layer_vids for upper layers).
+     * Imported rows are sorted by (distance, vid), as required by the
+     * pruning and log-merge stages. If the destination has a smaller
+     * capacity, retain the closest neighbors after sorting.
      *
      * Per-row writes only; no locks needed because extraction is a
      * phase-boundary operation.
@@ -72,13 +76,7 @@ public:
         RefiningGraphT&           refining_graph,
         const layer_id_t          level_id
     ) -> void {
-        // Take min(src_capacity, dest_capacity), so callers can drive the
-        // refiner with an RG layer cap that differs from the hier_graph slot cap
-        // in either direction. Symmetric with
-        // writeback_layer_from_refining_graph.
-        const vertex_num_t src_capacity  = hier_graph.max_nbr_size(level_id);
         const vertex_num_t dest_capacity = refining_graph.layer_config().max_nbr_size();
-        const vertex_num_t copy_capacity = std::min(src_capacity, dest_capacity);
 
         propagate_engine_t::parallel_for_each_vertex(
             refining_graph,
@@ -98,10 +96,16 @@ public:
                 const auto src = hier_graph.fetch_level_nbrs(storage_vid, level_id);
                 auto& dst = refining_graph.fetch_nbrs(storage_vid);
                 dst.clear();
-                for (vertex_num_t i = 0; i < copy_capacity && i < src.size(); ++i) {
-                    if (src[i].is_invalid()) break;
-                    dst.push_back(src[i]);
+                for (const auto& neighbor : src) {
+                    if (neighbor.is_invalid()) break;
+                    dst.push_back(neighbor);
                 }
+                // Insert-time reverse edges are appended without sorting.
+                // NbrLogTable::apply_logs uses inplace_merge and adjacent
+                // deduplication, so distance-only ordering is insufficient
+                // when two neighbors have the same distance.
+                std::sort(dst.begin(), dst.end(), strict_nbr_comp_t{});
+                if (dst.size() > dest_capacity) dst.resize(dest_capacity);
             });
     }
 

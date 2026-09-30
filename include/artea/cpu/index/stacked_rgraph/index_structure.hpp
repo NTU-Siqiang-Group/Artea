@@ -223,6 +223,18 @@ public:
         get_hierarchical_graph().assign_layer(vid, h);
     }
 
+    auto prepare_layer(const vertex_id_t vid, const layer_id_t h) -> void {
+        get_hierarchical_graph().prepare_layer(vid, h);
+    }
+
+    auto publish_layer(const vertex_id_t vid) -> void {
+        get_hierarchical_graph().publish_layer(vid);
+    }
+
+    auto acquire_layer_growth_lock() {
+        return get_hierarchical_graph().acquire_layer_growth_lock();
+    }
+
     __attribute__((always_inline))
     auto fetch_level_nbrs(const vertex_id_t vid, const layer_id_t l)
         -> std::span<nbr_t>
@@ -268,6 +280,10 @@ public:
     __attribute__((always_inline))
     auto get_top_level_vids() const {
         return get_hierarchical_graph().get_top_level_vids();
+    }
+
+    auto get_top_level_view() const {
+        return get_hierarchical_graph().get_top_level_view();
     }
 
     __attribute__((always_inline))

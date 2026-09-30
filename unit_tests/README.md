@@ -1,5 +1,33 @@
 # Test Documentation
 
+## Construction regressions
+
+`test_graph_build_regressions` uses synthetic graphs without external datasets.
+It checks that unordered hierarchical neighbor rows are sorted by `(distance, ID)`
+before refinement, including tied distances, sparse upper-layer ID mapping, log
+merging without duplicate edges, and truncation to a smaller destination capacity.
+An incremental insertion fixture also verifies that widening the construction
+queue from 30 to 100 revisits a previously rejected candidate and discovers the
+true nearest neighbor behind it. The fixture has a unique apex and inserts one
+vertex through the production factory, so it does not depend on scheduling.
+
+Layer-growth regressions synchronize two insertions after both have captured
+the same old top. They check L2/L3 growth with and without L0 insertion: the
+losing creator must retry, connect at the new layer, or lower its insertion
+level if the new layer covers it. A test-only index substitution controls this
+interleaving with a preallocated batch and two explicit caller threads, so the
+barrier does not depend on TBB splitting a tiny range. Production code has no
+test hooks. The tests also check that new
+tops are published after their lower-layer edges and that captured entry views
+remain stable across publication. The race cases require at least two threads;
+the test executable honors `OMP_NUM_THREADS` for its TBB concurrency limit.
+
+```sh
+cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
+cmake --build build --target test_graph_build_regressions -j
+OMP_NUM_THREADS="$(nproc)" numactl --interleave=all ./build/unit_tests/test_graph_build_regressions
+```
+
 ## Grouped CSR Compaction
 
 `test_hierarchical_graph_compactor` uses synthetic vectors and ordered neighbor lists without dataset downloads.
@@ -97,11 +125,27 @@ The L0 distance scale stays unchanged; `scale_coeffs` does not affect radii. ART
 All distances use build-distance units; the same L0 scale controls ARTEA's
 refinement shift.
 
-`test_artea_graph` reads these values from the workload's `indexes-config.artea`
-entry. CLI tests `test_stacked_rgraph` and `test_hierarchical_graph_persistence`
-accept `--beta`, `--tau-k`, `--shifted-coeffs`, `--scale-coeffs`,
-and `--l0-min-distance`.
-Their distance probe can supply `l0_min_distance` when a negative value is given.
+`test_artea_graph` and `test_stacked_rgraph` read these values from the workload's
+`indexes-config.artea` entry. Their distance probe supplies `l0_min_distance` when
+that field is omitted. `test_hierarchical_graph_persistence` accepts `--beta`,
+`--tau-k`, `--shifted-coeffs`, `--scale-coeffs`, and `--l0-min-distance`, with a
+negative `--l0-min-distance` enabling its distance probe.
 `test_stage_distance` checks fractional tau_k and beta, geometric radius
 growth, independence from the pruning shift, invalid parameters, L1-radius overflow, actual L1 membership, and the
 shared ARTEA/stacked-rnet configuration type.
+
+To inspect the stacked r-net's level distribution, run from the Artea repository root:
+
+```sh
+cmake --build build --target test_stacked_rgraph -j "$(nproc)"
+OMP_NUM_THREADS="$(nproc)" OMP_DYNAMIC=FALSE numactl --interleave=all \
+    ./build/unit_tests/test_stacked_rgraph --workload ./workloads/sift1m-bench.jsonc
+```
+
+`test_stacked_rgraph` accepts only `-w`/`--workload` for configuration; the former individual build flags
+are no longer supported. JSON and JSONC comments are supported. Dataset paths are resolved relative to the
+working directory, as in the benchmark. An object-valued `indexes-config.artea` is used directly; an array
+must contain exactly one untagged base entry, with tagged variants ignored. No search sweep is required.
+Only one graph is built, honoring `insert_on_L0` and `shuffle_insertion_order` (both default to `false`).
+The output includes build time, cumulative vertex counts at each level, and a compactor trim preview.
+This builds the stacked r-net backbone; ARTEA's L0 refinement and queries are not run.

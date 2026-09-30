@@ -53,9 +53,10 @@ void print_header(const std::string& label, const std::vector<float>& qs) {
 }
 
 template <typename Result>
-void print_nn_table(const Result& result) {
+void print_nn_table(const Result& result, size_t max_rank = std::numeric_limits<size_t>::max()) {
     print_header("rank", result.quantiles);
-    for (size_t r = 0; r < result.nn_ranks.size(); ++r) {
+    const auto displayed_ranks = std::min(result.nn_ranks.size(), max_rank);
+    for (size_t r = 0; r < displayed_ranks; ++r) {
         std::cout << fmt::format("{:>10}", result.nn_ranks[r]);
         for (auto distance : result.table[r]) {
             std::cout << fmt::format(" {:>13.6f}", distance);
@@ -177,9 +178,10 @@ int main(int argc, char** argv) {
                 ARTEA_INFO("Probing query ground-truth distances...");
                 const auto result = prober.probe_query(
                     dataset.get_query_vecs(), dataset.get_gt_vecs(), quantiles);
+                const auto displayed_ranks = std::min<size_t>(result.nn_ranks.size(), 100);
                 ARTEA_INFO(fmt::format("Query distance quantiles: {} queries x {} ranks",
-                    result.num_queries, result.nn_ranks.size()));
-                print_nn_table(result);
+                    result.num_queries, displayed_ranks));
+                print_nn_table(result, displayed_ranks);
             }
 
             if (mode == "all" || mode == "farthest" || mode == "aspect-ratio") {

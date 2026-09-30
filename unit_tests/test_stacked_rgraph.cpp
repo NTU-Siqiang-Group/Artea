@@ -15,25 +15,26 @@
 /*
  * @FilePath: /Artea/unit_tests/test_stacked_rgraph.cpp
  * @Author: Chandler (Weitang Ye) <weitang.ye@ntu.edu.sg>
- * @Description: Build-time benchmark for the stacked r-net backbone.
- *               Tests both insert_on_L0=false (upper-layer edges only,
- *               as used by artea_graph refinement) and insert_on_L0=true
- *               (all layers including L0). Reports wall-clock times for
- *               both modes.
+ * @Description: Build the stacked r-net backbone from a workload JSON/JSONC file.
+ *               Reports build time and vertex counts at each level, using the
+ *               workload's insert_on_L0 and shuffle_insertion_order settings.
  */
 
 #include <chrono>
 #include <cstdint>
 #include <filesystem>
+#include <fstream>
 #include <iostream>
 #include <memory>
 #include <stdexcept>
 #include <string>
 #include <utility>
+#include <vector>
 
 #include <argparse/argparse.hpp>
 #include <fmt/format.h>
 #include <gtest/gtest.h>
+#include <nlohmann/json.hpp>
 
 #include <artea/cpu/framework/artea.hpp>
 #include <artea/cpu/framework/type_context/default_context.hpp>
@@ -45,7 +46,7 @@ using namespace artea::cpu;
 using stacked_index_t = typename index_traits_t::stacked_rgraph::index_t;
 
 // ============================================================
-//  Global configuration (populated by argparse in main())
+//  Global configuration (populated from the workload in main())
 // ============================================================
 
 struct TestConfig {
@@ -74,7 +75,62 @@ struct TestConfig {
     // Insert-time upper-layer RNG scale (shifted is forced to 0 at the
     // stacked_rgraph config level).
     float    scale_coeffs;
+    bool     insert_on_L0;
+    bool     shuffle_insertion_order;
 } g_config;
+
+static auto load_workload(const std::string& workload_path) -> TestConfig {
+    std::ifstream workload_file(workload_path);
+    if (!workload_file.is_open()) {
+        throw std::runtime_error("Failed to open workload: " + workload_path);
+    }
+    const auto workload = nlohmann::json::parse(workload_file, nullptr, true, /*ignore_comments=*/true);
+    const auto& artea_entry = workload.at("indexes-config").at("artea");
+
+    // Match benchmark mode: use the object itself or the unique untagged array entry.
+    const nlohmann::json* base_config = nullptr;
+    if (artea_entry.is_object()) {
+        base_config = &artea_entry;
+    } else if (artea_entry.is_array()) {
+        for (const auto& entry : artea_entry) {
+            if (!entry.is_object() || entry.contains("tag")) continue;
+            if (base_config != nullptr) {
+                throw std::runtime_error("indexes-config.artea must have exactly one untagged base config");
+            }
+            base_config = &entry;
+        }
+        if (base_config == nullptr) {
+            throw std::runtime_error("indexes-config.artea has no untagged base config");
+        }
+    } else {
+        throw std::runtime_error("indexes-config.artea must be an object or array");
+    }
+    const auto& params = *base_config;
+    if (params.contains("num_skipped_levels")) {
+        throw std::runtime_error("num_skipped_levels is no longer supported; use tau_k");
+    }
+
+    TestConfig config{};
+    config.config_path = workload.at("dataset-config").get<std::string>();
+    config.dataset_name = workload.at("dataset").get<std::string>();
+    config.metric = workload.value("metric", "euclidean");
+    config.rnet_beta = params.value("rnet_beta", 2.0f);
+    config.tau_k = params.value("tau_k", 0.0f);
+    config.shifted_coeffs = params.value("shifted_coeffs", 0.0f);
+    config.l0_min_distance_provided = params.contains("l0_min_distance");
+    config.l0_min_distance = params.value("l0_min_distance", -1.0f);
+    config.ul_max_nbr_size = params.value("ul_max_nbr_size", 32u);
+    config.bl_max_nbr_size = params.value("bl_max_nbr_size", 64u);
+    config.search_nn_qs = params.value("search_nn_qs", 30u);
+    config.ul_select_nbrs_qs = params.value("ul_select_nbrs_qs", 100u);
+    config.bl_select_nbrs_qs = params.value("bl_select_nbrs_qs", 100u);
+    config.scale_coeffs = params.value("scale_coeffs", 1.1f);
+    config.probe_num_samples = params.value("probe_num_samples", 500u);
+    config.probe_quantile = params.value("probe_quantile", 0.9f);
+    config.insert_on_L0 = params.value("insert_on_L0", false);
+    config.shuffle_insertion_order = params.value("shuffle_insertion_order", false);
+    return config;
+}
 
 // ============================================================
 //  DataProvider singleton
@@ -101,7 +157,7 @@ public:
         ARTEA_INFO(fmt::format("Dataset loaded: {} vectors, {} dims",
             base_vecs.get_num_vecs(), base_vecs.get_vec_dim()));
 
-        // Resolve BOTH compile-time axes: metric from the --metric input,
+        // Resolve BOTH compile-time axes: metric from the workload,
         // padded dim from the loaded dataset. The dataset and the probed L0
         // radius (a plain float) are metric/dim-independent; only the
         // build_dist / prober run behind <Metric, Dim>.
@@ -142,13 +198,13 @@ private:
 };
 
 // ============================================================
-//  Fixture: build both insert_on_L0=false and =true graphs.
+//  Fixture: build one graph using the workload's insertion settings.
 // ============================================================
 
 class StackedRGraphTest : public ::testing::Test {
 protected:
     template <DistanceMetricsT Metric, vec_dim_t Dim>
-    static auto build_graph(bool insert_on_L0)
+    static auto build_graph()
         -> std::pair<std::unique_ptr<stacked_index_t>, int64_t>
     {
         auto& provider = DataProvider::instance();
@@ -191,7 +247,8 @@ protected:
 
         auto t0 = std::chrono::high_resolution_clock::now();
         stacked_rgraph::factory_t<Metric, Dim>::add_vertices(
-            *graph, std::move(owned_batch), build_dist, insert_on_L0);
+            *graph, std::move(owned_batch), build_dist,
+            g_config.insert_on_L0, g_config.shuffle_insertion_order);
         auto t1 = std::chrono::high_resolution_clock::now();
         const int64_t ms =
             std::chrono::duration_cast<std::chrono::milliseconds>(t1 - t0).count();
@@ -268,110 +325,54 @@ protected:
 
     static void SetUpTestSuite() {
         build_infra_dispatch(DataProvider::instance().get_dataset_info(), ARTEA_METRIC_LAMBDA(void) {
-                ARTEA_INFO("--- Building with insert_on_L0=false ---");
-                std::tie(_graph_no_l0, _build_ms_no_l0) =
-                    build_graph<Metric, Dim>(/*insert_on_L0=*/false);
-                dump_graph_info(_graph_no_l0->get_hierarchical_graph(), "insert_on_L0=false", _build_ms_no_l0);
-
-                ARTEA_INFO("--- Building with insert_on_L0=true ---");
-                std::tie(_graph_with_l0, _build_ms_with_l0) =
-                    build_graph<Metric, Dim>(/*insert_on_L0=*/true);
-                dump_graph_info(_graph_with_l0->get_hierarchical_graph(), "insert_on_L0=true", _build_ms_with_l0);
-            });
+            ARTEA_INFO(fmt::format("--- Building with insert_on_L0={} ---", g_config.insert_on_L0));
+            std::tie(_graph, _build_ms) = build_graph<Metric, Dim>();
+            const char* label = g_config.insert_on_L0 ? "insert_on_L0=true" : "insert_on_L0=false";
+            dump_graph_info(_graph->get_hierarchical_graph(), label, _build_ms);
+        });
     }
 
     static void TearDownTestSuite() {
-        _graph_no_l0.reset();
-        _graph_with_l0.reset();
+        _graph.reset();
     }
 
-    static std::unique_ptr<stacked_index_t> _graph_no_l0;
-    static std::unique_ptr<stacked_index_t> _graph_with_l0;
-    static int64_t _build_ms_no_l0;
-    static int64_t _build_ms_with_l0;
+    static std::unique_ptr<stacked_index_t> _graph;
+    static int64_t _build_ms;
 };
 
-std::unique_ptr<stacked_index_t> StackedRGraphTest::_graph_no_l0   = nullptr;
-std::unique_ptr<stacked_index_t> StackedRGraphTest::_graph_with_l0 = nullptr;
-int64_t StackedRGraphTest::_build_ms_no_l0  = 0;
-int64_t StackedRGraphTest::_build_ms_with_l0 = 0;
+std::unique_ptr<stacked_index_t> StackedRGraphTest::_graph = nullptr;
+int64_t StackedRGraphTest::_build_ms = 0;
 
 // ============================================================
-//  Build time comparison.
+//  Build summary.
 // ============================================================
 
 TEST_F(StackedRGraphTest, BuildTime) {
-    ASSERT_NE(_graph_no_l0, nullptr);
-    ASSERT_NE(_graph_with_l0, nullptr);
-    EXPECT_GT(_build_ms_no_l0, 0);
-    EXPECT_GT(_build_ms_with_l0, 0);
+    ASSERT_NE(_graph, nullptr);
+    EXPECT_GE(_build_ms, 0);
+    EXPECT_EQ(_graph->get_hierarchical_graph().get_num_vertices(),
+              DataProvider::instance().get_dataset().get_base_vecs().get_num_vecs());
 
     ARTEA_INFO("=== Build summary ===");
     ARTEA_INFO(fmt::format("  dataset           : {}", g_config.dataset_name));
-    ARTEA_INFO(fmt::format("  num_vertices      : {}", _graph_no_l0->get_hierarchical_graph().get_num_vertices()));
+    ARTEA_INFO(fmt::format("  num_vertices      : {}", _graph->get_hierarchical_graph().get_num_vertices()));
     ARTEA_INFO(fmt::format("  max_allowed_level_id: {}",
-        static_cast<int>(_graph_no_l0->get_hierarchical_graph().max_allowed_level_id())));
-    ARTEA_INFO(fmt::format("  insert_on_L0=false: {} ms", _build_ms_no_l0));
-    ARTEA_INFO(fmt::format("  insert_on_L0=true : {} ms", _build_ms_with_l0));
-    ARTEA_INFO(fmt::format("  L0 overhead       : {} ms ({:.1f}%)",
-        _build_ms_with_l0 - _build_ms_no_l0,
-        100.0 * (_build_ms_with_l0 - _build_ms_no_l0) /
-            std::max<int64_t>(_build_ms_no_l0, 1)));
+        static_cast<int>(_graph->get_hierarchical_graph().max_allowed_level_id())));
+    ARTEA_INFO(fmt::format("  insert_on_L0={}: {} ms", g_config.insert_on_L0, _build_ms));
 }
 
 // ============================================================
-//  main: argparse + test suite runner
+//  main: workload JSON + test suite runner
 // ============================================================
 
 int main(int argc, char** argv) {
     ::testing::InitGoogleTest(&argc, argv);
 
     argparse::ArgumentParser program("test_stacked_rgraph");
-    program.add_argument("-c", "--config")
-        .default_value(artea::default_dataset_config_path())
-        .help("Path to datasets.json config file");
-    program.add_argument("-d", "--dataset")
-        .default_value(std::string("sift-1m"))
-        .help("Dataset name (as listed in datasets.json)");
-    program.add_argument("--metric")
-        .default_value(std::string("euclidean"))
-        .help("Task metric: euclidean/l2 or euclidean_sqr/l2_sqr (build=L2, compact search=L2 squared), inner_product, cosine");
-
-    program.add_argument("--shifted-coeffs").default_value(0.0f).scan<'g', float>()
-        .help("Nonnegative tau; does not affect r-net radii");
-    program.add_argument("--beta").default_value(2.0f).scan<'g', float>()
-        .help("R-net radius growth factor, finite and > 1");
-    program.add_argument("--tau-k").default_value(0.0f).scan<'g', float>()
-        .help("Nonnegative tau_k: R1 = l0_min_distance * (1 + tau_k)");
-    program.add_argument("--l0-min-distance")
-        .default_value(-1.0f).scan<'g', float>()
-        .help("Characteristic L0 minimum distance in build-distance units. "
-              "If negative, auto-probe via DatasetProber.");
-    program.add_argument("--ul-max-nbr-size")
-        .default_value(32u).scan<'u', uint32_t>()
-        .help("Per-vertex neighbor capacity at every upper layer (level_id > 0).");
-    program.add_argument("--bl-max-nbr-size")
-        .default_value(64u).scan<'u', uint32_t>()
-        .help("Per-vertex neighbor capacity at the bottom layer (L0). "
-              "Independent of --ul-max-nbr-size.");
-
-    program.add_argument("--probe-num-samples")
-        .default_value(500u).scan<'u', uint32_t>();
-    program.add_argument("--probe-quantile")
-        .default_value(0.9f).scan<'g', float>();
-
-    program.add_argument("--search-nn-qs")
-        .default_value(40u).scan<'u', uint32_t>();
-    program.add_argument("--ul-select-nbrs-qs")
-        .default_value(100u).scan<'u', uint32_t>()
-        .help("Upper-layer (L1+) beam-search queue size for the select phase.");
-    program.add_argument("--bl-select-nbrs-qs")
-        .default_value(100u).scan<'u', uint32_t>()
-        .help("Bottom-layer (L0) beam-search queue size for the select phase.");
-    program.add_argument("--scale-coeffs")
-        .default_value(1.1f).scan<'g', float>()
-        .help("RNG scale coefficient applied at upper layers (default 1.1). "
-              "shifted_coeffs sets tau in the radius config; insertion pruning ignores the shift.");
+    program.add_description("Build a stacked r-net and report its level distribution from an Artea workload");
+    program.add_argument("-w", "--workload")
+        .required()
+        .help("Path to workload JSON/JSONC; reads dataset-config, dataset, metric and indexes-config.artea");
 
     try {
         program.parse_args(argc, argv);
@@ -380,32 +381,23 @@ int main(int argc, char** argv) {
         return 1;
     }
 
-    g_config.config_path        = program.get<std::string>("--config");
-    g_config.dataset_name       = program.get<std::string>("--dataset");
-    g_config.metric             = program.get<std::string>("--metric");
-    g_config.rnet_beta          = program.get<float>("--beta");
-    g_config.shifted_coeffs     = program.get<float>("--shifted-coeffs");
-    g_config.tau_k              = program.get<float>("--tau-k");
-    g_config.ul_max_nbr_size    = program.get<uint32_t>("--ul-max-nbr-size");
-    g_config.bl_max_nbr_size    = program.get<uint32_t>("--bl-max-nbr-size");
-    g_config.probe_num_samples  = program.get<uint32_t>("--probe-num-samples");
-    g_config.probe_quantile     = program.get<float>("--probe-quantile");
-    g_config.search_nn_qs       = program.get<uint32_t>("--search-nn-qs");
-    g_config.ul_select_nbrs_qs  = program.get<uint32_t>("--ul-select-nbrs-qs");
-    g_config.bl_select_nbrs_qs  = program.get<uint32_t>("--bl-select-nbrs-qs");
-    g_config.scale_coeffs       = program.get<float>("--scale-coeffs");
-
-    const float l0_min_distance_arg = program.get<float>("--l0-min-distance");
-    g_config.l0_min_distance_provided = (l0_min_distance_arg >= 0.0f);
-    g_config.l0_min_distance     = l0_min_distance_arg;
+    const auto workload_path = program.get<std::string>("--workload");
+    try {
+        g_config = load_workload(workload_path);
+    } catch (const std::exception& err) {
+        std::cerr << "Failed to load workload: " << workload_path << "\n" << err.what() << "\n";
+        return 1;
+    }
 
     std::cout << "\n=== Test Configuration ===\n";
+    std::cout << "Workload:       " << workload_path << "\n";
     std::cout << "Dataset:        " << g_config.dataset_name   << "\n";
+    std::cout << "Metric:         " << g_config.metric << "\n";
     std::cout << "rnet_beta:      " << g_config.rnet_beta      << "\n";
     std::cout << "tau_k:          " << g_config.tau_k << "\n";
     if (g_config.l0_min_distance_provided) {
         std::cout << "L0 minimum distance:      " << g_config.l0_min_distance
-                  << " (user-provided)\n";
+                  << " (from workload)\n";
     } else {
         std::cout << "L0 minimum distance:      auto-probe ("
                   << static_cast<int>(g_config.probe_quantile * 100.0f)
@@ -418,9 +410,15 @@ int main(int argc, char** argv) {
     std::cout << "ul_select_nbrs_qs: " << g_config.ul_select_nbrs_qs << "\n";
     std::cout << "bl_select_nbrs_qs: " << g_config.bl_select_nbrs_qs << "\n";
     std::cout << "scale_coeffs:      " << g_config.scale_coeffs      << "\n";
-    std::cout << "modes:          insert_on_L0={false, true}\n";
+    std::cout << "insert_on_L0:   " << (g_config.insert_on_L0 ? "true" : "false") << "\n";
+    std::cout << "shuffle_insertion_order: " << (g_config.shuffle_insertion_order ? "true" : "false") << "\n";
     std::cout << "============================\n\n";
 
-    DataProvider::instance().init();
+    try {
+        DataProvider::instance().init();
+    } catch (const std::exception& err) {
+        std::cerr << "Failed to initialize dataset: " << err.what() << "\n";
+        return 1;
+    }
     return RUN_ALL_TESTS();
 }

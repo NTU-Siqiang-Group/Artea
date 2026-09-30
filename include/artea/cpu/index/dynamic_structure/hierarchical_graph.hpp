@@ -139,6 +139,14 @@ private:
     static_assert(std::atomic<top_level_snapshot_t>::is_always_lock_free);
 
 public:
+    /** @brief Layer and initialized entry prefix read from one publication. */
+    struct TopLevelView {
+        layer_id_t top_level_id;
+        vid_range_t vids;
+
+        auto get_top_level_vids() const -> vid_range_t { return vids; }
+    };
+
     /** @brief Marks this graph as the dynamic (concurrently mutated)
      *         storage. Routers branch on this in @c detail::make_layer_range
      *         to pick the right NeighborRange adapter. */
@@ -289,6 +297,15 @@ public:
      * so scans for the first invalid entry start in a clean state.
      */
     auto assign_layer(const vertex_id_t vid, const layer_id_t highest_level_id) -> void {
+        prepare_layer(vid, highest_level_id);
+        publish_layer(vid);
+    }
+
+    /** @brief Initialize a vertex's slots without publishing it as an entry.
+     *  A new-layer creator holds acquire_layer_growth_lock() from its top
+     *  recheck through publish_layer(), completing lower-layer edges first.
+     *  Each prepared vertex must be published exactly once. */
+    auto prepare_layer(const vertex_id_t vid, const layer_id_t highest_level_id) -> void {
         if (highest_level_id > _max_allowed_level_id) {
             ARTEA_ERROR(fmt::format(
                 "assign_layer: highest_level_id ({}) exceeds max_allowed_level_id ({})",
@@ -310,7 +327,11 @@ public:
         auto& vinfo = _vertex_info_table[vid];
         vinfo.highest_level_id = highest_level_id;
         vinfo.slot_offset      = slot_offset;
+    }
 
+    /** @brief Publish an already-prepared vertex after its initialization. */
+    auto publish_layer(const vertex_id_t vid) -> void {
+        const layer_id_t highest_level_id = _vertex_info_table[vid].highest_level_id;
         auto& bucket = _vids_by_highest_level[highest_level_id];
         auto top_level_id = top_occupied_level_id();
         // The top only increases. Readers of an older top retain its already-published prefix.
@@ -338,6 +359,13 @@ public:
         }
         _top_snapshot.store({highest_level_id, static_cast<vertex_num_t>(bucket.size())},
                             std::memory_order_release);
+    }
+
+    /** @brief Serialize layer growth only; independent of the short publish lock.
+     *  The caller must recheck its observed top before preparing any vertex.
+     *  Do not acquire this guard while holding a neighbor or publication lock. */
+    auto acquire_layer_growth_lock() -> std::unique_lock<std::mutex> {
+        return std::unique_lock<std::mutex>(_layer_growth_mutex);
     }
 
     // =================================================================
@@ -496,13 +524,18 @@ public:
         return _vids_by_highest_level[h];
     }
 
+    /** @brief Coherent top and entry prefix, valid through later top changes. */
+    auto get_top_level_view() const -> TopLevelView {
+        const auto snapshot = _top_snapshot.load(std::memory_order_acquire);
+        if (snapshot.top_level_id == invalid_level_id) return {invalid_level_id, {}};
+        const auto first = _vids_by_highest_level[snapshot.top_level_id].cbegin();
+        return {snapshot.top_level_id, {first, first + snapshot.published_size}};
+    }
+
     /** @brief Fixed, fully initialized top-bucket prefix, valid through subsequent insertions/top changes. */
     __attribute__((always_inline))
     auto get_top_level_vids() const -> vid_range_t {
-        const auto snapshot = _top_snapshot.load(std::memory_order_acquire);
-        if (snapshot.top_level_id == invalid_level_id) return {};
-        const auto first = _vids_by_highest_level[snapshot.top_level_id].cbegin();
-        return {first, first + snapshot.published_size};
+        return get_top_level_view().vids;
     }
 
     /** @brief Highest published layer, or @c invalid_level_id for an empty graph. */
@@ -686,6 +719,10 @@ private:
      *           (2) HierarchicalGraphCompactor — materializes the compact
      *               graph by walking each bucket in order. */
     std::vector<tbb::concurrent_vector<vertex_id_t>> _vids_by_highest_level;
+
+    /** @brief New-layer creators hold this through initialization and publication.
+     *  Ordinary insertion and readers never acquire it. */
+    std::mutex _layer_growth_mutex;
 
     /** @brief Only top/new-top appenders take this lock; lower-layer appenders and readers do not. */
     std::mutex _top_publish_mutex;

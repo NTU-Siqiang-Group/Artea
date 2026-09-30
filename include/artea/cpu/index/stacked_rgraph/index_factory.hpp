@@ -24,7 +24,8 @@
  *            it with a larger capacity.
  *   Step B — Compute highest_insert_level_id via the r-net covering
  *            rule.
- *   Step C — Claim a slot in the hierarchical graph via assign_layer.
+ *   Step C — Recheck growth under its guard; retry descent on a newer top.
+ *            Prepare a new-layer seed privately until Step D completes.
  *   Step D — Edge insertion for cur_level_id in
  *            [0, highest_insert_level_id]: per-level select_neighbors +
  *            forward + reverse. Beam width is level-dependent (L0 uses
@@ -48,6 +49,7 @@
 #include <cstdint>
 #include <limits>
 #include <memory>
+#include <mutex>
 #include <numeric>
 #include <optional>
 #include <random>
@@ -115,9 +117,9 @@ class IndexFactory {
     static constexpr layer_id_t  invalid_level_id = hierarchical_graph_t::invalid_level_id;
 
 public:
-    /** @brief Number of vertices inserted serially during bootstrap
-     *         before switching to @c tbb::parallel_for. */
-    static constexpr vertex_num_t startup_points = 0;
+    /** @brief Maximum number of vertices inserted serially to bootstrap
+     *         an empty graph before switching to @c tbb::parallel_for. */
+    static constexpr vertex_num_t startup_points = 10;
 
     /** @brief Wall-clock time taken by @ref add_vertices, returned by
      *         value so callers can log it without re-instrumenting.
@@ -237,11 +239,14 @@ private:
 
         visited_table_pool_t visited_pool(total_vecs);
 
-        // Serial bootstrap iterates the permutation prefix; parallel
-        // phase iterates the suffix. Both dereference insert_order[i]
-        // to get the actual vid.
+        // Complete empty-graph bootstrap before starting parallel workers,
+        // so they cannot independently create disconnected initial seeds.
+        // Existing graphs need no serial prefix. Both phases follow the
+        // same insertion permutation.
         const vertex_num_t serial_count =
-            std::min<vertex_num_t>(startup_points, batch_size);
+            index.top_occupied_level_id() == invalid_level_id
+                ? std::min<vertex_num_t>(startup_points, batch_size)
+                : vertex_num_t{0};
         for (vertex_num_t i = 0; i < serial_count; ++i) {
             const vertex_id_t vid = insert_order[i];
             auto& visited = visited_pool.acquire();
@@ -256,8 +261,8 @@ private:
                 for (vertex_num_t i = r.begin(); i != r.end(); ++i) {
                     const vertex_id_t vid = insert_order[i];
                     // acquire() per-vertex: each insertion starts with a
-                    // fresh visited table, shared across its descent +
-                    // select phases.
+                    // fresh visited table for descent. Each select pass
+                    // clears it again before expanding its own queue.
                     auto& visited = visited_pool.acquire();
                     _insert_one(index, router, vid, dist_func,
                                 pruning_updater, visited, insert_on_L0);
@@ -288,93 +293,114 @@ private:
         const vertex_num_t bl_select_nbrs_qs = index.bl_select_nbrs_qs();
         const ratio_t      scale_coeffs      = index.pruning_config().scale_coeffs();
         const layer_num_t  max_allowed_level_id = index.max_allowed_level_id();
-        const layer_id_t   top_level_id = index.top_occupied_level_id();
-
-        // ==============================================================
-        //   Step A — Descent: top_level_id → level 1 (not including level 0)
-        // ==============================================================
         const std::size_t num_cached_queues = static_cast<std::size_t>(max_allowed_level_id) + 1;
         std::vector<distance_t> min_dist_per_level(num_cached_queues, max_distance);
         std::vector<std::optional<std_candidate_queue_t>> descent_queue_per_level(num_cached_queues);
-        for (auto& slot : descent_queue_per_level) { slot.emplace(search_nn_qs); }
-
-        if (top_level_id != invalid_level_id && top_level_id >= 1) {
-            std_candidate_queue_t cur_queue(search_nn_qs);
-            candidate_sample_utils_t::sample_single_entry(
-                index.get_base_vecs(), dist_func, index, new_vec, cur_queue);
-
-            for (layer_id_t cur_level_id = top_level_id; cur_level_id >= 1; --cur_level_id) {
-                router.beam_search(
-                    new_vec,
-                    detail::make_layer_range(index, cur_level_id),
-                    cur_queue, visited);
-
-                if (cur_queue.get_result_size() > 0) {
-                    min_dist_per_level[cur_level_id] = cur_queue.best_result_distance();
-                }
-
-                if (cur_level_id == 1) {
-                    // Last level: just stash for Step D.
-                    descent_queue_per_level[cur_level_id].emplace(std::move(cur_queue));
-                    break;
-                }
-
-                // Fork a fresh queue for the next (lower) level BEFORE
-                // handing ownership of cur_queue to the per-level slot.
-                // seed_from_queue copies this layer's top_candidates into
-                // the new queue in one O(L) pass with a clean
-                // _lower_bound (no cross-layer gating).
-                std_candidate_queue_t next_queue(search_nn_qs);
-                next_queue.seed_from_queue(cur_queue);
-                descent_queue_per_level[cur_level_id].emplace(std::move(cur_queue));
-                cur_queue = std::move(next_queue);
-            }
-        }
-
-        // Descent's L0 tail: L0 has no beam_search pass of its own, so
-        // seed descent_queue_per_level[0] from descent_queue_per_level[1]
-        // — those L1 NNs are the closest seeds available without paying
-        // the cost of a full L0 beam search during descent.
-        //
-        // First-vertex bootstrap (top_level_id == unassigned) leaves
-        // descent_queue_per_level[1] empty; the seed call is then a
-        // no-op and L0's run_select_at_level will safely no-op too.
-        //
-        // When insert_on_L0 == false, L0 edge construction is skipped
-        // entirely (see Step D loop), so the L1→L0 seed transfer is
-        // wasted work and we elide it here.
-        if (insert_on_L0 && descent_queue_per_level[1] &&
-            descent_queue_per_level[1]->get_result_size() > 0) {
-            descent_queue_per_level[0]->seed_from_queue(*descent_queue_per_level[1]);
-        }
-
-        // ==============================================================
-        //   Step B — Compute highest_insert_level_id (match legacy)
-        // ==============================================================
         layer_id_t highest_insert_level_id;
-        if (top_level_id == invalid_level_id) {
-            // Empty hierarchy: first vertex seeds L_1.
-            highest_insert_level_id = 1;
-        } else {
-            // Default: grow hierarchy by ONE level (capped at
-            // max_allowed_level_id).
-            highest_insert_level_id = std::min<layer_id_t>(
-                static_cast<layer_id_t>(top_level_id) + 1,
-                static_cast<layer_id_t>(max_allowed_level_id));
-            // Override: smallest h where q is absorbed at L_h means
-            // q joins only L_0..L_{h-1}.
-            for (layer_id_t h = 1; h <= top_level_id; ++h) {
-                if (min_dist_per_level[h] <= index.radius_at(h)) {
-                    highest_insert_level_id = static_cast<layer_id_t>(h - 1);
-                    break;
+        bool grows_hierarchy;
+        std::unique_lock<std::mutex> growth_lock;
+
+        for (;;) {
+            // The layer and its entry prefix must describe the same publication.
+            const auto top_view = index.get_top_level_view();
+            const layer_id_t top_level_id = top_view.top_level_id;
+            std::fill(min_dist_per_level.begin(), min_dist_per_level.end(), max_distance);
+            for (auto& slot : descent_queue_per_level) slot.emplace(search_nn_qs);
+
+            // Step A — Descend from this snapshot and cache each layer's queue.
+            if (top_level_id != invalid_level_id && top_level_id >= 1) {
+                std_candidate_queue_t cur_queue(search_nn_qs);
+                candidate_sample_utils_t::sample_single_entry(
+                    index.get_base_vecs(), dist_func, top_view, new_vec, cur_queue);
+
+                for (layer_id_t cur_level_id = top_level_id; cur_level_id >= 1; --cur_level_id) {
+                    router.beam_search(
+                        new_vec,
+                        detail::make_layer_range(index, cur_level_id),
+                        cur_queue, visited);
+
+                    if (cur_queue.get_result_size() > 0) {
+                        min_dist_per_level[cur_level_id] = cur_queue.best_result_distance();
+                    }
+
+                    if (cur_level_id == 1) {
+                        // Last level: just stash for Step D.
+                        descent_queue_per_level[cur_level_id].emplace(std::move(cur_queue));
+                        break;
+                    }
+
+                    // Fork a fresh queue for the next (lower) level BEFORE
+                    // handing ownership of cur_queue to the per-level slot.
+                    // seed_from_queue copies this layer's top_candidates into
+                    // the new queue in one O(L) pass with a clean
+                    // _lower_bound (no cross-layer gating).
+                    std_candidate_queue_t next_queue(search_nn_qs);
+                    next_queue.seed_from_queue(cur_queue);
+                    descent_queue_per_level[cur_level_id].emplace(std::move(cur_queue));
+                    cur_queue = std::move(next_queue);
                 }
             }
+
+            // Descent's L0 tail: L0 has no beam_search pass of its own, so
+            // seed descent_queue_per_level[0] from descent_queue_per_level[1]
+            // — those L1 NNs are the closest seeds available without paying
+            // the cost of a full L0 beam search during descent.
+            //
+            // First-vertex bootstrap (top_level_id == unassigned) leaves
+            // descent_queue_per_level[1] empty; the seed call is then a
+            // no-op and L0's run_select_at_level will safely no-op too.
+            //
+            // When insert_on_L0 == false, L0 edge construction is skipped
+            // entirely (see Step D loop), so the L1→L0 seed transfer is
+            // wasted work and we elide it here.
+            if (insert_on_L0 && descent_queue_per_level[1] &&
+                descent_queue_per_level[1]->get_result_size() > 0) {
+                descent_queue_per_level[0]->seed_from_queue(*descent_queue_per_level[1]);
+            }
+
+            // ==============================================================
+            //   Step B — Compute highest_insert_level_id (match legacy)
+            // ==============================================================
+            if (top_level_id == invalid_level_id) {
+                // Empty hierarchy: first vertex seeds L_1.
+                highest_insert_level_id = 1;
+            } else {
+                // Default: grow hierarchy by ONE level (capped at
+                // max_allowed_level_id).
+                highest_insert_level_id = std::min<layer_id_t>(
+                    static_cast<layer_id_t>(top_level_id) + 1,
+                    static_cast<layer_id_t>(max_allowed_level_id));
+                // Override: smallest h where q is absorbed at L_h means
+                // q joins only L_0..L_{h-1}.
+                for (layer_id_t h = 1; h <= top_level_id; ++h) {
+                    if (min_dist_per_level[h] <= index.radius_at(h)) {
+                        highest_insert_level_id = static_cast<layer_id_t>(h - 1);
+                        break;
+                    }
+                }
+            }
+
+            grows_hierarchy = top_level_id == invalid_level_id ||
+                              highest_insert_level_id > top_level_id;
+            if (!grows_hierarchy) break;
+
+            // Only potential new-layer creators contend here. A losing thread
+            // must redo the covering decision as well as recover missing queues.
+            growth_lock = index.acquire_layer_growth_lock();
+            if (index.top_occupied_level_id() == top_level_id) break;
+            growth_lock.unlock();
+            visited.clear();
         }
 
         // ==============================================================
         //   Step C — Assign slot
         // ==============================================================
-        index.assign_layer(new_vid, highest_insert_level_id);
+        if (grows_hierarchy) {
+            // Readers keep using the old top until this seed has lower-layer edges.
+            index.prepare_layer(new_vid, highest_insert_level_id);
+        } else {
+            index.assign_layer(new_vid, highest_insert_level_id);
+        }
 
         // ==============================================================
         //   Step D — Edge insertion (now includes L0)
@@ -398,6 +424,12 @@ private:
                 (target_level_id == 0) ? bl_select_nbrs_qs : ul_select_nbrs_qs;
             select_queue.set_capacity(level_select_nbrs_qs);
             select_queue.reset_lower_bound();
+            // Descent marks candidates visited even when its narrower
+            // queue rejects them. Reconsider them with the select budget;
+            // beam_search will mark the retained queue seeds again.
+            // Clear for every level, since cached queues and neighborhoods
+            // also differ between successive select passes.
+            visited.clear();
             router.beam_search(
                 new_vec,
                 detail::make_layer_range(index, target_level_id),
@@ -440,6 +472,10 @@ private:
             _write_reverse_edges(
                 index, new_vid, cur_level_id, pruned_results,
                 pruning_updater, scale_coeffs);
+        }
+        if (grows_hierarchy) {
+            // The growth guard stays held through the release publication.
+            index.publish_layer(new_vid);
         }
     }
 

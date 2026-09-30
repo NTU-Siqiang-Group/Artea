@@ -172,23 +172,8 @@ private:
         const vertex_id_t new_vid_end = static_cast<vertex_id_t>(index.get_num_vertices());
         if (new_vid_start == new_vid_end) return {upper_layer_time_ms, 0.0, upper_layer_time_ms};
 
-        // Step 2 + 3: refine every occupied layer (including L0) and
-        // write back. top_occupied_level_id is 0 for the degenerate
-        // single-layer case.
-        const auto refine_t0 = std::chrono::high_resolution_clock::now();
-        const layer_id_t top_level_id = index.top_occupied_level_id();
-        for (layer_id_t level_id = 0; level_id <= top_level_id; ++level_id) {
-            refine_layer(
-                index, level_id, dist_func,
-                new_vid_start, new_vid_end);
-        }
-        const auto refine_t1 = std::chrono::high_resolution_clock::now();
-        const double bottom_layer_time_ms = std::chrono::duration<double, std::milli>(refine_t1 - refine_t0).count();
-        const double total_time_ms = upper_layer_time_ms + bottom_layer_time_ms;
-        ARTEA_INFO(fmt::format("[artea_graph] per-layer refinement done in {:.2f} ms (total add_vertices: {:.2f} ms)",
-            bottom_layer_time_ms, total_time_ms));
-
-        // Per-layer vertex count breakdown. A vertex with
+        // Report the hierarchy as soon as r-net insertion finishes;
+        // refinement changes edges, not level membership. A vertex with
         // highest_level=h' participates in every layer 0..h', so
         // count(h) = total - sum(bucket(0..h-1).size()). Walk bottom-up
         // and decrement `running` by each bucket as we print, no
@@ -207,6 +192,22 @@ private:
             running -= static_cast<vertex_num_t>(
                 index.get_vids_with_highest_level(h).size());
         }
+
+        // Step 2 + 3: refine every occupied layer (including L0) and
+        // write back. top_occupied_level_id is 0 for the degenerate
+        // single-layer case.
+        const auto refine_t0 = std::chrono::high_resolution_clock::now();
+        const layer_id_t top_level_id = index.top_occupied_level_id();
+        for (layer_id_t level_id = 0; level_id <= top_level_id; ++level_id) {
+            refine_layer(
+                index, level_id, dist_func,
+                new_vid_start, new_vid_end);
+        }
+        const auto refine_t1 = std::chrono::high_resolution_clock::now();
+        const double bottom_layer_time_ms = std::chrono::duration<double, std::milli>(refine_t1 - refine_t0).count();
+        const double total_time_ms = upper_layer_time_ms + bottom_layer_time_ms;
+        ARTEA_INFO(fmt::format("[artea_graph] per-layer refinement done in {:.2f} ms (total add_vertices: {:.2f} ms)",
+            bottom_layer_time_ms, total_time_ms));
 
         return BuildTime{
             upper_layer_time_ms,
