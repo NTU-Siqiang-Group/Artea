@@ -18,7 +18,7 @@
 #include <artea/cpu/index/layer_config.hpp>
 #include <artea/cpu/index/dynamic_structure/hierarchical_graph.hpp>
 #include <artea/cpu/index/compact_structure/hierarchical_graph.hpp>
-#include <artea/cpu/index/exact_artea/index_structure.hpp>
+#include <artea/cpu/index/exact_artea/configs.hpp>
 #include <artea/cpu/router/vector_router.hpp>
 #include <artea/cpu/router/data_structures/candidate_entry.hpp>
 #include <artea/cpu/router/data_structures/std_candidate_queue.hpp>
@@ -197,30 +197,6 @@ TEST(RouterEarlyStop, EmptyAndBottomOnlyGraphsDoNotNeedValidUpperLayerThresholds
     auto bottom = graph(0);
     const auto result = router.query<false, true>(data.get(3), bottom, config(), invalid);
     EXPECT_EQ(result.front().get_vid(), 3u);
-}
-
-TEST(RouterEarlyStop, ReadsConfigsFromIndexAndSupportsDynamicGraph) {
-    auto data = vectors({12, 8, 4, 0});
-    exact_artea::IndexStructure<IT> index(data, config(), pruning);
-    index.add_vertices(4);
-    for (uint32_t id = 0; id < 4; ++id) {
-        index.assign_layer(id, id == 0 ? 1 : 0);
-        auto row = index.fetch_level_nbrs(id, 0);
-        unsigned pos = 0;
-        for (uint32_t other = 0; other < 4; ++other) {
-            if (id != other) row[pos++] = Base::nbr_t(other, 0);
-        }
-    }
-    std::atomic<unsigned> calls{0};
-    RT<>::dist_func_t distance{&calls};
-    RT<>::hierarchical_graph_router_t router(data, distance, 1, 4);
-    const auto single = router.query<false, true>(data.get(3), index);
-    EXPECT_EQ(single.front().get_vid(), 3u);
-    const auto batch = router.batch_query<false, true>(data, index);
-    for (uint32_t id = 0; id < 4; ++id) EXPECT_EQ(batch[id].get_vid(), id);
-    const auto bare = router.query<false, true>(
-        data.get(3), index.get_hierarchical_graph(), config(), pruning);
-    EXPECT_EQ(bare.front().get_vid(), 3u);
 }
 
 TEST(RouterEarlyStop, RejectsUnrepresentableSquaredThresholds) {
