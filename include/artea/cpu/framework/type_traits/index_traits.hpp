@@ -155,7 +155,7 @@ struct IndexTraits : virtual public BaseTraitsT {
         using pruning_config_t   = cpu::artea_graph::PruningConfig<index_traits_t>;
     };
 
-    /** @brief Namespace-scoped types for exact_artea (stacked-rgraph storage, ARTEA configs). */
+    /** @brief Independent exact_artea index with per-layer refining graphs and ARTEA configs. */
     struct exact_artea {
         exact_artea() = delete;
         using index_t          = cpu::exact_artea::IndexStructure<index_traits_t>;

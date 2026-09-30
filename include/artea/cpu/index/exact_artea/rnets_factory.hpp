@@ -24,7 +24,6 @@
 #include <vector>
 
 #include <tbb/blocked_range.h>
-#include <tbb/parallel_for.h>
 #include <tbb/parallel_reduce.h>
 
 #include <artea/cpu/index/exact_artea/index_structure.hpp>
@@ -42,7 +41,6 @@ class RNetsFactory {
     using layer_id_t = typename GraphFactoryTraitsT::layer_id_t;
     using distance_t = typename GraphFactoryTraitsT::distance_t;
     using dist_func_t = typename GraphFactoryTraitsT::dist_func_t;
-    using hierarchical_graph_t = typename GraphFactoryTraitsT::dynamic::hierarchical_graph_t;
 
 public:
     /**
@@ -52,24 +50,23 @@ public:
      * V_h is an R_h-net of V_{h-1}, using rgraph_config.radius_at(h):
      * every point of V_{h-1} is within distance <= R_h of V_h, and distinct
      * points of V_h have distance > R_h. Stop at a singleton top layer;
-     * empty and singleton datasets have no upper layers. The storage bound
-     * follows the actual height, not the stacked-rgraph insertion heuristic.
-     * Only vertex membership and empty neighbor slots are constructed.
+     * empty and singleton datasets have no upper layers. Creates one
+     * RefiningGraph per actual layer, with initially empty neighbor vectors.
      *
      * Each layer starts at vertex 0. Repeatedly select the point with the
      * largest exact distance to the selected set, breaking ties by smallest
      * vertex ID. TBB parallelizes distance updates and the argmax reduction.
      * Covered points can be skipped permanently: their nearest distance can
      * only decrease. There is no approximate search, subsampling or epsilon.
-     * Membership is deterministic for a deterministic distance functor;
-     * physical slot / bucket order may differ between parallel runs.
+     * Membership and local row order are deterministic for a deterministic
+     * distance functor. Layer rows are ordered by global vertex ID.
      *
      * @param index Prepared index over immutable base vectors, with an empty
-     *              building graph. Call prepare_build before rebuilding.
+     *              layer collection. Call prepare_build before rebuilding.
      * @param dist_func Thread-safe metric distance functor; radii must use
      *                  the same units (e.g. squared radii for squared L2).
      *                  Exactness is with respect to its returned distances.
-     * @throws std::logic_error If the building graph is absent or nonempty.
+     * @throws std::logic_error If unprepared or layers have already been built.
      * @throws std::domain_error If an evaluated distance is negative/nonfinite.
      * @throws std::overflow_error If a required radius or height is unrepresentable.
      *
@@ -79,15 +76,17 @@ public:
      * O(sum_h |V_{h-1}| * |V_h|) distance evaluations.
      */
     static auto fps_generator(this_index_t& index, const dist_func_t& dist_func) -> void {
-        if (index.get_num_vertices() != 0) {
-            throw std::logic_error("fps_generator requires an empty building graph; call prepare_build");
+        if (index.has_layers()) {
+            throw std::logic_error("fps_generator requires no existing layers; call prepare_build");
         }
         const auto& vectors = index.get_base_vecs();
         const auto& config = index.rgraph_config();
         const auto count = static_cast<vertex_num_t>(vectors.get_num_vecs());
         constexpr auto invalid_vid = GraphFactoryTraitsT::invalid_vertex_id;
-        constexpr auto invalid_level = hierarchical_graph_t::invalid_level_id;
+        constexpr auto invalid_level = this_index_t::invalid_level_id;
         constexpr std::size_t grain_size = 256;
+
+        if (count >= invalid_vid) throw std::length_error("Exact dataset exceeds vertex ID range");
 
         std::vector<layer_id_t> highest_level(count, layer_id_t(0));
         std::vector<vertex_id_t> candidates(count);
@@ -152,18 +151,7 @@ public:
             candidates.swap(selected);
         }
 
-        // assign_layer may only be called once per vertex. Finish sampling first,
-        // then allocate each vertex's complete set of layers in a private graph.
-        auto graph = std::make_unique<hierarchical_graph_t>(
-            h, config.ul_max_nbr_size(), config.bl_max_nbr_size(), count);
-        graph->add_vertices(count);
-        tbb::parallel_for(tbb::blocked_range<std::size_t>(0, count, grain_size),
-            [&](const tbb::blocked_range<std::size_t>& range) {
-                for (std::size_t i = range.begin(); i != range.end(); ++i) {
-                    graph->assign_layer(static_cast<vertex_id_t>(i), highest_level[i]);
-                }
-            });
-        index.replace_building_graph(std::move(graph));
+        index.initialize_layers(std::move(highest_level));
     }
 };
 

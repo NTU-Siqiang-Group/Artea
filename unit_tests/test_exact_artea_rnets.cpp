@@ -106,8 +106,8 @@ auto reference(const Vectors& vectors, const Config& cfg) -> Layers {
 auto verify(const Index& index, const Layers& expected) -> void {
     const auto& vectors = index.get_base_vecs();
     ASSERT_EQ(index.get_num_vertices(), vectors.get_num_vecs());
-    ASSERT_EQ(index.max_allowed_level_id(), expected.size() - 1);
-    ASSERT_EQ(index.get_hierarchical_graph().max_allowed_level_id(), expected.size() - 1);
+    ASSERT_EQ(index.get_num_layers(), expected.size());
+    EXPECT_FALSE(index.has_hierarchical_graph());
     if (vectors.get_num_vecs() == 0) {
         EXPECT_EQ(index.top_occupied_level_id(), Index::invalid_level_id);
         return;
@@ -119,8 +119,8 @@ auto verify(const Index& index, const Layers& expected) -> void {
         ASSERT_EQ(current, expected[h]);
         for (auto id : current) {
             const auto neighbors = index.fetch_level_nbrs(id, h);
-            EXPECT_EQ(neighbors.size(), h == 0 ? 5 : 3);
-            for (const auto& neighbor : neighbors) EXPECT_TRUE(neighbor.is_invalid());
+            EXPECT_TRUE(neighbors.empty());
+            EXPECT_EQ(&index.get_layer_graph(h).get_vecs_data(), &vectors);
         }
         if (h == 0) continue;
         const auto radius = index.radius_at(h);
@@ -190,7 +190,7 @@ TEST(ExactArteaRnets, UsesTauKInLayerRadius) {
 TEST(ExactArteaRnets, ActualHeightCanExceedInsertionHeuristic) {
     auto vectors = line({0, 1024});
     Index index(vectors, config());
-    EXPECT_EQ(index.max_allowed_level_id(), 1);
+    EXPECT_EQ(index.get_num_layers(), 0u);
     RNetsFactoryT::fps_generator(index, distance);
     EXPECT_EQ(index.top_occupied_level_id(), 11);
     verify(index, reference(vectors, config()));
@@ -225,9 +225,9 @@ TEST(ExactArteaRnets, RejectsNonemptyGraphAndSupportsExplicitRebuild) {
     auto vectors = line({0, 2, 5});
     Index index(vectors, config());
     RNetsFactoryT::fps_generator(index, distance);
-    const auto* graph = &index.get_hierarchical_graph();
+    const auto* graph = &std::as_const(index).get_layer_graph(0);
     EXPECT_THROW(RNetsFactoryT::fps_generator(index, distance), std::logic_error);
-    EXPECT_EQ(&index.get_hierarchical_graph(), graph);
+    EXPECT_EQ(&std::as_const(index).get_layer_graph(0), graph);
     index.prepare_build(config());
     RNetsFactoryT::fps_generator(index, distance);
     verify(index, reference(vectors, config()));
@@ -238,9 +238,9 @@ TEST(ExactArteaRnets, RejectsNonfiniteDistancesWithoutPublishing) {
                         std::numeric_limits<float>::quiet_NaN()}) {
         auto vectors = line({0, value});
         Index index(vectors, config());
-        const auto* graph = &index.get_hierarchical_graph();
+        EXPECT_FALSE(index.has_layers());
         EXPECT_THROW(RNetsFactoryT::fps_generator(index, distance), std::domain_error);
-        EXPECT_EQ(&index.get_hierarchical_graph(), graph);
+        EXPECT_FALSE(index.has_layers());
         EXPECT_EQ(index.get_num_vertices(), 0);
     }
 }
@@ -248,10 +248,10 @@ TEST(ExactArteaRnets, RejectsNonfiniteDistancesWithoutPublishing) {
 TEST(ExactArteaRnets, RejectsRadiusOverflowWithoutPublishing) {
     auto vectors = line({0, 4});
     Index index(vectors, config(2, std::numeric_limits<float>::max()));
-    const auto* graph = &index.get_hierarchical_graph();
+    EXPECT_FALSE(index.has_layers());
     EXPECT_THROW(RNetsFactoryT::fps_generator(index, distance), std::overflow_error);
-    EXPECT_EQ(&index.get_hierarchical_graph(), graph);
-    EXPECT_EQ(index.max_allowed_level_id(), 1);
+    EXPECT_FALSE(index.has_layers());
+    EXPECT_EQ(index.get_num_layers(), 0u);
     EXPECT_EQ(index.get_num_vertices(), 0);
 }
 

@@ -24,6 +24,7 @@
 
 #include <cstddef>
 #include <cstdint>
+#include <cmath>
 #include <vector>
 #include <stdexcept>
 #include <artea/cpu/utils/nbr_arr_checker.hpp>
@@ -33,16 +34,85 @@ namespace cpu {
 
 /* ------ Pruning Condition Enumeration ------ *
  *
- * Only PruningUpdater consumes this enum now: the post-refining routing
- * loop uses it to pick between plain RNG and the scaled/shifted RNG
- * variants. TriangleUpdater / HierarchicalPruningUpdater hard-code the
- * plain RNG rule and ignore scale/shift entirely.
+ * Shared by the graph-bound PruningUpdater and standalone candidate pruning.
  */
 enum class PruningConditionT {
     scaled_ineq,
     scaled_shifted_ineq,
     shifted_ineq,
     origin_rng_ineq
+};
+
+/**
+ * @brief Prune a distance-sorted candidate list without graph storage or a degree cap.
+ *
+ * The distance functor and vectors must outlive this updater. Each invocation
+ * owns its output, so distinct lists can be processed concurrently with a
+ * thread-safe distance functor. Retained records are marked OLD only at the end.
+ * SkipOldPairs preserves the incremental refiner optimization; exact construction
+ * leaves it false and checks all pairs regardless of their labels.
+ */
+template <typename TraitsT, PruningConditionT ConditionType, bool SkipOldPairs = false>
+class CandidatePruningUpdater {
+    using nbr_arr_t = typename TraitsT::nbr_arr_t;
+    using distance_t = typename TraitsT::distance_t;
+    using ratio_t = typename TraitsT::ratio_t;
+    using vector_array_t = typename TraitsT::vector_array_t;
+    using dist_func_t = typename TraitsT::dist_func_t;
+
+public:
+    CandidatePruningUpdater(const dist_func_t& dist_func, const vector_array_t& vectors,
+                            ratio_t scale_coeffs, ratio_t shifted_coeffs = 0)
+        : _dist_func(dist_func), _vectors(vectors),
+          _inv_scale_coeffs(ratio_t(1) / scale_coeffs), _shifted_coeffs(shifted_coeffs) {}
+
+    auto operator()(nbr_arr_t& candidates) const -> void {
+        if (candidates.empty()) return;
+        nbr_arr_t retained;
+        retained.reserve(candidates.capacity());
+        for (const auto& candidate : candidates) {
+            const auto* vector = _vectors.get(candidate.get_vid());
+            const distance_t threshold = compute_threshold(candidate.get_distance());
+            bool keep = true;
+            for (const auto& neighbor : retained) {
+                if constexpr (SkipOldPairs) {
+                    if (candidate.is_old() && neighbor.is_old()) continue;
+                }
+                const distance_t distance = _dist_func(vector, _vectors.get(neighbor.get_vid()));
+                if constexpr (!SkipOldPairs) {
+                    if (!std::isfinite(distance) || distance < distance_t(0)) {
+                        throw std::domain_error("Exact pruning requires finite nonnegative distances");
+                    }
+                }
+                if (distance < threshold) {
+                    keep = false;
+                    break;
+                }
+            }
+            if (keep) retained.push_back(candidate);
+        }
+        for (auto& neighbor : retained) neighbor.mark_as_old();
+        candidates.swap(retained);
+    }
+
+private:
+    auto compute_threshold(distance_t distance) const -> distance_t {
+        if constexpr (ConditionType == PruningConditionT::scaled_ineq) {
+            return distance * _inv_scale_coeffs;
+        } else if constexpr (ConditionType == PruningConditionT::scaled_shifted_ineq) {
+            return distance * _inv_scale_coeffs - _shifted_coeffs;
+        } else if constexpr (ConditionType == PruningConditionT::shifted_ineq) {
+            return distance - _shifted_coeffs;
+        } else {
+            static_assert(ConditionType == PruningConditionT::origin_rng_ineq);
+            return distance;
+        }
+    }
+
+    const dist_func_t& _dist_func;
+    const vector_array_t& _vectors;
+    const ratio_t _inv_scale_coeffs;
+    const ratio_t _shifted_coeffs;
 };
 
 template <typename RefinerTraitsT>
@@ -79,7 +149,7 @@ public:
         const ratio_t             scale_coeffs,
         const ratio_t             shifted_coeffs = 0.0
     ) : base_class_t(dist_func, vecs_data, log_table, refining_graph),
-        _inv_scale_coeffs(static_cast<ratio_t>(1.0) / scale_coeffs),
+        _scale_coeffs(scale_coeffs),
         _shifted_coeffs(shifted_coeffs) {}
 
     __attribute__((always_inline))
@@ -99,87 +169,20 @@ public:
         const vertex_id_t /*layer_vid*/,
         nbr_arr_t& origin_nbrs
     ) -> void {
-        #ifndef NDEBUG
-        if (origin_nbrs.empty()) {
-            ARTEA_ERROR("[PruningUpdater]: origin_nbrs cannot be empty");
-        }
-        #endif
-
-        nbr_arr_t retained_nbrs;
-        retained_nbrs.reserve(origin_nbrs.capacity());
-        const vertex_num_t max_sz = this->_refining_graph.layer_config().max_nbr_size();
-
-        // The first neighbor is always the closest and cannot conflict
-        retained_nbrs.push_back(origin_nbrs[0]);
-
-        for (vertex_num_t i = 1; i < origin_nbrs.size(); ++i) {
-            const nbr_t& ori_nbr = origin_nbrs[i];
-            bool passed = _internal_check<ConditionType>(ori_nbr, retained_nbrs);
-
-            if (passed) {
-                retained_nbrs.push_back(ori_nbr);
-                if (retained_nbrs.size() >= max_sz) {
-                    continue;
-                }
-            }
-        }
-
-        // Mark all retained neighbors as old before swapping
-        for (vertex_num_t i = 0; i < retained_nbrs.size(); ++i) {
-            retained_nbrs[i].mark_as_old();
-        }
-
-        std::swap(origin_nbrs, retained_nbrs);
+        CandidatePruningUpdater<RefinerTraitsT, ConditionType, true> prune(
+            this->_dist_func, this->_vecs_data, _scale_coeffs, _shifted_coeffs);
+        prune(origin_nbrs);
     }
 
 private:
 
-    /** @brief Inverse of scale coefficient for RNG Triangle Inequality. */
-    const ratio_t _inv_scale_coeffs;
+    /** @brief Scale coefficient for RNG Triangle Inequality. */
+    const ratio_t _scale_coeffs;
 
     /** @brief Shifted coefficient for RNG Triangle Inequality.
      *         Subtracted as a bare term from the candidate distance in
      *         every threshold variant that consumes the shift. */
     const ratio_t _shifted_coeffs;
-
-    template <PruningConditionT ConditionType>
-    __attribute__((always_inline))
-    constexpr auto _compute_threshold(const distance_t ori_dist) const -> distance_t {
-        if constexpr (ConditionType == PruningConditionT::scaled_ineq) {
-            return ori_dist * _inv_scale_coeffs;
-        } else if constexpr (ConditionType == PruningConditionT::scaled_shifted_ineq) {
-            return ori_dist * _inv_scale_coeffs - _shifted_coeffs;
-        } else if constexpr (ConditionType == PruningConditionT::shifted_ineq) {
-            return ori_dist - _shifted_coeffs;
-        } else if constexpr (ConditionType == PruningConditionT::origin_rng_ineq) {
-            return ori_dist;
-        }
-    }
-
-    template <PruningConditionT ConditionType>
-    auto _internal_check(
-        const nbr_t& ori_nbr,
-        const nbr_arr_t& retained_nbrs
-    ) -> bool {
-        const vec_ele_t* ori_vec = this->_vecs_data.get(ori_nbr.get_vid());
-        const distance_t threshold = _compute_threshold<ConditionType>(ori_nbr.get_distance());
-
-        for (vertex_num_t i = 0; i < retained_nbrs.size(); ++i) {
-            if (ori_nbr.is_old() && retained_nbrs[i].is_old()) {
-                continue;
-            }
-
-            const nbr_t& retained_nbr = retained_nbrs[i];
-            const vec_ele_t* retained_vec = this->_vecs_data.get(retained_nbr.get_vid());
-            distance_t dist_to_retained = this->_dist_func(ori_vec, retained_vec);
-
-            if (dist_to_retained < threshold) {
-                return rejected;
-            }
-        }
-
-        return accepted;
-    }
 
 };  // class PruningUpdater
 
