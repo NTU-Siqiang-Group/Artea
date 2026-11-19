@@ -186,11 +186,11 @@ public:
     }
 
 private:
-    /** @brief Layer config used to size the RefiningGraph built for
+    /** @brief Layer config used to size the SingleLayerGraph built for
      *         upper layers (level_id > 0) inside @c refine_layer. */
     std::optional<layer_config_t> _ul_refining_layer_config;
 
-    /** @brief Layer config used to size the RefiningGraph built for
+    /** @brief Layer config used to size the SingleLayerGraph built for
      *         the bottom layer (L0) inside @c refine_layer. */
     std::optional<layer_config_t> _bl_refining_layer_config;
 

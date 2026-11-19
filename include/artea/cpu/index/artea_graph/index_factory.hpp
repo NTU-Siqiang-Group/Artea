@@ -19,7 +19,7 @@
  *               r-net insertion logic from stacked_rgraph::IndexFactory
  *               (including L0 neighbors) and adds @c refine_layer:
  *               transcribe each layer of the hierarchical graph into a
- *               RefiningGraph, run a conv_graph-style prune + reverse +
+ *               SingleLayerGraph, run a conv_graph-style prune + reverse +
  *               truncate pipeline on it, then write the refined edges
  *               back. The public @c add_vertices (1) inserts the batch
  *               via the parent r-net insertion engine and then (2)
@@ -64,7 +64,7 @@ class IndexFactory : public stacked_rgraph::IndexFactory<GraphFactoryTraitsT> {
     using vector_array_t  = typename GraphFactoryTraitsT::vector_array_t;
     using dist_func_t     = typename GraphFactoryTraitsT::dist_func_t;
 
-    using refining_graph_t   = typename GraphFactoryTraitsT::dynamic::refining_graph_t;
+    using single_layer_graph_t = typename GraphFactoryTraitsT::dynamic::single_layer_graph_t;
     using layer_config_t     = typename GraphFactoryTraitsT::layer_config_t;
 
     // artea_graph / stacked_rgraph / conv_graph PruningConfig all alias
@@ -73,7 +73,7 @@ class IndexFactory : public stacked_rgraph::IndexFactory<GraphFactoryTraitsT> {
     using propagate_config_t = typename GraphFactoryTraitsT::artea_graph::propagate_config_t;
 
     // Refiner primitives driven directly (conv_graph::construct_graph
-    // assumes a dense RefiningGraph, which would break the L1+ sparse
+    // assumes a dense SingleLayerGraph, which would break the L1+ sparse
     // case — so we inline the prune + reverse + truncate pipeline here
     // using the same refiner building blocks).
     using propagate_engine_t = typename GraphFactoryTraitsT::propagate_engine_t;
@@ -225,9 +225,9 @@ public:
      * Pipeline:
      *   1. @c hier_graph.collect_layer_vids(level_id) — (l2g, g2l) vid maps.
      *      Empty for @p level_id == 0 (identity mode).
-     *   2. Construct a @c refining_graph_t matching the mode: dense
+     *   2. Construct a @c single_layer_graph_t matching the mode: dense
      *      ctor for L0, sparse ctor for L1+. Fill it from the current
-     *      layer slot via @c refiner_utils_t::fill_refining_graph_from_layer.
+     *      layer slot via @c refiner_utils_t::fill_single_layer_graph_from_layer.
      *   2.5. (L0 only) run @c random_updater_t in top-up mode over the
      *        newly-inserted vid window: rows whose current neighbor
      *        count is below @c refining_max_nbr_size *
@@ -239,12 +239,12 @@ public:
      *        enough edges, and it still rescues any sparse rows.
      *   3. Drive @c propagate_engine with @c triangle_updater +
      *      @c reverse_updater + @c arc_updater (+ optional routing
-     *      loops) directly on the RefiningGraph. We cannot call
+     *      loops) directly on the SingleLayerGraph. We cannot call
      *      @c conv_factory_t::construct_graph here because its
-     *      @c refining_graph_t&& overload dense-constructs its own inner
-     *      RefiningGraph and then move-assigns only the nbrs array —
+     *      @c single_layer_graph_t&& overload dense-constructs its own inner
+     *      SingleLayerGraph and then move-assigns only the nbrs array —
      *      losing the sparse vid mapping.
-     *   4. @c refiner_utils_t::writeback_layer_from_refining_graph to push refined
+     *   4. @c refiner_utils_t::writeback_layer_from_single_layer_graph to push refined
      *      edges back.
      *
      * All refinement configs come from @p index's stored values (set at
@@ -270,7 +270,7 @@ public:
     ) -> void {
         auto& hier_graph                = index.get_hierarchical_graph();
         const auto& vecs_storage        = index.get_base_vecs();
-        // Per-level RefiningGraph layer_config: bl for L0, ul for L1+.
+        // Per-level SingleLayerGraph layer_config: bl for L0, ul for L1+.
         // Derived in the IndexStructure ctor as rgraph max_nbr_size × 1.5.
         auto& layer_config              = index.refining_layer_config(level_id);
         const auto& pruning_config      = index.pruning_config();
@@ -299,14 +299,14 @@ public:
         // ---- Step 1: build vid maps for the participating set ----
         auto [local_to_global, global_to_local] = hier_graph.collect_layer_vids(level_id);
 
-        // ---- Step 2: allocate + fill the layer's RefiningGraph ----
-        std::unique_ptr<refining_graph_t> refining_graph;
+        // ---- Step 2: allocate + fill the layer's SingleLayerGraph ----
+        std::unique_ptr<single_layer_graph_t> single_layer_graph;
         if (local_to_global.empty()) {
             // L0 / identity mode: dense ctor, _nbrs_arr sized to N_global.
-            refining_graph = std::make_unique<refining_graph_t>(vecs_storage, layer_config);
+            single_layer_graph = std::make_unique<single_layer_graph_t>(vecs_storage, layer_config);
         } else {
             // L1+ / sparse mode: pass moved maps to the sparse ctor.
-            refining_graph = std::make_unique<refining_graph_t>(
+            single_layer_graph = std::make_unique<single_layer_graph_t>(
                 vecs_storage, 
                 layer_config,
                 std::move(local_to_global), 
@@ -314,14 +314,14 @@ public:
             );
         }
         // Transcribe the current layer edges (produced by r-net
-        // insertion on every layer, L0 included) into the RG.
-        refiner_utils_t::fill_refining_graph_from_layer(hier_graph, *refining_graph, level_id);
+        // insertion on every layer, L0 included) into the single-layer graph.
+        refiner_utils_t::fill_single_layer_graph_from_layer(hier_graph, *single_layer_graph, level_id);
 
         // Buckets below @c IndexTraitsT::min_layer_cap get trimmed at
         // compaction (see @c HierarchicalGraphCompactor). Refining them
         // is pure waste, and on a single-vid bucket some updaters rely
         // on non-empty origin_nbrs and would read past the end.
-        const vertex_num_t n_local = refining_graph->get_num_vertices();
+        const vertex_num_t n_local = single_layer_graph->get_num_vertices();
         if (n_local < GraphFactoryTraitsT::min_layer_cap) {
             ARTEA_INFO(fmt::format(
                 "[artea_graph] refine_layer skipping level_id={}: "
@@ -331,12 +331,12 @@ public:
             return;
         }
 
-        // ---- Step 3: run prune + reverse + truncate on the RG ----
+        // ---- Step 3: run prune + reverse + truncate on the single-layer graph ----
         // The log_table inside propagate_engine is indexed by local_vid
         // (N_local for sparse upper layers, N_global in identity mode);
-        // set_graph sizes it from the bound RG.
+        // set_graph sizes it from the bound single-layer graph.
         propagate_engine_t propagate_engine(dist_func);
-        propagate_engine.set_graph(*refining_graph);
+        propagate_engine.set_graph(*single_layer_graph);
 
         // ---- Step 2.5: L0 random top-up. Fires regardless of how the
         //      r-net insertion step filled L0: RandomUpdater's threshold
@@ -348,7 +348,7 @@ public:
             const vertex_num_t prefill_threshold = static_cast<vertex_num_t>(
                 static_cast<ratio_t>(max_nbr_size) * propagate_config.prefill_ratio());
             if (prefill_threshold > 0) {
-                const vertex_num_t l0_num_vertices = refining_graph->get_num_vertices();
+                const vertex_num_t l0_num_vertices = single_layer_graph->get_num_vertices();
                 auto random_updater = propagate_engine.template make_updater<random_updater_t>(
                         /*rand_gen_size=*/prefill_threshold,
                         /*start_vid=*/vertex_id_t{0},
@@ -407,7 +407,7 @@ public:
         }
 
         // ---- Step 4: write refined edges back ----
-        refiner_utils_t::writeback_layer_from_refining_graph(hier_graph, *refining_graph, level_id);
+        refiner_utils_t::writeback_layer_from_single_layer_graph(hier_graph, *single_layer_graph, level_id);
     }
 
 };  // class IndexFactory

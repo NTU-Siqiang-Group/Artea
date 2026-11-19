@@ -98,7 +98,7 @@ protected:
     vector_dataset_t* dataset_;
 };
 
-TEST_F(FlatGraphPersistenceTest, RefiningGraphSnapshotRestore) {
+TEST_F(FlatGraphPersistenceTest, SingleLayerGraphSnapshotRestore) {
     const auto& base_vecs = dataset_->get_base_vecs();
 
     ARTEA_INFO("Building descent graph for persistence test...");
@@ -124,7 +124,7 @@ TEST_F(FlatGraphPersistenceTest, RefiningGraphSnapshotRestore) {
         // Snapshot the graph
         std::string snapshot_dir = g_config.temp_dir + "/flat_graph_snapshot";
         nlohmann::json metadata;
-        metadata["test_name"] = "RefiningGraphSnapshotRestore";
+        metadata["test_name"] = "SingleLayerGraphSnapshotRestore";
         metadata["dataset"] = g_config.dataset_name;
 
         ARTEA_INFO(fmt::format("Snapshotting graph to {}", snapshot_dir));

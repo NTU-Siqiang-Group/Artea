@@ -50,15 +50,15 @@ public:
     /**
      * @brief Default-constructed; caller must invoke @c resize before use.
      *        The "executor_vid" across this class is a @b local vid (row
-     *        index in the RefiningGraph's _nbrs_arr). In identity-mapped
-     *        RefiningGraphs this is bit-identical to the global vid; for a
-     *        sparse layer RefiningGraph it is the row index within that
+     *        index in the SingleLayerGraph's _nbrs_arr). In identity-mapped
+     *        SingleLayerGraphs this is bit-identical to the global vid; for a
+     *        sparse layer SingleLayerGraph it is the row index within that
      *        layer only.
      */
     NbrLogTable() = default;
 
-    /** @brief Allocate one log buffer per vertex in the RefiningGraph.
-     *         For a sparse upper-layer RG @p num_vertices is the layer
+    /** @brief Allocate one log buffer per vertex in the SingleLayerGraph.
+     *         For a sparse upper-layer single-layer graph @p num_vertices is the layer
      *         size (N_local), not the global vertex count. */
     auto resize(const vertex_num_t num_vertices) -> void {
         _nbr_logs.clear();
@@ -131,7 +131,7 @@ public:
 
         const size_t num_logs = log_container.size();
 
-        // executor_vid is local; translate to global for the RG row fetch.
+        // executor_vid is local; translate to global for the single-layer graph row fetch.
         auto& cur_nbrs = graph.fetch_nbrs(graph.get_storage_vid(executor_vid));
 
         #ifndef NDEBUG

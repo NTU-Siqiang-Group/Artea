@@ -41,7 +41,7 @@ struct BenchConfig {
 
 BenchConfig g_config;
 
-using refining_graph_t = typename index_traits_t::dynamic::refining_graph_t;
+using single_layer_graph_t = typename index_traits_t::dynamic::single_layer_graph_t;
 
 class DataProvider {
 public:
@@ -63,12 +63,12 @@ public:
         base_vecs_ = std::move(dataset->get_base_vecs());
 
         // Resolve the metric and padded dimension for the metric-dependent
-        // generators and updaters. RefiningGraph itself is independent of both.
+        // generators and updaters. SingleLayerGraph itself is independent of both.
         dataset_info_ = DatasetInfra{parse_metric(g_config.metric), dim_};
 
         // Initialize flat graph with random edges
         ARTEA_INFO("Initializing descent graph with random edges...");
-        graph_ = std::make_unique<refining_graph_t>(base_vecs_, g_config.layer_config);
+        graph_ = std::make_unique<single_layer_graph_t>(base_vecs_, g_config.layer_config);
         build_infra_dispatch(dataset_info_, ARTEA_METRIC_LAMBDA(void) {
             // Stateless functor: the dimension is a compile-time trait now.
             dist_func_t<Metric, Dim> build_dist;
@@ -84,7 +84,7 @@ public:
     vec_dim_t get_dim() const { return dim_; }
     vec_num_t get_num_base_vecs() const { return num_base_vecs_; }
     DatasetInfra get_dataset_info() const { return dataset_info_; }
-    refining_graph_t& get_graph() { return *graph_; }
+    single_layer_graph_t& get_graph() { return *graph_; }
 
     // Reset graph to initial state
     void reset_graph() {
@@ -107,14 +107,14 @@ private:
     vec_num_t num_base_vecs_;
     vector_array_t base_vecs_;
     DatasetInfra dataset_info_{};
-    std::unique_ptr<refining_graph_t> graph_;
+    std::unique_ptr<single_layer_graph_t> graph_;
     std::vector<nbr_arr_t> initial_nbrs_;
 };
 
 // Benchmark for PropagateEngine with TriangleUpdater (with selective scheduling)
 static void BM_TriangleUpdater(benchmark::State& state) {
     auto& provider = DataProvider::instance();
-    refining_graph_t& graph = provider.get_graph();
+    single_layer_graph_t& graph = provider.get_graph();
     const vec_num_t num_vertices = provider.get_num_base_vecs();
 
     // Set max_nbr_size on the flat graph
@@ -160,7 +160,7 @@ static void BM_TriangleUpdater(benchmark::State& state) {
 // Benchmark for PropagateEngine with TriangleUpdater (without selective scheduling)
 static void BM_TriangleUpdater_NoSS(benchmark::State& state) {
     auto& provider = DataProvider::instance();
-    refining_graph_t& graph = provider.get_graph();
+    single_layer_graph_t& graph = provider.get_graph();
     const vec_num_t num_vertices = provider.get_num_base_vecs();
 
     // Set max_nbr_size on the flat graph
@@ -205,7 +205,7 @@ static void BM_TriangleUpdater_NoSS(benchmark::State& state) {
 // Benchmark for PropagateEngine with ReverseUpdater
 static void BM_ReverseUpdater(benchmark::State& state) {
     auto& provider = DataProvider::instance();
-    refining_graph_t& graph = provider.get_graph();
+    single_layer_graph_t& graph = provider.get_graph();
     const vec_num_t num_vertices = provider.get_num_base_vecs();
 
     build_infra_dispatch(provider.get_dataset_info(), ARTEA_METRIC_LAMBDA(void) {
@@ -246,7 +246,7 @@ static void BM_ReverseUpdater(benchmark::State& state) {
 // Benchmark for PropagateEngine with ReverseUpdater (without selective scheduling)
 static void BM_ReverseUpdater_NoSS(benchmark::State& state) {
     auto& provider = DataProvider::instance();
-    refining_graph_t& graph = provider.get_graph();
+    single_layer_graph_t& graph = provider.get_graph();
     const vec_num_t num_vertices = provider.get_num_base_vecs();
 
     build_infra_dispatch(provider.get_dataset_info(), ARTEA_METRIC_LAMBDA(void) {
@@ -287,7 +287,7 @@ static void BM_ReverseUpdater_NoSS(benchmark::State& state) {
 // Benchmark for PropagateEngine with RandomUpdater
 static void BM_RandomUpdater(benchmark::State& state) {
     auto& provider = DataProvider::instance();
-    refining_graph_t& graph = provider.get_graph();
+    single_layer_graph_t& graph = provider.get_graph();
     const vec_num_t num_vertices = provider.get_num_base_vecs();
 
     build_infra_dispatch(provider.get_dataset_info(), ARTEA_METRIC_LAMBDA(void) {
@@ -329,7 +329,7 @@ static void BM_RandomUpdater(benchmark::State& state) {
 // Benchmark for PropagateEngine with RandomUpdater (without selective scheduling)
 static void BM_RandomUpdater_NoSS(benchmark::State& state) {
     auto& provider = DataProvider::instance();
-    refining_graph_t& graph = provider.get_graph();
+    single_layer_graph_t& graph = provider.get_graph();
     const vec_num_t num_vertices = provider.get_num_base_vecs();
 
     build_infra_dispatch(provider.get_dataset_info(), ARTEA_METRIC_LAMBDA(void) {

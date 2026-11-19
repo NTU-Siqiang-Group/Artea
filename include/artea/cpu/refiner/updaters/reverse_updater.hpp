@@ -40,7 +40,7 @@ class ReverseUpdater :
     using nbr_arr_t = typename RefinerTraitsT::nbr_arr_t;
     using log_table_t = typename RefinerTraitsT::log_table_t;
     using dist_func_t = typename RefinerTraitsT::dist_func_t;
-    using refining_graph_t = typename RefinerTraitsT::dynamic::refining_graph_t;
+    using single_layer_graph_t = typename RefinerTraitsT::dynamic::single_layer_graph_t;
     using base_class_t = typename RefinerTraitsT::template neighbor_updater_t<ReverseUpdater<RefinerTraitsT>>;
 
 public:
@@ -56,8 +56,8 @@ public:
         const dist_func_t&        dist_func,
         const vector_array_t&     vecs_data,
         log_table_t&              log_table,
-        const refining_graph_t&   refining_graph
-    ) : base_class_t(dist_func, vecs_data, log_table, refining_graph) {}
+        const single_layer_graph_t&   single_layer_graph
+    ) : base_class_t(dist_func, vecs_data, log_table, single_layer_graph) {}
 
     /**
      * @brief Add reverse edges for all neighbors in origin_nbrs.
@@ -73,16 +73,16 @@ public:
         const vertex_id_t layer_vid,
         nbr_arr_t& origin_nbrs
     ) -> void {
-        const vertex_id_t storage_vid = this->_refining_graph.get_storage_vid(layer_vid);
+        const vertex_id_t storage_vid = this->_single_layer_graph.get_storage_vid(layer_vid);
         // For each neighbor in origin_nbrs, add a reverse edge from that neighbor to storage_vid
-        const vertex_num_t max_sz = this->_refining_graph.layer_config().max_nbr_size();
+        const vertex_num_t max_sz = this->_single_layer_graph.layer_config().max_nbr_size();
         for (vertex_num_t i = 0; i < origin_nbrs.size(); ++i) {
             const nbr_t& nbr = origin_nbrs[i];
             vertex_id_t nbr_id = nbr.get_vid();
             distance_t dist = nbr.get_distance();
 
             // Check if nbr_id's neighbor array is already full with closer neighbors
-            const nbr_arr_t& nbr_vertex_nbrs = this->_refining_graph.fetch_nbrs(nbr_id);
+            const nbr_arr_t& nbr_vertex_nbrs = this->_single_layer_graph.fetch_nbrs(nbr_id);
             // if (nbr_vertex_nbrs.size() >= max_sz &&
             //     nbr_vertex_nbrs[max_sz - 1].get_distance() <= dist) {
             //     continue;
@@ -92,7 +92,7 @@ public:
             // Executor here is the neighbor (a global vid) — translate to
             // local for the log_table row index.
             this->_log_table.write_log(
-                /* executor_vid = */this->_refining_graph.local_id_of(nbr_id),
+                /* executor_vid = */this->_single_layer_graph.local_id_of(nbr_id),
                 /* nbr_id = */storage_vid,
                 /* new_edge_dist = */dist
             );

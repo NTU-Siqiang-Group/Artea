@@ -69,7 +69,7 @@ public:
 
     /** @brief Build in place using the index's existing vectors and graph configuration. */
     static auto build_from_vectors(this_index_t& graph_index, const dist_func_t& distance) -> double {
-        graph_index.get_refining_graph();
+        graph_index.get_single_layer_graph();
         const auto start = std::chrono::high_resolution_clock::now();
         if (graph_index.get_num_vertices() != 0) {
             _build_loop(graph_index, distance, graph_index.propagate_config());
@@ -120,14 +120,14 @@ public:
         typename knn_graph::index_t&& knn_graph_index
     ) -> ConstructResult {
         const auto t_start = std::chrono::high_resolution_clock::now();
-        knn_graph_index.get_refining_graph();
+        knn_graph_index.get_single_layer_graph();
         this_index_t graph_index(std::move(knn_graph_index));
 
         const vertex_num_t num_vertices = graph_index.get_num_vertices();
         dist_func_t dist_func;  // stateless: dim is a compile-time trait
 
         propagate_engine_t propagate_engine(dist_func);
-        propagate_engine.set_graph(graph_index.get_refining_graph());
+        propagate_engine.set_graph(graph_index.get_single_layer_graph());
 
         auto reverse_updater = propagate_engine.template make_updater<reverse_updater_t>();
 
@@ -163,7 +163,7 @@ public:
         _build_loop(graph_index, dist_func, propagate_config,
             [&](iter_t build_loop) {
                 auto t0 = std::chrono::high_resolution_clock::now();
-                auto results = router.batch_query(query_vecs, graph_index.get_refining_graph());
+                auto results = router.batch_query(query_vecs, graph_index.get_single_layer_graph());
                 auto t1 = std::chrono::high_resolution_clock::now();
                 double qps = query_vecs.get_num_vecs() * 1e6 /
                     std::chrono::duration_cast<std::chrono::microseconds>(t1 - t0).count();
@@ -199,10 +199,10 @@ private:
         /** ----------------------------------------------------------------------- ***/
 
         random_eg_t random_eg(dist_func);
-        random_eg.generate(graph_index.get_refining_graph(), init_nbr_size);
+        random_eg.generate(graph_index.get_single_layer_graph(), init_nbr_size);
 
         propagate_engine_t propagate_engine(dist_func);
-        propagate_engine.set_graph(graph_index.get_refining_graph());
+        propagate_engine.set_graph(graph_index.get_single_layer_graph());
 
         // symmetric_knn_graph dropped PruningConfig in a prior commit;
         // pass plain RNG coefficients (scale=1, shift=0) to preserve the

@@ -37,14 +37,14 @@ namespace symmetric_knn_graph {
     using IndexStructure = knn_graph::IndexStructure<IndexTraitsT>;
 }
 namespace compact {
-    template <typename IndexTraitsT> class RefiningGraph;
+    template <typename IndexTraitsT> class SingleLayerGraph;
     template <typename IndexTraitsT> class HierarchicalGraph;
 }
 namespace dynamic {
-    template <typename IndexTraitsT> class RefiningGraph;
+    template <typename IndexTraitsT> class SingleLayerGraph;
     template <typename IndexTraitsT> class HierarchicalGraph;
 }
-template <typename IndexTraitsT> class RefiningGraphCompactor;
+template <typename IndexTraitsT> class SingleLayerGraphCompactor;
 template <typename IndexTraitsT> class FlatGraphFileManager;
 template <typename IndexTraitsT> class HierarchicalGraphFileManager;
 template <typename IndexTraitsT> class IndexSizeCalculator;
@@ -87,12 +87,12 @@ struct IndexTraits : virtual public BaseTraitsT {
     /** @brief Graph structures grouped by mode. */
     struct compact {
         compact() = delete;
-        using refining_graph_t     = cpu::compact::RefiningGraph<index_traits_t>;
+        using single_layer_graph_t = cpu::compact::SingleLayerGraph<index_traits_t>;
         using hierarchical_graph_t = cpu::compact::HierarchicalGraph<index_traits_t>;
     };
     struct dynamic {
         dynamic() = delete;
-        using refining_graph_t     = cpu::dynamic::RefiningGraph<index_traits_t>;
+        using single_layer_graph_t = cpu::dynamic::SingleLayerGraph<index_traits_t>;
         using hierarchical_graph_t = cpu::dynamic::HierarchicalGraph<index_traits_t>;
     };
 
@@ -119,7 +119,7 @@ struct IndexTraits : virtual public BaseTraitsT {
     };
 
     /** @brief Descent graph compactor type. */
-    using refining_graph_compactor_t = RefiningGraphCompactor<index_traits_t>;
+    using single_layer_graph_compactor_t = SingleLayerGraphCompactor<index_traits_t>;
 
     /** @brief Flat graph file manager type. */
     using flat_graph_file_manager_t = FlatGraphFileManager<index_traits_t>;
@@ -155,7 +155,7 @@ struct IndexTraits : virtual public BaseTraitsT {
         using pruning_config_t   = cpu::artea_graph::PruningConfig<index_traits_t>;
     };
 
-    /** @brief Independent exact_artea index with per-layer refining graphs and ARTEA configs. */
+    /** @brief Independent exact_artea index with per-layer single-layer graphs and ARTEA configs. */
     struct exact_artea {
         exact_artea() = delete;
         using index_t          = cpu::exact_artea::IndexStructure<index_traits_t>;

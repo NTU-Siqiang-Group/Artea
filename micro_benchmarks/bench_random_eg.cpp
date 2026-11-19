@@ -97,7 +97,7 @@ static void BM_RandomEG(benchmark::State& state) {
             );
 
             // Perform the random edge generation
-            random_eg.generate(graph_index.get_refining_graph(), g_config.layer_config.max_nbr_size());
+            random_eg.generate(graph_index.get_single_layer_graph(), g_config.layer_config.max_nbr_size());
 
             // Prevent optimization from removing the work
             benchmark::DoNotOptimize(graph_index);

@@ -1,12 +1,13 @@
 /*
- * @FilePath: /Artea/include/artea/cpu/index/refining_graph.hpp
+ * @FilePath: /Artea/include/artea/cpu/index/dynamic_structure/single_layer_graph.hpp
  * @Author: Chandler (Weitang Ye) <weitang.ye@ntu.edu.sg>
- * @Description: CRTP base descent graph structure for graph-based index.
+ * @Description: Mutable single-layer graph with optional vertex ID mappings.
  */
 
 #pragma once
 
 #include <cstddef>
+#include <utility>
 #include <vector>
 #include <nlohmann/json.hpp>
 
@@ -16,18 +17,17 @@ namespace cpu {
 namespace dynamic {
 
 /**
- * @brief Descent Graph: ordinary graph type that stores graph topology and
- *        layer config. Used by composition (conv_graph::IndexStructure,
- *        knn_graph::IndexStructure hold one through unique_ptr).
+ * @brief Mutable adjacency lists and configuration for a single graph layer.
+ *        The conv_graph and knn_graph index structures each own an instance.
  *
  *        Optionally carries a sparse vid mapping (local_to_global /
  *        global_to_local) so a single layer of HierarchicalGraph can be
- *        extracted into a standalone RefiningGraph for refinement.
+ *        extracted into a standalone SingleLayerGraph for refinement.
  *
  * @tparam IndexTraitsT The index traits type.
  */
 template <typename IndexTraitsT>
-class RefiningGraph {
+class SingleLayerGraph {
 
 public:
     /** @brief Marks this graph as the dynamic (concurrently mutated)
@@ -46,16 +46,11 @@ public:
     using layer_config_t = typename IndexTraitsT::layer_config_t;
 
     /**
-     * @brief Construct a new Descent Graph object.
+     * @brief Construct a dense graph with one adjacency row per global vid.
      * @param vecs_data Reference to the vector data for this layer.
      * @param layer_config Layer configuration (max_nbr_size).
      */
-    /**
-     * @brief Dense (identity-mapped) constructor. Every global vid in
-     *        @p vecs_data is a row in @c _nbrs_arr; @c fetch_nbrs(vid)
-     *        directly indexes by the global vid.
-     */
-    RefiningGraph(
+    SingleLayerGraph(
         const vector_array_t& vecs_data,
         const layer_config_t layer_config
     ) :
@@ -86,7 +81,7 @@ public:
      *                        entries for vids not in this layer must be
      *                        @c invalid_vertex_id.
      */
-    RefiningGraph(
+    SingleLayerGraph(
         const vector_array_t&         global_vecs,
         const layer_config_t          layer_config,
         std::vector<vertex_id_t>      local_to_global,
@@ -104,10 +99,10 @@ public:
         }
     }
 
-    RefiningGraph(const RefiningGraph&) = delete;
-    RefiningGraph& operator=(const RefiningGraph&) = delete;
+    SingleLayerGraph(const SingleLayerGraph&) = delete;
+    SingleLayerGraph& operator=(const SingleLayerGraph&) = delete;
 
-    RefiningGraph(RefiningGraph&& other) noexcept
+    SingleLayerGraph(SingleLayerGraph&& other) noexcept
         : _num_vertices(other._num_vertices),
           _layer_config(other._layer_config),
           _nbrs_arr(std::move(other._nbrs_arr)),
@@ -116,7 +111,7 @@ public:
           _global_to_local(std::move(other._global_to_local))
     {}
 
-    RefiningGraph& operator=(RefiningGraph&& other) noexcept {
+    SingleLayerGraph& operator=(SingleLayerGraph&& other) noexcept {
         _num_vertices = other._num_vertices;
         _layer_config = other._layer_config;
         _nbrs_arr = std::move(other._nbrs_arr);
@@ -201,6 +196,7 @@ public:
 
     auto get_base_metadata() const -> nlohmann::json {
         nlohmann::json meta;
+        // Flat graph snapshots use this stable on-disk type tag.
         meta["graph_type"] = "refining_graph";
         meta["version"] = "1.0";
         meta["num_vertices"] = _num_vertices;
@@ -230,7 +226,7 @@ protected:
      *         entries for non-participating vids are @c invalid_vertex_id. */
     std::vector<vertex_id_t> _global_to_local;
 
-};  // class RefiningGraph
+};  // class SingleLayerGraph
 
 }   // namespace dynamic
 }   // namespace cpu

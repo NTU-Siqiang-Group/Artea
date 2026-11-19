@@ -49,7 +49,7 @@ class PropagateEngine {
     using log_container_t = typename RefinerTraitsT::log_container_t;
     using log_table_t = typename RefinerTraitsT::log_table_t;
     using dist_func_t = typename RefinerTraitsT::dist_func_t;
-    using refining_graph_t = typename RefinerTraitsT::dynamic::refining_graph_t;
+    using single_layer_graph_t = typename RefinerTraitsT::dynamic::single_layer_graph_t;
 
     template <typename DerivedClassT>
     using neighbor_updater_t = typename RefinerTraitsT::template neighbor_updater_t<DerivedClassT>;
@@ -58,27 +58,27 @@ class PropagateEngine {
 
 public:
     /**
-     * @brief Iterate every participating vertex of @p refining_graph in
+     * @brief Iterate every participating vertex of @p single_layer_graph in
      *        parallel. The callback receives @c (layer_vid, storage_vid).
      *        In identity mode both are equal; in sparse mode
-     *        @c layer_vid is the row index in the RG and @c storage_vid
-     *        is the resolved global id via @c refining_graph.get_storage_vid.
+     *        @c layer_vid is the row index in the single-layer graph and @c storage_vid
+     *        is the resolved global id via @c single_layer_graph.get_storage_vid.
      *
-     * Templated on the RefiningGraph type so that HierarchicalGraph
+     * Templated on the SingleLayerGraph type so that HierarchicalGraph
      * callers (which don't see RefinerTraits) can reuse the helper
      * without coupling.
      */
-    template <typename RefiningGraphT, typename CallbackT>
+    template <typename SingleLayerGraphT, typename CallbackT>
     static auto parallel_for_each_vertex(
-        const RefiningGraphT& refining_graph,
+        const SingleLayerGraphT& single_layer_graph,
         CallbackT&&           callback
     ) -> void {
-        using vn_t = decltype(refining_graph.get_num_vertices());
+        using vn_t = decltype(single_layer_graph.get_num_vertices());
         tbb::parallel_for(
-            tbb::blocked_range<vn_t>(0, refining_graph.get_num_vertices()),
+            tbb::blocked_range<vn_t>(0, single_layer_graph.get_num_vertices()),
             [&](const tbb::blocked_range<vn_t>& range) {
                 for (vn_t i = range.begin(); i != range.end(); ++i) {
-                    callback(i, refining_graph.get_storage_vid(i));
+                    callback(i, single_layer_graph.get_storage_vid(i));
                 }
             });
     }
@@ -89,9 +89,9 @@ public:
      *        propagate overloads that only want to touch a sub-range of
      *        vertices (e.g. incremental batch seeding).
      */
-    template <typename RefiningGraphT, typename CallbackT>
+    template <typename SingleLayerGraphT, typename CallbackT>
     static auto parallel_for_each_vertex_in_range(
-        const RefiningGraphT& refining_graph,
+        const SingleLayerGraphT& single_layer_graph,
         const vertex_num_t    local_start,
         const vertex_num_t    local_end,
         CallbackT&&           callback
@@ -100,7 +100,7 @@ public:
             tbb::blocked_range<vertex_num_t>(local_start, local_end),
             [&](const tbb::blocked_range<vertex_num_t>& range) {
                 for (vertex_num_t i = range.begin(); i != range.end(); ++i) {
-                    callback(i, refining_graph.get_storage_vid(i));
+                    callback(i, single_layer_graph.get_storage_vid(i));
                 }
             });
     }
@@ -108,24 +108,24 @@ public:
     /**
      * @brief Construct with only the distance function. @c _log_table is
      *        default-constructed (empty) and sized on every @c set_graph
-     *        call to match the bound RefiningGraph's vertex count (N_local
+     *        call to match the bound SingleLayerGraph's vertex count (N_local
      *        for sparse layers, N_global for identity-mapped RGs).
      */
     PropagateEngine(const dist_func_t& dist_func) :
-        _refining_graph(nullptr),
+        _single_layer_graph(nullptr),
         _dist_func(dist_func)
     {}
 
     /** @brief Set the descent graph to operate on. */
     __attribute__((always_inline))
-    auto set_graph(refining_graph_t& refining_graph) -> void {
-        _refining_graph = &refining_graph;
-        _log_table.resize(refining_graph.get_num_vertices());
+    auto set_graph(single_layer_graph_t& single_layer_graph) -> void {
+        _single_layer_graph = &single_layer_graph;
+        _log_table.resize(single_layer_graph.get_num_vertices());
     }
 
     /**
      * @brief Run the updater on a single pivot. @p layer_vid indexes the
-     *        log_table / RG row; the global vid is resolved internally via
+     *        log_table / single-layer graph row; the global vid is resolved internally via
      *        get_storage_vid to fetch the neighbor array.
      */
     template <typename UdfUpdaterT>
@@ -134,8 +134,8 @@ public:
         const vertex_id_t layer_vid,
         UdfUpdaterT& udf_updater
     ) -> void {
-        const vertex_id_t storage_vid = _refining_graph->get_storage_vid(layer_vid);
-        nbr_arr_t& origin_nbrs = _refining_graph->fetch_nbrs(storage_vid);
+        const vertex_id_t storage_vid = _single_layer_graph->get_storage_vid(layer_vid);
+        nbr_arr_t& origin_nbrs = _single_layer_graph->fetch_nbrs(storage_vid);
         udf_updater(layer_vid, origin_nbrs);
     }
 
@@ -143,7 +143,7 @@ public:
         requires std::derived_from<UdfUpdaterT, neighbor_updater_t<UdfUpdaterT>>
     auto propagate(UdfUpdaterT& udf_updater) -> void {
         parallel_for_each_vertex(
-            *_refining_graph,
+            *_single_layer_graph,
             [&](const vertex_id_t layer_vid, const vertex_id_t /*storage_vid*/) {
                 propagate<UdfUpdaterT>(layer_vid, udf_updater);
             });
@@ -162,7 +162,7 @@ public:
         const vertex_num_t local_end
     ) -> void {
         parallel_for_each_vertex_in_range(
-            *_refining_graph, local_start, local_end,
+            *_single_layer_graph, local_start, local_end,
             [&](const vertex_id_t layer_vid, const vertex_id_t /*storage_vid*/) {
                 propagate<UdfUpdaterT>(layer_vid, udf_updater);
             });
@@ -174,7 +174,7 @@ public:
     */
     __attribute__((always_inline))
     auto merge_logs(const vertex_id_t layer_vid) -> size_t {
-        return _log_table.apply_logs(layer_vid, *_refining_graph);
+        return _log_table.apply_logs(layer_vid, *_single_layer_graph);
     }
 
     /** @brief Merge the logged operations for all vertices back to the descent graph.
@@ -184,7 +184,7 @@ public:
         tbb::enumerable_thread_specific<size_t> local_counts;
 
         parallel_for_each_vertex(
-            *_refining_graph,
+            *_single_layer_graph,
             [&](const vertex_id_t layer_vid, const vertex_id_t /*storage_vid*/) {
                 local_counts.local() += merge_logs(layer_vid);
             });
@@ -275,7 +275,7 @@ public:
       *   - triangle_updater_t: Requires scale_coeffs and optional shifted_coeffs
       *   - reverse_updater_t: No additional parameters required
       *   - random_updater_t: Requires rand_gen_size (num_vertices is auto-provided)
-      *   - routing_updater_t: Requires topk, candidate_queue_size (refining_graph is auto-provided from internal state)
+      *   - routing_updater_t: Requires topk, candidate_queue_size (single_layer_graph is auto-provided from internal state)
       */
     template <typename UpdaterT, typename... Args>
     auto make_updater(Args&&... args) -> UpdaterT {
@@ -286,23 +286,23 @@ public:
         using routing_updater_t  = typename RefinerTraitsT::routing_updater_t;
         using truncate_updater_t = typename RefinerTraitsT::truncate_updater_t;
 
-        const auto& vecs_arr = _refining_graph->get_vecs_data();
+        const auto& vecs_arr = _single_layer_graph->get_vecs_data();
         auto& log_table = _log_table;
-        const auto max_nbr_size = _refining_graph->layer_config().max_nbr_size();
-        const auto num_vertices = _refining_graph->get_num_vertices();
+        const auto max_nbr_size = _single_layer_graph->layer_config().max_nbr_size();
+        const auto num_vertices = _single_layer_graph->get_num_vertices();
 
         if constexpr (std::is_same_v<UpdaterT, triangle_updater_t>) {
-            return UpdaterT(_dist_func, vecs_arr, log_table, *_refining_graph, std::forward<Args>(args)...);
+            return UpdaterT(_dist_func, vecs_arr, log_table, *_single_layer_graph, std::forward<Args>(args)...);
         } else if constexpr (std::is_same_v<UpdaterT, pruning_updater_t>) {
-            return UpdaterT(_dist_func, vecs_arr, log_table, *_refining_graph, std::forward<Args>(args)...);
+            return UpdaterT(_dist_func, vecs_arr, log_table, *_single_layer_graph, std::forward<Args>(args)...);
         } else if constexpr (std::is_same_v<UpdaterT, reverse_updater_t>) {
-            return UpdaterT(_dist_func, vecs_arr, log_table, *_refining_graph);
+            return UpdaterT(_dist_func, vecs_arr, log_table, *_single_layer_graph);
         } else if constexpr (std::is_same_v<UpdaterT, random_updater_t>) {
-            return UpdaterT(_dist_func, vecs_arr, log_table, *_refining_graph, num_vertices, std::forward<Args>(args)...);
+            return UpdaterT(_dist_func, vecs_arr, log_table, *_single_layer_graph, num_vertices, std::forward<Args>(args)...);
         } else if constexpr (std::is_same_v<UpdaterT, routing_updater_t>) {
-            return UpdaterT(_dist_func, vecs_arr, log_table, *_refining_graph, std::forward<Args>(args)...);
+            return UpdaterT(_dist_func, vecs_arr, log_table, *_single_layer_graph, std::forward<Args>(args)...);
         } else if constexpr (std::is_same_v<UpdaterT, truncate_updater_t>) {
-            return UpdaterT(_dist_func, vecs_arr, log_table, *_refining_graph, std::forward<Args>(args)...);
+            return UpdaterT(_dist_func, vecs_arr, log_table, *_single_layer_graph, std::forward<Args>(args)...);
         } else {
             ARTEA_ERROR("Unsupported updater type");
         }
@@ -314,7 +314,7 @@ private:
     log_table_t _log_table;
 
     /** @brief Pointer to the descent graph being operated on. */
-    refining_graph_t* _refining_graph;
+    single_layer_graph_t* _single_layer_graph;
 
     /** @brief Distance function reference. */
     const dist_func_t& _dist_func;

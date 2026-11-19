@@ -15,7 +15,7 @@
 /*
  * @FilePath: /Artea/include/artea/cpu/router/detail/compact_flat_range.hpp
  * @Author: Chandler (Weitang Ye) <weitang.ye@ntu.edu.sg>
- * @Description: NeighborRange adapter binding a compact::RefiningGraph.
+ * @Description: NeighborRange adapter binding a compact::SingleLayerGraph.
  *               The graph already yields vertex_id_t directly via
  *               fetch_nbrs(); the adapter just sentinel-stops.
  *               The neighbor cap is baked into compact storage at
@@ -30,28 +30,28 @@ namespace artea {
 namespace cpu {
 namespace detail {
 
-template <typename RefiningGraphT>
+template <typename SingleLayerGraphT>
 class CompactFlatRange {
 public:
-    using vertex_id_t = typename RefiningGraphT::vertex_id_t;
+    using vertex_id_t = typename SingleLayerGraphT::vertex_id_t;
 
     static constexpr vertex_id_t invalid_vertex_id =
-        RefiningGraphT::invalid_vertex_id;
+        SingleLayerGraphT::invalid_vertex_id;
 
     __attribute__((always_inline))
-    explicit CompactFlatRange(const RefiningGraphT& refining_graph) :
-        _refining_graph(refining_graph) {}
+    explicit CompactFlatRange(const SingleLayerGraphT& single_layer_graph) :
+        _single_layer_graph(single_layer_graph) {}
 
     __attribute__((always_inline))
     auto of(const vertex_id_t vid) const {
-        return _refining_graph.fetch_nbrs(vid)
+        return _single_layer_graph.fetch_nbrs(vid)
              | std::views::take_while([](const vertex_id_t v) {
                    return v != invalid_vertex_id;
                });
     }
 
 private:
-    const RefiningGraphT& _refining_graph;
+    const SingleLayerGraphT& _single_layer_graph;
 
 };  // class CompactFlatRange
 

@@ -60,7 +60,7 @@ namespace hier_conv_graph {
  *      per vid.
  *   2. Per-layer refinement: seeds each layer with random edges via
  *      @c random_eg.generate, then runs the conv_graph-style build
- *      loop on the layer's RefiningGraph (dense for L0, sparse for
+ *      loop on the layer's SingleLayerGraph (dense for L0, sparse for
  *      L1+ via @c collect_layer_vids).
  *
  * @tparam GraphFactoryTraitsT The graph-factory traits type.
@@ -80,7 +80,7 @@ class IndexFactory {
     using dist_func_t    = typename GraphFactoryTraitsT::dist_func_t;
     using random_seq_nr_t = typename GraphFactoryTraitsT::random_seq_nr_t;
 
-    using refining_graph_t   = typename GraphFactoryTraitsT::dynamic::refining_graph_t;
+    using single_layer_graph_t = typename GraphFactoryTraitsT::dynamic::single_layer_graph_t;
     using layer_config_t     = typename GraphFactoryTraitsT::layer_config_t;
     using propagate_config_t = typename GraphFactoryTraitsT::hier_conv_graph::propagate_config_t;
     using pruning_config_t   = typename GraphFactoryTraitsT::hier_conv_graph::pruning_config_t;
@@ -190,13 +190,13 @@ public:
      * Pipeline (mirrors artea_graph::refine_layer minus ARC sweep and
      * minus the L0-only shift scaling):
      *   1. @c hier_graph.collect_layer_vids(level_id) → (l2g, g2l) vid maps.
-     *   2. Allocate refining_graph_t — dense ctor for L0, sparse ctor for L1+.
-     *   3. fill_refining_graph_from_layer — no-op when layer is empty
+     *   2. Allocate single_layer_graph_t — dense ctor for L0, sparse ctor for L1+.
+     *   3. fill_single_layer_graph_from_layer — no-op when layer is empty
      *      (which it always is here, since assign_layer doesn't seed edges).
      *   4. Skip-small-bucket guard: N_local < min_layer_cap → return.
      *   5. random_eg.generate to seed init_nbr_size random edges per row.
      *      Replaces the conv_graph::_build_loop init step; works on
-     *      both dense and sparse refining graphs because
+     *      both dense and sparse single-layer graphs because
      *      @c get_storage_vid handles the local→global translation.
      *   6. Conv-graph build loop with truncate-inside-triu (artea_graph
      *      pattern):
@@ -207,7 +207,7 @@ public:
      *   7. Routing loops (optional):
      *        for routing_loop in [0, num_routing_loops):
      *          engine.next(routing).next(pruning).next(reverse).next(truncate)
-     *   8. writeback_layer_from_refining_graph.
+     *   8. writeback_layer_from_single_layer_graph.
      *
      * @param index           hier_conv_graph index whose layer is refined.
      * @param level_id        Hierarchy layer to refine.
@@ -250,14 +250,14 @@ public:
         // ---- Step 1: build vid maps for the participating set ----
         auto [local_to_global, global_to_local] = hier_graph.collect_layer_vids(level_id);
 
-        // ---- Step 2: allocate the layer's RefiningGraph ----
-        std::unique_ptr<refining_graph_t> refining_graph;
+        // ---- Step 2: allocate the layer's SingleLayerGraph ----
+        std::unique_ptr<single_layer_graph_t> single_layer_graph;
         if (local_to_global.empty()) {
             // L0 / identity mode: every global vid is a row in _nbrs_arr.
-            refining_graph = std::make_unique<refining_graph_t>(vecs_storage, layer_config);
+            single_layer_graph = std::make_unique<single_layer_graph_t>(vecs_storage, layer_config);
         } else {
             // L1+ / sparse mode: local↔global maps drive lookups.
-            refining_graph = std::make_unique<refining_graph_t>(
+            single_layer_graph = std::make_unique<single_layer_graph_t>(
                 vecs_storage, layer_config,
                 std::move(local_to_global), std::move(global_to_local));
         }
@@ -266,10 +266,10 @@ public:
         //              never seed edges via insertion). Kept for
         //              symmetry with artea_graph in case a future
         //              hybrid build seeds upper layers externally. ----
-        refiner_utils_t::fill_refining_graph_from_layer(hier_graph, *refining_graph, level_id);
+        refiner_utils_t::fill_single_layer_graph_from_layer(hier_graph, *single_layer_graph, level_id);
 
         // ---- Step 4: skip buckets that the compactor will trim ----
-        const vertex_num_t num_layer_vertices = refining_graph->get_num_vertices();
+        const vertex_num_t num_layer_vertices = single_layer_graph->get_num_vertices();
         if (num_layer_vertices < GraphFactoryTraitsT::min_layer_cap) {
             ARTEA_INFO(fmt::format(
                 "[hier_conv_graph] refine_layer skipping level_id={}: "
@@ -281,18 +281,18 @@ public:
         // ---- Step 5: seed initial random edges ----
         // After assign_layer the layer holds zero edges. random_eg
         // populates @c init_nbr_size random neighbors per row; it
-        // handles both dense and sparse refining graphs (local→global
+        // handles both dense and sparse single-layer graphs (local→global
         // translation via get_storage_vid).
         const vertex_num_t init_nbr_size = static_cast<vertex_num_t>(
             static_cast<double>(max_nbr_size) * propagate_config.prefill_ratio());
         if (init_nbr_size > 0 && init_nbr_size <= num_layer_vertices) {
             random_eg_t random_eg(dist_func);
-            random_eg.generate(*refining_graph, init_nbr_size);
+            random_eg.generate(*single_layer_graph, init_nbr_size);
         }
 
-        // ---- Step 6: run prune + reverse + truncate on the RG ----
+        // ---- Step 6: run prune + reverse + truncate on the single-layer graph ----
         propagate_engine_t propagate_engine(dist_func);
-        propagate_engine.set_graph(*refining_graph);
+        propagate_engine.set_graph(*single_layer_graph);
 
         auto triangle_updater = propagate_engine.template make_updater<triangle_updater_t>(
             pruning_config.scale_coeffs(), pruning_config.shifted_coeffs());
@@ -319,7 +319,7 @@ public:
         }
 
         // ---- Step 8: write refined edges back ----
-        refiner_utils_t::writeback_layer_from_refining_graph(hier_graph, *refining_graph, level_id);
+        refiner_utils_t::writeback_layer_from_single_layer_graph(hier_graph, *single_layer_graph, level_id);
     }
 
 private:

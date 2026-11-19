@@ -26,7 +26,7 @@
 #include <artea/cpu/index/dataset_index.hpp>
 #include <artea/cpu/index/exact_artea/configs.hpp>
 #include <artea/cpu/index/layer_config.hpp>
-#include <artea/cpu/index/dynamic_structure/refining_graph.hpp>
+#include <artea/cpu/index/dynamic_structure/single_layer_graph.hpp>
 #include <artea/cpu/index/compact_structure/hierarchical_graph.hpp>
 
 namespace artea::cpu::exact_artea {
@@ -35,7 +35,7 @@ template <typename GraphFactoryTraitsT> class RNetsFactory;
 template <typename GraphFactoryTraitsT> class IndexFactory;
 
 /**
- * @brief Independent exact index: one variable-degree RefiningGraph per layer.
+ * @brief Independent exact index: one variable-degree SingleLayerGraph per layer.
  *
  * Reuses dataset ownership and ARTEA configuration, but no stacked-rgraph
  * construction or fixed-size neighbor slots. All layers borrow the same global
@@ -57,7 +57,7 @@ public:
     using vector_dataset_t = typename IndexTraitsT::vector_dataset_t;
     using rgraph_config_t = typename IndexTraitsT::exact_artea::rgraph_config_t;
     using pruning_config_t = typename IndexTraitsT::exact_artea::pruning_config_t;
-    using refining_graph_t = typename IndexTraitsT::dynamic::refining_graph_t;
+    using single_layer_graph_t = typename IndexTraitsT::dynamic::single_layer_graph_t;
     using hierarchical_graph_t = typename IndexTraitsT::compact::hierarchical_graph_t;
     using compact_graph_t = hierarchical_graph_t;
 
@@ -126,13 +126,13 @@ public:
         return _highest_levels.empty() ? invalid_level_id : static_cast<layer_id_t>(_layers.size() - 1);
     }
 
-    auto get_layer_graph(layer_id_t h) const -> const refining_graph_t& { return *_layers.at(h); }
+    auto get_layer_graph(layer_id_t h) const -> const single_layer_graph_t& { return *_layers.at(h); }
 
     /** @brief Access a mutable layer, invalidating the merged snapshot.
      * Do not retain mutable references across a subsequent merge or rebuild.
      * Topology arrays and ID mappings must remain unchanged; mutate neighbor rows only.
      */
-    auto get_layer_graph(layer_id_t h) -> refining_graph_t& {
+    auto get_layer_graph(layer_id_t h) -> single_layer_graph_t& {
         auto& graph = *_layers.at(h);
         _hierarchical_graph.reset();
         return graph;
@@ -171,7 +171,7 @@ private:
         const layer_id_t top = highest_levels.empty() ? 0 :
             *std::max_element(highest_levels.begin(), highest_levels.end());
         if (top == invalid_level_id) throw std::out_of_range("Invalid exact layer height");
-        std::vector<std::unique_ptr<refining_graph_t>> layers;
+        std::vector<std::unique_ptr<single_layer_graph_t>> layers;
         layers.reserve(static_cast<std::size_t>(top) + 1);
         for (layer_id_t h = 0; h <= top; ++h) {
             std::vector<vertex_id_t> local_to_global;
@@ -181,9 +181,9 @@ private:
                 global_to_local[vid] = static_cast<vertex_id_t>(local_to_global.size());
                 local_to_global.push_back(vid);
             }
-            // RefiningGraph's legacy config is only an initial vector reservation.
+            // SingleLayerGraph's legacy config is only an initial vector reservation.
             // Exact construction uses growing vectors and never applies a degree cap.
-            layers.push_back(std::make_unique<refining_graph_t>(
+            layers.push_back(std::make_unique<single_layer_graph_t>(
                 vectors, typename IndexTraitsT::layer_config_t(0),
                 std::move(local_to_global), std::move(global_to_local)));
         }
@@ -195,7 +195,7 @@ private:
     std::optional<rgraph_config_t> _rgraph_config;
     std::optional<pruning_config_t> _pruning_config;
     std::vector<layer_id_t> _highest_levels;
-    std::vector<std::unique_ptr<refining_graph_t>> _layers;
+    std::vector<std::unique_ptr<single_layer_graph_t>> _layers;
     std::optional<hierarchical_graph_t> _hierarchical_graph;
 };
 

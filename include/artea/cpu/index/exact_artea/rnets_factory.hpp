@@ -51,7 +51,7 @@ public:
      * every point of V_{h-1} is within distance <= R_h of V_h, and distinct
      * points of V_h have distance > R_h. Stop at a singleton top layer;
      * empty and singleton datasets have no upper layers. Creates one
-     * RefiningGraph per actual layer, with initially empty neighbor vectors.
+     * SingleLayerGraph per actual layer, with initially empty neighbor vectors.
      *
      * Each layer starts at vertex 0. Repeatedly select the point with the
      * largest exact distance to the selected set, breaking ties by smallest

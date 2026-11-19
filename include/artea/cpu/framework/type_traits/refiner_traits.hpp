@@ -110,7 +110,7 @@ struct RefinerTraits :
     using ivf_partitions_t = IVFPartitions<refiner_traits_t>;
 
     /** @brief Bridge between dynamic::HierarchicalGraph and
-     *         dynamic::RefiningGraph (layer fill / writeback helpers). */
+     *         dynamic::SingleLayerGraph (layer fill / writeback helpers). */
     using refiner_utils_t = RefinerUtils<refiner_traits_t>;
 
 };  // struct RefinerTraits

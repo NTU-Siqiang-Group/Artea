@@ -579,7 +579,7 @@ public:
     }
 
     // =================================================================
-    //   Layer ↔ RefiningGraph conversion
+    //   Layer ↔ SingleLayerGraph conversion
     // =================================================================
 
     /**
@@ -587,7 +587,7 @@ public:
      *        participating-vid set at @p level_id.
      *
      * For @p level_id == 0, both maps are returned empty (identity mode):
-     *        the caller should construct the @c RefiningGraph with the
+     *        the caller should construct the @c SingleLayerGraph with the
      *        dense ctor.
      *
      * For @p level_id >= 1, walks every bucket

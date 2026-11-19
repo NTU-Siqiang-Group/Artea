@@ -15,7 +15,7 @@
 /*
  * @FilePath: /Artea/include/artea/cpu/router/detail/dynamic_flat_range.hpp
  * @Author: Chandler (Weitang Ye) <weitang.ye@ntu.edu.sg>
- * @Description: NeighborRange adapter binding a dynamic::RefiningGraph.
+ * @Description: NeighborRange adapter binding a dynamic::SingleLayerGraph.
  *               Projects nbr_t -> vertex_id_t and sentinel-stops on
  *               nbr.is_invalid() (or the storage end, whichever is first).
  */
@@ -28,25 +28,25 @@ namespace artea {
 namespace cpu {
 namespace detail {
 
-template <typename RefiningGraphT>
+template <typename SingleLayerGraphT>
 class DynamicFlatRange {
 public:
-    using vertex_id_t = typename RefiningGraphT::vertex_id_t;
-    using nbr_t       = typename RefiningGraphT::nbr_t;
+    using vertex_id_t = typename SingleLayerGraphT::vertex_id_t;
+    using nbr_t       = typename SingleLayerGraphT::nbr_t;
 
     __attribute__((always_inline))
-    explicit DynamicFlatRange(const RefiningGraphT& refining_graph) :
-        _refining_graph(refining_graph) {}
+    explicit DynamicFlatRange(const SingleLayerGraphT& single_layer_graph) :
+        _single_layer_graph(single_layer_graph) {}
 
     __attribute__((always_inline))
     auto of(const vertex_id_t vid) const {
-        return _refining_graph.fetch_nbrs(vid)
+        return _single_layer_graph.fetch_nbrs(vid)
              | std::views::take_while([](const nbr_t& nbr) { return !nbr.is_invalid(); })
              | std::views::transform([](const nbr_t& nbr) { return nbr.get_vid(); });
     }
 
 private:
-    const RefiningGraphT& _refining_graph;
+    const SingleLayerGraphT& _single_layer_graph;
 
 };  // class DynamicFlatRange
 

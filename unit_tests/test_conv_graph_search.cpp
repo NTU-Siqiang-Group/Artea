@@ -16,7 +16,7 @@
  * @FilePath: /Artea/unit_tests/test_conv_graph_search.cpp
  * @Author: Chandler (Weitang Ye) <weitang.ye@ntu.edu.sg>
  * @Description: Search tests for SingleLayerRouter on a convergent graph
- *               (compact and dynamic refining graphs). Reports dataset info,
+ *               (compact and dynamic single-layer graphs). Reports dataset info,
  *               recall, and throughput. Covers: SearchModeBatchQuery,
  *               SearchModeParallelSingleQuery, ConstructModeBatchQuery.
  */
@@ -40,7 +40,7 @@
 using namespace artea;
 using namespace artea::cpu;
 
-using dynamic_refining_graph_t = typename index_traits_t::dynamic::refining_graph_t;
+using dynamic_single_layer_graph_t = typename index_traits_t::dynamic::single_layer_graph_t;
 using conv_index_t = typename index_traits_t::conv_graph::index_t;
 
 // ============================================================
@@ -94,7 +94,7 @@ public:
         g_results.vec_dim      = base_vecs.get_vec_dim();
 
         // Metric from the --metric input, padded dim from the loaded dataset;
-        // the dataset and the compact::refining_graph_t are metric/dim-
+        // the dataset and the compact::single_layer_graph_t are metric/dim-
         // independent, so only the build runs behind <Metric, Dim>.
         dataset_info_ = DatasetInfra{parse_metric(g_config.metric), base_vecs.get_vec_dim()};
 
@@ -109,8 +109,8 @@ public:
             );
 
             // Convert to search graph (metric/dim-independent result)
-            compact_refining_graph_ = std::make_unique<compact::refining_graph_t>(
-                refining_graph_compactor_t::compact_graph(graph_index, g_config.extracted_nbr_size)
+            compact_single_layer_graph_ = std::make_unique<compact::single_layer_graph_t>(
+                single_layer_graph_compactor_t::compact_graph(graph_index, g_config.extracted_nbr_size)
             );
 
             graph_index_ = std::make_unique<conv_index_t>(std::move(graph_index));
@@ -121,15 +121,15 @@ public:
 
     vector_dataset_t&    get_dataset()          { return *dataset_; }
     DatasetInfra         get_dataset_info() const { return dataset_info_; }
-    dynamic_refining_graph_t& get_dynamic_refining_graph() { return graph_index_->get_refining_graph(); }
-    compact::refining_graph_t& get_compact_refining_graph() { return *compact_refining_graph_; }
+    dynamic_single_layer_graph_t& get_dynamic_single_layer_graph() { return graph_index_->get_single_layer_graph(); }
+    compact::single_layer_graph_t& get_compact_single_layer_graph() { return *compact_single_layer_graph_; }
     const idlist_array_t& get_gt()              { return dataset_->get_gt_vecs(); }
 
 private:
     DataProvider() = default;
     std::unique_ptr<vector_dataset_t>    dataset_;
     std::unique_ptr<conv_index_t>        graph_index_;
-    std::unique_ptr<compact::refining_graph_t> compact_refining_graph_;
+    std::unique_ptr<compact::single_layer_graph_t> compact_single_layer_graph_;
     DatasetInfra dataset_info_{};
 };
 
@@ -160,7 +160,7 @@ TEST_F(ConvGraphSearchTest, SearchModeBatchQuery) {
 
         // Warmup runs
         for (uint32_t w = 0; w < g_config.warmup_runs; ++w) {
-            [[maybe_unused]] auto _ = router.batch_query(query_vecs, p.get_compact_refining_graph());
+            [[maybe_unused]] auto _ = router.batch_query(query_vecs, p.get_compact_single_layer_graph());
         }
 
         // Test runs
@@ -170,7 +170,7 @@ TEST_F(ConvGraphSearchTest, SearchModeBatchQuery) {
         recall_estimator_t<Metric, Dim> re;
         for (uint32_t r = 0; r < g_config.test_runs; ++r) {
             auto t0 = std::chrono::high_resolution_clock::now();
-            last_results = router.batch_query(query_vecs, p.get_compact_refining_graph());
+            last_results = router.batch_query(query_vecs, p.get_compact_single_layer_graph());
             auto t1 = std::chrono::high_resolution_clock::now();
             total_us += std::chrono::duration_cast<std::chrono::microseconds>(t1 - t0).count();
             total_recall += re.calculate_recall_at_k(last_results, p.get_gt(), g_config.topk, g_results.num_queries);
@@ -212,7 +212,7 @@ TEST_F(ConvGraphSearchTest, SearchModeParallelSingleQuery) {
                 tbb::blocked_range<uint32_t>(0, g_results.num_queries),
                 [&](const tbb::blocked_range<uint32_t>& r) {
                     for (uint32_t i = r.begin(); i != r.end(); ++i) {
-                        knn_results_t<Metric, Dim> res = router.query(query_vecs.get(i), p.get_compact_refining_graph());
+                        knn_results_t<Metric, Dim> res = router.query(query_vecs.get(i), p.get_compact_single_layer_graph());
                         std::copy(res.begin(), res.end(), warmup_results.begin() + i * g_config.topk);
                     }
                 }
@@ -232,7 +232,7 @@ TEST_F(ConvGraphSearchTest, SearchModeParallelSingleQuery) {
                 tbb::blocked_range<uint32_t>(0, g_results.num_queries),
                 [&](const tbb::blocked_range<uint32_t>& r) {
                     for (uint32_t i = r.begin(); i != r.end(); ++i) {
-                        knn_results_t<Metric, Dim> res = router.query(query_vecs.get(i), p.get_compact_refining_graph());
+                        knn_results_t<Metric, Dim> res = router.query(query_vecs.get(i), p.get_compact_single_layer_graph());
                         if (res.size() != g_config.topk) {
                             error_count.fetch_add(1, std::memory_order_relaxed);
                             continue;
@@ -279,7 +279,7 @@ TEST_F(ConvGraphSearchTest, ConstructModeBatchQuery) {
 
         // Warmup runs
         for (uint32_t w = 0; w < g_config.warmup_runs; ++w) {
-            [[maybe_unused]] auto _ = router.batch_query(query_vecs, p.get_dynamic_refining_graph());
+            [[maybe_unused]] auto _ = router.batch_query(query_vecs, p.get_dynamic_single_layer_graph());
         }
 
         // Test runs
@@ -289,7 +289,7 @@ TEST_F(ConvGraphSearchTest, ConstructModeBatchQuery) {
         recall_estimator_t<Metric, Dim> re;
         for (uint32_t r = 0; r < g_config.test_runs; ++r) {
             auto t0 = std::chrono::high_resolution_clock::now();
-            last_results = router.batch_query(query_vecs, p.get_dynamic_refining_graph());
+            last_results = router.batch_query(query_vecs, p.get_dynamic_single_layer_graph());
             auto t1 = std::chrono::high_resolution_clock::now();
             total_us += std::chrono::duration_cast<std::chrono::microseconds>(t1 - t0).count();
             total_recall += re.calculate_recall_at_k(last_results, p.get_gt(), g_config.topk, g_results.num_queries);

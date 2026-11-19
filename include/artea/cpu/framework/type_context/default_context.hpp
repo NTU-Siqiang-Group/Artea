@@ -101,7 +101,7 @@ using log_table_t = typename buffer_traits_t::log_table_t;
 
 // Config / index types from IndexTraits
 using layer_config_t = typename index_traits_t::layer_config_t;
-using refining_graph_compactor_t = typename index_traits_t::refining_graph_compactor_t;
+using single_layer_graph_compactor_t = typename index_traits_t::single_layer_graph_compactor_t;
 using flat_graph_file_manager_t = typename index_traits_t::flat_graph_file_manager_t;
 using hierarchical_graph_file_manager_t = typename index_traits_t::hierarchical_graph_file_manager_t;
 using index_size_calculator_t = typename index_traits_t::index_size_calculator_t;
@@ -110,7 +110,7 @@ using hierarchical_graph_compactor_t = typename index_traits_t::hierarchical_gra
 
 // Graph-storage types from IndexTraits (metric/dim-independent)
 namespace compact {
-    using refining_graph_t     = typename index_traits_t::compact::refining_graph_t;
+    using single_layer_graph_t = typename index_traits_t::compact::single_layer_graph_t;
     using hierarchical_graph_t = typename index_traits_t::compact::hierarchical_graph_t;
 }   // namespace compact
 namespace dynamic {

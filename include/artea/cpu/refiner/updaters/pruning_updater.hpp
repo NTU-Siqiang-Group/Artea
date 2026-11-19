@@ -130,7 +130,7 @@ class PruningUpdater :
     using log_table_t = typename RefinerTraitsT::log_table_t;
     using dist_func_t = typename RefinerTraitsT::dist_func_t;
     using pruning_condition_t = typename RefinerTraitsT::pruning_condition_t;
-    using refining_graph_t = typename RefinerTraitsT::dynamic::refining_graph_t;
+    using single_layer_graph_t = typename RefinerTraitsT::dynamic::single_layer_graph_t;
     using base_class_t = typename RefinerTraitsT::template neighbor_updater_t<PruningUpdater<RefinerTraitsT>>;
     static constexpr vertex_id_t invalid_vertex_id = RefinerTraitsT::invalid_vertex_id;
     static constexpr distance_t nan_distance = RefinerTraitsT::nan_distance;
@@ -145,16 +145,16 @@ public:
         const dist_func_t&        dist_func,
         const vector_array_t&     vecs_data,
         log_table_t&              log_table,
-        const refining_graph_t&   refining_graph,
+        const single_layer_graph_t&   single_layer_graph,
         const ratio_t             scale_coeffs,
         const ratio_t             shifted_coeffs = 0.0
-    ) : base_class_t(dist_func, vecs_data, log_table, refining_graph),
+    ) : base_class_t(dist_func, vecs_data, log_table, single_layer_graph),
         _scale_coeffs(scale_coeffs),
         _shifted_coeffs(shifted_coeffs) {}
 
     __attribute__((always_inline))
     auto get_max_nbr_size() const -> vertex_num_t {
-        return this->_refining_graph.layer_config().max_nbr_size();
+        return this->_single_layer_graph.layer_config().max_nbr_size();
     }
 
     /**

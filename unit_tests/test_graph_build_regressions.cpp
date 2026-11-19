@@ -21,7 +21,7 @@ using namespace artea::cpu;
 namespace {
 constexpr auto metric = DistanceMetricsT::EUCLIDEAN;
 constexpr vec_dim_t dimension = 16;
-using refining_graph_t = refiner_traits_t<metric, dimension>::dynamic::refining_graph_t;
+using single_layer_graph_t = refiner_traits_t<metric, dimension>::dynamic::single_layer_graph_t;
 
 std::vector<vertex_id_t> neighbor_ids(const nbr_arr_t& row) {
     std::vector<vertex_id_t> ids;
@@ -55,15 +55,15 @@ void check_refinement_input(layer_id_t level, vertex_num_t destination_capacity)
     }
 
     layer_config_t config(destination_capacity);
-    std::unique_ptr<refining_graph_t> refining;
+    std::unique_ptr<single_layer_graph_t> refining;
     if (level == 0) {
-        refining = std::make_unique<refining_graph_t>(vectors, config);
+        refining = std::make_unique<single_layer_graph_t>(vectors, config);
     } else {
         auto [local_to_global, global_to_local] = graph.collect_layer_vids(level);
-        refining = std::make_unique<refining_graph_t>(
+        refining = std::make_unique<single_layer_graph_t>(
             vectors, config, std::move(local_to_global), std::move(global_to_local));
     }
-    refiner_utils_t<metric, dimension>::fill_refining_graph_from_layer(graph, *refining, level);
+    refiner_utils_t<metric, dimension>::fill_single_layer_graph_from_layer(graph, *refining, level);
     const auto& row = refining->fetch_nbrs(pivot);
     std::vector<vertex_id_t> expected{4, 8, 10, 12};
     expected.resize(std::min<std::size_t>(expected.size(), destination_capacity));

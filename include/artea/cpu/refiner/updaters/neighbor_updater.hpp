@@ -41,7 +41,7 @@ class NeighborUpdater {
     using log_table_t = typename RefinerTraitsT::log_table_t;
     using dist_func_t = typename RefinerTraitsT::dist_func_t;
     using nbr_arr_checker_t = typename RefinerTraitsT::nbr_arr_checker_t;
-    using refining_graph_t = typename RefinerTraitsT::dynamic::refining_graph_t;
+    using single_layer_graph_t = typename RefinerTraitsT::dynamic::single_layer_graph_t;
 
 public:
 
@@ -49,8 +49,8 @@ public:
         const dist_func_t&        dist_func,
         const vector_array_t&     vecs_data,
         log_table_t&              log_table,
-        const refining_graph_t&   refining_graph
-    ) : _dist_func(dist_func), _vecs_data(vecs_data), _log_table(log_table), _refining_graph(refining_graph) {}
+        const single_layer_graph_t&   single_layer_graph
+    ) : _dist_func(dist_func), _vecs_data(vecs_data), _log_table(log_table), _single_layer_graph(single_layer_graph) {}
 
     /**
      * @brief Operator that delegates to the derived class's update_impl.
@@ -89,7 +89,7 @@ protected:
     log_table_t& _log_table;
 
     /** @brief Reference to the descent graph for neighbor overflow check. */
-    const refining_graph_t& _refining_graph;
+    const single_layer_graph_t& _single_layer_graph;
 
 };  //  class NeighborUpdater
 

@@ -67,7 +67,7 @@ auto verify_merged_rows(const Index& index) -> void {
     EXPECT_EQ(graph.neighbor_ids().size(), total);
 }
 
-TEST(ExactArteaBuild, PerLayerRefiningGraphsGrowAndMergeWithoutTrimmingOrTruncation) {
+TEST(ExactArteaBuild, SingleLayerGraphsGrowAndMergeWithoutTrimmingOrTruncation) {
     auto data = grid(4);
     Index index(data, config(), pruning);
     EXPECT_FALSE(index.has_layers());

@@ -15,7 +15,7 @@
 /*
  * @FilePath: /Artea/unit_tests/search_router_vs_construct_router.cpp
  * @Author: Chandler (Weitang Ye) <weitang.ye@ntu.edu.sg>
- * @Description: Compares SingleLayerRouter on a dynamic vs compact RefiningGraph
+ * @Description: Compares SingleLayerRouter on a dynamic vs compact SingleLayerGraph
  *               of a ConvGraph. Measures construct-mode query time, search-graph
  *               conversion time, and search-mode query time.
  */
@@ -37,7 +37,7 @@
 using namespace artea;
 using namespace artea::cpu;
 
-using dynamic_refining_graph_t = typename index_traits_t::dynamic::refining_graph_t;
+using dynamic_single_layer_graph_t = typename index_traits_t::dynamic::single_layer_graph_t;
 using conv_index_t = typename index_traits_t::conv_graph::index_t;
 
 // ============================================================
@@ -97,7 +97,7 @@ public:
         g_results.vec_dim      = base_vecs.get_vec_dim();
 
         // Metric from the --metric input, padded dim from the loaded dataset;
-        // the dataset and the compact::refining_graph_t are metric/dim-
+        // the dataset and the compact::single_layer_graph_t are metric/dim-
         // independent, so only the build runs behind <Metric, Dim>.
         dataset_info_ = DatasetInfra{parse_metric(g_config.metric), base_vecs.get_vec_dim()};
 
@@ -123,8 +123,8 @@ public:
             // Convert to flat search graph (metric/dim-independent result)
             ARTEA_INFO("Converting to flat search graph...");
             auto tc0 = std::chrono::high_resolution_clock::now();
-            compact_refining_graph_ = std::make_unique<compact::refining_graph_t>(
-                refining_graph_compactor_t::compact_graph(graph_index, g_config.extracted_nbr_size)
+            compact_single_layer_graph_ = std::make_unique<compact::single_layer_graph_t>(
+                single_layer_graph_compactor_t::compact_graph(graph_index, g_config.extracted_nbr_size)
             );
             auto tc1 = std::chrono::high_resolution_clock::now();
             g_results.conversion_time_ms =
@@ -139,15 +139,15 @@ public:
 
     vector_dataset_t&    get_dataset()           { return *dataset_; }
     DatasetInfra         get_dataset_info() const { return dataset_info_; }
-    dynamic_refining_graph_t& get_dynamic_refining_graph() { return graph_index_->get_refining_graph(); }
-    compact::refining_graph_t& get_compact_refining_graph()  { return *compact_refining_graph_; }
+    dynamic_single_layer_graph_t& get_dynamic_single_layer_graph() { return graph_index_->get_single_layer_graph(); }
+    compact::single_layer_graph_t& get_compact_single_layer_graph()  { return *compact_single_layer_graph_; }
     const idlist_array_t& get_gt()               { return dataset_->get_gt_vecs(); }
 
 private:
     DataProvider() = default;
     std::unique_ptr<vector_dataset_t>    dataset_;
     std::unique_ptr<conv_index_t>        graph_index_;
-    std::unique_ptr<compact::refining_graph_t> compact_refining_graph_;
+    std::unique_ptr<compact::single_layer_graph_t> compact_single_layer_graph_;
     DatasetInfra dataset_info_{};
 };
 
@@ -178,7 +178,7 @@ TEST_F(RouterComparisonTest, ConstructModeRouter) {
 
         auto t0 = std::chrono::high_resolution_clock::now();
         knn_results_t<Metric, Dim> results = router.batch_query(
-            query_vecs, p.get_dynamic_refining_graph());
+            query_vecs, p.get_dynamic_single_layer_graph());
         auto t1 = std::chrono::high_resolution_clock::now();
         double us = std::chrono::duration_cast<std::chrono::microseconds>(t1 - t0).count();
 
@@ -214,7 +214,7 @@ TEST_F(RouterComparisonTest, SearchModeRouter) {
 
         auto t0 = std::chrono::high_resolution_clock::now();
         knn_results_t<Metric, Dim> results = router.batch_query(
-            query_vecs, p.get_compact_refining_graph());
+            query_vecs, p.get_compact_single_layer_graph());
         auto t1 = std::chrono::high_resolution_clock::now();
         double us = std::chrono::duration_cast<std::chrono::microseconds>(t1 - t0).count();
 
@@ -307,10 +307,10 @@ int main(int argc, char** argv) {
     std::cout << fmt::format("  {:45s}  {:>10s}  {:>12s}\n", "Mode", "Recall@k", "QPS");
     std::cout << std::string(70, '-') << "\n";
     std::cout << fmt::format("  {:45s}  {:>10.4f}  {:>12.1f}\n",
-        "dynamic_mode (RefiningGraph, no conversion)",
+        "dynamic_mode (SingleLayerGraph, no conversion)",
         g_results.construct_recall, g_results.construct_qps);
     std::cout << fmt::format("  {:45s}  {:>10.4f}  {:>12.1f}\n",
-        "compact_mode (CompactRefiningGraph, +conv time)",
+        "compact_mode (CompactSingleLayerGraph, +conv time)",
         g_results.search_recall, g_results.search_qps);
     std::cout << std::string(70, '=') << "\n";
 

@@ -1,8 +1,8 @@
 /*
- * @FilePath: /Artea/include/artea/cpu/index/compact_refining_graph.hpp
+ * @FilePath: /Artea/include/artea/cpu/index/compact_structure/single_layer_graph.hpp
  * @Author: Chandler (Weitang Ye) <weitang.ye@ntu.edu.sg>
  * @Date: 2026-02-05
- * @Description: Compact descent graph with CSR format for efficient neighbor access.
+ * @Description: Compact single-layer graph with CSR format for efficient neighbor access.
  */
 
 #pragma once
@@ -16,11 +16,11 @@ namespace cpu {
 namespace compact {
 
 /**
- * @brief Compact descent graph using CSR (Compressed Sparse Row) format for efficient neighbor access.
+ * @brief Compact single-layer graph using CSR (Compressed Sparse Row) format for efficient neighbor access.
  * @tparam IndexTraitsT The index traits type.
  */
 template <typename IndexTraitsT>
-class RefiningGraph {
+class SingleLayerGraph {
 
 public:
     // Public so router-side adapters can read these typedefs without
@@ -43,11 +43,11 @@ public:
     static constexpr vertex_id_t invalid_vertex_id = IndexTraitsT::invalid_vertex_id;
 
     /**
-     * @brief Construct a new Flat Search Graph object.
+     * @brief Construct a compact single-layer graph.
      * @param vecs_data Reference to the vector data for this graph.
      * @param extracted_nbr_size Fixed number of neighbors per vertex.
      */
-    RefiningGraph(
+    SingleLayerGraph(
         const vector_array_t& vecs_data,
         const vertex_num_t extracted_nbr_size
     ) :
@@ -62,12 +62,12 @@ public:
     }
 
     // Copying is deleted
-    RefiningGraph(const RefiningGraph&) = delete;
-    RefiningGraph& operator=(const RefiningGraph&) = delete;
+    SingleLayerGraph(const SingleLayerGraph&) = delete;
+    SingleLayerGraph& operator=(const SingleLayerGraph&) = delete;
 
     // default move constructor and assignment
-    RefiningGraph(RefiningGraph&&) noexcept = default;
-    RefiningGraph& operator=(RefiningGraph&&) noexcept = default;
+    SingleLayerGraph(SingleLayerGraph&&) noexcept = default;
+    SingleLayerGraph& operator=(SingleLayerGraph&&) noexcept = default;
 
     // --- Public Interface ---
 
@@ -76,7 +76,7 @@ public:
         return _num_vertices;
     }
 
-    /** @brief Identity passthrough to mirror @c dynamic::RefiningGraph's
+    /** @brief Identity passthrough to mirror @c dynamic::SingleLayerGraph's
      *         API. Compact graphs are always dense, so the local row
      *         index is the storage vid. */
     __attribute__((always_inline))
@@ -163,7 +163,7 @@ private:
     /** @brief Const reference to vector data for this graph. */
     const vector_array_t& _vecs_data;
 
-};  // class RefiningGraph
+};  // class SingleLayerGraph
 
 }   // namespace compact
 }   // namespace cpu

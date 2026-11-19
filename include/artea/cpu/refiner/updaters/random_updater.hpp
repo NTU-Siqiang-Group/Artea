@@ -44,7 +44,7 @@ class RandomUpdater :
     using nbr_arr_t = typename RefinerTraitsT::nbr_arr_t;
     using log_table_t = typename RefinerTraitsT::log_table_t;
     using dist_func_t = typename RefinerTraitsT::dist_func_t;
-    using refining_graph_t = typename RefinerTraitsT::dynamic::refining_graph_t;
+    using single_layer_graph_t = typename RefinerTraitsT::dynamic::single_layer_graph_t;
     using base_class_t = typename RefinerTraitsT::template neighbor_updater_t<RandomUpdater<RefinerTraitsT>>;
     using random_seq_t = typename RefinerTraitsT::random_seq_t;
 
@@ -68,12 +68,12 @@ public:
         const dist_func_t&        dist_func,
         const vector_array_t&     vecs_data,
         log_table_t&              log_table,
-        const refining_graph_t&   refining_graph,
+        const single_layer_graph_t&   single_layer_graph,
         const vertex_num_t        num_vertices,
         const vertex_num_t        rand_gen_size,
         const vertex_id_t         start_vid,
         const vertex_id_t         end_vid
-    ) : base_class_t(dist_func, vecs_data, log_table, refining_graph),
+    ) : base_class_t(dist_func, vecs_data, log_table, single_layer_graph),
         _num_vertices(num_vertices),
         _rand_gen_size(rand_gen_size),
         _start_vid(start_vid),
@@ -98,12 +98,12 @@ public:
         const vertex_id_t layer_vid,
         nbr_arr_t& origin_nbrs
     ) -> void {
-        const vertex_id_t storage_vid = this->_refining_graph.get_storage_vid(layer_vid);
+        const vertex_id_t storage_vid = this->_single_layer_graph.get_storage_vid(layer_vid);
 
         // Top-up gate: rows that already sit at/above rand_gen_size are
         // skipped; rows below it are padded with exactly the deficit.
         const vertex_num_t cur_size = static_cast<vertex_num_t>(
-            this->_refining_graph.fetch_nbrs(storage_vid).size());
+            this->_single_layer_graph.fetch_nbrs(storage_vid).size());
         if (cur_size >= _rand_gen_size) { return; }
         const vertex_num_t gen_size = _rand_gen_size - cur_size;
 
@@ -117,7 +117,7 @@ public:
             rand_ids_buffer, _start_vid, _end_vid, gen_size);
 
         const vec_ele_t* pivot_vec = this->_vecs_data.get(storage_vid);
-        const vertex_num_t max_sz = this->_refining_graph.layer_config().max_nbr_size();
+        const vertex_num_t max_sz = this->_single_layer_graph.layer_config().max_nbr_size();
 
         std::vector<vertex_id_t> nbr_ids;
         std::vector<distance_t> nbr_dists;
@@ -125,11 +125,11 @@ public:
         nbr_dists.reserve(gen_size);
 
         for (vertex_num_t i = 0; i < gen_size; ++i) {
-            const vertex_id_t rand_nbr_global = this->_refining_graph.get_storage_vid(rand_ids_buffer[i]);
+            const vertex_id_t rand_nbr_global = this->_single_layer_graph.get_storage_vid(rand_ids_buffer[i]);
             if (rand_nbr_global == storage_vid) { continue; }
             const distance_t dist = this->_dist_func(pivot_vec, this->_vecs_data.get(rand_nbr_global));
 
-            const nbr_arr_t& pivot_nbrs = this->_refining_graph.fetch_nbrs(storage_vid);
+            const nbr_arr_t& pivot_nbrs = this->_single_layer_graph.fetch_nbrs(storage_vid);
             if (pivot_nbrs.size() >= max_sz &&
                 pivot_nbrs[max_sz - 1].get_distance() <= dist) {
                 continue;

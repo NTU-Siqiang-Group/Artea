@@ -94,7 +94,7 @@ public:
 
         // Resolve BOTH compile-time axes: metric from the --metric input,
         // padded dim from the loaded dataset; the dataset and the resulting
-        // compact::refining_graph_t are metric/dim-independent, so only the
+        // compact::single_layer_graph_t are metric/dim-independent, so only the
         // build runs behind <Metric, Dim>.
         dataset_info_ = DatasetInfra{parse_metric(g_config.metric), base_vecs.get_vec_dim()};
 
@@ -145,8 +145,8 @@ public:
             // Convert to flat search graph (metric/dim-independent result)
             ARTEA_INFO("Converting to flat search graph...");
             t0 = std::chrono::high_resolution_clock::now();
-            compact_refining_graph_ = std::make_unique<compact::refining_graph_t>(
-                refining_graph_compactor_t::compact_graph(conv_graph, g_config.extracted_nbr_size)
+            compact_single_layer_graph_ = std::make_unique<compact::single_layer_graph_t>(
+                single_layer_graph_compactor_t::compact_graph(conv_graph, g_config.extracted_nbr_size)
             );
             t1 = std::chrono::high_resolution_clock::now();
             g_test_results.conversion_time_ms =
@@ -157,13 +157,13 @@ public:
 
     vector_dataset_t& get_dataset() { return *dataset_; }
     DatasetInfra get_dataset_info() const { return dataset_info_; }
-    compact::refining_graph_t& get_compact_refining_graph() { return *compact_refining_graph_; }
+    compact::single_layer_graph_t& get_compact_single_layer_graph() { return *compact_single_layer_graph_; }
     const idlist_array_t& get_groundtruth() { return dataset_->get_gt_vecs(); }
 
 private:
     DataProvider() = default;
     std::unique_ptr<vector_dataset_t> dataset_;
-    std::unique_ptr<compact::refining_graph_t> compact_refining_graph_;
+    std::unique_ptr<compact::single_layer_graph_t> compact_single_layer_graph_;
     DatasetInfra dataset_info_{};
 };
 
@@ -172,7 +172,7 @@ class Knn2ConvTest : public ::testing::Test {};
 TEST_F(Knn2ConvTest, QueryRecall) {
     auto& provider = DataProvider::instance();
     auto& dataset = provider.get_dataset();
-    auto& compact_refining_graph = provider.get_compact_refining_graph();
+    auto& compact_single_layer_graph = provider.get_compact_single_layer_graph();
     const auto& groundtruth = provider.get_groundtruth();
 
     const auto& base_vecs = dataset.get_base_vecs();
@@ -191,7 +191,7 @@ TEST_F(Knn2ConvTest, QueryRecall) {
             router.initialize();
 
             auto t0 = std::chrono::high_resolution_clock::now();
-            knn_results_t<Metric, Dim> results = router.batch_query(query_vecs, compact_refining_graph);
+            knn_results_t<Metric, Dim> results = router.batch_query(query_vecs, compact_single_layer_graph);
             auto t1 = std::chrono::high_resolution_clock::now();
             auto us = std::chrono::duration_cast<std::chrono::microseconds>(t1 - t0).count();
 

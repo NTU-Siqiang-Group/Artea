@@ -56,7 +56,7 @@ using IndexStructure = conv_graph::IndexStructure<IndexTraitsT>;
 }
 ```
 
-Otherwise, define a new class that **composes** a `dynamic::RefiningGraph`
+Otherwise, define a new class that **composes** a `dynamic::SingleLayerGraph`
 (it is an ordinary class — no CRTP):
 
 ```cpp
@@ -64,14 +64,14 @@ namespace artea::cpu::my_graph {
 
 template <typename IndexTraitsT>
 class IndexStructure {
-    using refining_graph_t   = typename IndexTraitsT::dynamic::refining_graph_t;
+    using single_layer_graph_t = typename IndexTraitsT::dynamic::single_layer_graph_t;
     using propagate_config_t = typename IndexTraitsT::my_graph::propagate_config_t;
     using pruning_config_t   = typename IndexTraitsT::my_graph::pruning_config_t;
 
 public:
     IndexStructure(const vector_array_t& vecs, const layer_config_t cfg,
                    const pruning_config_t pc, const propagate_config_t pp)
-        : _refining_graph(std::make_unique<refining_graph_t>(vecs, cfg)),
+        : _single_layer_graph(std::make_unique<single_layer_graph_t>(vecs, cfg)),
           _pruning_config(pc), _propagate_config(pp) {}
 
     // Move-only
@@ -115,14 +115,14 @@ class IndexFactory {
 
 public:
     static auto construct_graph(const vector_array_t& base_vecs, ...) -> this_index_t {
-        this_index_t refining_graph(base_vecs, layer_config, pruning_config, propagate_config);
+        this_index_t single_layer_graph(base_vecs, layer_config, pruning_config, propagate_config);
         dist_func_t dist_func(base_vecs.get_vec_dim());
-        _build_loop(refining_graph, dist_func, pruning_config, propagate_config);
-        return refining_graph;
+        _build_loop(single_layer_graph, dist_func, pruning_config, propagate_config);
+        return single_layer_graph;
     }
 
 private:
-    static auto _build_loop(this_index_t& refining_graph, ...) -> void {
+    static auto _build_loop(this_index_t& single_layer_graph, ...) -> void {
         // 1. Initialize random edges
         // 2. Create propagate engine + updaters
         // 3. Run your build schedule  <-- THIS IS WHERE GRAPH TYPES DIVERGE
@@ -234,11 +234,11 @@ CMake auto-discovers all `.cpp` files via `file(GLOB ...)`. Create `test_my_grap
 using namespace artea::cpu;
 
 // 1. Build
-auto refining_graph = my_graph::factory_t::construct_graph(
+auto single_layer_graph = my_graph::factory_t::construct_graph(
     base_vecs, layer_config, pruning_config, propagate_config);
 
 // 2. Convert to search graph
-auto search_graph = refining_graph_compactor_t::from_refining_graph(refining_graph, extracted_nbr_size);
+auto search_graph = single_layer_graph_compactor_t::compact_graph(single_layer_graph, extracted_nbr_size);
 
 // 3. Grid-search QPS vs Recall
 for (uint32_t qs = start; qs <= end; qs += step) {

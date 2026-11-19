@@ -686,14 +686,14 @@ TEST_F(HierarchicalGraphTest, CompactorPreservesTopology) {
 }
 
 // ============================================================
-//  Layer ↔ RefiningGraph round-trip (extract → mutate → writeback)
+//  Layer ↔ SingleLayerGraph round-trip (extract → mutate → writeback)
 // ============================================================
 
 namespace {
 
-// RefiningGraph is now an ordinary (non-CRTP) class, so we can use it
+// SingleLayerGraph is now an ordinary (non-CRTP) class, so we can use it
 // directly without a derived stub.
-using TestRefiningGraph = dynamic::RefiningGraph<index_traits_t>;
+using TestSingleLayerGraph = dynamic::SingleLayerGraph<index_traits_t>;
 
 }  // namespace
 
@@ -701,7 +701,7 @@ using TestRefiningGraph = dynamic::RefiningGraph<index_traits_t>;
 // equivalence with the source slot → mutate one row → writeback → re-extract
 // → assert the mutation round-tripped. Covers L0 (identity-mapped) and L1+
 // (sparse-mapped) paths in one pass.
-TEST_F(HierarchicalGraphTest, LayerRefiningGraphRoundTrip) {
+TEST_F(HierarchicalGraphTest, SingleLayerGraphRoundTrip) {
   build_infra_dispatch(DataProvider::instance().get_dataset_info(), ARTEA_METRIC_LAMBDA(void) {
     // Construct a sized-down VectorArray matching the fixture's vid space.
     // Values are not read by this test (fill/writeback never call build_dist),
@@ -714,13 +714,13 @@ TEST_F(HierarchicalGraphTest, LayerRefiningGraphRoundTrip) {
     ASSERT_NE(top_h, hg_t::invalid_level_id);
 
     for (layer_id_t h = 0; h <= top_h; ++h) {
-        // ---- Build the (l2g, g2l) maps and construct the matching RG. ----
+        // ---- Build the (l2g, g2l) maps and construct the matching single-layer graph. ----
         auto [l2g, g2l] = _graph->collect_layer_vids(h);
-        std::unique_ptr<TestRefiningGraph> refining_graph;
+        std::unique_ptr<TestSingleLayerGraph> single_layer_graph;
         if (h == 0) {
             EXPECT_TRUE(l2g.empty()) << "L0 should be identity-mapped";
             EXPECT_TRUE(g2l.empty()) << "L0 should be identity-mapped";
-            refining_graph = std::make_unique<TestRefiningGraph>(vecs, layer_cfg);
+            single_layer_graph = std::make_unique<TestSingleLayerGraph>(vecs, layer_cfg);
         } else {
             // Participating-vid count must equal Σ |bucket[h..]|.
             vertex_num_t expected = 0;
@@ -730,24 +730,24 @@ TEST_F(HierarchicalGraphTest, LayerRefiningGraphRoundTrip) {
             }
             EXPECT_EQ(l2g.size(), expected);
             EXPECT_EQ(g2l.size(), _num_vertices);
-            refining_graph = std::make_unique<TestRefiningGraph>(
+            single_layer_graph = std::make_unique<TestSingleLayerGraph>(
                 vecs, layer_cfg, l2g, g2l);
-            EXPECT_FALSE(refining_graph->is_identity_mapped());
+            EXPECT_FALSE(single_layer_graph->is_identity_mapped());
         }
 
         // ---- Fill from the layer. ----
-        refiner_utils_t<Metric, Dim>::fill_refining_graph_from_layer(
-            *_graph, *refining_graph, h);
+        refiner_utils_t<Metric, Dim>::fill_single_layer_graph_from_layer(
+            *_graph, *single_layer_graph, h);
 
         // For freshly-built indexes the slot is all-invalid (no edges
-        // written by the fixture), so num_valid_nbrs == 0 and refining_graph
+        // written by the fixture), so num_valid_nbrs == 0 and single_layer_graph
         // rows are empty. Just sanity-check counts and identity round-trip.
         propagate_engine_t<Metric, Dim>::parallel_for_each_vertex(
-            *refining_graph,
+            *single_layer_graph,
             [&](const vertex_id_t /*layer_vid*/, const vertex_id_t storage_vid) {
                 if (!_graph->is_vertex_assigned(storage_vid)) return;
                 const vertex_num_t hg_cnt = _graph->num_valid_nbrs(storage_vid, h);
-                const auto& refining_nbrs = refining_graph->fetch_nbrs(storage_vid);
+                const auto& refining_nbrs = single_layer_graph->fetch_nbrs(storage_vid);
                 EXPECT_EQ(refining_nbrs.size(), hg_cnt)
                     << "vid=" << storage_vid << " h=" << h;
             });
@@ -755,15 +755,15 @@ TEST_F(HierarchicalGraphTest, LayerRefiningGraphRoundTrip) {
         // ---- Mutate one row: pick the first local row, push a fake
         //      neighbor pair (get_storage_vid(other), 1.0). Writeback, re-extract,
         //      assert the mutation survived. ----
-        if (refining_graph->get_num_vertices() < 2) continue;
-        const vertex_id_t pivot_global = refining_graph->get_storage_vid(0);
-        const vertex_id_t other_global = refining_graph->get_storage_vid(1);
-        refining_graph->fetch_nbrs(pivot_global).clear();
-        refining_graph->fetch_nbrs(pivot_global).emplace_back(
+        if (single_layer_graph->get_num_vertices() < 2) continue;
+        const vertex_id_t pivot_global = single_layer_graph->get_storage_vid(0);
+        const vertex_id_t other_global = single_layer_graph->get_storage_vid(1);
+        single_layer_graph->fetch_nbrs(pivot_global).clear();
+        single_layer_graph->fetch_nbrs(pivot_global).emplace_back(
             other_global, distance_t{1}, /*is_new=*/true);
 
-        refiner_utils_t<Metric, Dim>::writeback_layer_from_refining_graph(
-            *_graph, *refining_graph, h);
+        refiner_utils_t<Metric, Dim>::writeback_layer_from_single_layer_graph(
+            *_graph, *single_layer_graph, h);
 
         // Re-read the slot directly from hier_graph.
         const auto written = _graph->fetch_level_nbrs(pivot_global, h);

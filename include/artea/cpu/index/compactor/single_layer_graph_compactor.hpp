@@ -13,9 +13,9 @@
 // limitations under the License.
 
 /*
- * @FilePath: /Artea/include/artea/cpu/index/compactor/refining_graph_compactor.hpp
+ * @FilePath: /Artea/include/artea/cpu/index/compactor/single_layer_graph_compactor.hpp
  * @Author: Chandler (Weitang Ye) <weitang.ye@ntu.edu.sg>
- * @Description: Compactor: dynamic RefiningGraph -> compact RefiningGraph.
+ * @Description: Compactor: dynamic SingleLayerGraph -> compact SingleLayerGraph.
  */
 
 #pragma once
@@ -30,7 +30,7 @@ namespace artea {
 namespace cpu {
 
 template <typename IndexTraitsT>
-class RefiningGraphCompactor {
+class SingleLayerGraphCompactor {
 
     using vertex_num_t   = typename IndexTraitsT::vertex_num_t;
     using vertex_id_t    = typename IndexTraitsT::vertex_id_t;
@@ -40,7 +40,7 @@ class RefiningGraphCompactor {
 
 public:
     /**
-     * @brief Compact a RefiningGraph-like structure into a compact::refining_graph_t.
+     * @brief Compact a SingleLayerGraph-like structure into a compact::single_layer_graph_t.
      *
      * Reads neighbor arrays and vector data from @p src, copies up to
      * @p extracted_nbr_size neighbors per vertex into a flat CSR layout.
@@ -49,13 +49,13 @@ public:
      *                           get_num_vertices, get_vecs_data, get_nbrs_arr,
      *                           layer_config).
      * @param extracted_nbr_size Fixed neighbor count per vertex in the output.
-     * @return A new compact::refining_graph_t.
+     * @return A new compact::single_layer_graph_t.
      */
-    template <typename RefiningGraphT>
+    template <typename SingleLayerGraphT>
     static auto compact_graph(
-        const RefiningGraphT& src,
+        const SingleLayerGraphT& src,
         const vertex_num_t extracted_nbr_size
-    ) -> typename compact::refining_graph_t {
+    ) -> typename compact::single_layer_graph_t {
         const vertex_num_t max_nbr_size = src.layer_config().max_nbr_size();
 
         if (extracted_nbr_size > max_nbr_size) {
@@ -69,7 +69,7 @@ public:
         const auto& vecs_data = src.get_vecs_data();
         const auto& nbrs_arr = src.get_nbrs_arr();
 
-        typename compact::refining_graph_t result(vecs_data, extracted_nbr_size);
+        typename compact::single_layer_graph_t result(vecs_data, extracted_nbr_size);
         auto& csr_nbrs = result.get_csr_nbrs();
         const vertex_id_t invalid_id = IndexTraitsT::invalid_vertex_id;
 
@@ -104,13 +104,13 @@ public:
         const std::string& file_path,
         const vertex_num_t extracted_nbr_size,
         const vector_array_t& vecs_data
-    ) -> typename compact::refining_graph_t {
+    ) -> typename compact::single_layer_graph_t {
         using index_t = typename IndexTraitsT::conv_graph::index_t;
         index_t graph_index = index_t::restore(file_path, vecs_data);
         return compact_graph(graph_index, extracted_nbr_size);
     }
 
-};  // class RefiningGraphCompactor
+};  // class SingleLayerGraphCompactor
 
 }   // namespace cpu
 }   // namespace artea

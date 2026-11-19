@@ -65,7 +65,7 @@ class IndexFactory {
     using query_vecs_t = typename GraphFactoryTraitsT::query_vecs_t;
     using ground_truth_t = typename GraphFactoryTraitsT::ground_truth_t;
     using recall_estimator_t = typename GraphFactoryTraitsT::recall_estimator_t;
-    using refining_graph_t      = typename GraphFactoryTraitsT::dynamic::refining_graph_t;
+    using single_layer_graph_t  = typename GraphFactoryTraitsT::dynamic::single_layer_graph_t;
     using single_layer_router_t = typename GraphFactoryTraitsT::single_layer_router_t;
 
 public:
@@ -85,7 +85,7 @@ public:
 
     /** @brief Build in place using the index's existing vectors and graph configuration. */
     static auto build_from_vectors(this_index_t& graph_index, const dist_func_t& distance) -> double {
-        graph_index.get_refining_graph();
+        graph_index.get_single_layer_graph();
         const auto start = std::chrono::high_resolution_clock::now();
         if (graph_index.get_num_vertices() != 0) {
             _build_loop(graph_index, distance, graph_index.pruning_config(), graph_index.propagate_config());
@@ -135,24 +135,24 @@ public:
     }
 
     /**
-     * @brief Construct a convergent graph from an existing RefiningGraph
+     * @brief Construct a convergent graph from an existing SingleLayerGraph
      *        (e.g. the inner graph of a knn_graph or symmetric_knn_graph
      *        IndexStructure) by taking ownership of its edges, then running
      *        triangle+reverse pruning.
      *
-     * @warning This function moves from the input RefiningGraph. After the
+     * @warning This function moves from the input SingleLayerGraph. After the
      *          call, the input is left in a valid but unspecified state —
      *          the caller must not use it further. This overload only borrows the source vectors;
      *          they must outlive the returned index. Use the whole-index overload to transfer ownership.
      *
-     * @param src_graph        The RefiningGraph whose edges will be consumed
+     * @param src_graph        The SingleLayerGraph whose edges will be consumed
      *                         (moved). Typically obtained via
-     *                         @c knn_index.get_refining_graph() or similar.
+     *                         @c knn_index.get_single_layer_graph() or similar.
      * @param pruning_config   Pruning configuration for triangle updater.
      * @return A fully constructed convergent graph.
      */
     static auto construct_graph(
-        refining_graph_t&&     src_graph,
+        single_layer_graph_t&&     src_graph,
         const pruning_config_t pruning_config
     ) -> ConstructResult {
         const auto t_start = std::chrono::high_resolution_clock::now();
@@ -197,7 +197,7 @@ public:
         _build_loop(graph_index, dist_func, pruning_config, propagate_config,
             [&](iter_t build_loop) {
                 auto t0 = std::chrono::high_resolution_clock::now();
-                auto results = router.batch_query(query_vecs, graph_index.get_refining_graph());
+                auto results = router.batch_query(query_vecs, graph_index.get_single_layer_graph());
                 auto t1 = std::chrono::high_resolution_clock::now();
                 double qps = query_vecs.get_num_vecs() * 1e6 /
                     std::chrono::duration_cast<std::chrono::microseconds>(t1 - t0).count();
@@ -219,7 +219,7 @@ private:
         dist_func_t dist_func;  // stateless: dim is a compile-time trait
 
         propagate_engine_t propagate_engine(dist_func);
-        propagate_engine.set_graph(graph_index.get_refining_graph());
+        propagate_engine.set_graph(graph_index.get_single_layer_graph());
 
         auto pruning_updater = propagate_engine.template make_updater<pruning_updater_t>(
             pruning_config.scale_coeffs(), pruning_config.shifted_coeffs());
@@ -258,10 +258,10 @@ private:
         const vertex_num_t init_nbr_size = static_cast<vertex_num_t>(max_nbr_size * propagate_config.prefill_ratio());
 
         random_eg_t random_eg(dist_func);
-        random_eg.generate(graph_index.get_refining_graph(), init_nbr_size);
+        random_eg.generate(graph_index.get_single_layer_graph(), init_nbr_size);
 
         propagate_engine_t propagate_engine(dist_func);
-        propagate_engine.set_graph(graph_index.get_refining_graph());
+        propagate_engine.set_graph(graph_index.get_single_layer_graph());
 
         auto triangle_updater  = propagate_engine.template make_updater<triangle_updater_t>(
             pruning_config.scale_coeffs(), pruning_config.shifted_coeffs());

@@ -185,7 +185,7 @@ TEST_F(PropagateEngineCorrectnessTest, TrianglePruningWithPropagateEngine) {
     graph_index_->layer_config().max_nbr_size(max_nbr_size);
 
     propagate_engine_t<TEST_METRIC, TEST_DIM> propagate_engine(*dist_func_);
-    propagate_engine.set_graph(graph_index_->get_refining_graph());
+    propagate_engine.set_graph(graph_index_->get_single_layer_graph());
 
     auto triangle_updater = propagate_engine.make_updater<triangle_updater_t<TEST_METRIC, TEST_DIM>>(
         pruning_config_.scale_coeffs(), pruning_config_.shifted_coeffs());
@@ -242,7 +242,7 @@ TEST_F(PropagateEngineCorrectnessTest, TrianglePrunesUsingFarthestRetainedNeighb
     }
 
     propagate_engine_t<TEST_METRIC, TEST_DIM> engine(*dist_func_);
-    engine.set_graph(graph_index_->get_refining_graph());
+    engine.set_graph(graph_index_->get_single_layer_graph());
     auto updater = engine.make_updater<triangle_updater_t<TEST_METRIC, TEST_DIM>>(1.0f, 0.0f);
     engine.propagate(0, updater);
 
@@ -268,7 +268,7 @@ TEST_F(PropagateEngineCorrectnessTest, TriangleSelectsClosestRecommendationWitho
     }
 
     propagate_engine_t<TEST_METRIC, TEST_DIM> engine(*dist_func_);
-    engine.set_graph(graph_index_->get_refining_graph());
+    engine.set_graph(graph_index_->get_single_layer_graph());
     auto updater = engine.make_updater<triangle_updater_t<TEST_METRIC, TEST_DIM>>(2.0f, 0.0f);
     engine.propagate(0, updater);
 
@@ -302,7 +302,7 @@ TEST_F(PropagateEngineCorrectnessTest, TriangleUsesAlphaDependentShiftAndKeepsRe
         }
 
         propagate_engine_t<TEST_METRIC, TEST_DIM> engine(*dist_func_);
-        engine.set_graph(graph_index_->get_refining_graph());
+        engine.set_graph(graph_index_->get_single_layer_graph());
         auto updater = engine.make_updater<triangle_updater_t<TEST_METRIC, TEST_DIM>>(
             c.alpha, c.shift);
         engine.propagate(0, updater);
@@ -334,7 +334,7 @@ TEST_F(PropagateEngineCorrectnessTest, IntegratedRandomAndReverseUpdater) {
     ARTEA_INFO("Step 1: Starting with empty graph");
 
     propagate_engine_t<TEST_METRIC, TEST_DIM> propagate_engine(*dist_func_);
-    propagate_engine.set_graph(graph_index_->get_refining_graph());
+    propagate_engine.set_graph(graph_index_->get_single_layer_graph());
 
     // Step 2: Apply RandomUpdater to generate asymmetric edges
     const vec_num_t rand_gen_size = 5;
@@ -435,7 +435,7 @@ TEST_F(PropagateEngineCorrectnessTest, NeighborsSortedAfterPruning) {
     graph_index_->layer_config().max_nbr_size(max_nbr_size);
 
     propagate_engine_t<TEST_METRIC, TEST_DIM> propagate_engine(*dist_func_);
-    propagate_engine.set_graph(graph_index_->get_refining_graph());
+    propagate_engine.set_graph(graph_index_->get_single_layer_graph());
 
     auto triangle_updater = propagate_engine.make_updater<triangle_updater_t<TEST_METRIC, TEST_DIM>>(
         pruning_config_.scale_coeffs(), pruning_config_.shifted_coeffs());
@@ -466,7 +466,7 @@ TEST_F(PropagateEngineCorrectnessTest, RandomUpdaterGeneratesEdges) {
     ARTEA_INFO("Testing RandomUpdater with empty initial graph:");
 
     propagate_engine_t<TEST_METRIC, TEST_DIM> propagate_engine(*dist_func_);
-    propagate_engine.set_graph(graph_index_->get_refining_graph());
+    propagate_engine.set_graph(graph_index_->get_single_layer_graph());
 
     const vec_num_t rand_gen_size = 5;  // Generate 5 random neighbors per vertex
 
@@ -527,7 +527,7 @@ TEST_F(PropagateEngineCorrectnessTest, RandomUpdaterThreadSafety) {
     }
 
     propagate_engine_t<TEST_METRIC, TEST_DIM> propagate_engine(*dist_func_);
-    propagate_engine.set_graph(graph_index_->get_refining_graph());
+    propagate_engine.set_graph(graph_index_->get_single_layer_graph());
 
     const vec_num_t rand_gen_size = 10;
 
@@ -579,7 +579,7 @@ TEST_F(PropagateEngineCorrectnessTest, TrianglePruningWithoutSelectiveScheduling
     graph_index_->layer_config().max_nbr_size(max_nbr_size);
 
     propagate_engine_t<TEST_METRIC, TEST_DIM> propagate_engine(*dist_func_);
-    propagate_engine.set_graph(graph_index_->get_refining_graph());
+    propagate_engine.set_graph(graph_index_->get_single_layer_graph());
 
     auto triangle_updater = propagate_engine.make_updater<triangle_updater_t<TEST_METRIC, TEST_DIM>>(
         pruning_config_.scale_coeffs(), pruning_config_.shifted_coeffs());

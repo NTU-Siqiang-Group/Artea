@@ -1,7 +1,7 @@
 /*
  * @FilePath: /Artea/include/artea/cpu/index/knn_graph/index_structure.hpp
  * @Author: Chandler (Weitang Ye) <weitang.ye@ntu.edu.sg>
- * @Description: KNN graph index structure. Composes a RefiningGraph plus
+ * @Description: KNN graph index structure. Composes a SingleLayerGraph plus
  *               propagation config. No RNG pruning config is stored —
  *               the KNN build pipeline does not invoke PruningUpdater.
  */
@@ -16,14 +16,14 @@
 #include <nlohmann/json.hpp>
 
 #include <artea/cpu/index/dataset_index.hpp>
-#include <artea/cpu/index/compactor/refining_graph_compactor.hpp>
+#include <artea/cpu/index/compactor/single_layer_graph_compactor.hpp>
 
 namespace artea {
 namespace cpu {
 namespace knn_graph {
 
 /**
- * @brief KNN graph index. Composes a @c RefiningGraph with a
+ * @brief KNN graph index. Composes a @c SingleLayerGraph with a
  *        caller-supplied propagation config.
  *
  * The KNN build pipeline (random init + triangle + reverse + truncate +
@@ -36,7 +36,7 @@ template <typename IndexTraitsT>
 class IndexStructure : public DatasetIndex<IndexTraitsT> {
     using data_base_t = DatasetIndex<IndexTraitsT>;
 
-    using refining_graph_t    = typename IndexTraitsT::dynamic::refining_graph_t;
+    using single_layer_graph_t = typename IndexTraitsT::dynamic::single_layer_graph_t;
     using vertex_num_t       = typename IndexTraitsT::vertex_num_t;
     using vertex_id_t        = typename IndexTraitsT::vertex_id_t;
     using nbr_arr_t         = typename IndexTraitsT::nbr_arr_t;
@@ -46,7 +46,7 @@ class IndexStructure : public DatasetIndex<IndexTraitsT> {
 
 public:
     using vector_dataset_t = typename IndexTraitsT::vector_dataset_t;
-    using compact_graph_t = typename IndexTraitsT::compact::refining_graph_t;
+    using compact_graph_t = typename IndexTraitsT::compact::single_layer_graph_t;
 
     /**
      * @brief Construct a new KNN graph index.
@@ -58,7 +58,7 @@ public:
         const vector_array_t& vecs_data,
         const layer_config_t layer_config,
         const propagate_config_t propagate_config
-    ) : data_base_t(vecs_data), _refining_graph(std::make_unique<refining_graph_t>(vecs_data, layer_config)),
+    ) : data_base_t(vecs_data), _single_layer_graph(std::make_unique<single_layer_graph_t>(vecs_data, layer_config)),
         _propagate_config(propagate_config)
     {}
 
@@ -80,20 +80,20 @@ public:
     auto prepare_build(const layer_config_t layer_config,
                    const propagate_config_t propagate_config) -> IndexStructure& {
         _compact_graph.reset();
-        _refining_graph.reset();
-        auto graph = std::make_unique<refining_graph_t>(this->get_base_vecs(), layer_config);
+        _single_layer_graph.reset();
+        auto graph = std::make_unique<single_layer_graph_t>(this->get_base_vecs(), layer_config);
         _propagate_config = propagate_config;
-        _refining_graph = std::move(graph);
+        _single_layer_graph = std::move(graph);
         return *this;
     }
 
     /** @brief Compact successfully before releasing construction state; retain all vector data. */
     auto compact(vertex_num_t extracted_nbr_size) -> void {
-        using compactor_t = typename IndexTraitsT::refining_graph_compactor_t;
-        auto graph = compactor_t::compact_graph(get_refining_graph(), extracted_nbr_size);
+        using compactor_t = typename IndexTraitsT::single_layer_graph_compactor_t;
+        auto graph = compactor_t::compact_graph(get_single_layer_graph(), extracted_nbr_size);
         auto compact_graph = std::make_unique<compact_graph_t>(std::move(graph));
         _compact_graph = std::move(compact_graph);
-        _refining_graph.reset();
+        _single_layer_graph.reset();
     }
 
     /** @brief Search graph available after compaction and until the next rebuild. */
@@ -103,7 +103,7 @@ public:
     }
 
     /** @brief Release construction state while retaining dataset and any compact graph. */
-    auto release() -> void { _refining_graph.reset(); }
+    auto release() -> void { _single_layer_graph.reset(); }
 
     IndexStructure(const IndexStructure&) = delete;
     IndexStructure& operator=(const IndexStructure&) = delete;
@@ -113,9 +113,9 @@ public:
     auto operator=(IndexStructure&& other) noexcept -> IndexStructure& {
         if (this != &other) {
             _compact_graph.reset();
-            _refining_graph.reset();
+            _single_layer_graph.reset();
             data_base_t::operator=(std::move(other));
-            _refining_graph = std::move(other._refining_graph);
+            _single_layer_graph = std::move(other._single_layer_graph);
             _compact_graph = std::move(other._compact_graph);
             _propagate_config = std::move(other._propagate_config);
         }
@@ -125,52 +125,52 @@ public:
     // --- Composed graph accessor ---
 
     __attribute__((always_inline))
-    auto get_refining_graph() -> refining_graph_t& {
-        if (!_refining_graph) throw std::logic_error("No building graph; call prepare_build first");
-        return *_refining_graph;
+    auto get_single_layer_graph() -> single_layer_graph_t& {
+        if (!_single_layer_graph) throw std::logic_error("No building graph; call prepare_build first");
+        return *_single_layer_graph;
     }
 
     __attribute__((always_inline))
-    auto get_refining_graph() const -> const refining_graph_t& {
-        if (!_refining_graph) throw std::logic_error("No building graph; call prepare_build first");
-        return *_refining_graph;
+    auto get_single_layer_graph() const -> const single_layer_graph_t& {
+        if (!_single_layer_graph) throw std::logic_error("No building graph; call prepare_build first");
+        return *_single_layer_graph;
     }
 
-    // --- RefiningGraph public API forwarders ---
+    // --- SingleLayerGraph public API forwarders ---
 
     __attribute__((always_inline))
     auto get_num_vertices() const -> vertex_num_t {
-        return get_refining_graph().get_num_vertices();
+        return get_single_layer_graph().get_num_vertices();
     }
 
     __attribute__((always_inline))
     auto layer_config() const -> const layer_config_t& {
-        return get_refining_graph().layer_config();
+        return get_single_layer_graph().layer_config();
     }
 
     __attribute__((always_inline))
     auto layer_config() -> layer_config_t& {
-        return get_refining_graph().layer_config();
+        return get_single_layer_graph().layer_config();
     }
 
     __attribute__((always_inline))
     auto get_nbrs_arr() -> std::vector<nbr_arr_t>& {
-        return get_refining_graph().get_nbrs_arr();
+        return get_single_layer_graph().get_nbrs_arr();
     }
 
     __attribute__((always_inline))
     auto get_nbrs_arr() const -> const std::vector<nbr_arr_t>& {
-        return get_refining_graph().get_nbrs_arr();
+        return get_single_layer_graph().get_nbrs_arr();
     }
 
     __attribute__((always_inline))
     auto fetch_nbrs(const vertex_id_t src) const -> const nbr_arr_t& {
-        return get_refining_graph().fetch_nbrs(src);
+        return get_single_layer_graph().fetch_nbrs(src);
     }
 
     __attribute__((always_inline))
     auto fetch_nbrs(const vertex_id_t src) -> nbr_arr_t& {
-        return get_refining_graph().fetch_nbrs(src);
+        return get_single_layer_graph().fetch_nbrs(src);
     }
 
     __attribute__((always_inline))
@@ -180,16 +180,16 @@ public:
 
     __attribute__((always_inline))
     auto is_identity_mapped() const -> bool {
-        return get_refining_graph().is_identity_mapped();
+        return get_single_layer_graph().is_identity_mapped();
     }
 
     __attribute__((always_inline))
     auto get_storage_vid(const vertex_num_t local_idx) const -> vertex_id_t {
-        return get_refining_graph().get_storage_vid(local_idx);
+        return get_single_layer_graph().get_storage_vid(local_idx);
     }
 
     auto get_base_metadata() const -> nlohmann::json {
-        return get_refining_graph().get_base_metadata();
+        return get_single_layer_graph().get_base_metadata();
     }
 
     // --- Config accessors ---
@@ -204,7 +204,7 @@ private:
     friend class conv_graph::IndexStructure<IndexTraitsT>;
 
     /** @brief Building topology referencing the stable vector array in the data-owning base. */
-    std::unique_ptr<refining_graph_t> _refining_graph;
+    std::unique_ptr<single_layer_graph_t> _single_layer_graph;
 
     /** @brief Search topology also borrowing that vector array; destroyed before the base. */
     std::unique_ptr<compact_graph_t> _compact_graph;

@@ -37,7 +37,7 @@ class TruncateUpdater :
     using log_table_t      = typename RefinerTraitsT::log_table_t;
     using dist_func_t      = typename RefinerTraitsT::dist_func_t;
     using vector_array_t   = typename RefinerTraitsT::vector_array_t;
-    using refining_graph_t = typename RefinerTraitsT::dynamic::refining_graph_t;
+    using single_layer_graph_t = typename RefinerTraitsT::dynamic::single_layer_graph_t;
     using base_class_t     = typename RefinerTraitsT::template neighbor_updater_t<TruncateUpdater<RefinerTraitsT>>;
 
 public:
@@ -50,9 +50,9 @@ public:
         const dist_func_t&        dist_func,
         const vector_array_t&     vecs_data,
         log_table_t&              log_table,
-        const refining_graph_t&   refining_graph,
+        const single_layer_graph_t&   single_layer_graph,
         distance_t                truncate_distance = RefinerTraitsT::max_distance
-    ) : base_class_t(dist_func, vecs_data, log_table, refining_graph),
+    ) : base_class_t(dist_func, vecs_data, log_table, single_layer_graph),
         _truncate_distance(truncate_distance) {}
 
     __attribute__((always_inline))
@@ -60,7 +60,7 @@ public:
         const vertex_id_t /* layer_vid */,
         nbr_arr_t& origin_nbrs
     ) -> void {
-        const vertex_num_t max_sz = this->_refining_graph.layer_config().max_nbr_size();
+        const vertex_num_t max_sz = this->_single_layer_graph.layer_config().max_nbr_size();
         if (origin_nbrs.size() > max_sz) {
             origin_nbrs.resize(max_sz);
         }

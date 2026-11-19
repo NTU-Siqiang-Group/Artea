@@ -48,7 +48,7 @@ class RandomEG {
     using nbr_comp_t = typename RefinerTraitsT::nbr_comp_t;
     using dist_func_t = typename RefinerTraitsT::dist_func_t;
     using random_seq_t = typename RefinerTraitsT::random_seq_t;
-    using refining_graph_t = typename RefinerTraitsT::dynamic::refining_graph_t;
+    using single_layer_graph_t = typename RefinerTraitsT::dynamic::single_layer_graph_t;
 
     static constexpr nbr_comp_t nbr_comp {};
 
@@ -62,15 +62,15 @@ public:
 
     /**
      * @brief Generate random edges for a descent graph.
-     * @param refining_graph The graph to initialize with random edges.
+     * @param single_layer_graph The graph to initialize with random edges.
      * @param init_nbr_size Number of random neighbors to generate for each vertex.
      */
     auto generate(
-        refining_graph_t& refining_graph,
+        single_layer_graph_t& single_layer_graph,
         const vertex_num_t init_nbr_size
     ) -> void {
-        const vertex_num_t num_vertices = refining_graph.get_num_vertices();
-        const vector_array_t& vecs_data = refining_graph.get_vecs_data();
+        const vertex_num_t num_vertices = single_layer_graph.get_num_vertices();
+        const vector_array_t& vecs_data = single_layer_graph.get_vecs_data();
 
         // RandomSeq uses thread-local storage internally, so it's safe to share across threads
         random_seq_t random_seq;
@@ -78,17 +78,17 @@ public:
         // Per-thread reusable buffer for random local indices. Indices are
         // drawn in [0, num_vertices) (i.e. local row space when sparse,
         // identical to global vid space when identity-mapped) and then
-        // translated to global vids via refining_graph.get_storage_vid(...).
+        // translated to global vids via single_layer_graph.get_storage_vid(...).
         tbb::enumerable_thread_specific<std::vector<vertex_id_t>>
             tls_random_local_ids([init_nbr_size]{
                 return std::vector<vertex_id_t>(init_nbr_size);
             });
 
         PropagateEngine<RefinerTraitsT>::parallel_for_each_vertex(
-            refining_graph,
+            single_layer_graph,
             [&](const vertex_id_t /*layer_vid*/, const vertex_id_t pivot_vid) {
                 auto& random_local_ids = tls_random_local_ids.local();
-                nbr_arr_t& nbrs = refining_graph.fetch_nbrs(pivot_vid);
+                nbr_arr_t& nbrs = single_layer_graph.fetch_nbrs(pivot_vid);
                 const vec_ele_t* query_vec = vecs_data.get(pivot_vid);
 
                 random_seq.generate(random_local_ids, num_vertices, init_nbr_size);
@@ -97,7 +97,7 @@ public:
 
                 for (vertex_num_t i = 0; i < init_nbr_size; ++i) {
                     const vertex_id_t nbr_vid =
-                        refining_graph.get_storage_vid(random_local_ids[i]);
+                        single_layer_graph.get_storage_vid(random_local_ids[i]);
 
                     if (nbr_vid == pivot_vid) {
                         continue;

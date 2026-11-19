@@ -376,10 +376,10 @@ private:
     /// @brief conv_graph pruning config (per-layer refinement).
     std::optional<pruning_config_t> _pruning_config;
 
-    /// @brief RefiningGraph sizing config for level_id > 0.
+    /// @brief SingleLayerGraph sizing config for level_id > 0.
     std::optional<layer_config_t> _ul_refining_layer_config;
 
-    /// @brief RefiningGraph sizing config for level_id == 0.
+    /// @brief SingleLayerGraph sizing config for level_id == 0.
     std::optional<layer_config_t> _bl_refining_layer_config;
 
     /** @brief Compact search graph whose lifetime remains within the data-owning index. */

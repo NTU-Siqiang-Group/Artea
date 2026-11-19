@@ -35,7 +35,7 @@
 #include <artea/cpu/utils/simd_distance.hpp>
 #include <artea/cpu/refiner/updaters/neighbor_updater.hpp>
 #include <artea/cpu/refiner/nbr_log_table.hpp>
-#include <artea/cpu/index/dynamic_structure/refining_graph.hpp>
+#include <artea/cpu/index/dynamic_structure/single_layer_graph.hpp>
 
 namespace {
 using namespace artea::cpu;
@@ -381,7 +381,7 @@ TEST(ExactArteaPruning, RejectsInvalidConfigShiftOverflowAndPairDistances) {
 
 TEST(ExactArteaPruning, SharedKernelPreservesLegacyIncrementalAndConditionDispatch) {
     auto data = line({0, 1, 1.25f});
-    IT::dynamic::refining_graph_t graph(data, IT::layer_config_t(1));
+    IT::dynamic::single_layer_graph_t graph(data, IT::layer_config_t(1));
     Buffer::log_table_t logs;
     Refiner::pruning_updater_t legacy(distance, data, logs, graph, 2, 1.5f);
     std::vector<Neighbor> old{{1, 1}, {2, 1.25f}};

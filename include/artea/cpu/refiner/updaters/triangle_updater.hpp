@@ -53,7 +53,7 @@ class TriangleUpdater :
     using nbr_arr_t = typename RefinerTraitsT::nbr_arr_t;
     using log_table_t = typename RefinerTraitsT::log_table_t;
     using dist_func_t = typename RefinerTraitsT::dist_func_t;
-    using refining_graph_t = typename RefinerTraitsT::dynamic::refining_graph_t;
+    using single_layer_graph_t = typename RefinerTraitsT::dynamic::single_layer_graph_t;
     using base_class_t = typename RefinerTraitsT::template neighbor_updater_t<TriangleUpdater<RefinerTraitsT>>;
     static constexpr vertex_id_t invalid_vertex_id = RefinerTraitsT::invalid_vertex_id;
     static constexpr distance_t nan_distance = RefinerTraitsT::nan_distance;
@@ -66,16 +66,16 @@ public:
         const dist_func_t&        dist_func,
         const vector_array_t&     vecs_data,
         log_table_t&              log_table,
-        const refining_graph_t&   refining_graph,
+        const single_layer_graph_t&   single_layer_graph,
         const ratio_t             scale_coeffs,
         const ratio_t             shifted_coeffs
-    ) : base_class_t(dist_func, vecs_data, log_table, refining_graph),
+    ) : base_class_t(dist_func, vecs_data, log_table, single_layer_graph),
         _inv_scale_coeffs(static_cast<ratio_t>(1.0) / scale_coeffs),
         _shifted_coeffs(shifted_coeffs) {}
 
     __attribute__((always_inline))
     auto get_max_nbr_size() const -> vertex_num_t {
-        return this->_refining_graph.layer_config().max_nbr_size();
+        return this->_single_layer_graph.layer_config().max_nbr_size();
     }
 
     /**
@@ -121,7 +121,7 @@ public:
 
         nbr_arr_t retained_nbrs;
         retained_nbrs.reserve(origin_nbrs.capacity());
-        const vertex_num_t max_sz = this->_refining_graph.layer_config().max_nbr_size();
+        const vertex_num_t max_sz = this->_single_layer_graph.layer_config().max_nbr_size();
 
         // The first neighbor is always the closest to pivot_vid and cannot conflict with any existing neighbor
         retained_nbrs.push_back(origin_nbrs[0]);
@@ -132,7 +132,7 @@ public:
 
             if (!recommend_to.is_invalid()) {
                 this->_log_table.write_log(
-                    this->_refining_graph.local_id_of(recommend_to.get_vid()),
+                    this->_single_layer_graph.local_id_of(recommend_to.get_vid()),
                     ori_nbr.get_vid(),
                     recommend_to.get_distance()
                 );

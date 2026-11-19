@@ -16,7 +16,7 @@
  * @FilePath: /Artea/include/artea/cpu/refiner/updaters/hierarchical_pruning_updater.hpp
  * @Author: Chandler (Weitang Ye) <weitang.ye@ntu.edu.sg>
  * @Description: Pure-RNG neighbor pruning over nbr_t, decoupled from any
- *               RefiningGraph / layer_config. Used by
+ *               SingleLayerGraph / layer_config. Used by
  *               stacked_rgraph::IndexFactory for both forward-edge
  *               pruning (new vertex's candidate list) and reverse-edge
  *               pruning (existing neighbors' lists under overflow).
@@ -41,7 +41,7 @@ namespace cpu {
  * check (threshold = ori_dist, no scale/shift) against already-retained
  * entries.
  *
- * Unlike the RefiningGraph-centric @c PruningUpdater, this class is
+ * Unlike the SingleLayerGraph-centric @c PruningUpdater, this class is
  * stateless except for the references to @c vecs_data + @c dist_func
  * needed to compute neighbor-to-neighbor distances. @c max_nbr_size is a
  * per-call parameter because the hierarchical graph uses different

@@ -284,7 +284,7 @@ TYPED_TEST(FlatDatasetIndex, OwnsBuildsCompactsRebuildsAndMovesWithoutCopying) {
     const auto* query_address = dataset->get_query_vecs().get_all();
     const auto* gt_address = dataset->get_gt_vecs().get_all();
     index_t index(std::move(dataset));
-    EXPECT_THROW(index.get_refining_graph(), std::logic_error);
+    EXPECT_THROW(index.get_single_layer_graph(), std::logic_error);
     EXPECT_THROW(index.get_compact_graph(), std::logic_error);
     EXPECT_THROW(index.get_vecs_storage(), std::logic_error);
     dist_func_t<metric, dimension> distance;
@@ -292,9 +292,9 @@ TYPED_TEST(FlatDatasetIndex, OwnsBuildsCompactsRebuildsAndMovesWithoutCopying) {
         TypeParam::prepare(index, degree);
         EXPECT_THROW(index.get_compact_graph(), std::logic_error);
         build_factory_t::build_from_vectors(index, distance);
-        auto reference = refining_graph_compactor_t::compact_graph(index.get_refining_graph(), 8);
+        auto reference = single_layer_graph_compactor_t::compact_graph(index.get_single_layer_graph(), 8);
         index.compact(8);
-        EXPECT_THROW(index.get_refining_graph(), std::logic_error);
+        EXPECT_THROW(index.get_single_layer_graph(), std::logic_error);
         EXPECT_EQ(index.get_compact_graph().get_csr_nbrs(), reference.get_csr_nbrs());
         EXPECT_EQ(&index.get_compact_graph().get_vecs_data(), &index.get_dataset().get_base_vecs());
 
@@ -355,7 +355,7 @@ TEST(DatasetIndex, FlatBorrowingRemainsExplicitAndMoveAssignmentReplacesReferenc
     EXPECT_THROW(first.get_vecs_storage(), std::logic_error);
     second = std::move(first);
     EXPECT_THROW(first.get_base_vecs(), std::logic_error);
-    EXPECT_EQ(&second.get_refining_graph().get_vecs_data(), &first_dataset->get_base_vecs());
+    EXPECT_EQ(&second.get_single_layer_graph().get_vecs_data(), &first_dataset->get_base_vecs());
     auto owned = KnnCase::construct(make_dataset(64));
     owned.graph = std::move(second);
     EXPECT_FALSE(owned.graph.owns_dataset());
@@ -374,11 +374,11 @@ TEST(DatasetIndex, KnnToSymmetricToConvTransfersDatasetAlongWithGraph) {
         auto conv = conv_graph::factory_t<metric, dimension>::construct_graph(
             std::move(symmetric.graph), flat_pruning_t(1.1f, 0));
         EXPECT_FALSE(symmetric.graph.owns_dataset());
-        EXPECT_THROW(symmetric.graph.get_refining_graph(), std::logic_error);
+        EXPECT_THROW(symmetric.graph.get_single_layer_graph(), std::logic_error);
         return conv;
     }();
     EXPECT_EQ(&converted.graph.get_dataset(), original);
-    EXPECT_EQ(converted.graph.get_refining_graph().get_vecs_data().get_all(), vectors);
+    EXPECT_EQ(converted.graph.get_single_layer_graph().get_vecs_data().get_all(), vectors);
     converted.graph.compact(8);
     EXPECT_EQ(converted.graph.get_compact_graph().get_vecs_data().get_all(), vectors);
     dist_func_t<metric, dimension> distance;
