@@ -156,6 +156,31 @@ TEST_F(SingleLayerGraphTest, MoveSemantics) {
     EXPECT_EQ(moved.get_nbrs_arr()[0].size(), edges_v0);
 }
 
+TEST(SingleLayerGraphMappingTest, MovesMappingsWithSparseRows) {
+    using graph_t = index_traits_t::dynamic::single_layer_graph_t;
+    vector_array_t vectors(4, TEST_DIM);
+    const layer_config_t config(2);
+    constexpr auto missing = index_traits_t::invalid_vertex_id;
+    graph_t source(vectors, config, {1, 3}, {missing, 0, missing, 1});
+    source.fetch_nbrs(3).emplace_back(1, 1.0f, true);
+
+    graph_t moved(std::move(source));
+    EXPECT_EQ(moved.get_storage_vid(1), 3u);
+    EXPECT_EQ(moved.local_id_of(3), 1u);
+
+    graph_t assigned(vectors, config);
+    assigned = std::move(moved);
+    EXPECT_EQ(assigned.get_storage_vid(1), 3u);
+    ASSERT_EQ(assigned.local_id_of(3), 1u);
+    const auto& neighbors = assigned.fetch_nbrs(3);
+    ASSERT_EQ(neighbors.size(), 1u);
+    EXPECT_EQ(neighbors.front().get_vid(), 1u);
+
+    assigned = graph_t(vectors, config);
+    EXPECT_TRUE(assigned.is_identity_mapped());
+    EXPECT_TRUE(assigned.local_to_global().empty());
+}
+
 // ============================================================
 //  compact::SingleLayerGraph (via SingleLayerGraphCompactor)
 // ============================================================

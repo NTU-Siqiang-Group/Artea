@@ -68,7 +68,7 @@ public:
      * @brief Sparse constructor for a subset of @p global_vecs. Only the
      *        vids in @p local_to_global have rows in @c _nbrs_arr (one
      *        row per local index); @c fetch_nbrs(storage_vid) translates
-     *        through @c _global_to_local on the hot path.
+     *        through @c local_id_of on the hot path.
      *
      * @param global_vecs     Borrowed reference to the global vector array.
      *                        Neighbor entries continue to carry global vids,
@@ -90,8 +90,7 @@ public:
         _num_vertices(static_cast<vertex_num_t>(local_to_global.size())),
         _layer_config(layer_config),
         _vecs_data(global_vecs),
-        _local_to_global(std::move(local_to_global)),
-        _global_to_local(std::move(global_to_local))
+        _hier_env{std::move(local_to_global), std::move(global_to_local)}
     {
         _nbrs_arr.resize(_num_vertices);
         for (vertex_num_t i = 0; i < _num_vertices; ++i) {
@@ -107,16 +106,14 @@ public:
           _layer_config(other._layer_config),
           _nbrs_arr(std::move(other._nbrs_arr)),
           _vecs_data(other._vecs_data),
-          _local_to_global(std::move(other._local_to_global)),
-          _global_to_local(std::move(other._global_to_local))
+          _hier_env(std::move(other._hier_env))
     {}
 
     SingleLayerGraph& operator=(SingleLayerGraph&& other) noexcept {
         _num_vertices = other._num_vertices;
         _layer_config = other._layer_config;
         _nbrs_arr = std::move(other._nbrs_arr);
-        _local_to_global = std::move(other._local_to_global);
-        _global_to_local = std::move(other._global_to_local);
+        _hier_env = std::move(other._hier_env);
         // _vecs_data is a reference, cannot be reseated
         return *this;
     }
@@ -133,36 +130,36 @@ public:
      *         @c _nbrs_arr (no translation needed). */
     __attribute__((always_inline))
     auto is_identity_mapped() const -> bool {
-        return _global_to_local.empty();
+        return global_to_local().empty();
     }
 
     /** @brief Local row index → global vid. Empty in identity mode. */
     __attribute__((always_inline))
     auto local_to_global() const -> const std::vector<vertex_id_t>& {
-        return _local_to_global;
+        return _hier_env._local_to_global;
     }
 
     /** @brief Global vid → local row index. Empty in identity mode;
      *         entries for non-participating vids are @c invalid_vertex_id. */
     __attribute__((always_inline))
     auto global_to_local() const -> const std::vector<vertex_id_t>& {
-        return _global_to_local;
+        return _hier_env._global_to_local;
     }
 
     /** @brief Translate a single global vid to its local row index
      *         (identity passthrough in dense mode). */
     __attribute__((always_inline))
     auto local_id_of(const vertex_id_t storage_vid) const -> vertex_id_t {
-        return _global_to_local.empty() ? storage_vid : _global_to_local[storage_vid];
+        return is_identity_mapped() ? storage_vid : global_to_local()[storage_vid];
     }
 
     /** @brief Translate a local row index to its global vid (identity
      *         passthrough in dense mode). */
     __attribute__((always_inline))
     auto get_storage_vid(const vertex_num_t local_idx) const -> vertex_id_t {
-        return _local_to_global.empty()
+        return local_to_global().empty()
             ? static_cast<vertex_id_t>(local_idx)
-            : _local_to_global[local_idx];
+            : local_to_global()[local_idx];
     }
 
     __attribute__((always_inline))
@@ -179,16 +176,12 @@ public:
 
     __attribute__((always_inline))
     auto fetch_nbrs(const vertex_id_t storage_vid) const -> const nbr_arr_t& {
-        return _global_to_local.empty()
-            ? _nbrs_arr[storage_vid]
-            : _nbrs_arr[_global_to_local[storage_vid]];
+        return _nbrs_arr[local_id_of(storage_vid)];
     }
 
     __attribute__((always_inline))
     auto fetch_nbrs(const vertex_id_t storage_vid) -> nbr_arr_t& {
-        return _global_to_local.empty()
-            ? _nbrs_arr[storage_vid]
-            : _nbrs_arr[_global_to_local[storage_vid]];
+        return _nbrs_arr[local_id_of(storage_vid)];
     }
 
     __attribute__((always_inline))
@@ -219,12 +212,17 @@ protected:
     /** @brief Const reference to vector data for this layer. */
     const vector_array_t& _vecs_data;
 
-    /** @brief Local row index → global vid. Empty in identity mode. */
-    std::vector<vertex_id_t> _local_to_global;
+    /** @brief Vertex ID mappings for a layer of a hierarchical graph. */
+    typedef struct hier_env_extension {
+        /** @brief Local row index → global vid. Empty in identity mode. */
+        std::vector<vertex_id_t> _local_to_global;
 
-    /** @brief Global vid → local row index. Empty in identity mode;
-     *         entries for non-participating vids are @c invalid_vertex_id. */
-    std::vector<vertex_id_t> _global_to_local;
+        /** @brief Global vid → local row index. Empty in identity mode;
+         *         entries for non-participating vids are @c invalid_vertex_id. */
+        std::vector<vertex_id_t> _global_to_local;
+    } hier_env_extension_t;
+
+    hier_env_extension_t _hier_env;
 
 };  // class SingleLayerGraph
 
