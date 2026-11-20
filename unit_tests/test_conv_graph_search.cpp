@@ -101,7 +101,7 @@ public:
         build_infra_dispatch(dataset_info_, ARTEA_METRIC_LAMBDA(void) {
             // Build convergent graph
             ARTEA_INFO("Building convergent graph...");
-            layer_config_t layer_cfg(16);
+            sl_config_t layer_cfg(16);
             conv_graph::pruning_config_t<Metric, Dim> pruning_cfg(1.0f, 0.0f);
             conv_graph::propagate_config_t<Metric, Dim> propagate_cfg(4, 14, 0.6f);
             conv_index_t graph_index = std::move(

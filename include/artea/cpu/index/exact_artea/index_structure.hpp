@@ -25,7 +25,7 @@
 
 #include <artea/cpu/index/dataset_index.hpp>
 #include <artea/cpu/index/exact_artea/configs.hpp>
-#include <artea/cpu/index/layer_config.hpp>
+#include <artea/cpu/index/single_layer_config.hpp>
 #include <artea/cpu/index/dynamic_structure/single_layer_graph.hpp>
 #include <artea/cpu/index/compact_structure/hierarchical_graph.hpp>
 
@@ -184,7 +184,7 @@ private:
             // SingleLayerGraph's legacy config is only an initial vector reservation.
             // Exact construction uses growing vectors and never applies a degree cap.
             layers.push_back(std::make_unique<single_layer_graph_t>(
-                vectors, typename IndexTraitsT::layer_config_t(0),
+                vectors, typename IndexTraitsT::sl_config_t(0),
                 std::move(local_to_global), std::move(global_to_local)));
         }
         _hierarchical_graph.reset();

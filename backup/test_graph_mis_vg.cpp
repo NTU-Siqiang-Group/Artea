@@ -80,7 +80,7 @@ public:
 
         build_infra_dispatch(dataset_info, ARTEA_METRIC_LAMBDA(void) {
             // Build KNN graph
-            layer_config_t layer_config(g_config.max_nbr_size);
+            sl_config_t layer_config(g_config.max_nbr_size);
             knn_graph::propagate_config_t<Metric, Dim> propagate_config(5, 12, g_config.prefill_ratio, 1,
             g_config.routing_topk, g_config.routing_queue_size);
 

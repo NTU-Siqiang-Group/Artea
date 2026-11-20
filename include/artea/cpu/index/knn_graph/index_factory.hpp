@@ -49,7 +49,7 @@ class IndexFactory {
     using ratio_t = typename GraphFactoryTraitsT::ratio_t;
     using vector_dataset_t = typename GraphFactoryTraitsT::vector_dataset_t;
     using dist_func_t = typename GraphFactoryTraitsT::dist_func_t;
-    using layer_config_t = typename GraphFactoryTraitsT::layer_config_t;
+    using sl_config_t = typename GraphFactoryTraitsT::sl_config_t;
     using this_index_t = typename GraphFactoryTraitsT::knn_graph::index_t;
     using propagate_config_t = typename GraphFactoryTraitsT::knn_graph::propagate_config_t;
     using random_eg_t        = typename GraphFactoryTraitsT::random_eg_t;
@@ -74,9 +74,9 @@ public:
     };
 
     // A returned borrowing index cannot safely refer to a temporary vector array.
-    static auto construct_graph(vector_array_t&&, layer_config_t, propagate_config_t)
+    static auto construct_graph(vector_array_t&&, sl_config_t, propagate_config_t)
         -> ConstructResult = delete;
-    static auto construct_graph(const vector_array_t&&, layer_config_t, propagate_config_t)
+    static auto construct_graph(const vector_array_t&&, sl_config_t, propagate_config_t)
         -> ConstructResult = delete;
 
     /** @brief Build in place using the index's existing vectors and graph configuration. */
@@ -91,7 +91,7 @@ public:
     }
 
     /** @brief Construct an owning index without copying the dataset's base vectors. */
-    static auto construct_graph(std::unique_ptr<vector_dataset_t> dataset, const layer_config_t layer_config,
+    static auto construct_graph(std::unique_ptr<vector_dataset_t> dataset, const sl_config_t layer_config,
         const propagate_config_t propagate_config) -> ConstructResult {
         const auto start = std::chrono::high_resolution_clock::now();
         this_index_t graph_index(std::move(dataset), layer_config, propagate_config);
@@ -104,7 +104,7 @@ public:
     /** @brief construct a new KNN graph from vector array */
     static auto construct_graph(
         const vector_array_t& base_vecs,
-        const layer_config_t layer_config,
+        const sl_config_t layer_config,
         const propagate_config_t propagate_config
     ) -> ConstructResult {
         const auto t_start = std::chrono::high_resolution_clock::now();
@@ -121,7 +121,7 @@ public:
     /** @brief construct a new KNN graph from dataset, with per-build-loop recall/throughput profiling */
     static auto profile_graph_quality(
         const vector_dataset_t& dataset,
-        const layer_config_t layer_config,
+        const sl_config_t layer_config,
         const propagate_config_t propagate_config
     ) -> void {
         const vector_array_t& base_vecs = dataset.get_base_vecs();

@@ -65,7 +65,7 @@ protected:
         // Stateless functor: the dimension is a compile-time trait now.
         dist_func_ = std::make_unique<dist_func_t<TEST_METRIC, TEST_DIM>>();
 
-        layer_config_ = layer_config_t(64);
+        layer_config_ = sl_config_t(64);
         graph_index_ = std::make_unique<conv_graph::index_t<TEST_METRIC, TEST_DIM>>(
             *vecs_, layer_config_,
             conv_graph::pruning_config_t<TEST_METRIC, TEST_DIM>(1.0, 0.0),
@@ -94,7 +94,7 @@ protected:
         }
     }
 
-    layer_config_t layer_config_{64};
+    sl_config_t layer_config_{64};
     std::unique_ptr<vector_array_t> vecs_;
     std::unique_ptr<dist_func_t<TEST_METRIC, TEST_DIM>>    dist_func_;
     std::unique_ptr<conv_graph::index_t<TEST_METRIC, TEST_DIM>> graph_index_;
@@ -159,7 +159,7 @@ TEST_F(SingleLayerGraphTest, MoveSemantics) {
 TEST(SingleLayerGraphMappingTest, MovesMappingsWithSparseRows) {
     using graph_t = index_traits_t::dynamic::single_layer_graph_t;
     vector_array_t vectors(4, TEST_DIM);
-    const layer_config_t config(2);
+    const sl_config_t config(2);
     constexpr auto missing = index_traits_t::invalid_vertex_id;
     graph_t source(vectors, config, {1, 3}, {missing, 0, missing, 1});
     source.fetch_nbrs(3).emplace_back(1, 1.0f, true);

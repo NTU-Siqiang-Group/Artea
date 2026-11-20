@@ -27,7 +27,7 @@
 #include <artea/cpu/framework/type_traits/graph_factory_traits.hpp>
 #include <artea/cpu/containers/vector_dataset.hpp>
 #include <artea/cpu/containers/locked_buffer.hpp>
-#include <artea/cpu/index/layer_config.hpp>
+#include <artea/cpu/index/single_layer_config.hpp>
 #include <artea/cpu/index/dynamic_structure/hierarchical_graph.hpp>
 #include <artea/cpu/index/compact_structure/hierarchical_graph.hpp>
 #include <artea/cpu/index/exact_artea/index_factory.hpp>
@@ -381,7 +381,7 @@ TEST(ExactArteaPruning, RejectsInvalidConfigShiftOverflowAndPairDistances) {
 
 TEST(ExactArteaPruning, SharedKernelPreservesLegacyIncrementalAndConditionDispatch) {
     auto data = line({0, 1, 1.25f});
-    IT::dynamic::single_layer_graph_t graph(data, IT::layer_config_t(1));
+    IT::dynamic::single_layer_graph_t graph(data, IT::sl_config_t(1));
     Buffer::log_table_t logs;
     Refiner::pruning_updater_t legacy(distance, data, logs, graph, 2, 1.5f);
     std::vector<Neighbor> old{{1, 1}, {2, 1.25f}};

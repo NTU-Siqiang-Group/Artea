@@ -17,7 +17,9 @@ This guide uses `my_graph` as a placeholder name. The process consists of **6 st
 
 **File:** `include/artea/cpu/index/my_graph/configs.hpp`
 
-Each graph type has its own configs file. **LayerConfig** (in `index/layer_config.hpp`) is shared and mandatory for every graph type. Graph-specific configs (e.g. PruningConfig, PropagateConfig) live in `index/my_graph/configs.hpp`.
+Each graph type has its own configs file.
+**SingleLayerConfig** (`sl_config_t`), defined in `index/single_layer_config.hpp`, sets the neighbor capacity for a single graph layer.
+Graph-specific configs (e.g. PruningConfig, PropagateConfig) live in `index/my_graph/configs.hpp`.
 
 If a config you need already exists in another namespace, include it and reuse via alias:
 
@@ -65,11 +67,12 @@ namespace artea::cpu::my_graph {
 template <typename IndexTraitsT>
 class IndexStructure {
     using single_layer_graph_t = typename IndexTraitsT::dynamic::single_layer_graph_t;
+    using sl_config_t = typename IndexTraitsT::sl_config_t;
     using propagate_config_t = typename IndexTraitsT::my_graph::propagate_config_t;
     using pruning_config_t   = typename IndexTraitsT::my_graph::pruning_config_t;
 
 public:
-    IndexStructure(const vector_array_t& vecs, const layer_config_t cfg,
+    IndexStructure(const vector_array_t& vecs, const sl_config_t cfg,
                    const pruning_config_t pc, const propagate_config_t pp)
         : _single_layer_graph(std::make_unique<single_layer_graph_t>(vecs, cfg)),
           _pruning_config(pc), _propagate_config(pp) {}

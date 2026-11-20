@@ -81,7 +81,7 @@ class IndexFactory {
     using random_seq_nr_t = typename GraphFactoryTraitsT::random_seq_nr_t;
 
     using single_layer_graph_t = typename GraphFactoryTraitsT::dynamic::single_layer_graph_t;
-    using layer_config_t     = typename GraphFactoryTraitsT::layer_config_t;
+    using sl_config_t        = typename GraphFactoryTraitsT::sl_config_t;
     using propagate_config_t = typename GraphFactoryTraitsT::hier_conv_graph::propagate_config_t;
     using pruning_config_t   = typename GraphFactoryTraitsT::hier_conv_graph::pruning_config_t;
 

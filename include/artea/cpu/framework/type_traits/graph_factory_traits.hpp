@@ -27,6 +27,10 @@ namespace cpu {
 namespace conv_graph {
     template <typename GraphFactoryTraitsT> class IndexFactory;
 }
+namespace practheo {
+    template <typename GraphFactoryTraitsT> class IndexFactory;
+    template <typename GraphFactoryTraitsT> class VertexWeightAssigner;
+}
 namespace knn_graph {
     template <typename GraphFactoryTraitsT> class IndexFactory;
 }
@@ -60,6 +64,12 @@ struct GraphFactoryTraits :
     struct conv_graph : RefinerTraitsT::conv_graph {
         conv_graph() = delete;
         using factory_t = cpu::conv_graph::IndexFactory<graph_factory_traits_t>;
+    };
+
+    struct practheo : RefinerTraitsT::practheo {
+        practheo() = delete;
+        using factory_t = cpu::practheo::IndexFactory<graph_factory_traits_t>;
+        using vertex_weight_assigner_t = cpu::practheo::VertexWeightAssigner<graph_factory_traits_t>;
     };
 
     /** @brief Namespace-scoped factory types for knn_graph, extending IndexTraits::knn_graph. */

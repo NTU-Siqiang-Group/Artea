@@ -42,7 +42,7 @@ class IndexStructure : public stacked_rgraph::IndexStructure<IndexTraitsT> {
     using base_t              = stacked_rgraph::IndexStructure<IndexTraitsT>;
     using vertex_num_t        = typename IndexTraitsT::vertex_num_t;
     using vector_array_t      = typename IndexTraitsT::vector_array_t;
-    using layer_config_t      = typename IndexTraitsT::layer_config_t;
+    using sl_config_t         = typename IndexTraitsT::sl_config_t;
     using rgraph_config_t     = typename IndexTraitsT::artea_graph::rgraph_config_t;
     using propagate_config_t  = typename IndexTraitsT::artea_graph::propagate_config_t;
     using pruning_config_t    = typename IndexTraitsT::artea_graph::pruning_config_t;
@@ -67,7 +67,7 @@ public:
      * @param rgraph_config     Stacked r-net geometry / queue / capacity,
      *                          including independent @c ul_max_nbr_size
      *                          and @c bl_max_nbr_size. The two refining
-     *                          LayerConfigs are derived as
+     *                          @c SingleLayerConfig instances are derived as
      *                          @c rgraph_config.{ul,bl}_max_nbr_size() ×
      *                          1.5.
      * @param propagate_config  Conv-graph propagate config used when
@@ -140,30 +140,30 @@ public:
 
     /** @brief Layer config for refining upper layers (level_id > 0). */
     __attribute__((always_inline))
-    auto ul_refining_layer_config() const -> const layer_config_t& {
+    auto ul_refining_layer_config() const -> const sl_config_t& {
         return _ul_refining_layer_config.value();
     }
 
     __attribute__((always_inline))
-    auto ul_refining_layer_config() -> layer_config_t& {
+    auto ul_refining_layer_config() -> sl_config_t& {
         return _ul_refining_layer_config.value();
     }
 
     /** @brief Layer config for refining the bottom layer (L0). */
     __attribute__((always_inline))
-    auto bl_refining_layer_config() const -> const layer_config_t& {
+    auto bl_refining_layer_config() const -> const sl_config_t& {
         return _bl_refining_layer_config.value();
     }
 
     __attribute__((always_inline))
-    auto bl_refining_layer_config() -> layer_config_t& {
+    auto bl_refining_layer_config() -> sl_config_t& {
         return _bl_refining_layer_config.value();
     }
 
     /** @brief Refining layer config for @p level_id (bl for L0, ul elsewhere). */
     __attribute__((always_inline))
     auto refining_layer_config(const typename IndexTraitsT::layer_id_t level_id)
-        -> layer_config_t&
+        -> sl_config_t&
     {
         return (level_id == 0) ? _bl_refining_layer_config.value()
                                : _ul_refining_layer_config.value();
@@ -188,11 +188,11 @@ public:
 private:
     /** @brief Layer config used to size the SingleLayerGraph built for
      *         upper layers (level_id > 0) inside @c refine_layer. */
-    std::optional<layer_config_t> _ul_refining_layer_config;
+    std::optional<sl_config_t> _ul_refining_layer_config;
 
     /** @brief Layer config used to size the SingleLayerGraph built for
      *         the bottom layer (L0) inside @c refine_layer. */
-    std::optional<layer_config_t> _bl_refining_layer_config;
+    std::optional<sl_config_t> _bl_refining_layer_config;
 
     /** @brief Conv-graph propagate config for per-layer refinement. */
     std::optional<propagate_config_t> _propagate_config;

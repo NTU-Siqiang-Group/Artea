@@ -48,10 +48,10 @@ struct TestConfig {
     std::string dataset_name;
     std::string metric;
 
-    // layer_config_t is metric/dim-independent; the propagate config is now a
+    // sl_config_t is metric/dim-independent; the propagate config is now a
     // <Metric, Dim> alias, so we keep its raw params here and build the object
     // inside the dispatched body.
-    layer_config_t layer_config{64};
+    sl_config_t layer_config{64};
     uint32_t num_build_loops;
     uint32_t num_triu_iters;
     float    prefill_ratio;
@@ -273,7 +273,7 @@ int main(int argc, char** argv) {
 
     uint32_t max_nbr_size = program.get<uint32_t>("--max-nbr-size");
 
-    g_config.layer_config = layer_config_t(max_nbr_size);
+    g_config.layer_config = sl_config_t(max_nbr_size);
     g_config.num_build_loops    = program.get<uint32_t>("--num-build-loops");
     g_config.num_triu_iters     = program.get<uint32_t>("--num-triu-iters");
     g_config.prefill_ratio      = program.get<float>("--prefill-ratio");

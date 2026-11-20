@@ -41,7 +41,7 @@ class IndexStructure : public DatasetIndex<IndexTraitsT> {
     using vertex_id_t        = typename IndexTraitsT::vertex_id_t;
     using nbr_arr_t         = typename IndexTraitsT::nbr_arr_t;
     using vector_array_t     = typename IndexTraitsT::vector_array_t;
-    using layer_config_t     = typename IndexTraitsT::layer_config_t;
+    using sl_config_t        = typename IndexTraitsT::sl_config_t;
     using propagate_config_t = typename IndexTraitsT::knn_graph::propagate_config_t;
 
 public:
@@ -56,7 +56,7 @@ public:
      */
     IndexStructure(
         const vector_array_t& vecs_data,
-        const layer_config_t layer_config,
+        const sl_config_t layer_config,
         const propagate_config_t propagate_config
     ) : data_base_t(vecs_data), _single_layer_graph(std::make_unique<single_layer_graph_t>(vecs_data, layer_config)),
         _propagate_config(propagate_config)
@@ -66,18 +66,18 @@ public:
     explicit IndexStructure(std::unique_ptr<vector_dataset_t> dataset)
         : data_base_t(std::move(dataset)) {}
 
-    IndexStructure(std::unique_ptr<vector_dataset_t> dataset, const layer_config_t layer_config,
+    IndexStructure(std::unique_ptr<vector_dataset_t> dataset, const sl_config_t layer_config,
                    const propagate_config_t propagate_config)
         : data_base_t(std::move(dataset)) {
         prepare_build(layer_config, propagate_config);
     }
 
-    IndexStructure(vector_array_t&&, layer_config_t, propagate_config_t) = delete;
-    IndexStructure(const vector_array_t&&, layer_config_t, propagate_config_t) = delete;
+    IndexStructure(vector_array_t&&, sl_config_t, propagate_config_t) = delete;
+    IndexStructure(const vector_array_t&&, sl_config_t, propagate_config_t) = delete;
 
     /** @brief Replace graph state and configs; preserve dataset addresses even if allocation fails.
      *  Invalidates graph references. Call only after queries on the previous graph have finished. */
-    auto prepare_build(const layer_config_t layer_config,
+    auto prepare_build(const sl_config_t layer_config,
                    const propagate_config_t propagate_config) -> IndexStructure& {
         _compact_graph.reset();
         _single_layer_graph.reset();
@@ -144,12 +144,12 @@ public:
     }
 
     __attribute__((always_inline))
-    auto layer_config() const -> const layer_config_t& {
+    auto layer_config() const -> const sl_config_t& {
         return get_single_layer_graph().layer_config();
     }
 
     __attribute__((always_inline))
-    auto layer_config() -> layer_config_t& {
+    auto layer_config() -> sl_config_t& {
         return get_single_layer_graph().layer_config();
     }
 

@@ -43,7 +43,7 @@
 #include <artea/cpu/containers/four_ary_heap.hpp>
 
 #include <artea/cpu/index/dataset_index.hpp>
-#include <artea/cpu/index/layer_config.hpp>
+#include <artea/cpu/index/single_layer_config.hpp>
 #include <artea/cpu/index/neighbor.hpp>
 #include <artea/cpu/index/dynamic_structure/single_layer_graph.hpp>
 #include <artea/cpu/index/compact_structure/single_layer_graph.hpp>
@@ -59,6 +59,10 @@
 #include <artea/cpu/index/conv_graph/configs.hpp>
 #include <artea/cpu/index/conv_graph/index_structure.hpp>
 #include <artea/cpu/index/conv_graph/index_factory.hpp>
+#include <artea/cpu/index/practheo/configs.hpp>
+#include <artea/cpu/index/practheo/index_structure.hpp>
+#include <artea/cpu/index/practheo/vertex_weight_assigner.hpp>
+#include <artea/cpu/index/practheo/index_factory.hpp>
 #include <artea/cpu/index/knn_graph/configs.hpp>
 #include <artea/cpu/index/knn_graph/index_structure.hpp>
 #include <artea/cpu/index/knn_graph/index_factory.hpp>

@@ -61,7 +61,7 @@ public:
         dataset_info_ = DatasetInfra{parse_metric(g_config.metric), base_vecs.get_vec_dim()};
 
         // Build KNN graph
-        layer_config_t layer_config(g_config.max_nbr_size);
+        sl_config_t layer_config(g_config.max_nbr_size);
 
         ARTEA_INFO("Building KNN graph...");
         auto t0 = std::chrono::high_resolution_clock::now();

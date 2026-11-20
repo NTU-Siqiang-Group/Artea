@@ -22,8 +22,10 @@
 
 #pragma once
 
+#include <algorithm>
 #include <cstddef>
 #include <cstdint>
+#include <span>
 #include <vector>
 #include <utility>
 #include <tbb/parallel_for.h>
@@ -95,17 +97,33 @@ public:
     }
 
     /**
-     * @brief Query the top-k nearest vertices for a given vector with an entry point.
-     *
-     * For bruteforce router, entry point is ignored and this delegates to the standard query.
-     *
+     * @brief Query the top-k nearest vertices among the given candidate IDs.
      * @param query_vec Pointer to the query vector data.
-     * @param entry_point Starting vertex ID (ignored for bruteforce).
-     * @return std::vector<vec_id_t> Vector containing the IDs of the top-k nearest vertices.
+     * @param subset_indices Original vector IDs in the array passed to the constructor.
+     * @return Up to topk entries sorted by distance, with original vector IDs.
+     * @pre Every ID in @p subset_indices is a valid index into the input vector array.
      */
-    auto query(const vec_ele_t* query_vec, const vertex_id_t entry_point) const -> knn_results_t {
-        // For bruteforce, entry point doesn't matter - just delegate to standard implementation
-        return query(query_vec);
+    auto query(const vec_ele_t* query_vec, std::span<const vertex_id_t> subset_indices) const -> knn_results_t {
+        const std::size_t k = std::min<std::size_t>(this->_topk, subset_indices.size());
+        if (k == 0) {
+            return {};
+        }
+
+        knn_results_t results;
+        results.reserve(subset_indices.size());
+        for (const vertex_id_t vid : subset_indices) {
+            const distance_t dist = this->_dist_func(query_vec, this->_vecs_data.get(vid));
+            results.emplace_back(vid, dist);
+        }
+
+        std::partial_sort(
+            results.begin(), results.begin() + k, results.end(),
+            [](const result_entry_t& a, const result_entry_t& b) {
+                return a.get_distance() < b.get_distance();
+            }
+        );
+        results.resize(k);
+        return results;
     }
 
     /**
@@ -141,6 +159,36 @@ public:
             }
         );
 
+        return results;
+    }
+
+    /**
+     * @brief Perform parallel batch queries with a shared candidate list.
+     * @param query_vecs A VectorArray containing the query vectors.
+     * @param subset_indices Original vector IDs in the array passed to the constructor.
+     * @return Flat, row-major array of num_queries * topk entries with original IDs and invalid padding.
+     * @pre Every ID in @p subset_indices is a valid index into the input vector array.
+     */
+    auto batch_query(
+        const typename RouterTraitsT::query_vecs_t& query_vecs,
+        std::span<const vertex_id_t> subset_indices
+    ) const -> knn_results_t {
+        const vertex_num_t num_queries = query_vecs.get_num_vecs();
+        const std::size_t k = this->_topk;
+        knn_results_t results(num_queries * k);
+        if (results.empty() || subset_indices.empty()) {
+            return results;
+        }
+
+        tbb::parallel_for(
+            tbb::blocked_range<vertex_num_t>(0, num_queries),
+            [&](const tbb::blocked_range<vertex_num_t>& range) {
+                for (vertex_num_t i = range.begin(); i != range.end(); ++i) {
+                    const auto topk_results = this->query(query_vecs.get(i), subset_indices);
+                    std::copy(topk_results.begin(), topk_results.end(), results.begin() + i * k);
+                }
+            }
+        );
         return results;
     }
 

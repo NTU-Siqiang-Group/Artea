@@ -50,11 +50,15 @@ template <typename BaseTraitsT> class RandomSeqNR;
 template <typename BaseTraitsT> class CentroidComputer;
 template <typename BaseTraitsT> struct VertexSubset;
 template <typename T, typename ContainerT, typename Compare> class FourAryHeap;
-template <typename IndexTraitsT> struct LayerConfig;
+template <typename IndexTraitsT> struct SingleLayerConfig;
 
 namespace conv_graph {
     template <typename IndexTraitsT> struct PropagateConfig;
     template <typename IndexTraitsT> struct PruningConfig;
+}
+
+namespace practheo {
+    template <typename IndexTraitsT> struct BuildConfig;
 }
 
 namespace knn_graph {
@@ -230,7 +234,7 @@ public:
     /** @brief pruning condition type for triangle inequality. */
     using pruning_condition_t = PruningConditionT;
 
-    // layer_config_t and namespace-scoped config aliases live on
+    // sl_config_t and namespace-scoped config aliases live on
     // IndexTraits — every config template is parameterized on
     // IndexTraitsT, which BaseTraits has no reference to.
 

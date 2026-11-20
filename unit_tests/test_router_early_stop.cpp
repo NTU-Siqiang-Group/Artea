@@ -15,7 +15,7 @@
 #include <artea/cpu/framework/type_traits/index_traits.hpp>
 #include <artea/cpu/framework/type_traits/router_traits.hpp>
 #include <artea/cpu/containers/vector_dataset.hpp>
-#include <artea/cpu/index/layer_config.hpp>
+#include <artea/cpu/index/single_layer_config.hpp>
 #include <artea/cpu/index/dynamic_structure/hierarchical_graph.hpp>
 #include <artea/cpu/index/compact_structure/hierarchical_graph.hpp>
 #include <artea/cpu/index/exact_artea/configs.hpp>

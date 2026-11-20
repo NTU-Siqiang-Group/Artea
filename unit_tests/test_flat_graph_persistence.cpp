@@ -33,10 +33,10 @@ struct TestConfig {
     std::string dataset_name;
     std::string metric;
     std::string temp_dir;
-    // layer_config_t is metric/dim-independent; the conv_graph pruning/propagate
+    // sl_config_t is metric/dim-independent; the conv_graph pruning/propagate
     // configs are now <Metric, Dim> aliases, so we keep their raw params here and
     // build the objects inside the dispatched body.
-    layer_config_t layer_config{16};
+    sl_config_t layer_config{16};
     float    scale_coeffs    = 1.0f;
     float    shifted_coeffs  = 0.0f;
     uint32_t num_build_loops = 4;

@@ -43,7 +43,7 @@ public:
     using nbr_t = typename IndexTraitsT::nbr_t;
     using nbr_arr_t = typename IndexTraitsT::nbr_arr_t;
     using vector_array_t = typename IndexTraitsT::vector_array_t;
-    using layer_config_t = typename IndexTraitsT::layer_config_t;
+    using sl_config_t = typename IndexTraitsT::sl_config_t;
 
     /**
      * @brief Construct a dense graph with one adjacency row per global vid.
@@ -52,7 +52,7 @@ public:
      */
     SingleLayerGraph(
         const vector_array_t& vecs_data,
-        const layer_config_t layer_config
+        const sl_config_t layer_config
     ) :
         _num_vertices(vecs_data.get_num_vecs()),
         _layer_config(layer_config),
@@ -83,7 +83,7 @@ public:
      */
     SingleLayerGraph(
         const vector_array_t&         global_vecs,
-        const layer_config_t          layer_config,
+        const sl_config_t             layer_config,
         std::vector<vertex_id_t>      local_to_global,
         std::vector<vertex_id_t>      global_to_local
     ) :
@@ -163,10 +163,10 @@ public:
     }
 
     __attribute__((always_inline))
-    auto layer_config() const -> const layer_config_t& { return _layer_config; }
+    auto layer_config() const -> const sl_config_t& { return _layer_config; }
 
     __attribute__((always_inline))
-    auto layer_config() -> layer_config_t& { return _layer_config; }
+    auto layer_config() -> sl_config_t& { return _layer_config; }
 
     __attribute__((always_inline))
     auto get_nbrs_arr() -> std::vector<nbr_arr_t>& { return _nbrs_arr; }
@@ -204,7 +204,7 @@ protected:
     vertex_num_t _num_vertices;
 
     /** @brief Layer configuration (max_nbr_size). */
-    layer_config_t _layer_config;
+    sl_config_t _layer_config;
 
     /** @brief Array of neighbors for each vertex. */
     std::vector<nbr_arr_t> _nbrs_arr;

@@ -44,7 +44,7 @@ class FlatGraphFileManager {
     using nbr_t = typename IndexTraitsT::nbr_t;
     using nbr_arr_t = typename IndexTraitsT::nbr_arr_t;
     using vector_array_t = typename IndexTraitsT::vector_array_t;
-    using layer_config_t = typename IndexTraitsT::layer_config_t;
+    using sl_config_t = typename IndexTraitsT::sl_config_t;
 
 public:
     /**
@@ -178,7 +178,7 @@ public:
             ARTEA_ERROR(fmt::format("Unsupported descent graph file version: {}", graph_bin_path));
         }
 
-        layer_config_t layer_config(max_nbr_size);
+        sl_config_t layer_config(max_nbr_size);
 
         // Construct IndexStructure from metadata using subclass hook
         SingleLayerGraphT graph_index = SingleLayerGraphT::from_metadata(meta, vecs_data, layer_config);

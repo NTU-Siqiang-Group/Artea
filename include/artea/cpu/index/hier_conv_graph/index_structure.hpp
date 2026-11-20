@@ -51,7 +51,7 @@ namespace hier_conv_graph {
  *   - The HierarchyConfig (ul / bl capacities + sample_ratio).
  *   - The conv_graph propagate / pruning configs used by per-layer refinement.
  *   - A dataset owned by the common base, or an explicit borrowed vector view.
- *   - Two derived LayerConfig instances (1.5x max_nbr_size, mirroring
+ *   - Two derived SingleLayerConfig instances (1.5x max_nbr_size, mirroring
  *     artea_graph::IndexStructure).
  *
  * Copy / move are both deleted — clients hold an instance inside a
@@ -70,7 +70,7 @@ public:
     using layer_id_t           = typename IndexTraitsT::layer_id_t;
     using ratio_t              = typename IndexTraitsT::ratio_t;
     using nbr_t                = typename IndexTraitsT::nbr_t;
-    using layer_config_t       = typename IndexTraitsT::layer_config_t;
+    using sl_config_t          = typename IndexTraitsT::sl_config_t;
     using vector_array_t       = typename IndexTraitsT::vector_array_t;
     using vecs_storage_t       = typename IndexTraitsT::vecs_storage_t;
     using hierarchy_config_t   = typename IndexTraitsT::hier_conv_graph::hierarchy_config_t;
@@ -322,25 +322,25 @@ public:
 
     /** @brief Layer config for refining upper layers (level_id > 0). */
     __attribute__((always_inline))
-    auto ul_refining_layer_config() const -> const layer_config_t& {
+    auto ul_refining_layer_config() const -> const sl_config_t& {
         return _ul_refining_layer_config.value();
     }
 
     __attribute__((always_inline))
-    auto ul_refining_layer_config() -> layer_config_t& { return _ul_refining_layer_config.value(); }
+    auto ul_refining_layer_config() -> sl_config_t& { return _ul_refining_layer_config.value(); }
 
     /** @brief Layer config for refining the bottom layer (L0). */
     __attribute__((always_inline))
-    auto bl_refining_layer_config() const -> const layer_config_t& {
+    auto bl_refining_layer_config() const -> const sl_config_t& {
         return _bl_refining_layer_config.value();
     }
 
     __attribute__((always_inline))
-    auto bl_refining_layer_config() -> layer_config_t& { return _bl_refining_layer_config.value(); }
+    auto bl_refining_layer_config() -> sl_config_t& { return _bl_refining_layer_config.value(); }
 
     /** @brief Refining layer config for @p level_id (bl for L0, ul elsewhere). */
     __attribute__((always_inline))
-    auto refining_layer_config(const layer_id_t level_id) -> layer_config_t& {
+    auto refining_layer_config(const layer_id_t level_id) -> sl_config_t& {
         return (level_id == 0) ? _bl_refining_layer_config.value() : _ul_refining_layer_config.value();
     }
 
@@ -377,10 +377,10 @@ private:
     std::optional<pruning_config_t> _pruning_config;
 
     /// @brief SingleLayerGraph sizing config for level_id > 0.
-    std::optional<layer_config_t> _ul_refining_layer_config;
+    std::optional<sl_config_t> _ul_refining_layer_config;
 
     /// @brief SingleLayerGraph sizing config for level_id == 0.
-    std::optional<layer_config_t> _bl_refining_layer_config;
+    std::optional<sl_config_t> _bl_refining_layer_config;
 
     /** @brief Compact search graph whose lifetime remains within the data-owning index. */
     std::optional<compact_graph_t> _compact_graph;

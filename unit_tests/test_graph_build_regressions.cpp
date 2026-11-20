@@ -54,7 +54,7 @@ void check_refinement_input(layer_id_t level, vertex_num_t destination_capacity)
         source[i] = nbr_t(input_ids[i], distance(vectors.get(pivot), vectors.get(input_ids[i])));
     }
 
-    layer_config_t config(destination_capacity);
+    sl_config_t config(destination_capacity);
     std::unique_ptr<single_layer_graph_t> refining;
     if (level == 0) {
         refining = std::make_unique<single_layer_graph_t>(vectors, config);

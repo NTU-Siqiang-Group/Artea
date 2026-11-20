@@ -51,7 +51,7 @@ protected:
 
         num_vertices_ = 12;
         vec_dim_ = TEST_DIM;
-        layer_config_ = layer_config_t(8);
+        layer_config_ = sl_config_t(8);
 
         // Create VectorArray and populate with vectors. Storage stride is the
         // SIMD-padded TEST_DIM; only the first 2 coords carry the grid position
@@ -135,7 +135,7 @@ protected:
 
     vec_num_t num_vertices_;
     vec_num_t vec_dim_;
-    layer_config_t layer_config_{8};
+    sl_config_t layer_config_{8};
     conv_graph::pruning_config_t<TEST_METRIC, TEST_DIM> pruning_config_{1.0, 0.0};
     conv_graph::propagate_config_t<TEST_METRIC, TEST_DIM> propagate_config_{4, 14, 0.6};
     std::unique_ptr<vector_array_t> vecs_;

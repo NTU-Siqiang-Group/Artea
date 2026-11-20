@@ -100,7 +100,7 @@ using log_container_t = typename buffer_traits_t::log_container_t;
 using log_table_t = typename buffer_traits_t::log_table_t;
 
 // Config / index types from IndexTraits
-using layer_config_t = typename index_traits_t::layer_config_t;
+using sl_config_t = typename index_traits_t::sl_config_t;
 using single_layer_graph_compactor_t = typename index_traits_t::single_layer_graph_compactor_t;
 using flat_graph_file_manager_t = typename index_traits_t::flat_graph_file_manager_t;
 using hierarchical_graph_file_manager_t = typename index_traits_t::hierarchical_graph_file_manager_t;
@@ -192,6 +192,13 @@ namespace conv_graph {
     template <DistanceMetricsT Metric, vec_dim_t Dim> using propagate_config_t = typename graph_factory_traits_t<Metric, Dim>::conv_graph::propagate_config_t;
     template <DistanceMetricsT Metric, vec_dim_t Dim> using pruning_config_t = typename graph_factory_traits_t<Metric, Dim>::conv_graph::pruning_config_t;
 }   // namespace conv_graph
+
+namespace practheo {
+    template <DistanceMetricsT Metric, vec_dim_t Dim> using index_t = typename graph_factory_traits_t<Metric, Dim>::practheo::index_t;
+    template <DistanceMetricsT Metric, vec_dim_t Dim> using factory_t = typename graph_factory_traits_t<Metric, Dim>::practheo::factory_t;
+    template <DistanceMetricsT Metric, vec_dim_t Dim> using vertex_weight_assigner_t = typename graph_factory_traits_t<Metric, Dim>::practheo::vertex_weight_assigner_t;
+    template <DistanceMetricsT Metric, vec_dim_t Dim> using build_config_t = typename graph_factory_traits_t<Metric, Dim>::practheo::build_config_t;
+}   // namespace practheo
 
 namespace knn_graph {
     template <DistanceMetricsT Metric, vec_dim_t Dim> using index_t = typename graph_factory_traits_t<Metric, Dim>::knn_graph::index_t;

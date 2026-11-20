@@ -29,6 +29,9 @@ namespace cpu {
 namespace conv_graph {
     template <typename IndexTraitsT> class IndexStructure;
 }
+namespace practheo {
+    template <typename IndexTraitsT> class IndexStructure;
+}
 namespace knn_graph {
     template <typename IndexTraitsT> class IndexStructure;
 }
@@ -82,7 +85,7 @@ struct IndexTraits : virtual public BaseTraitsT {
     static constexpr std::size_t slots_per_block = 2048;
 
     /** @brief Layer configuration type. */
-    using layer_config_t = LayerConfig<index_traits_t>;
+    using sl_config_t = SingleLayerConfig<index_traits_t>;
 
     /** @brief Graph structures grouped by mode. */
     struct compact {
@@ -102,6 +105,12 @@ struct IndexTraits : virtual public BaseTraitsT {
         using index_t            = cpu::conv_graph::IndexStructure<index_traits_t>;
         using propagate_config_t = cpu::conv_graph::PropagateConfig<index_traits_t>;
         using pruning_config_t   = cpu::conv_graph::PruningConfig<index_traits_t>;
+    };
+
+    struct practheo {
+        practheo() = delete;
+        using index_t        = cpu::practheo::IndexStructure<index_traits_t>;
+        using build_config_t = cpu::practheo::BuildConfig<index_traits_t>;
     };
 
     /** @brief Namespace-scoped types for knn_graph. */

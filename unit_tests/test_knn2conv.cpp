@@ -34,10 +34,10 @@ struct TestConfig {
     std::string dataset_name;
     std::string metric;
 
-    // KNN graph build params. layer_config_t is metric/dim-independent; the
+    // KNN graph build params. sl_config_t is metric/dim-independent; the
     // propagate / pruning configs are now <Metric, Dim> aliases, so we keep their
     // raw params here and build the objects inside the dispatched body.
-    layer_config_t knn_layer_config{64};
+    sl_config_t knn_layer_config{64};
 
     uint32_t knn_num_build_loops;
     uint32_t knn_num_triu_iters;
@@ -260,7 +260,7 @@ int main(int argc, char** argv) {
 
     // KNN graph config
     uint32_t knn_max_nbr_size = program.get<uint32_t>("--knn-max-nbr-size");
-    g_config.knn_layer_config = layer_config_t(knn_max_nbr_size);
+    g_config.knn_layer_config = sl_config_t(knn_max_nbr_size);
     g_config.knn_num_build_loops    = program.get<uint32_t>("--knn-num-build-loops");
     g_config.knn_num_triu_iters     = program.get<uint32_t>("--knn-num-triu-iters");
     g_config.knn_prefill_ratio      = program.get<float>("--knn-prefill-ratio");

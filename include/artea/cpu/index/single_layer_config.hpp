@@ -13,7 +13,7 @@
 // limitations under the License.
 
 /*
- * @FilePath: /Artea/include/artea/cpu/index/layer_config.hpp
+ * @FilePath: /Artea/include/artea/cpu/index/single_layer_config.hpp
  * @Author: Chandler (Weitang Ye) <weitang.ye@ntu.edu.sg>
  * @Description: Configuration for graph layer parameters.
  */
@@ -24,24 +24,24 @@ namespace artea {
 namespace cpu {
 
 /**
- * @brief Configuration for a single layer in hierarchical graph.
+ * @brief Neighbor capacity for a single graph layer.
  * Supports builder pattern for flexible configuration.
  * @tparam IndexTraitsT The index traits type.
  */
 template <typename IndexTraitsT>
-struct LayerConfig {
+struct SingleLayerConfig {
     using vertex_num_t = typename IndexTraitsT::vertex_num_t;
 
     /**
      * @brief Constructor for layer configuration.
      * @param max_nbr_size Maximum number of neighbors (for overflow control).
      */
-    explicit LayerConfig(vertex_num_t max_nbr_size) :
+    explicit SingleLayerConfig(vertex_num_t max_nbr_size) :
         _max_nbr_size(max_nbr_size)
     {}
 
     // Builder pattern setter (chainable)
-    auto max_nbr_size(vertex_num_t value) -> LayerConfig& { _max_nbr_size = value; return *this; }
+    auto max_nbr_size(vertex_num_t value) -> SingleLayerConfig& { _max_nbr_size = value; return *this; }
 
     // Const getter
     auto max_nbr_size() const -> vertex_num_t { return _max_nbr_size; }

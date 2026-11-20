@@ -708,7 +708,7 @@ TEST_F(HierarchicalGraphTest, SingleLayerGraphRoundTrip) {
     // so an uninitialized buffer of the right shape is sufficient.
     const auto& full_vecs = DataProvider::instance().vectors();
     vector_array_t vecs(_num_vertices, full_vecs.get_vec_dim());
-    const layer_config_t layer_cfg(_ul_max_nbr);
+    const sl_config_t layer_cfg(_ul_max_nbr);
 
     const layer_id_t top_h = _graph->top_occupied_level_id();
     ASSERT_NE(top_h, hg_t::invalid_level_id);

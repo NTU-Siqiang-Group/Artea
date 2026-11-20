@@ -29,7 +29,7 @@ struct BenchConfig {
     std::string config_path;
     std::string dataset_name;
     std::string metric;
-    layer_config_t layer_config{16};
+    sl_config_t layer_config{16};
     ratio_t prefill_ratio{ratio_t(0.6)};
     // updater params
     vec_num_t rand_gen_size;
@@ -448,7 +448,7 @@ int main(int argc, char** argv) {
     g_config.config_path = program.get<std::string>("--config");
     g_config.dataset_name = program.get<std::string>("--dataset");
     g_config.metric = program.get<std::string>("--metric");
-    g_config.layer_config = layer_config_t(
+    g_config.layer_config = sl_config_t(
         static_cast<vec_num_t>(program.get<int>("--max-nbrs"))
     );
     g_config.rand_gen_size = static_cast<vec_num_t>(program.get<int>("--rand-gen-size"));

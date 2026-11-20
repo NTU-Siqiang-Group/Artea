@@ -65,7 +65,7 @@ class IndexFactory : public stacked_rgraph::IndexFactory<GraphFactoryTraitsT> {
     using dist_func_t     = typename GraphFactoryTraitsT::dist_func_t;
 
     using single_layer_graph_t = typename GraphFactoryTraitsT::dynamic::single_layer_graph_t;
-    using layer_config_t     = typename GraphFactoryTraitsT::layer_config_t;
+    using sl_config_t        = typename GraphFactoryTraitsT::sl_config_t;
 
     // artea_graph / stacked_rgraph / conv_graph PruningConfig all alias
     // to the same underlying type — one alias is enough.

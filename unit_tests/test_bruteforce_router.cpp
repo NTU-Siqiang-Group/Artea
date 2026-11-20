@@ -21,10 +21,13 @@
 // Copyright 2026 Weitang Ye
 // Correctness test for Bruteforce Router using Google Test.
 
+#include <algorithm>
 #include <iostream>
 #include <vector>
 #include <memory>
 #include <filesystem>
+#include <span>
+#include <stdexcept>
 #include <fmt/format.h>
 #include <argparse/argparse.hpp>
 #include <gtest/gtest.h>
@@ -161,6 +164,53 @@ TEST(BruteforceRouterTest, BatchTopKQuery) {
 
         ARTEA_INFO("Batch top-k query test passed");
     });
+}
+
+TEST(BruteforceRouterTest, IndexedSubsetQueries) {
+    constexpr auto Metric = DistanceMetricsT::EUCLIDEAN_SQR;
+    constexpr vec_dim_t Dim = 128;
+    using results_t = knn_results_t<Metric, Dim>;
+
+    vector_array_t base_vecs(5, Dim);
+    std::fill_n(base_vecs.get_all(), base_vecs.get_num_vecs() * Dim, 0.0f);
+    base_vecs.get(1)[0] = 2.0f;
+    base_vecs.get(2)[0] = 4.0f;
+    base_vecs.get(3)[0] = 7.0f;
+    base_vecs.get(4)[0] = 9.0f;
+    vector_array_t query_vecs(2, Dim);
+    std::fill_n(query_vecs.get_all(), query_vecs.get_num_vecs() * Dim, 0.0f);
+    query_vecs.get(0)[0] = 4.0f;
+    query_vecs.get(1)[0] = 9.0f;
+
+    const std::vector<vertex_id_t> subset_indices = {4, 3, 1};
+    const dist_func_t<Metric, Dim> dist{};
+    const bruteforce_router_t<Metric, Dim> router(base_vecs, dist, 2);
+    const auto* query = query_vecs.get(0);
+
+    const results_t expected_single = {{1, 4.0f}, {3, 9.0f}};
+    const results_t expected_batch = {{1, 4.0f}, {3, 9.0f}, {4, 0.0f}, {3, 4.0f}};
+    EXPECT_EQ(router.query(query, subset_indices), expected_single);
+    EXPECT_EQ(router.batch_query(query_vecs, subset_indices), expected_batch);
+
+    const bruteforce_router_t<Metric, Dim> padded_router(base_vecs, dist, 4);
+    EXPECT_EQ(padded_router.query(query, subset_indices).size(), subset_indices.size());
+    const auto padded = padded_router.batch_query(query_vecs, subset_indices);
+    ASSERT_EQ(padded.size(), 8u);
+    EXPECT_TRUE(padded[3].is_invalid());
+    EXPECT_EQ(padded[4], expected_batch[2]);
+    EXPECT_TRUE(padded[7].is_invalid());
+
+    const std::span<const vertex_id_t> empty_subset;
+    EXPECT_TRUE(router.query(query, empty_subset).empty());
+    const auto empty_batch = router.batch_query(query_vecs, empty_subset);
+    ASSERT_EQ(empty_batch.size(), expected_batch.size());
+    for (const auto& hit : empty_batch) {
+        EXPECT_TRUE(hit.is_invalid());
+    }
+
+    const bruteforce_router_t<Metric, Dim> zero_k_router(base_vecs, dist, 0);
+    EXPECT_TRUE(zero_k_router.query(query, subset_indices).empty());
+    EXPECT_TRUE(zero_k_router.batch_query(query_vecs, subset_indices).empty());
 }
 
 int main(int argc, char** argv) {

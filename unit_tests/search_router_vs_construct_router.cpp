@@ -103,7 +103,7 @@ public:
 
         build_infra_dispatch(dataset_info_, ARTEA_METRIC_LAMBDA(void) {
             // Build convergent graph
-            layer_config_t layer_cfg(g_config.max_nbr_size);
+            sl_config_t layer_cfg(g_config.max_nbr_size);
             conv_graph::pruning_config_t<Metric, Dim> pruning_cfg(g_config.scale_coeffs, g_config.shifted_coeffs);
             conv_graph::propagate_config_t<Metric, Dim> propagate_cfg(
                 g_config.num_build_loops, g_config.num_triu_iters, g_config.prefill_ratio,

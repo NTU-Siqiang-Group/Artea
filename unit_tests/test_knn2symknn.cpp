@@ -44,8 +44,8 @@ struct TestConfig {
     std::string dataset_name;
     std::string metric;
 
-    // layer_config_t is metric/dim-independent (IndexTraits) and can live here.
-    layer_config_t knn_layer_config{64};
+    // sl_config_t is metric/dim-independent (IndexTraits) and can live here.
+    sl_config_t knn_layer_config{64};
 
     // knn_graph::propagate_config_t is now a <Metric, Dim> alias, so we keep the raw
     // build params here and construct the metric-dependent config object inside
@@ -179,7 +179,7 @@ int main(int argc, char** argv) {
     g_config.metric = program.get<std::string>("--metric");
 
     uint32_t knn_max_nbr_size = program.get<uint32_t>("--knn-max-nbr-size");
-    g_config.knn_layer_config = layer_config_t(knn_max_nbr_size);
+    g_config.knn_layer_config = sl_config_t(knn_max_nbr_size);
     g_config.knn_num_build_loops    = program.get<uint32_t>("--knn-num-build-loops");
     g_config.knn_num_triu_iters     = program.get<uint32_t>("--knn-num-triu-iters");
     g_config.knn_prefill_ratio      = program.get<float>("--knn-prefill-ratio");

@@ -22,14 +22,14 @@
 using namespace artea;
 using namespace artea::cpu;
 
-// layer_config_t is metric/dim-independent; the conv_graph pruning/propagate
+// sl_config_t is metric/dim-independent; the conv_graph pruning/propagate
 // configs are now <Metric, Dim> aliases, so keep their raw params here and build the
 // objects inside the dispatched benchmark body.
 struct BenchConfig {
     std::string config_path;
     std::string dataset_name;
     std::string metric;
-    layer_config_t layer_config{32};
+    sl_config_t layer_config{32};
     int64_t iterations;
 };
 
@@ -164,7 +164,7 @@ int main(int argc, char** argv) {
     g_config.dataset_name = program.get<std::string>("--dataset");
     g_config.metric = program.get<std::string>("--metric");
     vec_num_t max_nbr_size = static_cast<vec_num_t>(program.get<int>("--max-nbrs"));
-    g_config.layer_config = layer_config_t(max_nbr_size);
+    g_config.layer_config = sl_config_t(max_nbr_size);
     g_config.iterations = program.get<int64_t>("--iterations");
 
     ARTEA_INFO(fmt::format("Benchmark Configuration:"));

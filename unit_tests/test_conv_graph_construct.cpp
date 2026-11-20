@@ -33,10 +33,10 @@ struct TestConfig {
     std::string config_path;
     std::string dataset_name;
     std::string metric;
-    // layer_config_t is metric/dim-independent; the pruning / propagate configs
+    // sl_config_t is metric/dim-independent; the pruning / propagate configs
     // are now <Metric, Dim> aliases, so we keep their raw params here and build the
     // objects inside the dispatched body.
-    layer_config_t layer_config{16};
+    sl_config_t layer_config{16};
     float    scale_coeffs       = 1.0f;
     float    shifted_coeffs     = 0.0f;
     uint32_t num_build_loops    = 4;
@@ -289,7 +289,7 @@ int main(int argc, char** argv) {
 
     uint32_t max_nbr_size = program.get<uint32_t>("--max-nbr-size");
 
-    g_config.layer_config = layer_config_t(max_nbr_size);
+    g_config.layer_config = sl_config_t(max_nbr_size);
     g_config.scale_coeffs       = program.get<float>("--scale-coeffs");
     g_config.shifted_coeffs     = program.get<float>("--shifted-coeffs");
     g_config.num_build_loops    = program.get<uint32_t>("--num-build-loops");
