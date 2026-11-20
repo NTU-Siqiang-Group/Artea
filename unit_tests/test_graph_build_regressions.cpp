@@ -94,6 +94,32 @@ TEST(GraphBuildRegressions, ImportKeepsClosestNeighborsWhenDestinationIsSmaller)
     for (layer_id_t level : {0u, 1u}) check_refinement_input(level, 2);
 }
 
+TEST(GraphBuildRegressions, ArteaAddsReverseEdgesBetweenBuildRounds) {
+    constexpr vertex_num_t count = graph_factory_traits_t<metric, dimension>::min_layer_cap;
+    vector_array_t vectors(count, dimension);
+    std::fill_n(vectors.get_all(), count * dimension, 0.0f);
+    vectors.get(1)[0] = 1.0f;
+    const artea_graph::rgraph_config_t<metric, dimension> rgraph(2.0f, 0.0f, 0.0f, 1.0f, 8);
+    const artea_graph::pruning_config_t<metric, dimension> pruning(1.0f, 0.0f);
+    const dist_func_t<metric, dimension> distance;
+
+    for (iter_t build_loops : {0u, 1u, 2u}) {
+        SCOPED_TRACE(::testing::Message() << "build_loops=" << build_loops);
+        // Isolate the reverse pass on a graph containing just the edge 0 -> 1.
+        const artea_graph::propagate_config_t<metric, dimension> propagation(
+            build_loops, /*num_triu_iters=*/0, /*prefill_ratio=*/0.0f);
+        artea_graph::index_t<metric, dimension> index(vectors, rgraph, propagation, pruning);
+        index.add_vertices(count);
+        for (vertex_id_t vid = 0; vid < count; ++vid) index.assign_layer(vid, 0);
+        index.fetch_level_nbrs(0, 0)[0] = nbr_t(1, 1.0f);
+
+        artea_graph::factory_t<metric, dimension>::refine_layer(index, 0, distance, 0, count);
+        EXPECT_EQ(index.fetch_level_nbrs(0, 0)[0].get_vid(), 1u);
+        EXPECT_EQ(index.num_valid_nbrs(1, 0), build_loops == 2 ? 1u : 0u);
+        if (build_loops == 2) EXPECT_EQ(index.fetch_level_nbrs(1, 0)[0].get_vid(), 0u);
+    }
+}
+
 TEST(GraphBuildRegressions, WiderInsertionSearchRevisitsPreviouslyRejectedCandidates) {
     // One apex fixes the seed; append just one vertex to exercise the real
     // insertion path without depending on scheduling or randomized construction.

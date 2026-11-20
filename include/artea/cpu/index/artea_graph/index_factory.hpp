@@ -239,11 +239,8 @@ public:
      *        enough edges, and it still rescues any sparse rows.
      *   3. Drive @c propagate_engine with @c triangle_updater +
      *      @c reverse_updater + @c arc_updater (+ optional routing
-     *      loops) directly on the SingleLayerGraph. We cannot call
-     *      @c conv_factory_t::construct_graph here because its
-     *      @c single_layer_graph_t&& overload dense-constructs its own inner
-     *      SingleLayerGraph and then move-assigns only the nbrs array —
-     *      losing the sparse vid mapping.
+     *      loops) directly on the SingleLayerGraph. The reverse pass runs
+     *      between build rounds. Every build round ends with @c arc_updater.
      *   4. @c refiner_utils_t::writeback_layer_from_single_layer_graph to push refined
      *      edges back.
      *
@@ -385,14 +382,14 @@ public:
         auto pruning_updater = propagate_engine.template make_updater<pruning_updater_t>(
             pruning_config.scale_coeffs(), effective_shift);
 
-        // propagate_engine.next(reverse_updater).next(arc_updater);
         for (iter_t build_loop = 0; build_loop < propagate_config.num_build_loops(); ++build_loop) {
-            // propagate_engine.run(propagate_config.num_triu_iters(), triangle_updater).next(arc_updater)
-            //                 .next(reverse_updater).next(arc_updater);
             for (iter_t triu_iter = 0; triu_iter < propagate_config.num_triu_iters(); ++triu_iter) {
                 propagate_engine.next(triangle_updater).next(arc_updater);
             }
-            propagate_engine.next(reverse_updater).next(arc_updater);
+            if (build_loop < propagate_config.num_build_loops() - 1) {
+                propagate_engine.next(reverse_updater);
+            }
+            propagate_engine.next(arc_updater);
         }
 
         // /** -------------------- Optimization --------------------------------------- ***/
