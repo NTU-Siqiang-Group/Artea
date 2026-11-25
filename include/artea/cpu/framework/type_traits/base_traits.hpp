@@ -57,10 +57,6 @@ namespace conv_graph {
     template <typename IndexTraitsT> struct PruningConfig;
 }
 
-namespace practheo {
-    template <typename IndexTraitsT> struct BuildConfig;
-}
-
 namespace knn_graph {
     template <typename IndexTraitsT> using PropagateConfig = conv_graph::PropagateConfig<IndexTraitsT>;
 }

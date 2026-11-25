@@ -7,14 +7,11 @@
 
 #include <algorithm>
 #include <bit>
-#include <cmath>
-#include <limits>
 #include <memory>
 #include <random>
 #include <stdexcept>
 #include <type_traits>
 #include <utility>
-#include <vector>
 
 using namespace artea::cpu;
 
@@ -224,9 +221,6 @@ TEST(DatasetIndex, IncrementalOwnedBatchesPreserveVectorIdsAndContents) {
 
 using knn_index_t = index_traits_t::knn_graph::index_t;
 using conv_index_t = index_traits_t::conv_graph::index_t;
-using practheo_index_t = practheo::index_t<metric, dimension>;
-using practheo_factory_t = practheo::factory_t<metric, dimension>;
-using practheo_config_t = practheo::build_config_t<metric, dimension>;
 using stacked_index_t = index_traits_t::stacked_rgraph::index_t;
 using hier_index_t = index_traits_t::hier_conv_graph::index_t;
 using flat_propagate_t = index_traits_t::knn_graph::propagate_config_t;
@@ -245,133 +239,6 @@ static_assert(!std::is_move_constructible_v<DatasetIndex<index_traits_t>>);
 static_assert(!std::is_constructible_v<knn_index_t, vector_array_t&&, sl_config_t, flat_propagate_t>);
 static_assert(!std::is_constructible_v<conv_index_t, const vector_array_t&&,
               sl_config_t, flat_pruning_t, flat_propagate_t>);
-static_assert(std::is_same_v<decltype(practheo_config_t::log_max_num_vecs), ratio_t>);
-static_assert(!std::is_default_constructible_v<practheo_config_t>);
-static_assert(!std::is_constructible_v<practheo_config_t, vec_num_t>);
-static_assert(std::is_constructible_v<practheo_config_t, vec_num_t, ratio_t>);
-static_assert(!std::is_constructible_v<practheo_index_t, std::unique_ptr<vector_dataset_t>>);
-static_assert(!std::is_constructible_v<practheo_index_t, std::unique_ptr<vector_dataset_t>, sl_config_t>);
-static_assert(!std::is_constructible_v<practheo_index_t, const vector_array_t&, sl_config_t>);
-static_assert(!std::is_constructible_v<practheo_index_t, vector_array_t&&, sl_config_t, practheo_config_t>);
-static_assert(!std::is_constructible_v<practheo_index_t, const vector_array_t&&, sl_config_t, practheo_config_t>);
-
-template <typename Vectors>
-concept CanConstructPractheo = requires(Vectors&& vectors, sl_config_t layer, practheo_config_t build) {
-    practheo_factory_t::construct_graph(std::forward<Vectors>(vectors), layer, build);
-};
-static_assert(CanConstructPractheo<const vector_array_t&>);
-static_assert(!CanConstructPractheo<vector_array_t>);
-static_assert(!CanConstructPractheo<const vector_array_t>);
-
-TEST(DatasetIndex, PractheoDerivesSamplingRateFromMaxVectors) {
-    EXPECT_THROW(practheo_config_t(0, 0.25f, 0.5f), std::invalid_argument);
-    EXPECT_THROW(practheo_config_t(1, 0.25f, 0.5f), std::invalid_argument);
-    EXPECT_THROW(practheo_config_t(16, 0.25f, 0.0f), std::invalid_argument);
-    EXPECT_THROW(practheo_config_t(16, 0.25f, 1.0f), std::invalid_argument);
-    for (ratio_t invalid : {-0.01f, 1.01f, std::numeric_limits<ratio_t>::quiet_NaN()}) {
-        EXPECT_THROW(practheo_config_t(16, 0.25f, invalid), std::invalid_argument);
-        EXPECT_THROW(practheo_config_t(16, invalid, 0.5f), std::invalid_argument);
-    }
-    for (vec_num_t maximum : {2u, 1'000'000u}) {
-        practheo_index_t index(make_dataset(0), practheo_config_t(maximum, 0.25f, 0.5f));
-        const auto& config = index.build_config();
-        EXPECT_EQ(config.max_num_vecs, maximum);
-        EXPECT_FLOAT_EQ(config.log_max_num_vecs, std::log(static_cast<double>(maximum)));
-        EXPECT_EQ(config.sampling_rate0, 0.25f);
-        EXPECT_EQ(config.sampling_rate1, ratio_t{1} / config.log_max_num_vecs);
-        EXPECT_EQ(config.weight_promotion_probability, 0.5f);
-        EXPECT_EQ(config.num_nearest_nbrs, 64u);
-        EXPECT_EQ(config.max_weight, std::ceil(std::log2(maximum)));
-    }
-}
-
-TEST(DatasetIndex, PractheoStoresTheSmallestWeightWithAtMostOneExpectedVertex) {
-    // 4^15 and its two neighbors are indistinguishable after rounding N to float.
-    for (const auto [capacity, expected] : {std::pair{1'000'000u, 10u}, {1'073'741'823u, 15u},
-                                           {1'073'741'824u, 15u}, {1'073'741'825u, 16u}}) {
-        const practheo_config_t config(capacity, 0.5f);
-        EXPECT_EQ(config.weight_promotion_probability, 0.25f);
-        EXPECT_EQ(config.max_weight, expected);
-        EXPECT_EQ(config.max_vertex_weight(), config.max_weight);
-    }
-    const vec_num_t capacity = std::numeric_limits<vec_num_t>::max();
-    for (ratio_t p : {std::numeric_limits<ratio_t>::min(), 0.75f, std::nextafter(1.0f, 0.0f)}) {
-        const practheo_config_t config(capacity, 0.5f, p);
-        ASSERT_GE(config.max_weight, 1u);
-        EXPECT_LE(capacity * std::pow(static_cast<long double>(p), config.max_weight), 1.L);
-        EXPECT_GT(capacity * std::pow(static_cast<long double>(p), config.max_weight - 1), 1.L);
-    }
-}
-
-TEST(DatasetIndex, PractheoUsesThePromotionProbabilitySuppliedToTheIndex) {
-    practheo_config_t config(16, 0.5f);
-    EXPECT_EQ(config.max_weight, 2u);
-    config.weight_promotion_probability = 0.5f;
-    const auto dataset = make_dataset(0);
-    const auto& base = dataset->get_base_vecs();
-    const practheo_index_t index(base, sl_config_t(0), config);
-    EXPECT_EQ(index.build_config().max_weight, 4u);
-    EXPECT_EQ(index.get_vids_by_weight().size(), 5u);
-    for (ratio_t endpoint : {0.f, 1.f}) {
-        config.weight_promotion_probability = endpoint;
-        EXPECT_THROW(practheo_index_t(base, sl_config_t(0), config), std::invalid_argument);
-    }
-}
-
-TEST(DatasetIndex, PractheoConstructGraphReturnsWeightsForEveryBaseVertex) {
-    const practheo_config_t config(16, 0.25f);
-    for (vec_num_t count : {0u, 16u}) {
-        const auto dataset = make_dataset(count);
-        const auto& base = dataset->get_base_vecs();
-        const auto result = practheo_factory_t::construct_graph(base, sl_config_t(0), config);
-        EXPECT_EQ(&result.graph.get_base_vecs(), &base);
-        EXPECT_EQ(result.graph.get_num_vertices(), count);
-        const auto& groups = result.graph.get_vids_by_weight();
-        ASSERT_EQ(groups.size(), 3u);
-        std::vector<vertex_id_t> ids;
-        for (const auto& group : groups) ids.insert(ids.end(), group.begin(), group.end());
-        std::sort(ids.begin(), ids.end());
-        ASSERT_EQ(ids.size(), count);
-        for (vertex_id_t vid = 0; vid < count; ++vid) EXPECT_EQ(ids[vid], vid);
-    }
-}
-
-TEST(DatasetIndex, PractheoKeepsDenseRowsWithTheirBaseVectors) {
-    const sl_config_t config(2);
-    auto borrowed = make_dataset(0);
-    practheo_index_t index(borrowed->get_base_vecs(), config, practheo_config_t(2, 0.25f, 0.5f));
-    EXPECT_FALSE(index.owns_dataset());
-    EXPECT_TRUE(index.get_nbrs_arr().empty());
-
-    auto dataset = make_dataset(3);
-    const auto* vectors = &dataset->get_base_vecs();
-    practheo_index_t source(std::move(dataset), config, practheo_config_t(16, 0.75f, 0.5f));
-    EXPECT_TRUE(source.is_identity_mapped());
-    ASSERT_EQ(source.get_nbrs_arr().size(), 3u);
-    EXPECT_EQ(source.get_storage_vid(2), 2u);
-    for (const auto& row : source.get_nbrs_arr()) EXPECT_TRUE(row.empty());
-    source.fetch_nbrs(1).emplace_back(2, 1.0f, true);
-    practheo_factory_t::assign_vertex_weight(source, *vectors, 0);
-    const auto expected_groups = source.get_vids_by_weight();
-
-    index = std::move(source);
-    EXPECT_EQ(&index.get_single_layer_graph().get_vecs_data(), vectors);
-    EXPECT_EQ(index.build_config().sampling_rate0, 0.75f);
-    index.compact(1);
-    EXPECT_EQ(index.get_vids_by_weight(), expected_groups);
-    const auto& compact = index.get_compact_graph();
-    EXPECT_EQ(&compact.get_vecs_data(), vectors);
-    EXPECT_EQ(compact.fetch_nbrs(1).front(), 2u);
-
-    index.prepare_build(config);
-    EXPECT_THROW(index.get_compact_graph(), std::logic_error);
-    EXPECT_EQ(index.build_config().max_num_vecs, 16u);
-    EXPECT_EQ(index.get_num_vertices(), 3u);
-    EXPECT_TRUE(index.fetch_nbrs(1).empty());
-    for (const auto& group : index.get_vids_by_weight()) EXPECT_TRUE(group.empty());
-    practheo_factory_t::assign_vertex_weight(index, *vectors, 0);
-    EXPECT_EQ(index.get_vids_by_weight(), expected_groups);
-}
 
 struct KnnCase {
     using index_t = knn_index_t;
